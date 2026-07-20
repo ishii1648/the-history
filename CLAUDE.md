@@ -23,10 +23,8 @@ Do not edit Backlog task, draft, document, decision, or milestone markdown files
 </CRITICAL_INSTRUCTION>
 <!-- BACKLOG.MD GUIDELINES END -->
 
-## プロジェクト運用規約
+## Task-Driven Development (Backlog.md)
 
-- **ブランチ命名**: `task-N-短い説明`（例: `task-1-deno-setup`）。TASK ID と内容が一目でわかるようにする
-- **タスク実行順序**: `backlog/tasks/` の `dependencies` に従い、依存が満たされたタスクから番号順に逐次実行する（並列実行はしない）
-- **main への取り込み**: タスクブランチは main に fast-forward できる状態を保ち、マージ後に `git push origin main` まで行う
-- **検証方針**: 各タスクの Acceptance Criteria は基本的にローカル起動での手動確認で検証する。`scripts/build-data.ts` のようなロジック中心のタスクは、必要に応じて `deno test` の追加を検討する
-- **ライセンス**: `data/` 配下の historical-basemaps 由来の派生データは GPL-3.0 必須。リポジトリ全体（アプリコード含む）も GPL-3.0 とする
+- Branch names must carry the TASK ID: `task-N-slug` (e.g. `task-1-deno-setup`), so a branch is always traceable back to its backlog task.
+- Work tasks strictly in dependency order from `backlog/tasks/*.md`; don't start a task until every task in its `dependencies` has reached the terminal status, and don't run tasks in parallel, to keep task status transitions unambiguous.
+- PR title/description must reference the TASK ID so review history stays linked to the backlog task.
