@@ -22,9 +22,3 @@ Do not edit Backlog task, draft, document, decision, or milestone markdown files
 
 </CRITICAL_INSTRUCTION>
 <!-- BACKLOG.MD GUIDELINES END -->
-
-## Task-Driven Development (Backlog.md)
-
-- Branch names must carry the TASK ID: `task-N-slug` (e.g. `task-1-deno-setup`), so a branch is always traceable back to its backlog task.
-- Work tasks strictly in dependency order from `backlog/tasks/*.md`; don't start a task until every task in its `dependencies` has reached the terminal status, and don't run tasks in parallel, to keep task status transitions unambiguous.
-- PR title/description must reference the TASK ID so review history stays linked to the backlog task.
