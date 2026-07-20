@@ -28,3 +28,6 @@ Do not edit Backlog task, draft, document, decision, or milestone markdown files
 - Branch names must carry the TASK ID: `task-N-slug` (e.g. `task-1-deno-setup`), so a branch is always traceable back to its backlog task.
 - Work tasks strictly in dependency order from `backlog/tasks/*.md`; don't start a task until every task in its `dependencies` has reached the terminal status, and don't run tasks in parallel, to keep task status transitions unambiguous.
 - PR title/description must reference the TASK ID so review history stays linked to the backlog task.
+- TDD is mandatory: write the test before the implementation and confirm it fails (red) before making it pass (green). See `docs/development-style.md` for details.
+- Standard task flow: backlog task -> branch -> test first -> implement -> `deno test` green -> converge via `/review-loop` -> PR (with TASK ID) -> CI green -> merge -> backlog finalization.
+- A task is Done only when all Acceptance Criteria are checked and CI is green.
