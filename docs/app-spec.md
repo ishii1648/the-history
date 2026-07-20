@@ -1,7 +1,7 @@
 # ヨーロッパ国境変遷マップ Web アプリ 仕様書（MVP）
 
 > 中世（西暦900年頃）〜近代（1914年）のヨーロッパにおける国境・勢力圏の変遷を、タイムラインスライダーでグラフィカルに追える Web アプリの仕様。
-> 技術選定の背景は [`../map-rendering-research.md`](../map-rendering-research.md) を参照。
+> 技術選定の背景は [`./map-rendering-research.md`](./map-rendering-research.md) を参照。
 
 ## 1. 目的・スコープ
 
