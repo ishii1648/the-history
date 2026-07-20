@@ -32,14 +32,11 @@
 main ブランチで CI 必須チェックと PR 必須をまだ設定していない場合、リポジトリ管理権限を持つユーザが以下を実行する（`gh` CLI が必要）。
 
 ```bash
-gh api -X PUT repos/{owner}/{repo}/branches/main/protection \
-  -H "Accept: application/vnd.github+json" \
-  -F required_status_checks.strict=true \
-  -f 'required_status_checks.contexts[]=ci' \
-  -F enforce_admins=true \
-  -F required_pull_request_reviews.required_approving_review_count=0 \
-  -F restrictions=null
+printf '%s' '{"required_status_checks":{"strict":true,"contexts":["ci"]},"enforce_admins":true,"required_pull_request_reviews":{"required_approving_review_count":0},"restrictions":null}' \
+  | gh api -X PUT repos/{owner}/{repo}/branches/main/protection \
+      -H "Accept: application/vnd.github+json" --input -
 ```
 
+- `gh api` の `-f`/`-F` はドット記法をネスト展開しないため、ネストした設定は `--input` で JSON ボディを渡す。
 - `required_status_checks.contexts` には `.github/workflows/ci.yml` のジョブ名 `ci` を指定する。
 - 権限不足で失敗する場合は、GitHub リポジトリの Settings > Branches からブラウザ上で同等の設定（Require status checks to pass: `ci`、Require a pull request before merging）を行う。
