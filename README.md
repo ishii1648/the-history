@@ -61,6 +61,32 @@ deno task build-colors
   （`SUBJECTO` は `name-overrides.json` の renames で正規化してから引きます）。
 - `NAME` が null の feature は載せません（クライアント側でデフォルト色）。
 
+## ベースマップ（europe.pmtiles）
+
+ベースマップは Protomaps の daily
+build（[maps.protomaps.com/builds](https://maps.protomaps.com/builds)）から
+ヨーロッパ域（西経25°〜東経60°・北緯34°〜72°）を `pmtiles extract`
+で切り出して使います（`docs/app-spec.md` §2.2）。
+
+```bash
+# pmtiles CLI（go-pmtiles）を導入する（macOS の例）
+brew install pmtiles
+
+# 最新の daily build から data/europe.pmtiles を切り出す
+deno task extract-pmtiles
+```
+
+- `scripts/extract-pmtiles.ts` が最新ビルドを自動選択し、
+  `pmtiles extract <URL> data/europe.pmtiles --bbox=-25,34,60,72 --maxzoom=8`
+  相当を実行します（構文は
+  [PMTiles CLI ドキュメント](https://docs.protomaps.com/pmtiles/cli)参照）。
+- bbox はデータパイプラインと同一（`scripts/build-data.ts` の
+  `EUROPE_BBOX`）、`--maxzoom=8` はアプリのズーム上限（`src/config.ts` の
+  `MAX_ZOOM`）に合わせています。全球 130 GB 超のビルドから必要な範囲だけを HTTP
+  Range Request で取得するため、ダウンロードは 200 MB 程度で済みます。
+- 生成物 `*.pmtiles` はサイズが大きいためコミットしません（.gitignore
+  で除外済み）。配信時は Cloudflare R2 に配置します。
+
 ## 出典・ライセンス
 
 歴史的国境・勢力圏のポリゴンデータは
