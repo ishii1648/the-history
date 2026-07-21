@@ -9,6 +9,46 @@
   </head>
   <body>
     <div id="map"></div>
+    <!-- TASK-6: タイムラインスライダー（app-spec §5.1）。目盛り・値・年表示は main.ts が初期化する -->
+    <div
+      id="timeline"
+      class="timeline"
+      role="group"
+      aria-label="年代スライダー"
+    >
+      <span id="timeline-year" class="timeline-year" aria-live="polite"
+      >1000</span>
+      <div class="timeline-controls">
+        <button
+          id="timeline-prev"
+          class="timeline-btn"
+          type="button"
+          aria-label="前の年代"
+        >
+          ‹
+        </button>
+        <input
+          id="timeline-slider"
+          class="timeline-slider"
+          type="range"
+          min="0"
+          max="0"
+          step="1"
+          value="0"
+          list="timeline-marks"
+          aria-label="年代"
+        />
+        <button
+          id="timeline-next"
+          class="timeline-btn"
+          type="button"
+          aria-label="次の年代"
+        >
+          ›
+        </button>
+      </div>
+      <datalist id="timeline-marks"></datalist>
+    </div>
     <script type="module" src="app.js"></script>
   </body>
 </html>

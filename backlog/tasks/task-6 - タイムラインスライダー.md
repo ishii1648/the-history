@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-20 04:23'
-updated_date: '2026-07-21 10:31'
+updated_date: '2026-07-21 10:44'
 labels: []
 dependencies:
   - TASK-5
@@ -41,3 +41,9 @@ ordinal: 6000
 6. 目視確認（mainagent・前面描画はスクリーンショットでフレーム強制）: AC#1 目盛り数と離散性、AC#2 4 操作、AC#3 年表示、AC#4 ネットワークログでキャッシュ確認、AC#5 フェード
 7. fmt/lint/test/build green → PR → CI+mergeability 監視 → マージ → マージ後動作確認 → finalization
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+実装: src/timeline.ts（純粋ロジック: clampIndex/yearAtIndex/indexOfYear/stepYear/keyToStep）+ src/timeline_test.ts（TDD red→green, 17 tests）。UI は index.html/app.css の下部固定コンテナ + src/main.ts の setupTimeline() で配線（switchYear 経由・fetch 重複実装なし）。AC#5 は buildPowerLayer に transitions:{getFillColor:{duration:400}} を追加。実ブラウザ検証済（localhost:8000）: 20目盛り離散/年40px/next・ArrowRight・slider input・prev の各操作/1279→1200 戻りで再fetchなし=キャッシュ(AC#4)/キーボード二重発火ガード(target=slider は無視)。fmt/lint/test(154 pass)/build 全 green。レビュー・AC確認・finalization は mainagent。
+<!-- SECTION:NOTES:END -->
