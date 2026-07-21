@@ -61,35 +61,76 @@ export const HRE_SIZE_LIMIT_BYTES = 200 * 1000;
 /** オーバーレイ feature の SUBJECTO / PARTOF に入れる帝国名 */
 export const HRE_NAME = "Holy Roman Empire";
 
+/** 年代で称号が変わる領邦の NAME 期間定義 */
+export interface TerritoryNamePeriod {
+  /** この期間の称号付き英語表示名 */
+  name: string;
+  /** この称号が有効になる最初の年（含む）。省略時は最初期から有効 */
+  start?: number;
+}
+
 /**
- * 主要領邦の選定結果（ドイツ語 id → 英語表示名）。マップに載る id のみ出力する。
- * 実データ（558 行・276 ユニーク id）を確認し、選帝侯 7（Böhmen / Kurbrandenburg /
- * Kurpfalz / Kurmainz / Kurtrier / KölnErzstift / ザクセン選帝侯領）+ 面積の大きい
- * 主要領邦（Österreich / Bayern / Württemberg / Hessen 系 / SalzburgErzstift）を採用。
+ * 領邦 id が解決する英語表示名の指定。固定名の文字列、または年代で称号が
+ * 変わる場合は期間定義の配列（start 昇順・先頭は start 省略）。
+ */
+export type TerritoryNameSpec = string | TerritoryNamePeriod[];
+
+/**
+ * 主要領邦の選定結果（ドイツ語 id → 称号付き英語表示名）。マップに載る id のみ
+ * 出力する。実データ（558 行・276 ユニーク id）を確認し、選帝侯 7（Böhmen /
+ * Kurbrandenburg / Kurpfalz / Kurmainz / Kurtrier / KölnErzstift / ザクセン
+ * 選帝侯領）+ 面積の大きい主要領邦（Österreich / Bayern / Württemberg /
+ * Hessen 系 / SalzburgErzstift）を採用。
+ * 表示名は正式称号付きで統一する（TASK-32）: 世俗選帝侯は Electorate、
+ * 聖界 3 選帝侯は Archbishopric、ボヘミアのみ Kingdom。
  * ザクセンは 1547 年（ヴィッテンベルクの降伏）前後で選帝侯位がエルネスティン系 →
  * アルベルティン系へ移るため、年代に応じて実在する id を採用しつつ表示名は
- * "Electoral Saxony"（選帝侯領）と "Ducal Saxony"（公領）の 2 系統に固定する。
+ * "Electorate of Saxony"（選帝侯領）と "Duchy of Saxony"（公領）の 2 系統に
+ * 固定する。バイエルンは 1623 年の選帝侯昇格を境に Duchy → Electorate に
+ * 切り替える（同一 id・同一領域）。
  * ヘッセンは 1567 年の分割相続を境に Hessen → HessenKassel / HessenDarmstadt。
  */
-export const HRE_TERRITORIES: Record<string, string> = {
-  "Österreich": "Austria",
-  "Kurbrandenburg": "Brandenburg",
-  "Böhmen": "Bohemia",
-  "Bayern": "Bavaria",
-  "ernestinischesSachsenbis1547": "Electoral Saxony",
-  "albertinischesSachsenbis1547": "Ducal Saxony",
-  "albertinischesSachsennach1635": "Electoral Saxony",
-  "ernestinischesSachsennach1547": "Ducal Saxony",
-  "Kurpfalz": "Palatinate",
-  "Kurmainz": "Mainz",
-  "Kurtrier": "Trier",
-  "KölnErzstift": "Cologne",
-  "Württemberg": "Württemberg",
-  "Hessen": "Hesse",
-  "HessenKassel": "Hesse-Kassel",
-  "HessenDarmstadt": "Hesse-Darmstadt",
-  "SalzburgErzstift": "Salzburg",
+export const HRE_TERRITORIES: Record<string, TerritoryNameSpec> = {
+  "Österreich": "Archduchy of Austria",
+  "Kurbrandenburg": "Electorate of Brandenburg",
+  "Böhmen": "Kingdom of Bohemia",
+  "Bayern": [
+    { name: "Duchy of Bavaria" },
+    { name: "Electorate of Bavaria", start: 1623 },
+  ],
+  "ernestinischesSachsenbis1547": "Electorate of Saxony",
+  "albertinischesSachsenbis1547": "Duchy of Saxony",
+  "albertinischesSachsennach1635": "Electorate of Saxony",
+  "ernestinischesSachsennach1547": "Duchy of Saxony",
+  "Kurpfalz": "Electorate of the Palatinate",
+  "Kurmainz": "Archbishopric of Mainz",
+  "Kurtrier": "Archbishopric of Trier",
+  "KölnErzstift": "Archbishopric of Cologne",
+  "Württemberg": "Duchy of Württemberg",
+  "Hessen": "Landgraviate of Hesse",
+  "HessenKassel": "Landgraviate of Hesse-Kassel",
+  "HessenDarmstadt": "Landgraviate of Hesse-Darmstadt",
+  "SalzburgErzstift": "Archbishopric of Salzburg",
 };
+
+/**
+ * 表示名指定を year 時点の英語表示名に解決する（純粋関数）。
+ * 期間配列は start 昇順を前提に、start <= year を満たす最後の期間を採用する。
+ * 全期間が year より後（通常は起こらない）の場合は先頭の名前に落とす。
+ */
+export function resolveTerritoryName(
+  spec: TerritoryNameSpec,
+  year: number,
+): string {
+  if (typeof spec === "string") return spec;
+  let resolved = spec[0].name;
+  for (const period of spec) {
+    if (period.start === undefined || year >= period.start) {
+      resolved = period.name;
+    }
+  }
+  return resolved;
+}
 
 /** start / end の上書き指定（片側のみも可） */
 export interface RangeOverride {
@@ -174,22 +215,25 @@ export function dedupById(fc: FeatureCollection): FeatureCollection {
 }
 
 /**
- * 選定マップに載っている id の feature のみ残し、英語表示名にリネームして
- * properties を { NAME, SUBJECTO, PARTOF } の最小限に間引く（純粋関数）。
- * 複数 id が同一表示名に解決された場合（ザクセンの年代別 id など）は
+ * 選定マップに載っている id の feature のみ残し、year 時点の称号付き英語表示名に
+ * リネームして properties を { NAME, SUBJECTO, PARTOF } の最小限に間引く
+ * （純粋関数）。複数 id が同一表示名に解決された場合（ザクセンの年代別 id など）は
  * 最初の 1 件のみ残す（同一年に同名領邦を二重計上しない）。
  */
 export function selectMajorTerritories(
   fc: FeatureCollection,
-  territories: Record<string, string> = HRE_TERRITORIES,
+  year: number,
+  territories: Record<string, TerritoryNameSpec> = HRE_TERRITORIES,
 ): FeatureCollection {
   const seenNames = new Set<string>();
   const features: Feature[] = [];
   for (const feature of fc.features) {
     const id = feature.properties?.id;
     if (typeof id !== "string") continue;
-    const name = territories[id];
-    if (name === undefined || seenNames.has(name)) continue;
+    const spec = territories[id];
+    if (spec === undefined) continue;
+    const name = resolveTerritoryName(spec, year);
+    if (seenNames.has(name)) continue;
     seenNames.add(name);
     features.push({
       ...feature,
@@ -206,7 +250,7 @@ export function selectMajorTerritories(
 export function buildYearCollection(
   fc: FeatureCollection,
   year: number,
-  territories: Record<string, string> = HRE_TERRITORIES,
+  territories: Record<string, TerritoryNameSpec> = HRE_TERRITORIES,
   overrides: Record<string, RangeOverride> = HRE_RANGE_OVERRIDES,
 ): FeatureCollection {
   const patched = applyRangeOverrides(fc, overrides);
@@ -216,7 +260,7 @@ export function buildYearCollection(
       isActiveAtYear(feature.properties ?? {}, year)
     ),
   };
-  return selectMajorTerritories(dedupById(active), territories);
+  return selectMajorTerritories(dedupById(active), year, territories);
 }
 
 /** npm:shapefile の read 関数の型（型定義が同梱されないため最小限を自前定義） */
