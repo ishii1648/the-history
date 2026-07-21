@@ -1,11 +1,11 @@
 ---
-id: TASK-10
+id: DRAFT-1
 title: Cloudflare デプロイと CSP・CI 整備
-status: In Progress
+status: To Do
 assignee:
   - '@claude'
 created_date: '2026-07-20 04:24'
-updated_date: '2026-07-21 11:34'
+updated_date: '2026-07-21 11:39'
 labels: []
 dependencies:
   - TASK-1
@@ -40,3 +40,9 @@ ordinal: 10000
 5. AC#1（実配信）はユーザーの Cloudflare 提供後に検証。確認結果を待って finalization
 6. fmt/lint/test/build green → PR → CI 監視 → マージ
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+ユーザー判断（2026-07-21）: TASK-10 は保留。人が明示的に着手を宣言するまで実施しない。next-task の選択対象から外すため draft へ demote する。着手宣言後は promote して再開（実装プランは記録済み。Cloudflare 提供・secrets 設定・R2 アップロードの人間作業が前提）。
+<!-- SECTION:NOTES:END -->
