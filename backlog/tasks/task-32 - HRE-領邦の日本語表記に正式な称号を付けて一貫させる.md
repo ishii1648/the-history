@@ -1,9 +1,11 @@
 ---
 id: TASK-32
 title: HRE 領邦の日本語表記に正式な称号を付けて一貫させる
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-21 15:05'
+updated_date: '2026-07-21 15:51'
 labels: []
 dependencies:
   - TASK-19
@@ -26,3 +28,13 @@ ordinal: 31000
 - [ ] #5 勢力名・河川名など既存の日本語表記に退行がない
 - [ ] #6 称号マッピングのロジックにテストがあり deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 方針: 称号は英語 NAME 側に持たせる（例: Electorate of Brandenburg / Kingdom of Bohemia / Archduchy of Austria / Duchy of Bavaria）。NAME は年代別ファイル hre_<year>.geojson に埋まるため、年代依存の称号（バイエルン 1650 のみ Electorate of Bavaria）はデータ生成の年代別 NAME 解決で表現でき、フロントエンド（labels/info/colors 参照機構）は無変更で済む。ja は新 NAME への 1:1 マッピング追加（バイエルン選帝侯領 等）。旧 NAME（Austria 等）の ja エントリはベース勢力（1715 以降の Austria 等）と共有のため変更しない — 称号付き新 NAME に分離することで衝突自体を解消する。
+2. 表記ルール（AC#2）: 聖界 3 選帝侯は「大司教領」を採用し選帝侯である旨は名称でなく称号一覧コメントに記す…ではなく、日本語文献の慣行（山川・詳説世界史等で一般的な「マインツ大司教領」等）に合わせ Electorate of Mainz→マインツ大司教領 / Trier→トリーア大司教領 / Cologne→ケルン大司教領 で統一。世俗選帝侯は「〜選帝侯領」（ブランデンブルク選帝侯領・プファルツ選帝侯領・ザクセン選帝侯領）、ボヘミアは「ボヘミア王国」。その他: オーストリア大公領・バイエルン公領（1650 はバイエルン選帝侯領）・ヴュルテンベルク公領・ヘッセン方伯領・ヘッセン＝カッセル方伯領・ヘッセン＝ダルムシュタット方伯領・ザルツブルク大司教領・ザクセン公領（Ducal Saxony）。
+3. 実装: scripts/build-hre.ts の領邦定義を「id → 年代別（期間別）の英語称号付き NAME」を解決できる構造に拡張（Bavaria: 〜1623 Duchy of Bavaria / 1623〜 Electorate of Bavaria）。hre_{1500,1530,1600,1650}.geojson を再生成し、colors.json（NAME|Holy Roman Empire キーが新 NAME に変わる）と name-ja.json（新 NAME の訳追加。孤立キー検査があるため旧 HRE 専用キーの扱いに注意 — Brandenburg/Bohemia/Bavaria 等はベース勢力や都市と共有のため残る）を再生成/更新。name-ja_test の期待集合を再生成。
+4. 並列化判定（タスク内）: 見送り（理由: 称号定義・データ再生成・訳追加が単一の整合性要件で密結合。単一 subagent に委譲）。
+5. TDD（build-hre_test に年代別 NAME 解決のテスト先行）→ fmt/lint/test green → 生成物検証（各年の NAME 一覧）→ mainagent が統合後に目視確認（1500/1650 のラベル・ツールチップ称号表記）→ PR → CI → finalization → マージ
+<!-- SECTION:PLAN:END -->
