@@ -87,8 +87,14 @@ description: backlog の次タスクを決定的に選択し、実装から fina
    - CI red なら修正して再 push し、green になるまでこのループを回す。
    - CI green になったら finalization（AC を検証エビデンス付きでチェック → final
      summary → `Done`）をタスクブランチ上でコミットし、再度 CI green を
-     確認してからマージする。`Done` がマージと同時に main へ載ることで、
-     次イテレーションの `next-tasks` 判定が正しく進む。
+     確認してからマージする。finalization では **decision 記録の判定**を行う:
+     このタスクで下した判断に**タスク横断で影響するもの**（データソース採用・
+     ライセンス方針・アーキテクチャ/方式選択・規約変更等）があれば
+     `backlog decision create` で記録する（記録基準・棲み分け・CLI の使い方は
+     `docs/development-style.md` 2.1 章）。タスク限りの実装意図は Implementation
+     Notes とコンテキストコミットに留め、decision 化しない。`Done`
+     がマージと同時に main へ載ることで、 次イテレーションの `next-tasks`
+     判定が正しく進む。
 4. **マージ後の動作確認**
    - マージ直後、次イテレーションに進む前に `deno task build` と dev
      サーバ起動で当該タスクの変更点を実際に動かして確認する。ブラウザ操作が
