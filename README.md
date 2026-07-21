@@ -28,6 +28,14 @@ deno task build
 deno task serve
 ```
 
+> [!NOTE]
+> 動作確認は必ず**前面（アクティブ）タブ**で行ってください。背景タブやブラウザ
+> 自動化環境ではタブが `visibilityState=hidden` の間ブラウザが
+> `requestAnimationFrame` を停止するため、MapLibre の初回描画とベクタソース
+> 読み込みが前面化（またはフレーム強制）まで進まず、地図が数十秒グレーのまま
+> になります。これは検証環境のアーティファクトで、前面タブではサブ秒で表示され
+> ます（TASK-17）。
+
 ## データパイプライン
 
 歴史的国境ポリゴンは `scripts/build-data.ts` で生成し、成果物を `data/`
