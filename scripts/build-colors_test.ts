@@ -9,6 +9,7 @@ import {
   deriveSubjectColorHsl,
   fnv1a,
   hslToHex,
+  INDEPENDENT_SUBJECT_SUZERAINS,
   LIGHTNESSES,
   PALETTE_SIZE,
   paletteHslForIndex,
@@ -305,6 +306,78 @@ Deno.test("buildColorMap: 独立勢力は互いに完全に相異なる色にな
   const colors = names.map((n) => map[n]);
   // distinct 比率 100%（ハッシュ衝突による同色が起きない）
   assertEquals(new Set(colors).size, names.length);
+});
+
+Deno.test("INDEPENDENT_SUBJECT_SUZERAINS: HRE 領邦を独立色にする既定集合を固定する", () => {
+  assertEquals([...INDEPENDENT_SUBJECT_SUZERAINS], ["Holy Roman Empire"]);
+});
+
+Deno.test("buildColorMap: independentSubjectSuzerains の属領は NAME ベースの独立色になる", () => {
+  const fc = collection([
+    feature({ NAME: "Austria", SUBJECTO: "Holy Roman Empire" }),
+    feature({ NAME: "Bavaria", SUBJECTO: "Holy Roman Empire" }),
+  ]);
+  const map = buildColorMap(
+    [fc],
+    { renames: {} },
+    new Set(["Holy Roman Empire"]),
+  );
+  // キーは従来どおり複合キーのまま
+  assert("Austria|Holy Roman Empire" in map);
+  assert("Bavaria|Holy Roman Empire" in map);
+  // 宗主国色の明度シフトではなく、互いに相異なる独立プロービング色になる
+  assert(
+    map["Austria|Holy Roman Empire"] !== map["Bavaria|Holy Roman Empire"],
+  );
+  assert(
+    map["Austria|Holy Roman Empire"] !==
+      deriveSubjectColor("Holy Roman Empire"),
+  );
+  // 同じ NAME 集合を独立勢力として割り当てた場合と同色（NAME ベースのプロービング）
+  const independent = buildColorMap(
+    [collection([
+      feature({ NAME: "Austria", SUBJECTO: null }),
+      feature({ NAME: "Bavaria", SUBJECTO: null }),
+    ])],
+    { renames: {} },
+  );
+  assertEquals(map["Austria|Holy Roman Empire"], independent["Austria"]);
+  assertEquals(map["Bavaria|Holy Roman Empire"], independent["Bavaria"]);
+});
+
+Deno.test("buildColorMap: independentSubjectSuzerains は renames 正規化後の宗主国名で判定する", () => {
+  const fc = collection([
+    feature({ NAME: "Austria", SUBJECTO: "H.R.E." }),
+  ]);
+  const map = buildColorMap(
+    [fc],
+    { renames: { "H.R.E.": "Holy Roman Empire" } },
+    new Set(["Holy Roman Empire"]),
+  );
+  assertEquals(map["Austria|H.R.E."], assignColor("Austria"));
+});
+
+Deno.test("buildColorMap: 集合外の宗主国の属領は従来どおり明度シフト派生色のまま", () => {
+  const fc = collection([
+    feature({ NAME: "Naples", SUBJECTO: "Aragon" }),
+  ]);
+  const map = buildColorMap(
+    [fc],
+    { renames: {} },
+    new Set(["Holy Roman Empire"]),
+  );
+  assertEquals(map["Naples|Aragon"], deriveSubjectColor("Aragon"));
+});
+
+Deno.test("buildColorMap: 第 3 引数省略時は従来挙動（全属領が派生色）", () => {
+  const fc = collection([
+    feature({ NAME: "Bohemia", SUBJECTO: "Holy Roman Empire" }),
+  ]);
+  const map = buildColorMap([fc], { renames: {} });
+  assertEquals(
+    map["Bohemia|Holy Roman Empire"],
+    deriveSubjectColor("Holy Roman Empire"),
+  );
 });
 
 Deno.test("buildColorMap: feature の順序に依存せず同一結果を返す（決定性）", () => {

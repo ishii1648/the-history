@@ -13,6 +13,7 @@
 
 import type { FeatureCollection } from "geojson";
 import { SNAPSHOT_YEARS } from "../src/config.ts";
+import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 
 const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;
@@ -211,6 +212,16 @@ interface ColorEntry {
 }
 
 /**
+ * 「属領でも独立色にする宗主国名」の既定集合（TASK-19）。
+ * HRE 領邦オーバーレイ（data/hre_<year>.geojson）は全 feature が
+ * SUBJECTO="Holy Roman Empire" のため、従来の「宗主国色の明度シフト」では
+ * 全領邦が同色になってしまう。HRE 配下は NAME ベースの独立プロービング色にする。
+ */
+export const INDEPENDENT_SUBJECT_SUZERAINS: ReadonlySet<string> = new Set([
+  "Holy Roman Empire",
+]);
+
+/**
  * 全年代の FeatureCollection から色割当マップを組み立てる（純粋関数）。
  * - NAME が null の feature は載せない（クライアント側でデフォルト色）
  * - 独立勢力は決定的プロービングで相異なるパレット色を割り当てる（ハッシュ衝突での同色を回避）
@@ -218,10 +229,13 @@ interface ColorEntry {
  *   色相を保ち明度をずらした色にする（宗主国の実表示色と同色相ファミリーになる）
  * - SUBJECTO は overrides.renames で正規化してから宗主国色を引く。
  *   正規化後に自分自身へ帰着する自己参照は属領扱いせずベース色にする
+ * - 正規化後の宗主国名が independentSubjectSuzerains に入る feature は属領扱いせず、
+ *   NAME ベースの独立プロービング色を割り当てる（キーは複合キーのまま）
  */
 export function buildColorMap(
   collections: FeatureCollection[],
   overrides: NameOverrides,
+  independentSubjectSuzerains: ReadonlySet<string> = new Set(),
 ): ColorMap {
   // 第 1 パス: 参照キーごとに割当情報を集め、ベース色が必要な勢力名を収集する。
   // 独立勢力の NAME に加え、属領の宗主国名も「色相の供給元」としてスロットを予約する。
@@ -241,6 +255,10 @@ export function buildColorMap(
         const suzerain = overrides.renames[subjecto] ?? subjecto;
         if (suzerain === name) {
           // 補正前綴りの自己参照 → 属領扱いせずベース色
+          entries.push({ key, baseName: name, subject: false });
+          baseNames.add(name);
+        } else if (independentSubjectSuzerains.has(suzerain)) {
+          // 独立色にする宗主国（HRE 等）配下 → NAME ベースの独立プロービング色
           entries.push({ key, baseName: name, subject: false });
           baseNames.add(name);
         } else {
@@ -288,7 +306,10 @@ async function loadOverrides(path: string): Promise<NameOverrides> {
   }
 }
 
-/** data/europe_<year>.geojson を全年代ぶん読み込む */
+/**
+ * data/europe_<year>.geojson を全年代ぶんと、存在する data/hre_<year>.geojson
+ * （HRE 主要領邦オーバーレイ・`deno task build-hre` で生成）を読み込む。
+ */
 async function loadCollections(): Promise<FeatureCollection[]> {
   const collections: FeatureCollection[] = [];
   for (const year of SNAPSHOT_YEARS) {
@@ -296,13 +317,25 @@ async function loadCollections(): Promise<FeatureCollection[]> {
     const fc = JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
     collections.push(fc);
   }
+  for (const year of HRE_OVERLAY_YEARS) {
+    const path = `${DATA_DIR}/hre_${year}.geojson`;
+    try {
+      const fc = JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
+      collections.push(fc);
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error;
+      // 未生成環境（build-hre 前）ではスキップして従来どおり動かす
+    }
+  }
   return collections;
 }
 
 async function main(): Promise<void> {
   const overrides = await loadOverrides(OVERRIDES_PATH);
   const collections = await loadCollections();
-  const map = sortColorMap(buildColorMap(collections, overrides));
+  const map = sortColorMap(
+    buildColorMap(collections, overrides, INDEPENDENT_SUBJECT_SUZERAINS),
+  );
   await Deno.writeTextFile(COLORS_PATH, `${JSON.stringify(map, null, 2)}\n`);
 
   const subjectKeys = Object.keys(map).filter((k) =>
