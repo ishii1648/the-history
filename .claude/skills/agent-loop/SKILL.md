@@ -22,7 +22,10 @@ description: backlog の次タスクを決定的に選択し、実装から fina
 2. **標準タスクフローの実行**（CLAUDE.md / docs/development-style.md に従う）
    - backlog CLI でタスクを `In Progress` にし、実装プランを記録する。
    - ブランチ `task-N-slug` を作成し、テスト先行（red 確認 → green）で
-     実装する。実装は subagent に委譲し、mainagent がレビューで収束させる。
+     実装する。default branch（main）上では作業しない。実装は subagent に
+     委譲し、mainagent がレビューで収束させる。タスク内で並列作業が可能な 場合は
+     subagent を並列に複数起動し、worktree isolation で衝突を避ける （成果物の
+     conflict は PR で解消する）。
    - `deno fmt --check` / `deno lint` / `deno test` / `deno task build` を 全て
      green にしてから PR を作成する（タイトル・説明に TASK ID を明記）。
 3. **CI 監視とマージ**

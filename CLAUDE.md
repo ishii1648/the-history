@@ -45,6 +45,11 @@ consistent.
   にする。詳細は `docs/development-style.md` を参照。
 - エージェント分担: 実装は subagent に委譲し、レビューは mainagent
   自身が行う。codex など外部エージェントによるレビューは行わない。
+- default branch（main）上で作業しない。編集・コミットは必ず作業ブランチで行い、
+  main への反映は常に PR 経由とする。
+- タスクの直列実行は維持しつつ、タスク内で並列作業が可能な場合は作業効率を
+  上げるため subagent を並列に複数起動する。subagent 同士の衝突を避けるため
+  worktree isolation を利用し、成果物の conflict は PR で解消する。
 - 標準タスクフロー: backlog タスク → ブランチ作成 → テスト先行 → 実装 （subagent
   に委譲）→ `deno test` green → mainagent によるレビューで収束 → PR 作成（TASK
   ID 明記）→ CI green → マージ → backlog finalization。
