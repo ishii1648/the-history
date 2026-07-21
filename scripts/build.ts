@@ -57,6 +57,8 @@ export function getDataCopyTargets(
     { from: "data/name-ja.json", to: `${distDir}/data/name-ja.json` },
     // TASK-21: 主要河川オーバーレイ用の GeoJSON（deno task build-rivers で生成）
     { from: "data/rivers.geojson", to: `${distDir}/data/rivers.geojson` },
+    // TASK-27: 各年代の主要都市マーカー（deno task build-cities で生成）
+    { from: "data/cities.json", to: `${distDir}/data/cities.json` },
   ];
   for (const year of years) {
     targets.push({
