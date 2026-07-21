@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 10:12'
-updated_date: '2026-07-21 10:29'
+updated_date: '2026-07-21 10:30'
 labels:
   - bug
 dependencies: []
@@ -40,7 +40,7 @@ TASK-4 のマージ後動作確認で初回観測（10〜18 秒、backlog notes 
 <!-- AC:BEGIN -->
 - [x] #1 初期表示までの所要時間の内訳（app.js 評価 / pmtiles fetch / タイルデコード / geojson+colors 取得）が計測され原因が特定されている
 - [x] #2 主因に対する修正または緩和策が実装され、ローカル dev での初期表示が体感で改善している（改善不能な場合は根拠を記録して wontfix 判断でも可）
-- [ ] #3 修正した場合、目視確認で初期表示時間の改善を確認している
+- [x] #3 修正した場合、目視確認で初期表示時間の改善を確認している
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -61,6 +61,8 @@ TASK-4 のマージ後動作確認で初回観測（10〜18 秒、backlog notes 
 mainagent 独立検証: 自動化タブで vis=hidden / hasFocus=false / rAF 3 秒未発火を確認。
 将来候補（今回スコープ外）: colors.json と初期年代 GeoJSON を map load ゲート外で先読みする最適化（効果軽微）。
 検証プロセスの学び: ブラウザ自動化での目視確認は、待機の前にスクリーンショットを撮ることでフレームが強制され描画が進む。長い wait より screenshot → wait → screenshot が有効。
+
+AC#3 は『修正した場合』の条件付き AC。wontfix（修正なし）のため条件不成立で自動成立としてチェック（Done 規約の全 AC チェック済み要件との整合）。
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
