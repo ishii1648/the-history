@@ -168,3 +168,29 @@ printf '%s' '{"required_status_checks":{"strict":true,"contexts":["ci"]},"enforc
 - 権限不足で失敗する場合は、GitHub リポジトリの Settings > Branches
   からブラウザ上で同等の設定（Require status checks to pass: `ci`、Require a
   pull request before merging）を行う。
+
+## 7. GitHub Actions の外部 action ピン留め
+
+`.github/workflows/` のワークフローで外部 action
+を追加・更新する際は、タグ（`@v4` など可変参照）ではなく**フルコミット SHA（40
+桁）で固定**し、対応するバージョンを
+コメントで併記する。タグは後から別コミットへ付け替え可能なため、タグ固定のままだと
+タグ乗っ取りによるサプライチェーン攻撃を受けうる（SHA は不変なので固定できる）。
+
+```yaml
+# 良い例（SHA 固定 + バージョンコメント）
+uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+
+# 悪い例（可変タグ参照）
+uses: actions/checkout@v4
+```
+
+- SHA はタグ/ブランチが指す実体を GitHub API で取得する（例:
+  `gh api repos/actions/checkout/git/ref/tags/v4 --jq .object.sha`。annotated
+  tag で `object.type` が `tag` の場合は
+  `gh api repos/<owner>/<repo>/git/tags/<sha>` で さらに deref する）。取得した
+  SHA が対象バージョンに対応することを確認してから
+  コメントのバージョンを記載する。
+- action を更新する際は SHA とコメントのバージョンを同時に書き換える。Dependabot
+  等で更新する場合も SHA 固定＋コメント併記の形式を維持する。
