@@ -5,6 +5,7 @@
  */
 
 import { SNAPSHOT_YEARS } from "../src/config.ts";
+import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 
 const ENTRY = "src/main.ts";
 const DIST_DIR = "dist";
@@ -37,10 +38,12 @@ export function getOptionalCopyTargets(
 /**
  * 勢力圏レイヤーが参照する data/ 一式を dist/data/ にコピーする対象を返す（純粋関数）。
  * index.json・colors.json と各年代の GeoJSON。europe.pmtiles は別枠（dist 直下・任意）。
+ * hreYears には HRE 主要領邦オーバーレイ（deno task build-hre で生成）の年代を渡す。
  */
 export function getDataCopyTargets(
   distDir: string,
   years: readonly number[],
+  hreYears: readonly number[],
 ): Array<{ from: string; to: string }> {
   const targets: Array<{ from: string; to: string }> = [
     { from: "data/index.json", to: `${distDir}/data/index.json` },
@@ -57,6 +60,13 @@ export function getDataCopyTargets(
     targets.push({
       from: `data/europe_${year}.geojson`,
       to: `${distDir}/data/europe_${year}.geojson`,
+    });
+  }
+  // TASK-19: HRE 主要領邦オーバーレイ用の GeoJSON（deno task build-hre で生成）
+  for (const year of hreYears) {
+    targets.push({
+      from: `data/hre_${year}.geojson`,
+      to: `${distDir}/data/hre_${year}.geojson`,
     });
   }
   return targets;
@@ -211,7 +221,13 @@ async function copyOptionalFiles(distDir: string): Promise<void> {
 
 async function copyDataFiles(distDir: string): Promise<void> {
   await Deno.mkdir(`${distDir}/data`, { recursive: true });
-  for (const { from, to } of getDataCopyTargets(distDir, SNAPSHOT_YEARS)) {
+  for (
+    const { from, to } of getDataCopyTargets(
+      distDir,
+      SNAPSHOT_YEARS,
+      HRE_OVERLAY_YEARS,
+    )
+  ) {
     await Deno.copyFile(from, to);
   }
 }
