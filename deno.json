@@ -8,6 +8,7 @@
   },
   "tasks": {
     "build": "deno run --allow-read --allow-write --allow-run scripts/build.ts",
+    "next-task": "deno run --allow-read scripts/next_task.ts",
     "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist",
     "test": "deno test",
     "test:watch": "deno test --watch"
@@ -17,6 +18,7 @@
     "@deck.gl/layers": "npm:@deck.gl/layers@^9.3.7",
     "@protomaps/basemaps": "npm:@protomaps/basemaps@^5.7.2",
     "@std/assert": "jsr:@std/assert@^1.0.19",
+    "@std/yaml": "jsr:@std/yaml@^1",
     "maplibre-gl": "npm:maplibre-gl@^4.7.1",
     "pmtiles": "npm:pmtiles@^3.2.1"
   }
