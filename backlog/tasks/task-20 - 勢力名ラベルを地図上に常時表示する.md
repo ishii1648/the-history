@@ -1,11 +1,11 @@
 ---
 id: TASK-20
 title: 勢力名ラベルを地図上に常時表示する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 12:09'
-updated_date: '2026-07-21 13:06'
+updated_date: '2026-07-21 13:20'
 labels: []
 dependencies: []
 ordinal: 20000
@@ -23,11 +23,11 @@ ordinal: 20000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 各勢力ポリゴン上に勢力名ラベルが常時表示され、代表的な勢力がホバーなしで識別できる
-- [ ] #2 ラベルは年代切替に追従して切り替わる
-- [ ] #3 ラベル同士の重なりが制御されており、初期ズーム（z4）で判読不能な重なりが発生しない（小勢力はズームインで表示される等の出し分けも可）
-- [ ] #4 属領（SUBJECTO が NAME と異なる feature）のラベル表記方針が info.ts の displayLabel と矛盾しない
-- [ ] #5 ラベル位置算出などの純粋ロジックにテストがあり deno test が green
+- [x] #1 各勢力ポリゴン上に勢力名ラベルが常時表示され、代表的な勢力がホバーなしで識別できる
+- [x] #2 ラベルは年代切替に追従して切り替わる
+- [x] #3 ラベル同士の重なりが制御されており、初期ズーム（z4）で判読不能な重なりが発生しない（小勢力はズームインで表示される等の出し分けも可）
+- [x] #4 属領（SUBJECTO が NAME と異なる feature）のラベル表記方針が info.ts の displayLabel と矛盾しない
+- [x] #5 ラベル位置算出などの純粋ロジックにテストがあり deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -40,3 +40,21 @@ ordinal: 20000
 5. 並列化判定: 見送り（理由: 本タスクは「純ロジック src/labels.ts」と「main.ts への TextLayer 統合」の 2 部分だが、統合部は labels.ts の API に依存しコンパイル・テストとも独立に成立しない（実行順依存）。CLAUDE.md の並列化基準「互いにファイル競合・実行順依存がなく独立にテスト可能」を満たさないため、単一 subagent に委譲して直列実装する）。
 6. TDD: labels_test.ts を先行作成（red 確認）→ 実装 → green。main.ts 統合後、deno fmt --check / lint / test / build 全 green → 目視確認（z4 で主要勢力ラベル・重なり無し、ズームインで領邦ラベル、年代切替追従）→ PR → CI 監視 → finalization → マージ → マージ後動作確認
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: dev サーバ + Chrome で目視確認。1500 年（z5）で Holy Roman Empire・France・Poland-Lithuania・Imperial Hungary 等の主要国と HRE 領邦（Brandenburg・Electoral/Ducal Saxony・Bohemia・Bavaria・Austria・Salzburg・Palatinate・Württemberg・Mainz・Hesse・Cologne）のラベルがホバーなしで判読できる。
+- AC#2: 年代切替で 1400 は Holy Roman Empire 単一等、年代相応のラベルに追従することを確認（applyFn 内で TextLayer data を差し替え、updateTriggers に year）。
+- AC#3: CollisionFilterExtension + collisionTestProps.sizeScale=2 で衝突制御し、z4〜z5 で判読不能な重なりなし。面積対数の priority で大勢力優先・小勢力はズームインで表示。
+- AC#4: 地図上ラベルは NAME のみ、属領の宗主国込み表記（NAME — SUBJECTO 領）はツールチップの displayLabel に委ねる方針で矛盾なし（info.ts 無変更）。
+- AC#5: src/labels_test.ts 14 テスト（最大ポリゴン選択・凹形状内部判定・NAME null 除外・priority 単調性とレンジ・characterSet 非 ASCII）。deno fmt --check / lint / test（260 passed）/ build 全 green、PR #30 CI pass。
+- 実装: 並列化見送り（実行順依存のため単一 subagent aeb6a9b）。TDD red→green 実施。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+deck.gl TextLayer + CollisionFilterExtension で勢力名ラベルを常時表示。代表点は最大ポリゴンの pole of inaccessibility（@mapbox/polylabel）、優先度は面積対数で大勢力優先、characterSet 自動導出で非 ASCII も描画。base と HRE 領邦オーバーレイ双方が対象。検証は deno test 260 passed・CI pass・Chrome で 1500/1400 の目視確認（重なり制御・年代追従）。
+<!-- SECTION:FINAL_SUMMARY:END -->
