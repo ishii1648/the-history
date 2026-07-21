@@ -1,9 +1,11 @@
 ---
 id: TASK-24
 title: 主要河川のラベル表示とクリックによるライン強調
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-21 13:25'
+updated_date: '2026-07-21 13:54'
 labels: []
 dependencies: []
 ordinal: 24000
@@ -24,3 +26,18 @@ ordinal: 24000
 - [ ] #3 河川のラベル・クリック判定が勢力ポリゴンのホバー/クリック（ツールチップ・情報パネル）を阻害しない
 - [ ] #4 追加・変更した純粋ロジックにテストがあり deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 方針: 河川の描画を MapLibre style レイヤー（basemap.ts の rivers ソース+line レイヤー）から deck.gl の GeoJsonLayer（line, pickable）へ移行し、クリック判定と動的強調（選択河川の太線・濃色化）を deck.gl 側で実現する。描画順は powers/hre の上（ライン 2px 程度なのでポリゴン視認性への影響は軽微、クリックは最前面判定のため river 線上では river が拾える）。線のクリックしやすさは overlay の pickingRadius で確保。
+2. 強調: モジュール状態 selectedRiverName を持ち、getLineColor/getLineWidth を選択状態依存のアクセサ + updateTriggers で切替。同一河川の再クリックで解除、勢力ポリゴン/空白のクリックでも解除。選択時は情報パネルに河川名を表示。
+3. ラベル: rivers.geojson の name を持つ feature の最長 LineString 中点にアンカーする純粋関数を src/rivers.ts に実装し、既存 TextLayer（power-labels）とは別に河川用 TextLayer（水色系・やや小さめ・CollisionFilterExtension 共用）を追加。表記は nameJa 適用（未登録は英語）。
+4. 日本語訳: data/name-ja.json に rivers.geojson の全ユニーク name（Rhine→ライン川 等）を追加し、scripts/name-ja_test.ts のカバレッジ対象に rivers.geojson を含める。
+5. basemap.ts: rivers ソース/レイヤー・buildRiversLayer を撤去（TASK-21 の描画部分の置換。出典表記はフッターに維持）。basemap_test を更新。
+6. 並列化判定: 並列可（独立サブ作業 2 件、worktree isolation）
+   - subagent A（フロント）: src/rivers.ts / rivers_test.ts 新規（アンカー・強調状態の純ロジック）、src/main.ts（deck レイヤー追加・クリック連動）、src/basemap.ts / basemap_test.ts（style レイヤー撤去）。担当: src/*
+   - subagent B（訳データ）: data/name-ja.json への河川名追加と scripts/name-ja_test.ts のカバレッジ拡張。担当: data/name-ja.json / scripts/name-ja_test.ts
+   - 契約: 河川ラベルは ja[name] ?? name（A は B の中身に依存しない）。担当ファイルは互いに素
+7. TDD: 両 subagent がテスト先行（red→green）→ mainagent 統合レビュー → fmt/lint/test/build 全 green → 目視確認（ラベル・クリック強調・解除・勢力 picking 非阻害）→ PR → CI → finalization → マージ → マージ後動作確認
+<!-- SECTION:PLAN:END -->
