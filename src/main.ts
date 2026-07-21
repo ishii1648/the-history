@@ -2,7 +2,11 @@ import maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol } from "pmtiles";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { GeoJsonLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
+import {
+  CollisionFilterExtension,
+  type CollisionFilterExtensionProps,
+} from "@deck.gl/extensions";
 import type { Feature, FeatureCollection } from "geojson";
 import { buildBasemapStyle } from "./basemap.ts";
 import {
@@ -20,6 +24,7 @@ import {
   LINE_WIDTH_PX,
 } from "./powers.ts";
 import { displayLabel } from "./info.ts";
+import { buildLabelData, characterSetFrom, type LabelDatum } from "./labels.ts";
 import {
   clearErrors,
   createLoadingState,
@@ -122,6 +127,12 @@ const POWER_LAYER_ID = "powers";
  */
 const HRE_LAYER_ID = "hre-powers";
 
+/**
+ * 勢力名ラベル（TextLayer）のレイヤー ID（TASK-20）。
+ * powers / hre-powers の上に重ね、年代切替では data のみ差し替える。
+ */
+const LABEL_LAYER_ID = "power-labels";
+
 /** colors.json（NAME / "NAME|SUBJECTO" → HEX のフラットマップ） */
 let colors: Record<string, string> = {};
 
@@ -186,6 +197,46 @@ function buildPowerLayer(
         : null;
       if (label !== null) showInfoPanel(label);
     },
+  });
+}
+
+/**
+ * 勢力名ラベルの TextLayer を生成する（TASK-20）。
+ * base（europe_*）と HRE 領邦オーバーレイ（hre_*）双方のラベルを 1 枚に束ね、
+ * CollisionFilterExtension で重なりを間引く。面積由来の priority（labels.ts）
+ * により大勢力を優先表示し、小勢力はズームインで空きができ次第表示される。
+ * pickable は false（ラベル自体はホバー対象にせず、下のポリゴンの picking を
+ * 妨げない）。年代切替では同一 ID のまま data を差し替えるのみ。
+ */
+function buildLabelLayer(
+  year: number,
+  base: FeatureCollection,
+  hre: FeatureCollection,
+): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
+  const data = [...buildLabelData(base), ...buildLabelData(hre)];
+  return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
+    id: LABEL_LAYER_ID,
+    data,
+    pickable: false,
+    getText: (d) => d.text,
+    getPosition: (d) => d.position,
+    // 13px 固定・濃色文字 + 白 halo（SDF アウトライン）で塗りの上でも判読できる
+    getSize: 13,
+    sizeUnits: "pixels",
+    getColor: [40, 40, 40, 255],
+    fontFamily: "sans-serif",
+    fontWeight: 600,
+    fontSettings: { sdf: true },
+    outlineWidth: 2,
+    outlineColor: [255, 255, 255, 220],
+    // ü などの非 ASCII 文字（Württemberg 等）もグリフを生成する
+    characterSet: characterSetFrom(data.map((d) => d.text)),
+    updateTriggers: { getText: [year], getPosition: [year] },
+    // 衝突制御: 判定時はラベルを 2 倍サイズとして扱い、初期ズーム（z4）での
+    // 密集を抑える（実表示より広い余白を確保し、判読不能な重なりを防ぐ）
+    extensions: [new CollisionFilterExtension()],
+    collisionTestProps: { sizeScale: 2 },
+    getCollisionPriority: (d: LabelDatum) => d.priority,
   });
 }
 
@@ -256,6 +307,8 @@ const yearSwitcher = createYearSwitcher(
       layers: [
         buildPowerLayer(POWER_LAYER_ID, year, data.base),
         buildPowerLayer(HRE_LAYER_ID, year, data.hre),
+        // TASK-20: 勢力名ラベルは常に最前面（powers / hre-powers の上）
+        buildLabelLayer(year, data.base, data.hre),
       ],
     });
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
