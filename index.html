@@ -98,26 +98,41 @@
       </div>
       <datalist id="timeline-marks"></datalist>
     </div>
-    <!-- TASK-9: データ出典・attribution・境界精度の免責を常時表示（app-spec §2.1, §5.4） -->
+    <!-- TASK-9/TASK-26: データ出典・attribution・境界精度の免責（app-spec §2.1, §5.4）。
+         TASK-26 で折りたたみ式に変更: 常時表示はⓘトグルボタンのみで、全文はクリック/
+         タップ/キーボードで展開する。文言・リンクは TASK-9 のまま不変。開閉制御は main.ts -->
     <footer id="app-footer" class="app-footer">
-      境界データ:
-      <a
-        href="https://github.com/aourednik/historical-basemaps"
-        target="_blank"
-        rel="noopener noreferrer"
-      >historical-basemaps</a>（GPL-3.0） / 帝国領邦:
-      <a
-        href="https://doi.org/10.3929/ethz-b-000472583"
-        target="_blank"
-        rel="noopener noreferrer"
-      >ETH Zürich (Roller)</a>（CC BY-NC-SA 4.0） / 地図: © Protomaps ©
-      OpenStreetMap contributors / 河川:
-      <a
-        href="https://www.naturalearthdata.com"
-        target="_blank"
-        rel="noopener noreferrer"
-      >Natural Earth</a>（パブリックドメイン） ／
-      歴史的境界は概略であり厳密ではありません（元データは work in progress）。
+      <button
+        id="footer-toggle"
+        class="footer-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="footer-content"
+        aria-label="データ出典・免責事項"
+      >
+        ⓘ
+      </button>
+      <div id="footer-content" class="footer-content" hidden>
+        境界データ:
+        <a
+          href="https://github.com/aourednik/historical-basemaps"
+          target="_blank"
+          rel="noopener noreferrer"
+        >historical-basemaps</a>（GPL-3.0） / 帝国領邦:
+        <a
+          href="https://doi.org/10.3929/ethz-b-000472583"
+          target="_blank"
+          rel="noopener noreferrer"
+        >ETH Zürich (Roller)</a>（CC BY-NC-SA 4.0） / 地図: © Protomaps ©
+        OpenStreetMap contributors / 河川:
+        <a
+          href="https://www.naturalearthdata.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Natural Earth</a>（パブリックドメイン） ／
+        歴史的境界は概略であり厳密ではありません（元データは work in
+        progress）。
+      </div>
     </footer>
     <script type="module" src="app.js"></script>
   </body>
