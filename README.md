@@ -28,6 +28,36 @@ deno task build
 deno task serve
 ```
 
+## データパイプライン
+
+歴史的国境ポリゴンは `scripts/build-data.ts` で生成し、成果物を `data/`
+にコミットしています（配信時に元リポジトリへアクセスしません）。
+
+```bash
+# data/europe_<year>.geojson × 20 と data/index.json を生成する
+deno task build-data
+```
+
+- ヨーロッパ bbox（西経25°〜東経60°・北緯34°〜72°）でクリップし、
+  `@turf/simplify` で 1 ファイル 300 KB 以下に簡略化します。
+- `data/name-overrides.json` で NAME の表記ゆれ・null を補正します。
+- 取得元コミットは `scripts/build-data.ts` の `SOURCE_COMMIT`
+  でピン留めしています。
+
+## 出典・ライセンス
+
+歴史的国境・勢力圏のポリゴンデータは
+[aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps)（**GPL-3.0**）に由来します。
+
+- 元データのライセンスはコピーレフトであり、切り出し・簡略化した
+  `data/europe_<year>.geojson` などの**派生データも GPL-3.0 で公開します**。
+- 取得元コミットハッシュ・リポジトリ・ライセンスは `data/index.json` の `source`
+  フィールドに記録しています。
+- 本リポジトリのライセンス全文は [`LICENSE`](LICENSE)（GNU General Public
+  License v3.0）を参照してください。
+- 元データは "work in progress"
+  であり、歴史的境界は概略です。学術的な厳密さは保証されません。
+
 ## npm install script（lifecycle script）の無効化について
 
 Deno はデフォルトで npm パッケージの install lifecycle script（`preinstall` /
