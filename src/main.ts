@@ -99,6 +99,12 @@ const map = new maplibregl.Map({
   maxBounds: MAP_MAX_BOUNDS,
 });
 
+// TASK-22: コンストラクタの maxBounds は初期カメラに制約を適用しないことがあり、
+// 境界ちょうどへクランプされた center（範囲外 URL 由来）だとビューポート下半分が
+// 圏外を映したまま初期表示される。setMaxBounds を明示的に呼ぶと現在のカメラへ
+// 即時に制約が適用され、初期表示から表示範囲が bounds 内に収まる。
+map.setMaxBounds(MAP_MAX_BOUNDS);
+
 let fallbackState = createFallbackState();
 
 /** フォールバック判定を通し、必要なら OpenFreeMap スタイルへ一度だけ切り替える */
