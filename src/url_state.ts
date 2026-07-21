@@ -2,7 +2,8 @@
  * URL 状態共有（app-spec §5.3 / map-rendering-research §5 の worldmonitor パターン）の
  * DOM・履歴 API に依存しない純粋ロジック。
  * - encodeState: 表示状態 → `?year=...&zoom=...&center=lon,lat` クエリ文字列
- * - decodeState: クエリ文字列 → 検証済みの表示状態（パラメータ単位でフォールバック）
+ * - decodeState: クエリ文字列 → 検証済みの表示状態
+ *   （パース不能値はパラメータ単位でフォールバック、範囲外の数値はクランプ）
  * - createReplaceStateUpdater: 同一 state での重複更新を抑止する薄いラッパ
  *
  * 検証はここに集約し、main.ts 側は location.search / history.replaceState との
@@ -87,7 +88,12 @@ function decodeZoom(
   return clamp(n, min, max);
 }
 
-/** `lon,lat` を検証。形式不正・非数値・範囲外はデフォルトへフォールバック。 */
+/**
+ * `lon,lat` を検証する。形式不正・非数値（パース不能）はデフォルトへ
+ * フォールバックし、数値として妥当だが範囲外の値は bounds 内へ軸ごとに
+ * クランプする（TASK-22: 共有 URL の視点の意図をなるべく保つため、範囲外は
+ * エラーやデフォルト置換ではなく最寄りの境界に寄せる）。
+ */
 function decodeCenter(
   raw: string | null,
   fallback: [number, number],
@@ -99,19 +105,24 @@ function decodeCenter(
   const lon = parseNumber(parts[0]);
   const lat = parseNumber(parts[1]);
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return fallback;
-  const minLon = bounds.minLon ?? DEFAULT_MIN_LON;
-  const maxLon = bounds.maxLon ?? DEFAULT_MAX_LON;
-  const minLat = bounds.minLat ?? DEFAULT_MIN_LAT;
-  const maxLat = bounds.maxLat ?? DEFAULT_MAX_LAT;
-  if (lon < minLon || lon > maxLon || lat < minLat || lat > maxLat) {
-    return fallback;
-  }
-  return [lon, lat];
+  return [
+    clamp(
+      lon,
+      bounds.minLon ?? DEFAULT_MIN_LON,
+      bounds.maxLon ?? DEFAULT_MAX_LON,
+    ),
+    clamp(
+      lat,
+      bounds.minLat ?? DEFAULT_MIN_LAT,
+      bounds.maxLat ?? DEFAULT_MAX_LAT,
+    ),
+  ];
 }
 
 /**
  * クエリ文字列を検証済み表示状態へ復元する。
- * 各パラメータは独立に検証し、不正なものだけ defaults へフォールバックする
+ * 各パラメータは独立に検証し、パース不能なものだけ defaults へフォールバック、
+ * 数値として妥当だが範囲外の zoom / center は bounds 内へクランプする
  * （正しい値は活かす）。search は先頭 `?` の有無どちらでも解釈する。
  */
 export function decodeState(

@@ -9,11 +9,29 @@ export const INITIAL_CENTER: readonly [number, number] = [15, 50];
 /** 地図の初期ズームレベル */
 export const INITIAL_ZOOM = 4;
 
-/** 地図の最小ズームレベル */
-export const MIN_ZOOM = 3;
+/**
+ * 地図の最小ズームレベル。
+ * TASK-22 でヨーロッパ全域がちょうど一望できる z4 に引き上げた（z3 では
+ * ヨーロッパが画面の一部にしか映らないほど引けてしまう）。なお MAP_MAX_BOUNDS
+ * 併用時、MapLibre は bounds 全体が収まるよう viewport 幅に応じて実効最小
+ * ズームをさらに制限するため、広い画面ではこの値より寄った表示が下限になる。
+ */
+export const MIN_ZOOM = 4;
 
 /** 地図の最大ズームレベル */
 export const MAX_ZOOM = 8;
+
+/**
+ * 地図のパン・ズームを制限するヨーロッパ域の境界 [[西, 南], [東, 北]]。
+ * MapLibre の LngLatBoundsLike 互換タプルで、Map の `maxBounds` にそのまま渡す。
+ * データパイプライン側 scripts/build-data.ts の EUROPE_BBOX ([-25, 34, 60, 72])
+ * と同値（src → scripts の import は行わない規約のため値を重複定義し、
+ * 同値性は config_test.ts で担保する）。
+ */
+export const MAP_MAX_BOUNDS: [[number, number], [number, number]] = [
+  [-25, 34],
+  [60, 72],
+];
 
 /** タイムラインスライダーの初期年代 */
 export const INITIAL_YEAR = 1000;
