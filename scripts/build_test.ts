@@ -1,5 +1,9 @@
 import { assertEquals } from "@std/assert";
-import { buildBundleArgs, getStaticCopyTargets } from "./build.ts";
+import {
+  buildBundleArgs,
+  getOptionalCopyTargets,
+  getStaticCopyTargets,
+} from "./build.ts";
 
 Deno.test("getStaticCopyTargets は index.html と app.css を dist/ にコピーする対象を返す", () => {
   const targets = getStaticCopyTargets("dist");
@@ -14,6 +18,20 @@ Deno.test("getStaticCopyTargets は distDir を反映する", () => {
   assertEquals(targets, [
     { from: "index.html", to: "out/index.html" },
     { from: "app.css", to: "out/app.css" },
+  ]);
+});
+
+Deno.test("getOptionalCopyTargets は data/europe.pmtiles を dist/ にコピーする対象を返す", () => {
+  const targets = getOptionalCopyTargets("dist");
+  assertEquals(targets, [
+    { from: "data/europe.pmtiles", to: "dist/europe.pmtiles" },
+  ]);
+});
+
+Deno.test("getOptionalCopyTargets は distDir を反映する", () => {
+  const targets = getOptionalCopyTargets("out");
+  assertEquals(targets, [
+    { from: "data/europe.pmtiles", to: "out/europe.pmtiles" },
   ]);
 });
 

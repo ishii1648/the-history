@@ -12,7 +12,7 @@
     "build-colors": "deno run --allow-read --allow-write scripts/build-colors.ts",
     "extract-pmtiles": "deno run --allow-net=build-metadata.protomaps.dev --allow-run=pmtiles --allow-read scripts/extract-pmtiles.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
-    "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist --port 5173",
+    "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist",
     "test": "deno test",
     "test:watch": "deno test --watch"
   },
