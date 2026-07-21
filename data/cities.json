@@ -1,0 +1,2452 @@
+{
+  "years": {
+    "900": [
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 300000
+      },
+      {
+        "name": "Samarra",
+        "lon": 43.874167,
+        "lat": 34.198333,
+        "population": 280000
+      },
+      {
+        "name": "Kairouan",
+        "lon": 10.101667,
+        "lat": 35.674444,
+        "population": 100000
+      },
+      {
+        "name": "Nishapur",
+        "lon": 58.795833,
+        "lat": 36.213333,
+        "population": 100000
+      },
+      {
+        "name": "Rayy",
+        "lon": 51.4333,
+        "lat": 35.5833,
+        "population": 100000
+      },
+      {
+        "name": "Thessaloniki",
+        "lon": 22.944606,
+        "lat": 40.63935,
+        "population": 50000
+      },
+      {
+        "name": "Tarsus",
+        "lon": 34.8784,
+        "lat": 36.91876,
+        "population": 48000
+      },
+      {
+        "name": "Astrakhan",
+        "lon": 48.083239,
+        "lat": 46.366681,
+        "population": 40000
+      },
+      {
+        "name": "Merida",
+        "lon": -6.34366,
+        "lat": 38.91611,
+        "population": 40000
+      },
+      {
+        "name": "Preslav",
+        "lon": 26.817967,
+        "lat": 43.164542,
+        "population": 40000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 40000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 40000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 37500
+      },
+      {
+        "name": "Bobastro",
+        "lon": -4.416667,
+        "lat": 36.716667,
+        "population": 36000
+      },
+      {
+        "name": "Pavia",
+        "lon": 9.16145,
+        "lat": 45.18446,
+        "population": 22000
+      },
+      {
+        "name": "Cologne",
+        "lon": 6.960278,
+        "lat": 50.937531,
+        "population": 21000
+      },
+      {
+        "name": "Cordoba",
+        "lon": -4.893564,
+        "lat": 38.046133,
+        "population": 20000
+      },
+      {
+        "name": "Reggio di Calabria",
+        "lon": 15.647292,
+        "lat": 38.1113,
+        "population": 17000
+      },
+      {
+        "name": "Metz",
+        "lon": 6.17269,
+        "lat": 49.11911,
+        "population": 14000
+      },
+      {
+        "name": "Burgos",
+        "lon": -3.7,
+        "lat": 42.35,
+        "population": 9000
+      }
+    ],
+    "1000": [
+      {
+        "name": "Cordoba",
+        "lon": -4.893564,
+        "lat": 38.046133,
+        "population": 450000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 300000
+      },
+      {
+        "name": "Nishapur",
+        "lon": 58.795833,
+        "lat": 36.213333,
+        "population": 125000
+      },
+      {
+        "name": "Rayy",
+        "lon": 51.4333,
+        "lat": 35.5833,
+        "population": 100000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 90000
+      },
+      {
+        "name": "Kairouan",
+        "lon": 10.101667,
+        "lat": 35.674444,
+        "population": 80000
+      },
+      {
+        "name": "Ani",
+        "lon": 43.567128,
+        "lat": 40.501381,
+        "population": 75000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 75000
+      },
+      {
+        "name": "Kiev",
+        "lon": 30.5238,
+        "lat": 50.45466,
+        "population": 45000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 45000
+      },
+      {
+        "name": "Aleppo",
+        "lon": 37.166667,
+        "lat": 36.216667,
+        "population": 40000
+      },
+      {
+        "name": "Diyarbakir",
+        "lon": 40.230628,
+        "lat": 37.914411,
+        "population": 40000
+      },
+      {
+        "name": "Kayseri",
+        "lon": 35.48528,
+        "lat": 38.73222,
+        "population": 40000
+      },
+      {
+        "name": "Ohrid",
+        "lon": 23.380704,
+        "lat": 43.454967,
+        "population": 40000
+      },
+      {
+        "name": "Thessaloniki",
+        "lon": 22.944606,
+        "lat": 40.63935,
+        "population": 40000
+      },
+      {
+        "name": "Almeria",
+        "lon": -2.45974,
+        "lat": 36.83814,
+        "population": 35000
+      },
+      {
+        "name": "Amalfi",
+        "lon": 14.602683,
+        "lat": 40.634003,
+        "population": 35000
+      },
+      {
+        "name": "Edessa",
+        "lon": 38.8,
+        "lat": 37.15,
+        "population": 35000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 35000
+      },
+      {
+        "name": "Cartagena",
+        "lon": -0.996583,
+        "lat": 37.625683,
+        "population": 33000
+      }
+    ],
+    "1100": [
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 200000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 125000
+      },
+      {
+        "name": "Nishapur",
+        "lon": 58.795833,
+        "lat": 36.213333,
+        "population": 100000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 90000
+      },
+      {
+        "name": "Rayy",
+        "lon": 51.4333,
+        "lat": 35.5833,
+        "population": 85000
+      },
+      {
+        "name": "Kalaa",
+        "lon": 0.328333,
+        "lat": 35.580556,
+        "population": 80000
+      },
+      {
+        "name": "Cordoba",
+        "lon": -4.893564,
+        "lat": 38.046133,
+        "population": 60000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 60000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 55000
+      },
+      {
+        "name": "Bejaia",
+        "lon": 5.066667,
+        "lat": 36.75,
+        "population": 50000
+      },
+      {
+        "name": "Kiev",
+        "lon": 30.5238,
+        "lat": 50.45466,
+        "population": 50000
+      },
+      {
+        "name": "Konya",
+        "lon": 32.48464,
+        "lat": 37.87135,
+        "population": 50000
+      },
+      {
+        "name": "Salerno",
+        "lon": 14.76599,
+        "lat": 40.67797,
+        "population": 50000
+      },
+      {
+        "name": "Thessaloniki",
+        "lon": 22.944606,
+        "lat": 40.63935,
+        "population": 50000
+      },
+      {
+        "name": "Kairouan",
+        "lon": 10.101667,
+        "lat": 35.674444,
+        "population": 48000
+      },
+      {
+        "name": "Sivas",
+        "lon": 37.01611,
+        "lat": 39.74833,
+        "population": 45000
+      },
+      {
+        "name": "Diyarbakir",
+        "lon": 40.230628,
+        "lat": 37.914411,
+        "population": 42000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 42000
+      },
+      {
+        "name": "Edessa",
+        "lon": 38.8,
+        "lat": 37.15,
+        "population": 41000
+      },
+      {
+        "name": "Antioch",
+        "lon": 36.15722,
+        "lat": 36.20655,
+        "population": 30000
+      }
+    ],
+    "1200": [
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 200000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 150000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 150000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 150000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 110000
+      },
+      {
+        "name": "Rayy",
+        "lon": 51.4333,
+        "lat": 35.5833,
+        "population": 80000
+      },
+      {
+        "name": "Tbilisi",
+        "lon": 44.792989,
+        "lat": 41.709975,
+        "population": 80000
+      },
+      {
+        "name": "Konya",
+        "lon": 32.48464,
+        "lat": 37.87135,
+        "population": 70000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 70000
+      },
+      {
+        "name": "Cordoba",
+        "lon": -4.893564,
+        "lat": 38.046133,
+        "population": 60000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 60000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 60000
+      },
+      {
+        "name": "Trabzon",
+        "lon": 39.717806,
+        "lat": 41.00145,
+        "population": 60000
+      },
+      {
+        "name": "Bejaia",
+        "lon": 5.066667,
+        "lat": 36.75,
+        "population": 50000
+      },
+      {
+        "name": "Cologne",
+        "lon": 6.960278,
+        "lat": 50.937531,
+        "population": 50000
+      },
+      {
+        "name": "Mosul",
+        "lon": 43.11889,
+        "lat": 36.335,
+        "population": 50000
+      },
+      {
+        "name": "Qom",
+        "lon": 50.8764,
+        "lat": 34.6401,
+        "population": 50000
+      },
+      {
+        "name": "Rabat",
+        "lon": -6.83255,
+        "lat": 34.01325,
+        "population": 50000
+      },
+      {
+        "name": "Aleppo",
+        "lon": 37.166667,
+        "lat": 36.216667,
+        "population": 45000
+      },
+      {
+        "name": "Sivas",
+        "lon": 37.01611,
+        "lat": 39.74833,
+        "population": 45000
+      }
+    ],
+    "1279": [
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 216000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 150000
+      },
+      {
+        "name": "Tabriz",
+        "lon": 46.2919,
+        "lat": 38.08,
+        "population": 125000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 110000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 100000
+      },
+      {
+        "name": "Sarai",
+        "lon": 41.02126,
+        "lat": 53.74577,
+        "population": 100000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 90000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 90000
+      },
+      {
+        "name": "Genoa",
+        "lon": 8.946256,
+        "lat": 44.40565,
+        "population": 85000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 70000
+      },
+      {
+        "name": "Florence",
+        "lon": 11.248,
+        "lat": 43.771033,
+        "population": 60000
+      },
+      {
+        "name": "Trabzon",
+        "lon": 39.717806,
+        "lat": 41.00145,
+        "population": 60000
+      },
+      {
+        "name": "Aleppo",
+        "lon": 37.166667,
+        "lat": 36.216667,
+        "population": 55000
+      },
+      {
+        "name": "Cologne",
+        "lon": 6.960278,
+        "lat": 50.937531,
+        "population": 54000
+      },
+      {
+        "name": "Bejaia",
+        "lon": 5.066667,
+        "lat": 36.75,
+        "population": 50000
+      },
+      {
+        "name": "Bruges",
+        "lon": 3.224936,
+        "lat": 51.210819,
+        "population": 50000
+      },
+      {
+        "name": "Kayseri",
+        "lon": 35.48528,
+        "lat": 38.73222,
+        "population": 50000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 50000
+      },
+      {
+        "name": "Thessaloniki",
+        "lon": 22.944606,
+        "lat": 40.63935,
+        "population": 50000
+      },
+      {
+        "name": "Tlemcen",
+        "lon": -1.315,
+        "lat": 34.87833,
+        "population": 50000
+      }
+    ],
+    "1300": [
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 228000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 150000
+      },
+      {
+        "name": "Tabriz",
+        "lon": 46.2919,
+        "lat": 38.08,
+        "population": 125000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 110000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 100000
+      },
+      {
+        "name": "Sarai",
+        "lon": 41.02126,
+        "lat": 53.74577,
+        "population": 100000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 90000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 90000
+      },
+      {
+        "name": "Genoa",
+        "lon": 8.946256,
+        "lat": 44.40565,
+        "population": 85000
+      },
+      {
+        "name": "Florence",
+        "lon": 11.248,
+        "lat": 43.771033,
+        "population": 60000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 60000
+      },
+      {
+        "name": "Trabzon",
+        "lon": 39.717806,
+        "lat": 41.00145,
+        "population": 60000
+      },
+      {
+        "name": "Aleppo",
+        "lon": 37.166667,
+        "lat": 36.216667,
+        "population": 55000
+      },
+      {
+        "name": "Cologne",
+        "lon": 6.960278,
+        "lat": 50.937531,
+        "population": 54000
+      },
+      {
+        "name": "Bejaia",
+        "lon": 5.066667,
+        "lat": 36.75,
+        "population": 50000
+      },
+      {
+        "name": "Bruges",
+        "lon": 3.224936,
+        "lat": 51.210819,
+        "population": 50000
+      },
+      {
+        "name": "Kayseri",
+        "lon": 35.48528,
+        "lat": 38.73222,
+        "population": 50000
+      },
+      {
+        "name": "Rouen",
+        "lon": 1.09932,
+        "lat": 49.44313,
+        "population": 50000
+      },
+      {
+        "name": "Soltaniyeh",
+        "lon": 48.7975,
+        "lat": 36.434722,
+        "population": 50000
+      },
+      {
+        "name": "Thessaloniki",
+        "lon": 22.944606,
+        "lat": 40.63935,
+        "population": 50000
+      }
+    ],
+    "1400": [
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 280000
+      },
+      {
+        "name": "Tabriz",
+        "lon": 46.2919,
+        "lat": 38.08,
+        "population": 150000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 125000
+      },
+      {
+        "name": "Sarai",
+        "lon": 41.02126,
+        "lat": 53.74577,
+        "population": 120000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 110000
+      },
+      {
+        "name": "Prague",
+        "lon": 14.42076,
+        "lat": 50.08804,
+        "population": 95000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 90000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 80000
+      },
+      {
+        "name": "Rouen",
+        "lon": 1.09932,
+        "lat": 49.44313,
+        "population": 80000
+      },
+      {
+        "name": "Aleppo",
+        "lon": 37.166667,
+        "lat": 36.216667,
+        "population": 75000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 75000
+      },
+      {
+        "name": "Feodosia",
+        "lon": 35.379167,
+        "lat": 45.048889,
+        "population": 75000
+      },
+      {
+        "name": "Bursa",
+        "lon": 29.08403,
+        "lat": 40.19266,
+        "population": 70000
+      },
+      {
+        "name": "Ghent",
+        "lon": 3.730378,
+        "lat": 51.053469,
+        "population": 70000
+      },
+      {
+        "name": "Tlemcen",
+        "lon": -1.315,
+        "lat": 34.87833,
+        "population": 70000
+      },
+      {
+        "name": "Genoa",
+        "lon": 8.946256,
+        "lat": 44.40565,
+        "population": 66000
+      },
+      {
+        "name": "Florence",
+        "lon": 11.248,
+        "lat": 43.771033,
+        "population": 61000
+      },
+      {
+        "name": "Bruges",
+        "lon": 3.224936,
+        "lat": 51.210819,
+        "population": 60000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 60000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 55000
+      }
+    ],
+    "1492": [
+      {
+        "name": "Tabriz",
+        "lon": 46.2919,
+        "lat": 38.08,
+        "population": 250000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 200000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 200000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 185000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 130000
+      },
+      {
+        "name": "Edirne",
+        "lon": 26.562269,
+        "lat": 41.681808,
+        "population": 127000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 115000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 114000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 83000
+      },
+      {
+        "name": "Ghent",
+        "lon": 3.730378,
+        "lat": 51.053469,
+        "population": 80000
+      },
+      {
+        "name": "Karaman",
+        "lon": 33.215,
+        "lat": 37.18111,
+        "population": 80000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 80000
+      },
+      {
+        "name": "Florence",
+        "lon": 11.248,
+        "lat": 43.771033,
+        "population": 70000
+      },
+      {
+        "name": "Prague",
+        "lon": 14.42076,
+        "lat": 50.08804,
+        "population": 70000
+      },
+      {
+        "name": "Aleppo",
+        "lon": 37.166667,
+        "lat": 36.216667,
+        "population": 67000
+      },
+      {
+        "name": "Tunis",
+        "lon": 10.165961,
+        "lat": 36.818811,
+        "population": 65000
+      },
+      {
+        "name": "Genoa",
+        "lon": 8.946256,
+        "lat": 44.40565,
+        "population": 62000
+      },
+      {
+        "name": "Bruges",
+        "lon": 3.224936,
+        "lat": 51.210819,
+        "population": 60000
+      },
+      {
+        "name": "Bologna",
+        "lon": 11.33875,
+        "lat": 44.49381,
+        "population": 55000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 55000
+      }
+    ],
+    "1500": [
+      {
+        "name": "Tabriz",
+        "lon": 46.2919,
+        "lat": 38.08,
+        "population": 250000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 200000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 185000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 130000
+      },
+      {
+        "name": "Edirne",
+        "lon": 26.562269,
+        "lat": 41.681808,
+        "population": 127000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 115000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 114000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 89000
+      },
+      {
+        "name": "Ghent",
+        "lon": 3.730378,
+        "lat": 51.053469,
+        "population": 80000
+      },
+      {
+        "name": "Karaman",
+        "lon": 33.215,
+        "lat": 37.18111,
+        "population": 80000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 80000
+      },
+      {
+        "name": "Florence",
+        "lon": 11.248,
+        "lat": 43.771033,
+        "population": 70000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 70000
+      },
+      {
+        "name": "Prague",
+        "lon": 14.42076,
+        "lat": 50.08804,
+        "population": 70000
+      },
+      {
+        "name": "Aleppo",
+        "lon": 37.166667,
+        "lat": 36.216667,
+        "population": 67000
+      },
+      {
+        "name": "Tunis",
+        "lon": 10.165961,
+        "lat": 36.818811,
+        "population": 65000
+      },
+      {
+        "name": "Genoa",
+        "lon": 8.946256,
+        "lat": 44.40565,
+        "population": 62000
+      },
+      {
+        "name": "Bruges",
+        "lon": 3.224936,
+        "lat": 51.210819,
+        "population": 60000
+      },
+      {
+        "name": "Bologna",
+        "lon": 11.33875,
+        "lat": 44.49381,
+        "population": 55000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 55000
+      }
+    ],
+    "1530": [
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 400000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 210000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 209637
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 171000
+      },
+      {
+        "name": "Tabriz",
+        "lon": 46.2919,
+        "lat": 38.08,
+        "population": 150000
+      },
+      {
+        "name": "Edirne",
+        "lon": 26.562269,
+        "lat": 41.681808,
+        "population": 140000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 131000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 98000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 90000
+      },
+      {
+        "name": "Rouen",
+        "lon": 1.09932,
+        "lat": 49.44313,
+        "population": 78000
+      },
+      {
+        "name": "Florence",
+        "lon": 11.248,
+        "lat": 43.771033,
+        "population": 70000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 70000
+      },
+      {
+        "name": "Prague",
+        "lon": 14.42076,
+        "lat": 50.08804,
+        "population": 70000
+      },
+      {
+        "name": "Qazvin",
+        "lon": 50.0041,
+        "lat": 36.26877,
+        "population": 70000
+      },
+      {
+        "name": "Genoa",
+        "lon": 8.946256,
+        "lat": 44.40565,
+        "population": 63000
+      },
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 62000
+      },
+      {
+        "name": "Tunis",
+        "lon": 10.165961,
+        "lat": 36.818811,
+        "population": 62000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 60000
+      },
+      {
+        "name": "Targoviste",
+        "lon": 25.456667,
+        "lat": 44.924167,
+        "population": 60000
+      },
+      {
+        "name": "Bologna",
+        "lon": 11.33875,
+        "lat": 44.49381,
+        "population": 59000
+      }
+    ],
+    "1600": [
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 700000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 245000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 224110
+      },
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 187000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 151000
+      },
+      {
+        "name": "Edirne",
+        "lon": 26.562269,
+        "lat": 41.681808,
+        "population": 150000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 126000
+      },
+      {
+        "name": "Prague",
+        "lon": 14.42076,
+        "lat": 50.08804,
+        "population": 110000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 107000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 105000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 102000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 100000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 100000
+      },
+      {
+        "name": "Madrid",
+        "lon": -3.703789,
+        "lat": 40.416775,
+        "population": 80000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 80000
+      },
+      {
+        "name": "Tabriz",
+        "lon": 46.2919,
+        "lat": 38.08,
+        "population": 80000
+      },
+      {
+        "name": "Algiers",
+        "lon": 3.04197,
+        "lat": 36.7525,
+        "population": 75000
+      },
+      {
+        "name": "Bursa",
+        "lon": 29.08403,
+        "lat": 40.19266,
+        "population": 70000
+      },
+      {
+        "name": "Granada",
+        "lon": -3.598558,
+        "lat": 37.177336,
+        "population": 68000
+      },
+      {
+        "name": "Florence",
+        "lon": 11.248,
+        "lat": 43.771033,
+        "population": 65000
+      }
+    ],
+    "1650": [
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 700000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 455000
+      },
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 410000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 265000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 170000
+      },
+      {
+        "name": "Amsterdam",
+        "lon": 4.88969,
+        "lat": 52.37403,
+        "population": 165000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 134000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 132000
+      },
+      {
+        "name": "Madrid",
+        "lon": -3.703789,
+        "lat": 40.416775,
+        "population": 125000
+      },
+      {
+        "name": "Edirne",
+        "lon": 26.562269,
+        "lat": 41.681808,
+        "population": 120000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 120000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 110000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 105000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 105000
+      },
+      {
+        "name": "Algiers",
+        "lon": 3.04197,
+        "lat": 36.7525,
+        "population": 100000
+      },
+      {
+        "name": "Rouen",
+        "lon": 1.09932,
+        "lat": 49.44313,
+        "population": 81000
+      },
+      {
+        "name": "Lyon",
+        "lon": 4.84671,
+        "lat": 45.74846,
+        "population": 80000
+      },
+      {
+        "name": "Gdansk",
+        "lon": 18.64663,
+        "lat": 54.352025,
+        "population": 77000
+      },
+      {
+        "name": "Smyrna",
+        "lon": 27.13838,
+        "lat": 38.41273,
+        "population": 75000
+      },
+      {
+        "name": "Tabriz",
+        "lon": 46.2919,
+        "lat": 38.08,
+        "population": 75000
+      }
+    ],
+    "1700": [
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 700000
+      },
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 550000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 530000
+      },
+      {
+        "name": "Amsterdam",
+        "lon": 4.88969,
+        "lat": 52.37403,
+        "population": 210000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 207000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 188000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 144000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 138000
+      },
+      {
+        "name": "Smyrna",
+        "lon": 27.13838,
+        "lat": 38.41273,
+        "population": 135000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 125000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 114000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 113000
+      },
+      {
+        "name": "Madrid",
+        "lon": -3.703789,
+        "lat": 40.416775,
+        "population": 105000
+      },
+      {
+        "name": "Vienna",
+        "lon": 16.37208,
+        "lat": 48.20849,
+        "population": 105000
+      },
+      {
+        "name": "Lyon",
+        "lon": 4.84671,
+        "lat": 45.74846,
+        "population": 97000
+      },
+      {
+        "name": "Algiers",
+        "lon": 3.04197,
+        "lat": 36.7525,
+        "population": 85000
+      },
+      {
+        "name": "Edirne",
+        "lon": 26.562269,
+        "lat": 41.681808,
+        "population": 85000
+      },
+      {
+        "name": "Dublin",
+        "lon": -6.24889,
+        "lat": 53.33306,
+        "population": 80000
+      },
+      {
+        "name": "Fez",
+        "lon": -5.01,
+        "lat": 34.033333,
+        "population": 80000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 80000
+      }
+    ],
+    "1715": [
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 700000
+      },
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 550000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 509640
+      },
+      {
+        "name": "Mashhad",
+        "lon": 59.6,
+        "lat": 36.3,
+        "population": 300000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 220000
+      },
+      {
+        "name": "Amsterdam",
+        "lon": 4.88969,
+        "lat": 52.37403,
+        "population": 210000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 200000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 144000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 138000
+      },
+      {
+        "name": "Smyrna",
+        "lon": 27.13838,
+        "lat": 38.41273,
+        "population": 135000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 114000
+      },
+      {
+        "name": "Vienna",
+        "lon": 16.37208,
+        "lat": 48.20849,
+        "population": 113800
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 108000
+      },
+      {
+        "name": "Madrid",
+        "lon": -3.703789,
+        "lat": 40.416775,
+        "population": 104000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 103082
+      },
+      {
+        "name": "Lyon",
+        "lon": 4.84671,
+        "lat": 45.74846,
+        "population": 95000
+      },
+      {
+        "name": "Algiers",
+        "lon": 3.04197,
+        "lat": 36.7525,
+        "population": 85000
+      },
+      {
+        "name": "Edirne",
+        "lon": 26.562269,
+        "lat": 41.681808,
+        "population": 85000
+      },
+      {
+        "name": "Seville",
+        "lon": -5.982331,
+        "lat": 37.388097,
+        "population": 81844
+      },
+      {
+        "name": "Rouen",
+        "lon": 1.09932,
+        "lat": 49.44313,
+        "population": 80690
+      }
+    ],
+    "1783": [
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 861000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 600600
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 560000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 438000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 237000
+      },
+      {
+        "name": "Vienna",
+        "lon": 16.37208,
+        "lat": 48.20849,
+        "population": 231079
+      },
+      {
+        "name": "Saint Petersburg",
+        "lon": 30.26417,
+        "lat": 59.89444,
+        "population": 220200
+      },
+      {
+        "name": "Amsterdam",
+        "lon": 4.88969,
+        "lat": 52.37403,
+        "population": 217024
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 213000
+      },
+      {
+        "name": "Berlin",
+        "lon": 13.41053,
+        "lat": 52.52437,
+        "population": 172132
+      },
+      {
+        "name": "Madrid",
+        "lon": -3.703789,
+        "lat": 40.416775,
+        "population": 156672
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 148000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 142000
+      },
+      {
+        "name": "Dublin",
+        "lon": -6.24889,
+        "lat": 53.33306,
+        "population": 138208
+      },
+      {
+        "name": "Lyon",
+        "lon": 4.84671,
+        "lat": 45.74846,
+        "population": 135207
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 133000
+      },
+      {
+        "name": "Smyrna",
+        "lon": 27.13838,
+        "lat": 38.41273,
+        "population": 125000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 122000
+      },
+      {
+        "name": "Warsaw",
+        "lon": 21.01178,
+        "lat": 52.22977,
+        "population": 120000
+      },
+      {
+        "name": "Hamburg",
+        "lon": 10.01534,
+        "lat": 53.57532,
+        "population": 117000
+      }
+    ],
+    "1800": [
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 861000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 570000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 547000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 430000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 248000
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 237000
+      },
+      {
+        "name": "Vienna",
+        "lon": 16.37208,
+        "lat": 48.20849,
+        "population": 231079
+      },
+      {
+        "name": "Saint Petersburg",
+        "lon": 30.26417,
+        "lat": 59.89444,
+        "population": 220200
+      },
+      {
+        "name": "Amsterdam",
+        "lon": 4.88969,
+        "lat": 52.37403,
+        "population": 195000
+      },
+      {
+        "name": "Madrid",
+        "lon": -3.703789,
+        "lat": 40.416775,
+        "population": 182000
+      },
+      {
+        "name": "Berlin",
+        "lon": 13.41053,
+        "lat": 52.52437,
+        "population": 172132
+      },
+      {
+        "name": "Dublin",
+        "lon": -6.24889,
+        "lat": 53.33306,
+        "population": 165000
+      },
+      {
+        "name": "Venice",
+        "lon": 12.315514,
+        "lat": 45.440847,
+        "population": 146000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 142000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 135000
+      },
+      {
+        "name": "Smyrna",
+        "lon": 27.13838,
+        "lat": 38.41273,
+        "population": 125000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 122000
+      },
+      {
+        "name": "Hamburg",
+        "lon": 10.01534,
+        "lat": 53.57532,
+        "population": 117000
+      },
+      {
+        "name": "Barcelona",
+        "lon": 2.15899,
+        "lat": 41.38879,
+        "population": 113000
+      },
+      {
+        "name": "Lyon",
+        "lon": 4.84671,
+        "lat": 45.74846,
+        "population": 111000
+      }
+    ],
+    "1815": [
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 1335000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 855000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 597600
+      },
+      {
+        "name": "Saint Petersburg",
+        "lon": 30.26417,
+        "lat": 59.89444,
+        "population": 438000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 350000
+      },
+      {
+        "name": "Vienna",
+        "lon": 16.37208,
+        "lat": 48.20849,
+        "population": 288000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 270184
+      },
+      {
+        "name": "Lisbon",
+        "lon": -9.13333,
+        "lat": 38.71667,
+        "population": 258000
+      },
+      {
+        "name": "Berlin",
+        "lon": 13.41053,
+        "lat": 52.52437,
+        "population": 222000
+      },
+      {
+        "name": "Madrid",
+        "lon": -3.703789,
+        "lat": 40.416775,
+        "population": 201344
+      },
+      {
+        "name": "Amsterdam",
+        "lon": 4.88969,
+        "lat": 52.37403,
+        "population": 196000
+      },
+      {
+        "name": "Dublin",
+        "lon": -6.24889,
+        "lat": 53.33306,
+        "population": 194000
+      },
+      {
+        "name": "Manchester",
+        "lon": -2.23743,
+        "lat": 53.48095,
+        "population": 178000
+      },
+      {
+        "name": "Glasgow",
+        "lon": -4.25763,
+        "lat": 55.86515,
+        "population": 173000
+      },
+      {
+        "name": "Liverpool",
+        "lon": -2.991572,
+        "lat": 53.408372,
+        "population": 170000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 156000
+      },
+      {
+        "name": "Edinburgh",
+        "lon": -3.19648,
+        "lat": 55.95206,
+        "population": 145000
+      },
+      {
+        "name": "Palermo",
+        "lon": 13.361267,
+        "lat": 38.115689,
+        "population": 144000
+      },
+      {
+        "name": "Lyon",
+        "lon": 4.84671,
+        "lat": 45.74846,
+        "population": 141000
+      },
+      {
+        "name": "Rome",
+        "lon": 12.4839,
+        "lat": 41.89474,
+        "population": 134242
+      }
+    ],
+    "1880": [
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 4241000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 2250000
+      },
+      {
+        "name": "Berlin",
+        "lon": 13.41053,
+        "lat": 52.52437,
+        "population": 1045000
+      },
+      {
+        "name": "Vienna",
+        "lon": 16.37208,
+        "lat": 48.20849,
+        "population": 1020000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 873000
+      },
+      {
+        "name": "Saint Petersburg",
+        "lon": 30.26417,
+        "lat": 59.89444,
+        "population": 764000
+      },
+      {
+        "name": "Liverpool",
+        "lon": -2.991572,
+        "lat": 53.408372,
+        "population": 650000
+      },
+      {
+        "name": "Glasgow",
+        "lon": -4.25763,
+        "lat": 55.86515,
+        "population": 635000
+      },
+      {
+        "name": "Newcastle upon Tyne",
+        "lon": -1.617781,
+        "lat": 54.978253,
+        "population": 615000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 600000
+      },
+      {
+        "name": "Manchester",
+        "lon": -2.23743,
+        "lat": 53.48095,
+        "population": 590000
+      },
+      {
+        "name": "Birmingham",
+        "lon": -1.89983,
+        "lat": 52.48142,
+        "population": 480000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 450000
+      },
+      {
+        "name": "Odessa",
+        "lon": 30.73262,
+        "lat": 46.47747,
+        "population": 449000
+      },
+      {
+        "name": "Cologne",
+        "lon": 6.960278,
+        "lat": 50.937531,
+        "population": 437000
+      },
+      {
+        "name": "Gliwice",
+        "lon": 18.671384,
+        "lat": 50.294491,
+        "population": 386000
+      },
+      {
+        "name": "Madrid",
+        "lon": -3.703789,
+        "lat": 40.416775,
+        "population": 373000
+      },
+      {
+        "name": "Rotterdam",
+        "lon": 4.47917,
+        "lat": 51.9225,
+        "population": 368000
+      },
+      {
+        "name": "Rhondda",
+        "lon": -3.44885,
+        "lat": 51.65896,
+        "population": 367000
+      },
+      {
+        "name": "Antwerp",
+        "lon": 4.402883,
+        "lat": 51.219217,
+        "population": 361000
+      }
+    ],
+    "1900": [
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 6480000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 3330000
+      },
+      {
+        "name": "Berlin",
+        "lon": 13.41053,
+        "lat": 52.52437,
+        "population": 2707000
+      },
+      {
+        "name": "Vienna",
+        "lon": 16.37208,
+        "lat": 48.20849,
+        "population": 1698000
+      },
+      {
+        "name": "Saint Petersburg",
+        "lon": 30.26417,
+        "lat": 59.89444,
+        "population": 1439000
+      },
+      {
+        "name": "Manchester",
+        "lon": -2.23743,
+        "lat": 53.48095,
+        "population": 1435000
+      },
+      {
+        "name": "Birmingham",
+        "lon": -1.89983,
+        "lat": 52.48142,
+        "population": 1248000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 1120000
+      },
+      {
+        "name": "Glasgow",
+        "lon": -4.25763,
+        "lat": 55.86515,
+        "population": 1015000
+      },
+      {
+        "name": "Liverpool",
+        "lon": -2.991572,
+        "lat": 53.408372,
+        "population": 940000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 900000
+      },
+      {
+        "name": "Hamburg",
+        "lon": 10.01534,
+        "lat": 53.57532,
+        "population": 895000
+      },
+      {
+        "name": "Budapest",
+        "lon": 19.03991,
+        "lat": 47.49801,
+        "population": 785000
+      },
+      {
+        "name": "Warsaw",
+        "lon": 21.01178,
+        "lat": 52.22977,
+        "population": 724000
+      },
+      {
+        "name": "Newcastle upon Tyne",
+        "lon": -1.617781,
+        "lat": 54.978253,
+        "population": 615000
+      },
+      {
+        "name": "Katowice",
+        "lon": 19.02754,
+        "lat": 50.25842,
+        "population": 565000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 563000
+      },
+      {
+        "name": "Brussels",
+        "lon": 4.34878,
+        "lat": 50.85045,
+        "population": 561000
+      },
+      {
+        "name": "Barcelona",
+        "lon": 2.15899,
+        "lat": 41.38879,
+        "population": 552000
+      },
+      {
+        "name": "Dresden",
+        "lon": 13.73832,
+        "lat": 51.05089,
+        "population": 540000
+      }
+    ],
+    "1914": [
+      {
+        "name": "London",
+        "lon": -0.119825,
+        "lat": 51.511214,
+        "population": 7419000
+      },
+      {
+        "name": "Paris",
+        "lon": 2.352222,
+        "lat": 48.856614,
+        "population": 4000000
+      },
+      {
+        "name": "Berlin",
+        "lon": 13.41053,
+        "lat": 52.52437,
+        "population": 3500000
+      },
+      {
+        "name": "Vienna",
+        "lon": 16.37208,
+        "lat": 48.20849,
+        "population": 1865000
+      },
+      {
+        "name": "Moscow",
+        "lon": 37.61556,
+        "lat": 55.75222,
+        "population": 1805000
+      },
+      {
+        "name": "Manchester",
+        "lon": -2.23743,
+        "lat": 53.48095,
+        "population": 1600000
+      },
+      {
+        "name": "Birmingham",
+        "lon": -1.89983,
+        "lat": 52.48142,
+        "population": 1500000
+      },
+      {
+        "name": "Saint Petersburg",
+        "lon": 30.26417,
+        "lat": 59.89444,
+        "population": 1430000
+      },
+      {
+        "name": "Hamburg",
+        "lon": 10.01534,
+        "lat": 53.57532,
+        "population": 1300000
+      },
+      {
+        "name": "Liverpool",
+        "lon": -2.991572,
+        "lat": 53.408372,
+        "population": 1300000
+      },
+      {
+        "name": "Constantinople",
+        "lon": 28.976944,
+        "lat": 41.005275,
+        "population": 1125000
+      },
+      {
+        "name": "Glasgow",
+        "lon": -4.25763,
+        "lat": 55.86515,
+        "population": 1125000
+      },
+      {
+        "name": "Budapest",
+        "lon": 19.03991,
+        "lat": 47.49801,
+        "population": 1050000
+      },
+      {
+        "name": "Warsaw",
+        "lon": 21.01178,
+        "lat": 52.22977,
+        "population": 906000
+      },
+      {
+        "name": "Newcastle upon Tyne",
+        "lon": -1.617781,
+        "lat": 54.978253,
+        "population": 700000
+      },
+      {
+        "name": "Naples",
+        "lon": 14.268122,
+        "lat": 40.851775,
+        "population": 691000
+      },
+      {
+        "name": "Brussels",
+        "lon": 4.34878,
+        "lat": 50.85045,
+        "population": 685000
+      },
+      {
+        "name": "Prague",
+        "lon": 14.42076,
+        "lat": 50.08804,
+        "population": 670000
+      },
+      {
+        "name": "Milan",
+        "lon": 9.198786,
+        "lat": 45.465453,
+        "population": 655000
+      },
+      {
+        "name": "Munich",
+        "lon": 11.576756,
+        "lat": 48.136739,
+        "population": 642000
+      }
+    ]
+  },
+  "source": {
+    "description": "Major European cities per snapshot year (top 20 by population, nearest record within -50/+25 years), derived from the Historical Urban Population dataset (Chandler, digitized by Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX)",
+    "license": "CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016)",
+    "repo": "fasiha/Historical-Urban-Population-Growth-Data",
+    "commit": "808ff2b4a279013f58621a3696cb9c28058c6af1",
+    "file": "chandler.csv",
+    "url": "https://raw.githubusercontent.com/fasiha/Historical-Urban-Population-Growth-Data/808ff2b4a279013f58621a3696cb9c28058c6af1/chandler.csv"
+  }
+}
