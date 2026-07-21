@@ -23,8 +23,11 @@ Do not edit Backlog task, draft, document, decision, or milestone markdown files
 </CRITICAL_INSTRUCTION>
 <!-- BACKLOG.MD GUIDELINES END -->
 
-## Task-Driven Development (Backlog.md)
+## タスク駆動開発（Backlog.md）
 
-- Branch names must carry the TASK ID: `task-N-slug` (e.g. `task-1-deno-setup`), so a branch is always traceable back to its backlog task.
-- Work tasks strictly in dependency order from `backlog/tasks/*.md`; don't start a task until every task in its `dependencies` has reached the terminal status, and don't run tasks in parallel, to keep task status transitions unambiguous.
-- PR title/description must reference the TASK ID so review history stays linked to the backlog task.
+- ブランチ名には TASK ID を含める: `task-N-slug`（例: `task-1-deno-setup`）。これによりブランチから backlog タスクへ常に追跡できるようにする。
+- `backlog/tasks/*.md` の依存関係順に厳密に作業する。あるタスクの `dependencies` が全て終端ステータスに達するまでは着手しない。また、タスクのステータス遷移を曖昧にしないため並行実行はしない。
+- PR タイトル・説明には TASK ID を明記し、レビュー履歴が backlog タスクと紐づくようにする。
+- TDD は必須: 実装より先にテストを書き、red（失敗）を確認してから green にする。詳細は `docs/development-style.md` を参照。
+- 標準タスクフロー: backlog タスク → ブランチ作成 → テスト先行 → 実装 → `deno test` green → `/review-loop` で収束 → PR 作成（TASK ID 明記）→ CI green → マージ → backlog finalization。
+- タスクは Acceptance Criteria が全てチェック済みかつ CI が green の場合にのみ Done となる。

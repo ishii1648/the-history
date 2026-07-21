@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check deno.json existence
+        id: check_deno_config
+        run: |
+          if [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "deno.json not found yet (see TASK-1). Skipping Deno steps."
+          fi
+
+      - name: Setup Deno
+        if: steps.check_deno_config.outputs.exists == 'true'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: deno fmt --check
+        if: steps.check_deno_config.outputs.exists == 'true'
+        run: deno fmt --check
+
+      - name: deno lint
+        if: steps.check_deno_config.outputs.exists == 'true'
+        run: deno lint
+
+      - name: deno test
+        if: steps.check_deno_config.outputs.exists == 'true'
+        run: deno test
+
+      - name: deno task build
+        if: steps.check_deno_config.outputs.exists == 'true'
+        run: deno task build
