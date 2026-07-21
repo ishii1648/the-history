@@ -52,15 +52,20 @@ consistent.
   worktree isolation を利用し、成果物の conflict は PR で解消する。
 - 標準タスクフロー: backlog タスク → ブランチ作成 → テスト先行 → 実装 （subagent
   に委譲）→ `deno test` green → mainagent によるレビューで収束 → PR 作成（TASK
-  ID 明記）→ CI green → マージ → backlog finalization。
+  ID 明記）→ CI green → マージ → マージ後動作確認 → backlog finalization。
+  動作確認で見つけた問題は label `bug`
+  付きタスクとして起票し、次イテレーションで 最優先修正する（直接 hotfix
+  しない）。
 - タスクは Acceptance Criteria が全てチェック済みかつ CI が green の場合にのみ
   Done となる。
 - 次タスクの選択は人の指名ではなく決定的ルールで行う: status が `To Do` かつ
   `dependencies` が全て `Done` のタスクのうち `ordinal`
   最小のものを選ぶ（`In
-  Progress` のタスクが残っている間は選ばない）。判定は
-  `deno task next-task` を使う。外側ループはローカルの Claude Code セッションで
-  `/agent-loop` スキル（`.claude/skills/agent-loop/SKILL.md`）を実行して
+  Progress` のタスクが残っている間は選ばない）。ただし
+  label `bug` を持つタスクは `ordinal` に関わらず最優先で選ぶ（bug 群内は
+  ordinal → ID 順）。判定は `deno task next-task` を使う。外側ループはローカルの
+  Claude Code セッションで `/agent-loop`
+  スキル（`.claude/skills/agent-loop/SKILL.md`）を実行して
   回し、マージ後も同一セッションが次タスクを継続する。CI や PR のステータスは
   Monitor ツールや PR activity 購読で監視する。詳細は
   `docs/development-style.md` の 4 章を参照。
