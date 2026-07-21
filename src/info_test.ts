@@ -75,3 +75,57 @@ Deno.test("displayLabel は overrides を省略しても従来どおり生値で
     "Naples — Aragon 領",
   );
 });
+
+// ---- TASK-23: 日本語表記マップ（ja）の適用 ----
+
+Deno.test("displayLabel は ja マップで NAME と宗主国名の双方を日本語化する", () => {
+  assertEquals(
+    displayLabel({ NAME: "Naples", SUBJECTO: "Aragon" }, {}, {
+      Naples: "ナポリ王国",
+      Aragon: "アラゴン王国",
+    }),
+    "ナポリ王国 — アラゴン王国 領",
+  );
+});
+
+Deno.test("displayLabel は renames で正規化した宗主国名に ja を適用する", () => {
+  // SUBJECTO 生値 Castille → renames → Castile → ja → カスティーリャ王国
+  assertEquals(
+    displayLabel(
+      { NAME: "Granada", SUBJECTO: "Castille" },
+      { Castille: "Castile" },
+      { Granada: "グラナダ", Castile: "カスティーリャ王国" },
+    ),
+    "グラナダ — カスティーリャ王国 領",
+  );
+});
+
+Deno.test("displayLabel は ja に無い名前を英語のままフォールバックする", () => {
+  assertEquals(
+    displayLabel({ NAME: "Naples", SUBJECTO: "Aragon" }, {}, {
+      Aragon: "アラゴン王国",
+    }),
+    "Naples — アラゴン王国 領",
+  );
+});
+
+Deno.test("displayLabel は renames による自己参照排除後の NAME にも ja を適用する", () => {
+  // Scotland|Scottland は正規化で自己参照 → NAME のみを日本語化して返す
+  assertEquals(
+    displayLabel(
+      { NAME: "Scotland", SUBJECTO: "Scottland" },
+      { Scottland: "Scotland" },
+      { Scotland: "スコットランド王国" },
+    ),
+    "スコットランド王国",
+  );
+});
+
+Deno.test("displayLabel は ja を省略すると従来どおり英語で整形する", () => {
+  assertEquals(
+    displayLabel({ NAME: "Granada", SUBJECTO: "Castille" }, {
+      Castille: "Castile",
+    }),
+    "Granada — Castile 領",
+  );
+});
