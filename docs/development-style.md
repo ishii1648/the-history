@@ -41,13 +41,15 @@
    を即座に確認しながら実装する（`deno task test:watch` として task-1
    で整備予定）。
 2. **中間ループ（実装完了〜PR前・エージェント自律）**: 実装は subagent
-   に委譲する。タスク内で並列作業が可能な場合は subagent を並列に複数起動して
-   作業効率を上げる。このとき subagent 同士の衝突を避けるため worktree isolation
-   を利用し、成果物の conflict は PR で解消する。実装が一通り 終わったら
-   mainagent が diff をレビューし、指摘があれば subagent に修正を
-   指示して、mainagent が問題なしと判断するまで収束させる（codex など外部
-   エージェントによるレビューは行わない）。作業は必ず作業ブランチで行い、
-   default branch（main）上では行わない。
+   に委譲する。実装プラン記録時に並列化判定を必須で行う: 独立サブ作業
+   （ファイル競合・実行順依存がなく独立にテスト可能な単位）への分割案を
+   列挙し、採否と根拠をプランに記録する。並列可なら subagent を並列に複数
+   起動し（worktree isolation で衝突回避、conflict は PR で解消）、見送り
+   なら理由を明記する。mainagent はレビュー時に並列化判定の記載有無を確認し、
+   無記載なら差し戻す。実装が一通り 終わったら mainagent が diff をレビュー
+   し、指摘があれば subagent に修正を指示して、mainagent が問題なしと判断
+   するまで収束させる（codex など外部エージェントによるレビューは行わない）。
+   作業は必ず作業ブランチで行い、default branch（main）上では行わない。
 3. **外側ループ（PR ゲート・CI）**: PR 作成後は CI（fmt / lint / test /
    build）が green になるまでマージしない。CI が red の場合は修正してから再度
    push し、このループを回す。
