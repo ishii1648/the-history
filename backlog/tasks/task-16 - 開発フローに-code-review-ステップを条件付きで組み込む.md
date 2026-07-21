@@ -1,9 +1,10 @@
 ---
 id: TASK-16
-title: 開発フローに /code-review ステップを条件付きで組み込む
+title: agent-loop 完了時に /code-review 実行を促す最終レポートへ変更
 status: To Do
 assignee: []
 created_date: '2026-07-21 09:21'
+updated_date: '2026-07-21 09:35'
 labels: []
 dependencies: []
 ordinal: 16000
@@ -12,21 +13,20 @@ ordinal: 16000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-mainagent レビュー収束後・PR 作成前に /code-review スキルによる構造化レビューを実行するステップを開発フロー文書に追加する。ユーザーとの合意（2026-07-21）に基づく。TASK-4 で試行し、その結果（検出数・有効性・所要コスト）を反映して文書化する。
+当初は「PR 作成前に /code-review を実行するステップ」を検討したが、/code-review は disable-model-invocation のためエージェントから起動できず、ループに挟むと HITL になるため組み込みは見送る（ユーザー決定 2026-07-21）。代わりに、agent-loop の停止条件『deno task next-task の出力が空で In Progress もない（全タスク完了）』に達した際の最終レポートに、(1) 全タスク完了の報告と (2) ユーザーへの /code-review 実行の促し（レビュー対象の説明付き）を含めるよう .claude/skills/agent-loop/SKILL.md を更新する。必要に応じて docs/development-style.md 4 章にも同趣旨を反映する。
 
-適用条件:
-- src/ または scripts/ に実装変更があるタスクのみ対象（docs・backlog のみの変更は対象外）
-- タイミングは mainagent レビュー収束後・PR 作成前
-- CONFIRMED 相当の指摘のみ subagent に修正させる（PLAUSIBLE は mainagent が判断）
-- 既存の生成物検証（実データの独立検証）は /code-review では代替できないため維持する、と明記する
-- /code-review ultra はユーザー起動・課金のため自律ループには組み込まない
-
-更新対象: CLAUDE.md（標準タスクフロー）、docs/development-style.md（3 章 中間ループ）、.claude/skills/agent-loop/SKILL.md（手順 2）
+経緯: TASK-4 で /code-review 試行を行い、Skill ツールからの起動が「disable-model-invocation」で拒否されることを確認済み（Implementation Notes 参照）。
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 TASK-4 での /code-review 試行結果（検出数・修正数・有効性の評価）がタスクに記録されている
-- [ ] #2 CLAUDE.md・docs/development-style.md・agent-loop SKILL.md に条件付き /code-review ステップが追記され、適用条件（実装変更のあるタスクのみ・PR 作成前・生成物検証は維持）が明記されている
-- [ ] #3 deno fmt --check が green である
+- [ ] #1 deno fmt --check が green である
+- [ ] #2 agent-loop SKILL.md の停止条件・最終レポート手順に、全タスク完了の報告とともにユーザーへ /code-review の実行を促す旨が記載されている
+- [ ] #3 PR 作成前に /code-review を自律実行する旨の記述が文書に存在しない（HITL 回避の設計判断が明記されている）
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+TASK-4 試行での判明事項（2026-07-21）: /code-review スキルは disable-model-invocation が設定されており、エージェント（モデル）からの自律起動は不可。Skill ツール呼び出しは「Skill code-review cannot be used with Skill tool due to disable-model-invocation」で拒否される。したがって「PR 作成前に自律ループが /code-review を実行する」という当初設計は成立しない。設計代替案: (a) ユーザーが試行タイミングで手動実行するゲートとして文書化する (b) 同等の構造化レビュー（レビュー専用 subagent に diff レビューを委譲し CONFIRMED/PLAUSIBLE を判定させる）をループ内に実装する (c) 組み込み自体を見送る。本タスク着手時に方式を決定する。
+<!-- SECTION:NOTES:END -->
