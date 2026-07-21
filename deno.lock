@@ -7,6 +7,7 @@
     "jsr:@std/yaml@1": "1.1.2",
     "npm:@deck.gl/core@^9.3.7": "9.3.7",
     "npm:@deck.gl/layers@^9.3.7": "9.3.7_@deck.gl+core@9.3.7_@loaders.gl+core@4.4.3_@luma.gl+core@9.3.6_@luma.gl+engine@9.3.6__@luma.gl+core@9.3.6__@luma.gl+shadertools@9.3.6___@luma.gl+core@9.3.6",
+    "npm:@deck.gl/mapbox@^9.3.7": "9.3.7_@deck.gl+core@9.3.7_@luma.gl+core@9.3.6_@math.gl+web-mercator@4.1.0",
     "npm:@protomaps/basemaps@^5.7.2": "5.7.2",
     "npm:@turf/bbox-clip@7": "7.3.5",
     "npm:@turf/helpers@7": "7.3.5",
@@ -68,6 +69,14 @@
         "@math.gl/web-mercator",
         "@types/geojson",
         "earcut@2.2.4"
+      ]
+    },
+    "@deck.gl/mapbox@9.3.7_@deck.gl+core@9.3.7_@luma.gl+core@9.3.6_@math.gl+web-mercator@4.1.0": {
+      "integrity": "sha512-hamgwBS2BbB8DHOjYWwPMrFki+KhcedjoHv/9cUpQHnjfXUswzmyhAURuyowO/tAVJb3vF+CmMzaDVUTlI40Sw==",
+      "dependencies": [
+        "@deck.gl/core",
+        "@luma.gl/core",
+        "@math.gl/web-mercator"
       ]
     },
     "@loaders.gl/core@4.4.3": {
@@ -533,6 +542,7 @@
       "jsr:@std/yaml@1",
       "npm:@deck.gl/core@^9.3.7",
       "npm:@deck.gl/layers@^9.3.7",
+      "npm:@deck.gl/mapbox@^9.3.7",
       "npm:@protomaps/basemaps@^5.7.2",
       "npm:@turf/bbox-clip@7",
       "npm:@turf/helpers@7",
