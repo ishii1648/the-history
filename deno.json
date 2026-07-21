@@ -9,6 +9,7 @@
   "tasks": {
     "build": "deno run --allow-read --allow-write --allow-run scripts/build.ts",
     "build-data": "deno run --allow-net --allow-read --allow-write scripts/build-data.ts",
+    "build-rivers": "deno run --allow-net --allow-read --allow-write scripts/build-rivers.ts",
     "build-colors": "deno run --allow-read --allow-write scripts/build-colors.ts",
     "extract-pmtiles": "deno run --allow-net=build-metadata.protomaps.dev --allow-run=pmtiles --allow-read scripts/extract-pmtiles.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
