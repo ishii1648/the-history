@@ -73,10 +73,20 @@ Deno.test("keyToStep は ArrowRight を +1 に写す", () => {
   assertEquals(keyToStep("ArrowRight"), 1);
 });
 
+// TASK-25: 縦タイムライン（上=古い/下=新しい）に合わせ ↑↓ でも移動できる
+Deno.test("keyToStep は ArrowUp を -1（古い方向）に写す", () => {
+  assertEquals(keyToStep("ArrowUp"), -1);
+});
+
+Deno.test("keyToStep は ArrowDown を +1（新しい方向）に写す", () => {
+  assertEquals(keyToStep("ArrowDown"), 1);
+});
+
 Deno.test("keyToStep は矢印以外を 0 に写す", () => {
   assertEquals(keyToStep("a"), 0);
   assertEquals(keyToStep("Enter"), 0);
-  assertEquals(keyToStep("ArrowUp"), 0);
+  assertEquals(keyToStep("PageUp"), 0);
+  assertEquals(keyToStep("Home"), 0);
 });
 
 Deno.test("SNAPSHOT_YEARS 全域で stepYear が端まで進める（20 年代・離散）", () => {
