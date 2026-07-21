@@ -1,10 +1,11 @@
 ---
 id: TASK-28
 title: 設計判断を backlog decisions に記録する運用を仕組み化する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-21 14:32'
-updated_date: '2026-07-21 15:43'
+updated_date: '2026-07-21 15:49'
 labels:
   - 'area:docs'
   - 'area:workflow'
@@ -26,3 +27,13 @@ ordinal: 28000
 - [ ] #4 decision の一覧・参照方法（CLI コマンド）が docs/development-style.md に記載されている
 - [ ] #5 コンテキストコミットの decision 行との棲み分け（重複記録を避ける方針）が明文化されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 方針: 設計判断の記録先を backlog decisions（backlog decision create）に一本化し、記録基準を「タスク横断で影響する判断」（アーキテクチャ/データソース/ライセンス/規約/採否にトレードオフがある選定）に絞る。タスク単位の実装意図・Why はコンテキストコミット（intent/decision 行）と task notes に残し、decision へは転記しない（棲み分けの明文化）。
+2. docs/development-style.md に記録基準・参照方法（backlog decision list / view）・棲み分けを追記。agent-loop SKILL.md のタスク実行フロー（finalization 前後）に「decision 記録要否の判断ステップ」を追加。
+3. 過去タスクの主要設計判断の遡及記録（現在も有効なもの）: 例 — データソース選定（historical-basemaps ピン留め / ETH Roller CC BY-NC-SA の別ファイル分離 / Natural Earth rivers / Reba cities）、色割当の決定的プロービング設計、HRE 領邦の独立色化、日本語表記の表示層マッピング方式（name-ja.json フラットマップ + 都市オーバーライド）、deck.gl レイヤー順による picking 優先、Deck レベルイベント集約、area ラベルによるタスク間並列判定。各 1 decision として backlog CLI で作成。
+4. 並列化判定（タスク内）: 見送り（理由: ドキュメント 2 本と decision 群の作成は同一の基準定義に依存する単一の運用整備作業で、独立にテスト可能な分割単位がない。単一 subagent に委譲）。
+5. チェック: deno fmt --check / lint / test green（md fmt 対象）→ PR → CI → finalization → マージ
+<!-- SECTION:PLAN:END -->
