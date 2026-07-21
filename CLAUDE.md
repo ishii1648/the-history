@@ -55,7 +55,7 @@ consistent.
   最小のものを選ぶ（`In
   Progress` のタスクが残っている間は選ばない）。判定は
   `deno task next-task` を使う。外側ループはローカルの Claude Code セッションで
-  `/agent-loop`（`.claude/commands/agent-loop.md`）を実行して
+  `/agent-loop` スキル（`.claude/skills/agent-loop/SKILL.md`）を実行して
   回し、マージ後も同一セッションが次タスクを継続する。CI や PR のステータスは
   Monitor ツールや PR activity 購読で監視する。詳細は
   `docs/development-style.md` の 4 章を参照。
