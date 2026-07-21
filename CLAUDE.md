@@ -54,9 +54,11 @@ consistent.
   `dependencies` が全て `Done` のタスクのうち `ordinal`
   最小のものを選ぶ（`In
   Progress` のタスクが残っている間は選ばない）。判定は
-  `deno task next-task` を使う。マージ後は `.github/workflows/agent-loop.yml`
-  が次タスクのセッションを自動起動する。詳細は `docs/development-style.md` の 4
-  章を参照。
+  `deno task next-task` を使う。外側ループはローカルの Claude Code セッションで
+  `/agent-loop`（`.claude/commands/agent-loop.md`）を実行して
+  回し、マージ後も同一セッションが次タスクを継続する。CI や PR のステータスは
+  Monitor ツールや PR activity 購読で監視する。詳細は
+  `docs/development-style.md` の 4 章を参照。
 - 人の介入は例外時のみ: AC が曖昧・CI が恒常 red・仕様判断が必要な場合に限り
   `needs-human` ラベル付き issue を起票して停止し、判断を仰ぐ。それ以外で人の
   指示を待たない。

@@ -65,22 +65,35 @@
 で次タスク ID（例: `TASK-2`）が出力される（候補なしなら出力なし・exit 0）。
 backlog CLI には依存しないため、CLI が未インストールの環境や CI 上でも動く。
 
-### 4.2 外側の自律ループ（agent-loop.yml）
+### 4.2 外側の自律ループ（ローカル実行・/agent-loop）
 
-`.github/workflows/agent-loop.yml` が main への push（= PR
-マージ）を起点に次タスクを判定し、`anthropics/claude-code-action`
-でエージェントの実装セッションを自動起動する。これにより「マージ →
-次タスク着手」が人の指示なしで連鎖する。
+外側ループはローカルの Claude Code セッション自身が実行主体となって回す。 GitHub
+Actions からセッションを起動する方式は用いない。手順は
+`.claude/commands/agent-loop.md`（`/agent-loop` コマンド）に定義されており、
+セッションは「`deno task next-task` で次タスクを判定 → 標準タスクフロー
+（TDD・subagent 実装・mainagent レビュー）→ PR 作成 → CI 監視 → green で マージ
+→ finalization → 次タスクへ」を人の指示なしで繰り返す。
 
-安全ガード（いずれかに該当すると何もせず正常終了する）:
+CI や PR のステータスは、GitHub Actions のトリガーではなくセッション側が
+監視する:
 
-- リポジトリ変数 `AGENT_LOOP_ENABLED` が `'true'` でない（ループはオプトイン。
-  変数を消せば即停止できる）
-- 着手可能なタスクがない、または `In Progress` のタスクが残っている
-- 次タスクのブランチ `task-N-*` が既に origin に存在する（二重着手防止）
+- PR activity 購読（`subscribe_pr_activity` 等の MCP）でレビューコメントや CI
+  失敗イベントを受け取る。
+- CI の完了は Monitor ツール（check-runs をポーリングし success / failure
+  などの終端ステータスを検知するスクリプト）で監視する。フォアグラウンドの sleep
+  待ちはしない。
 
-有効化に必要な設定: リポジトリ変数 `AGENT_LOOP_ENABLED=true` とシークレット
-`CLAUDE_CODE_OAUTH_TOKEN`（Claude Code の OAuth トークン）。
+安全ガード:
+
+- 着手可能なタスクがない場合はループを終了する（`In Progress` のタスクが
+  あればそれを再開する）。
+- 次タスクのブランチ `task-N-*` が既に origin に存在する場合は状態を調査し、
+  再開またはエスカレーションする（二重着手防止）。
+- ループは同時に 1 セッションのみ。1 イテレーション = 1 タスク = 1 PR。
+
+起動はローカルセッションで `/agent-loop` を実行するだけでよい。停止は
+セッションを止めるか、停止条件（全タスク完了・needs-human 起票）に達した
+ときにループ自身が終了する。
 
 ### 4.3 エスカレーション規約（人の介入は例外時のみ）
 
