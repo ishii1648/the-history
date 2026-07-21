@@ -1,11 +1,11 @@
 ---
 id: TASK-3
 title: 色割当の静的生成（data/colors.json）
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-20 04:22'
-updated_date: '2026-07-21 09:00'
+updated_date: '2026-07-21 09:09'
 labels: []
 dependencies:
   - TASK-2
@@ -20,9 +20,9 @@ ordinal: 3000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 NAME をキーに決定的ハッシュで色が割り当てられ、同一勢力は全 20 年代で同色になる
-- [ ] #2 SUBJECTO を持つ feature は宗主国の色相に寄せた明度違いの色になる
-- [ ] #3 data/colors.json が生成され、パレットは隣接勢力の色衝突を緩和できる十分な色数・彩度差を持つ
+- [x] #1 NAME をキーに決定的ハッシュで色が割り当てられ、同一勢力は全 20 年代で同色になる
+- [x] #2 SUBJECTO を持つ feature は宗主国の色相に寄せた明度違いの色になる
+- [x] #3 data/colors.json が生成され、パレットは隣接勢力の色衝突を緩和できる十分な色数・彩度差を持つ
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -43,3 +43,9 @@ ordinal: 3000
 mainagent レビュー第1ラウンド: 実装・テスト・SUBJECTO 正規化（renames 経由の宗主国解決）は良好。要修正 1 件を指摘: fnv1a % 288 の誕生日衝突で独立勢力 256 中 150 が完全同色（66 グループ、例: Prussia と Kingdom of Sardinia が同色）。ソート順の線形プロービングによる決定的衝突解決を指示。
 観察（スコープ外・将来の name-overrides 候補）: 'Aragón'/'Aragon'、'Norway'/'Kingdom of Norway'、'Burgandy'、'Irlanda' 等の表記ゆれが colors.json のキーに残存。TASK-2 の overrides カバレッジの問題であり本タスクでは非対応。
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+scripts/build-colors.ts と data/colors.json を追加し PR #16 で実装。検証エビデンス: (AC1) FNV-1a 起点の決定的プロービング割当。colors.json は単一フラットマップのため同一 NAME は全年代同色。再生成で bit 同一の出力（決定的）、全 20 年代 1506 feature のキー突合で欠落 0 を確認 (AC2) SUBJECTO 持ち feature は renames 正規化した宗主国のプロービング後スロットと同色相・明度差 >=0.08 を全 28 検証対象で確認（不一致 0）。正規化後自己参照は属領扱いせずベース色 (AC3) 色相24段（黄金角）×彩度3段×明度4段=288 色パレット。レビューで発覚したハッシュ衝突（distinct 172/256）をソート順線形プロービングで解決し独立勢力 256/256 全色 distinct。deno test 67 passed、PR #16 CI green・MERGEABLE/CLEAN。
+<!-- SECTION:FINAL_SUMMARY:END -->
