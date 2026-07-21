@@ -1,11 +1,11 @@
 ---
 id: TASK-21
 title: 主要河川がどのズームでも描画されない（仕様違反）を修正する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 12:09'
-updated_date: '2026-07-21 12:16'
+updated_date: '2026-07-21 12:27'
 labels:
   - bug
 dependencies: []
@@ -24,9 +24,9 @@ ordinal: 21000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 初期ズーム（z4）〜z8 の範囲で、ライン川・ドナウ川・エルベ川など欧州の主要河川が視認できる
-- [ ] #2 河川データを追加した場合、出典・ライセンスがフッターまたは data/index.json に反映されている
-- [ ] #3 追加・変更したロジックにテストがあり deno test が green
+- [x] #1 初期ズーム（z4）〜z8 の範囲で、ライン川・ドナウ川・エルベ川など欧州の主要河川が視認できる
+- [x] #2 河川データを追加した場合、出典・ライセンスがフッターまたは data/index.json に反映されている
+- [x] #3 追加・変更したロジックにテストがあり deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -40,3 +40,19 @@ ordinal: 21000
 3. TDD: 各 subagent がテスト先行（red 確認 → green）で実装する
 4. mainagent が統合レビュー → deno fmt --check / lint / test / build 全 green → PR 作成（TASK-21 明記）→ CI 監視 → finalization → マージ → マージ後動作確認（z4〜z8 で主要河川の視認確認）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: dev サーバ（dist 配信）+ Chrome で目視確認。z4（center 15,50）でライン川・ドナウ川・エルベ川・ヴィスワ川・ドニエプル川・ヴォルガ川等を視認、z6（center 9,49）でライン川・エルベ川・オーダー川・ドナウ川を明瞭に視認。初回確認で z4 の 0.5px 幅が勢力塗り（alpha 128）越しにほぼ見えなかったため、線幅を z3:1px→z8:2.5px に修正（aadad23）して再確認済み。
+- AC#2: フッターに「河川: Natural Earth（パブリックドメイン）」、rivers ソースの attribution に naturalearthdata.com を追加（basemap_test で検証、地図右下 attribution 表示も目視確認）。
+- AC#3: deno fmt --check / deno lint / deno test（213 passed / 0 failed）/ deno task build 全 green。PR #28 の CI も pass。
+- 実装: subagent 2 並列（worktree isolation、データ側 cb50f89 / 表示側 e790fcb）で TDD（red→green）実施、mainagent レビューで線幅修正 1 件を適用。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Natural Earth 50m rivers_lake_centerlines（コミット ca96624 固定・パブリックドメイン）から scripts/build-rivers.ts で欧州主要河川（scalerank<=5, 48 features, 約 50KB）を data/rivers.geojson に生成し、buildBasemapStyle に geojson ソース+line レイヤー（light flavor water 色、幅 z3:1px→z8:2.5px）としてオーバーレイ。原因は water_river の minzoom 9 とアプリ MAX_ZOOM=8 の不整合で河川が原理的に描画されなかったこと。検証は deno test 213 passed・CI pass・Chrome での z4/z6 目視確認（ライン/ドナウ/エルベ等を視認）。
+<!-- SECTION:FINAL_SUMMARY:END -->
