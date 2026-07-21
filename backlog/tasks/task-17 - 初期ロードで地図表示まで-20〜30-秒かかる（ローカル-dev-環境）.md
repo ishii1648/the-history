@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-21 10:12'
-updated_date: '2026-07-21 10:17'
+updated_date: '2026-07-21 10:28'
 labels:
   - bug
 dependencies: []
@@ -53,3 +53,12 @@ TASK-4 のマージ後動作確認で初回観測（10〜18 秒、backlog notes 
 5. 原因を特定し修正（例: maplibre worker の初期化問題、バンドル構造起因の遅延、protocol 登録タイミング等）。TDD 可能なロジックはテスト付きで
 6. mainagent がブラウザで改善を実測（AC #3）→ PR → CI → マージ → finalization
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+原因特定（subagent 計測 + mainagent 独立検証で確定）: 背景タブ（visibilityState=hidden）では Chrome が requestAnimationFrame を停止し、MapLibre の初回描画・ソース読み込み・load イベントが rAF ゲートの先で停止する。スクリーンショット取得（CDP のフレーム強制）で初めて 1 フレーム進み、そこから数十 ms で全段完了する。module 評価〜pmtiles ヘッダ取得は 200ms 以内・全リソース取得も高速で、コード・ネットワーク・バンドルサイズは無関係。前面タブでは実用上サブ秒で表示される見込み。結論: wontfix（検証環境のアーティファクト）。
+mainagent 独立検証: 自動化タブで vis=hidden / hasFocus=false / rAF 3 秒未発火を確認。
+将来候補（今回スコープ外）: colors.json と初期年代 GeoJSON を map load ゲート外で先読みする最適化（効果軽微）。
+検証プロセスの学び: ブラウザ自動化での目視確認は、待機の前にスクリーンショットを撮ることでフレームが強制され描画が進む。長い wait より screenshot → wait → screenshot が有効。
+<!-- SECTION:NOTES:END -->
