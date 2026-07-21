@@ -1,10 +1,11 @@
 ---
 id: TASK-16
 title: agent-loop 完了時に /code-review 実行を促す最終レポートへ変更
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-21 09:21'
-updated_date: '2026-07-21 09:35'
+updated_date: '2026-07-21 11:47'
 labels: []
 dependencies: []
 ordinal: 16000
@@ -28,6 +29,17 @@ ordinal: 16000
 - [ ] #3 PR 作成前に /code-review を自律実行する旨の記述が文書に存在しない（HITL 回避の設計判断が明記されている）
 - [ ] #4 /code-review の指摘を bug intake フォーマットで label bug タスクとして起票し agent-loop で処理する流れが SKILL.md に記載されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. ブランチ task-16-code-review-flow を origin/main から作成
+2. 並列化判定: 見送り（理由: SKILL.md 中心の文書追記のみ。subagent 1 体に委譲）
+3. SKILL.md の停止条件・最終レポート節を拡張: 全タスク完了時の最終レポートに /code-review 実行の促し（レビュー対象の説明付き）を含める手順を追記
+4. SKILL.md の bug intake 節に /code-review 指摘の受け入れフロー（bug intake フォーマットで起票 → bug 最優先で次イテレーション処理）を追記
+5. HITL 回避の設計判断（PR 前の自律実行はしない・理由）を明記
+6. fmt green → PR → CI 監視 → マージ → finalization
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
