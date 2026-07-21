@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-21 08:17'
-updated_date: '2026-07-21 11:41'
+updated_date: '2026-07-21 11:43'
 labels: []
 dependencies: []
 ordinal: 14000
@@ -34,6 +34,12 @@ PR 作成後の自動化のうち、/agent-loop skill（.claude/skills/agent-loo
 5. AC #3: 既存の CI red 対応・エスカレーション記述（手順 3/5）と矛盾なく統合されているかレビュー
 6. deno fmt --check green（SKILL.md が fmt 対象なら）→ PR → CI 監視 → マージ → finalization
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+AC #1 は手順3（既存の CONFLICTING/DIRTY 検知→main取り込み→解消→再push→CI green再確認）で充足済みを確認、補完不要。AC #2 として手順3にマージブロックの自動修正可否の切り分け（BEHIND/strict protection・auto-merge無効=手動マージ代替=修正可 / 必須レビュー承認者不在・恒常的に満たせないstatus check・マージ権限不足=修正不可）を追記。手順5のエスカレーション条件に自動修正不可なマージブロックを追加し、issue記載項目を『原因・検討した選択肢・推奨対応』に統一。deno fmt --check green。
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 
