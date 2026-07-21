@@ -143,6 +143,33 @@
         progress）。
       </div>
     </footer>
+    <!-- TASK-33: 年代ごとの歴史解説パネル。右下（maplibre attribution の少し上）に
+         「解説」トグルボタンを置き、展開時はその真上へ吹き出し状パネルを表示する。
+         トグルは notes.json のロード成功時のみ main.ts が表示する（欠如時は
+         hidden のまま従来表示を維持）。内容・開閉制御は main.ts -->
+    <aside id="notes" class="notes" aria-label="年代解説">
+      <button
+        id="notes-toggle"
+        class="notes-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="notes-panel"
+        hidden
+      >
+        解説
+      </button>
+      <div
+        id="notes-panel"
+        class="notes-panel"
+        role="region"
+        aria-label="年代の歴史解説"
+        hidden
+      >
+        <h2 id="notes-heading" class="notes-heading"></h2>
+        <ul id="notes-points" class="notes-points"></ul>
+        <p id="notes-summary" class="notes-summary"></p>
+      </div>
+    </aside>
     <script type="module" src="app.js"></script>
   </body>
 </html>
