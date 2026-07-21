@@ -1,10 +1,11 @@
 ---
 id: TASK-14
 title: agent-loop skill に PR conflict 対応とマージブロック分析を追記
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-21 08:17'
-updated_date: '2026-07-21 09:00'
+updated_date: '2026-07-21 11:41'
 labels: []
 dependencies: []
 ordinal: 14000
@@ -22,6 +23,17 @@ PR 作成後の自動化のうち、/agent-loop skill（.claude/skills/agent-loo
 - [ ] #2 SKILL.md に修正不可なマージブロックの原因分析と needs-human エスカレーション（原因・選択肢・推奨対応を記載）の手順が追記されている
 - [ ] #3 既存の CI red 対応・エスカレーション記述と矛盾なく統合されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. ブランチ task-14-agent-loop-docs を origin/main から作成
+2. 並列化判定: 見送り（理由: SKILL.md 単一ファイルへの文書追記のみで分割単位がない。subagent 1 体に委譲）
+3. AC #1 の現状確認: TASK-15 で先行追記済みの mergeability 監視・conflict 自動解消手順が AC を満たすか確認し、不足があれば補完
+4. AC #2: 自動修正不可なマージブロック（branch protection 要件・権限不足・レビュー必須等）の原因分析手順と needs-human エスカレーション（原因・検討した選択肢・推奨対応）を SKILL.md に追記
+5. AC #3: 既存の CI red 対応・エスカレーション記述（手順 3/5）と矛盾なく統合されているかレビュー
+6. deno fmt --check green（SKILL.md が fmt 対象なら）→ PR → CI 監視 → マージ → finalization
+<!-- SECTION:PLAN:END -->
 
 ## Comments
 
