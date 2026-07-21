@@ -1,11 +1,11 @@
 ---
 id: TASK-13
 title: エージェントループのローカル実行化（GitHub Actions 起動の廃止）
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 07:26'
-updated_date: '2026-07-21 07:27'
+updated_date: '2026-07-21 07:29'
 labels: []
 dependencies:
   - TASK-12
@@ -20,12 +20,12 @@ TASK-12 で整備した外側ループは GitHub Actions 上で claude-code-acti
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 .github/workflows/agent-loop.yml が削除されている
-- [ ] #2 .claude/commands/agent-loop.md が存在し、ローカルセッションが next-task 判定 → 標準タスクフロー → CI 監視（Monitor / PR activity 購読）→ マージ → finalization → 次タスクへ、を繰り返すループ手順を定義している
-- [ ] #3 ループの停止条件（着手可能タスクなし・needs-human エスカレーション時）が定義されている
-- [ ] #4 docs/development-style.md 4.2 がローカル実行前提の記述に更新され、AGENT_LOOP_ENABLED / CLAUDE_CODE_OAUTH_TOKEN の設定要件が削除されている
-- [ ] #5 CLAUDE.md の外側ループの記述が agent-loop.yml 参照からローカルループ参照に更新されている
-- [ ] #6 deno fmt --check / lint / test が green である
+- [x] #1 .github/workflows/agent-loop.yml が削除されている
+- [x] #2 .claude/commands/agent-loop.md が存在し、ローカルセッションが next-task 判定 → 標準タスクフロー → CI 監視（Monitor / PR activity 購読）→ マージ → finalization → 次タスクへ、を繰り返すループ手順を定義している
+- [x] #3 ループの停止条件（着手可能タスクなし・needs-human エスカレーション時）が定義されている
+- [x] #4 docs/development-style.md 4.2 がローカル実行前提の記述に更新され、AGENT_LOOP_ENABLED / CLAUDE_CODE_OAUTH_TOKEN の設定要件が削除されている
+- [x] #5 CLAUDE.md の外側ループの記述が agent-loop.yml 参照からローカルループ参照に更新されている
+- [x] #6 deno fmt --check / lint / test が green である
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -43,4 +43,12 @@ TASK-12 で整備した外側ループは GitHub Actions 上で claude-code-acti
 
 <!-- SECTION:NOTES:BEGIN -->
 agent-loop.yml を削除し、.claude/commands/agent-loop.md（/agent-loop コマンド）としてローカルセッション主導のループを定義。docs 4.2 をローカル実行前提（Monitor ツール / PR activity 購読による CI 監視、AGENT_LOOP_ENABLED・CLAUDE_CODE_OAUTH_TOKEN 要件の削除）に書き換え、CLAUDE.md の参照を更新。コードロジック変更なしのため新規テストなし。deno fmt --check / lint / test green、grep で旧方式（claude-code-action / AGENT_LOOP_ENABLED / agent-loop.yml）への参照が backlog 履歴以外に残っていないことを確認。
+
+検証エビデンス: agent-loop.yml の不在と .claude/commands/agent-loop.md の存在をファイルシステムで確認。grep で AGENT_LOOP_ENABLED / claude-code-action / agent-loop.yml への参照が backlog 履歴以外にないことを確認。deno fmt --check / lint / test (28 passed / 0 failed) green。PR #9 の CI (ci) success（GitHub MCP の check-runs で確認）。なおリモート実行環境では GitHub API 直叩きが不可のため CI 監視は MCP（check-runs 照会 + PR activity 購読）で代替した。ローカル実行時は Monitor ツールで gh pr checks 等をポーリングする。
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+外側ループを GitHub Actions 起動方式からローカル実行方式に変更。agent-loop.yml を削除し、/agent-loop コマンド（.claude/commands/agent-loop.md）としてローカルセッションが next-task 判定 → 標準タスクフロー → CI 監視（Monitor / PR activity 購読）→ マージ → finalization → 次タスクを繰り返すループと停止条件・ガードを定義。docs 4.2 と CLAUDE.md をローカル実行前提に更新し、AGENT_LOOP_ENABLED / CLAUDE_CODE_OAUTH_TOKEN の設定要件を撤廃。検証: deno fmt/lint/test green（28 passed）、旧方式参照の残存なし、PR #9 CI green。
+<!-- SECTION:FINAL_SUMMARY:END -->
