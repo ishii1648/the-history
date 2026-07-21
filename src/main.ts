@@ -660,8 +660,11 @@ setupLoadingUI();
  *
  * キーボード二重発火対策:
  * - keydown は document で受けるが、フォーカスがスライダー自身の場合は何もしない。
- *   range は ← → で値が変わり input イベントを発火するので、そちらの経路で 1 回だけ
- *   切り替わる。二重に stepYear すると 1 打鍵で 2 年代進む不具合になるため防ぐ。
+ *   range は矢印キーで値が変わり input イベントを発火するので、そちらの経路で 1 回
+ *   だけ切り替わる。二重に stepYear すると 1 打鍵で 2 年代進む不具合になるため防ぐ。
+ *   TASK-25: keyToStep が ↑↓ も返すようになったが、対象キー判定は keyToStep に
+ *   集約されているためこのガードはそのまま ↑↓ にも効く（縦 range の native な
+ *   ↑↓ 操作とも二重にならない）。
  */
 function setupTimeline(): void {
   const root = document.getElementById("timeline");
@@ -729,7 +732,8 @@ function setupTimeline(): void {
     requestYear(stepYear(SNAPSHOT_YEARS, currentYear(), 1));
   });
 
-  // AC #2: キーボード ← →（スライダー自身にフォーカスがある時は native + input に委ねる）
+  // AC #2: キーボード ← → / ↑ ↓（↑=古い方向・↓=新しい方向。縦レイアウトの
+  // 上=古い並びと一致させる。スライダー自身にフォーカスがある時は native + input に委ねる）
   document.addEventListener("keydown", (e) => {
     const step = keyToStep(e.key);
     if (step === 0) return;

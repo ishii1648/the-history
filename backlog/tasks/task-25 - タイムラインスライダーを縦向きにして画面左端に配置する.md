@@ -1,9 +1,11 @@
 ---
 id: TASK-25
 title: タイムラインスライダーを縦向きにして画面左端に配置する
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-07-21 13:40'
+updated_date: '2026-07-21 14:35'
 labels: []
 dependencies: []
 ordinal: 25000
@@ -19,8 +21,36 @@ ordinal: 25000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 タイムラインスライダーが縦向きで画面左端に表示され、ドラッグ・目盛りクリックで年代を選択できる
-- [ ] #2 年代表示・前後ボタン・目盛りが縦レイアウトで操作しやすく配置され、地図・情報パネル・フッターと重ならない
-- [ ] #3 キーボード操作（矢印キー）で従来どおり年代を移動できる
-- [ ] #4 既存の年代切替ロジック・URL 同期のテストが引き続き green（deno test 全 green）
+- [x] #1 タイムラインスライダーが縦向きで画面左端に表示され、ドラッグ・目盛りクリックで年代を選択できる
+- [x] #2 年代表示・前後ボタン・目盛りが縦レイアウトで操作しやすく配置され、地図・情報パネル・フッターと重ならない
+- [x] #3 キーボード操作（矢印キー）で従来どおり年代を移動できる
+- [x] #4 既存の年代切替ロジック・URL 同期のテストが引き続き green（deno test 全 green）
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 方針: index.html の #timeline を画面左端の縦レイアウトに変更する。input[type=range] の縦向き化は CSS の writing-mode: vertical-lr（+ 必要に応じ direction）を基本とし、年代の並びは上=古い（900）→下=新しい（1914）とする。年表示は上部、前後ボタンは上下端（上=前の年代/下=次の年代）、目盛りは縦に沿わせる。
+2. レイアウト干渉: 情報パネル（左上）と重ならないよう配置を調整する（スライダーを左端の垂直中央帯に収める・情報パネルを右上へ移す等、実装時に見た目で判断）。フッター（左下）とも重ねない。狭幅・低さの画面では max-height と overflow を考慮。
+3. キーボード: ←→ は従来どおり維持しつつ、縦向きに合わせ ↑↓ でも年代移動できるよう timeline.ts の keyToStep を拡張する（上=古い方向）。スライダー自身のフォーカス時は native の挙動（input イベント）に委ねる既存の二重発火防止を維持。
+4. ロジック不変: index/step 計算・URL 同期・競合ガード（timeline.ts / url_state.ts / powers.ts）は変更しない（keyToStep の拡張のみ）。
+5. 並列化判定: 見送り（理由: 変更は index.html / app.css / src/main.ts setupTimeline / src/timeline.ts の UI レイアウト一式で相互依存が強く、独立にテスト・検証可能なサブ作業に分割できない。単一 subagent に委譲）。
+6. TDD: timeline_test.ts（keyToStep の ↑↓ 拡張）を先行（red）→ 実装 → green → fmt/lint/test/build 全 green → 目視確認（縦スライダー表示・ドラッグ/クリック/キー操作・重なりなし）→ PR → CI → finalization → マージ → マージ後動作確認
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: Chrome で縦スライダーが左端（left:16px・垂直中央）に表示され、▼ボタンクリックで 1500→1530 に切替、サム位置が年代に追従することを確認。ドラッグは native の input[type=range]（writing-mode: vertical-lr）の標準挙動。
+- AC#2: 上から現在年 → ▲ → 縦スライダー → ▼ の縦一列。情報パネルは右上へ移動し（フランスのクリック表示で確認）、フッター（左下）・attribution（右下）と重なりなし。
+- AC#3: ↑ キーで 1530→1500 に移動することを確認（keyToStep に ArrowUp=-1 / ArrowDown=+1 を追加。←→ は従来どおり）。
+- AC#4: timeline_test.ts に ArrowUp/ArrowDown テストを追加（red→green）。deno fmt --check / lint / test（300 passed / 0 failed）/ build 全 green。PR #34 CI pass。
+- 実装: 並列化見送り（単一 subagent 6d2fab1）。TDD red→green。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+タイムラインを画面左端の縦型（上=900→下=1914）に変更。writing-mode: vertical-lr のみで縦向き化し、情報パネルを右上へ移動して重なりを回避。keyToStep に ↑↓ を追加（↑=古い方向）。年代切替ロジック・URL 同期は不変。検証は deno test 300 passed・CI pass・Chrome での操作確認（▼クリック・↑キー・レイアウト重なりなし）。
+<!-- SECTION:FINAL_SUMMARY:END -->
