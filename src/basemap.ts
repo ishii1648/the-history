@@ -3,6 +3,10 @@
  *
  * 歴史地図の下地として「地形・海岸線・河川」だけを描画し、現代の
  * 国境・地名・道路等はスタイル定義の段階で除外する（docs/app-spec.md §2.2）。
+ *
+ * Natural Earth 主要河川オーバーレイ（TASK-21）は、クリック/ホバー可能に
+ * するため TASK-24 で deck.gl の GeoJsonLayer（src/rivers.ts + main.ts）へ
+ * 移行した。ここでは MapLibre style に rivers ソース/レイヤーを含めない。
  */
 
 import { layers, namedFlavor } from "@protomaps/basemaps";
@@ -53,66 +57,18 @@ export interface BasemapVectorSource {
   attribution?: string;
 }
 
-/** GeoJSON ソースの最小型（MapLibre GeoJSONSourceSpecification 互換） */
-export interface BasemapGeoJsonSource {
-  type: "geojson";
-  data: string;
-  attribution?: string;
-}
-
 /** buildBasemapStyle が返すスタイルの最小型（MapLibre StyleSpecification 互換） */
 export interface BasemapStyle {
   version: 8;
   sources: {
-    [id: string]: BasemapVectorSource | BasemapGeoJsonSource;
+    [id: string]: BasemapVectorSource;
   };
   layers: Array<{ id: string; type: string; [key: string]: unknown }>;
-}
-
-/** 主要河川オーバーレイのソース/レイヤー id（TASK-21） */
-export const RIVERS_SOURCE_ID = "rivers";
-
-/** 主要河川 GeoJSON の配信 URL（scripts/ 側の生成物と一致させる契約） */
-export const RIVERS_DATA_URL = "/data/rivers.geojson";
-
-/**
- * Natural Earth 由来の主要河川を描画する line レイヤーを組み立てる純粋関数。
- *
- * ベースマップの water_river は minzoom 9 のためアプリの MAX_ZOOM=8 では
- * 一切描画されない。低ズーム帯（z3〜z8）でも主要河川が見えるよう、
- * Natural Earth 50m rivers_lake_centerlines の GeoJSON を重ねる。
- * 色は light flavor の water と同一にし、水域ポリゴンと調和させる。
- */
-export function buildRiversLayer(lineColor: string): BasemapStyle["layers"][0] {
-  return {
-    id: RIVERS_SOURCE_ID,
-    type: "line",
-    source: RIVERS_SOURCE_ID,
-    layout: {
-      "line-cap": "round",
-      "line-join": "round",
-    },
-    paint: {
-      "line-color": lineColor,
-      // z3 で 1px → z8 で 2.5px。勢力圏の半透明塗り（alpha 128）越しでも
-      // 低ズーム（初期表示の z4）で視認できるよう、細線側を太めにとる
-      "line-width": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        3,
-        1,
-        8,
-        2.5,
-      ],
-    },
-  };
 }
 
 /**
  * PMTiles URL からベースマップ用の MapLibre スタイルを組み立てる純粋関数。
  * ラベルレイヤーを生成しないため glyphs / sprite は不要。
- * 末尾に Natural Earth 主要河川のオーバーレイを追加する（陸地の上に描画）。
  */
 export function buildBasemapStyle(pmtilesUrl: string): BasemapStyle {
   const flavor = namedFlavor("light");
@@ -126,16 +82,7 @@ export function buildBasemapStyle(pmtilesUrl: string): BasemapStyle {
         attribution:
           '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
       },
-      [RIVERS_SOURCE_ID]: {
-        type: "geojson",
-        data: RIVERS_DATA_URL,
-        attribution:
-          '<a href="https://www.naturalearthdata.com">Natural Earth</a>',
-      },
     },
-    layers: [
-      ...(filterBasemapLayers(allLayers) as BasemapStyle["layers"]),
-      buildRiversLayer(flavor.water),
-    ],
+    layers: filterBasemapLayers(allLayers) as BasemapStyle["layers"],
   };
 }
