@@ -37,11 +37,14 @@ body {
   display: none;
 }
 
-/* TASK-7: クリック情報パネル（モバイルのホバー代替）。左上固定でタイムラインと重ならない */
+/* TASK-7/TASK-25: クリック情報パネル（モバイルのホバー代替）。
+   タイムラインが左端の垂直中央帯へ移ったため、低い viewport でも重ならないよう
+   右上固定へ移動（上中央のエラートーストとは横位置で、右下の attribution とは
+   縦位置で分離されており衝突しない） */
 .info-panel {
   position: absolute;
   top: 16px;
-  left: 16px;
+  right: 16px;
   z-index: 20;
   display: flex;
   align-items: center;
@@ -82,19 +85,21 @@ body {
   background: rgba(255, 255, 255, 0.24);
 }
 
-/* TASK-6: タイムラインスライダー（app-spec §5.1）。地図の上に画面下部固定で重ねる */
+/* TASK-6/TASK-25: タイムラインスライダー（app-spec §5.1）。
+   画面左端の垂直中央帯に縦向きで固定する（上=古い 900 / 下=新しい 1914）。
+   高さは clamp した vh ベースに抑え、上下に余白を残して左上の UI・左下の
+   フッターと重ならないようにする */
 .timeline {
   position: absolute;
-  left: 50%;
-  bottom: 24px;
-  transform: translateX(-50%);
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  width: min(720px, calc(100% - 32px));
-  padding: 14px 20px 18px;
+  gap: 10px;
+  padding: 12px 10px 14px;
   box-sizing: border-box;
   background: rgba(20, 22, 28, 0.82);
   border-radius: 12px;
@@ -103,20 +108,21 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-/* AC #3: 現在年を大きく表示 */
+/* AC #3: 現在年を最上部に大きく表示（縦帯に収まるようサイズは控えめ） */
 .timeline-year {
-  font-size: 40px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
 }
 
+/* TASK-25: 上=前の年代ボタン / 中央=縦スライダー / 下=次の年代ボタンの縦並び */
 .timeline-controls {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  width: 100%;
+  gap: 10px;
 }
 
 .timeline-btn {
@@ -127,7 +133,7 @@ body {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.12);
   color: #f5f5f5;
-  font-size: 22px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
@@ -141,15 +147,20 @@ body {
   cursor: default;
 }
 
+/* TASK-25: writing-mode で range を縦向き化（vertical-lr は min が上端に来るため
+   index 0 = 900 が最上部になり「上=古い」の並びと一致。direction 反転は不要）。
+   datalist の目盛りはこの縦トラックに沿って描画される */
 .timeline-slider {
-  flex: 1 1 auto;
-  width: 100%;
+  flex: 0 0 auto;
+  writing-mode: vertical-lr;
+  height: clamp(200px, 46vh, 460px);
   accent-color: #6ea8fe;
   cursor: pointer;
 }
 
 /* TASK-9: データ出典・attribution・免責の常時表示フッター（app-spec §2.1, §5.4）。
-   maplibre attribution（右下）・タイムライン（下部中央）と衝突しないよう左下に薄く配置 */
+   maplibre attribution（右下）・タイムライン（左端の垂直中央帯。高さは clamp 済みで
+   左下まで届かない）と衝突しないよう左下に薄く配置 */
 .app-footer {
   position: absolute;
   left: 8px;

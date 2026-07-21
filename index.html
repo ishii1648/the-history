@@ -39,7 +39,7 @@
     </div>
     <!-- TASK-7: ホバーツールチップ（app-spec §5.2）。位置・内容・表示制御は main.ts -->
     <div id="info-tooltip" class="info-tooltip" role="tooltip" hidden></div>
-    <!-- TASK-7: クリック情報パネル（モバイルのホバー代替）。左上固定・閉じるボタン付き -->
+    <!-- TASK-7: クリック情報パネル（モバイルのホバー代替）。右上固定・閉じるボタン付き（TASK-25 で左上から移動） -->
     <div
       id="info-panel"
       class="info-panel"
@@ -57,7 +57,8 @@
         ×
       </button>
     </div>
-    <!-- TASK-6: タイムラインスライダー（app-spec §5.1）。目盛り・値・年表示は main.ts が初期化する -->
+    <!-- TASK-6/TASK-25: タイムラインスライダー（app-spec §5.1）。目盛り・値・年表示は main.ts が初期化する。
+         画面左端の縦レイアウト（上=古い 900 / 下=新しい 1914）。range の縦向き化は app.css の writing-mode -->
     <div
       id="timeline"
       class="timeline"
@@ -73,7 +74,7 @@
           type="button"
           aria-label="前の年代"
         >
-          ‹
+          ▲
         </button>
         <input
           id="timeline-slider"
@@ -92,7 +93,7 @@
           type="button"
           aria-label="次の年代"
         >
-          ›
+          ▼
         </button>
       </div>
       <datalist id="timeline-marks"></datalist>

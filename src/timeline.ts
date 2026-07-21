@@ -44,11 +44,12 @@ export function stepYear(
 
 /**
  * キーボードのキー名をステップ方向へ写す（純粋関数）。
- * ← は -1、→ は +1、それ以外は 0（＝何もしない）。
- * AC #2 のキーボード操作は ← → のみを対象とする（app-spec §5.1）。
+ * ← / ↑ は -1（古い方向）、→ / ↓ は +1（新しい方向）、それ以外は 0（＝何もしない）。
+ * TASK-25: 縦タイムライン（上=古い 900 / 下=新しい 1914）の視覚方向と一致させるため
+ * ↑↓ を追加した。従来の ← → は据え置き（app-spec §5.1）。
  */
 export function keyToStep(key: string): -1 | 0 | 1 {
-  if (key === "ArrowLeft") return -1;
-  if (key === "ArrowRight") return 1;
+  if (key === "ArrowLeft" || key === "ArrowUp") return -1;
+  if (key === "ArrowRight" || key === "ArrowDown") return 1;
   return 0;
 }
