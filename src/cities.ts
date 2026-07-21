@@ -106,8 +106,32 @@ function cityLabelPriority(population: number | null): number {
 }
 
 /**
+ * 勢力名と綴りが衝突する都市の日本語訳オーバーライド。
+ * name-ja.json は勢力名と共有のフラットな 1:1 マップのため、Venice 等は
+ * 勢力訳（ヴェネツィア共和国 等）が登録されている。都市マーカー/ラベルの
+ * 表示では都市としての訳を優先する（ここに無い名前は ja → 英語の順）。
+ */
+export const CITY_NAME_JA_OVERRIDES: Record<string, string> = {
+  Venice: "ヴェネツィア",
+  Milan: "ミラノ",
+  Naples: "ナポリ",
+  Granada: "グラナダ",
+};
+
+/**
+ * 都市の表示名を返す（純粋関数）。
+ * CITY_NAME_JA_OVERRIDES → ja（name-ja.json）→ 英語名 の順で解決する。
+ */
+export function cityDisplayName(
+  name: string,
+  ja: Record<string, string> = {},
+): string {
+  return CITY_NAME_JA_OVERRIDES[name] ?? ja[name] ?? name;
+}
+
+/**
  * 都市エントリを TextLayer 用ラベルデータへ変換する（純粋関数）。
- * - text は ja（name-ja.json）適用。未登録の都市名は英語のまま
+ * - text は cityDisplayName（都市オーバーライド → ja → 英語）で解決する
  * - name 空のエントリは除外（ラベル・picking 表示のどちらも成立しない）
  * - priority は人口由来の都市固定バンド（CITY_LABEL_PRIORITY_MIN..MAX）
  */
@@ -119,7 +143,7 @@ export function buildCityLabelData(
   for (const entry of entries) {
     if (entry.name === "") continue;
     data.push({
-      text: ja[entry.name] ?? entry.name,
+      text: cityDisplayName(entry.name, ja),
       position: [entry.lon, entry.lat],
       priority: cityLabelPriority(entry.population),
     });

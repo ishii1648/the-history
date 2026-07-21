@@ -40,6 +40,7 @@ import {
   buildCityMarkerData,
   CITIES_DATA_URL,
   type CitiesData,
+  cityDisplayName,
   cityEntriesForYear,
   type CityMarkerDatum,
 } from "./cities.ts";
@@ -307,8 +308,8 @@ function pickedLabel(info: PickingInfo): string | null {
   const layerId = info.layer?.id;
   if (info.object === undefined || layerId === undefined) return null;
   if (layerId === CITY_LAYER_ID) {
-    const name = (info.object as CityMarkerDatum).name;
-    return nameJa[name] ?? name;
+    // 都市は cityDisplayName で解決（Venice 等の勢力名衝突キーは都市訳を優先）
+    return cityDisplayName((info.object as CityMarkerDatum).name, nameJa);
   }
   const feature = info.object as Feature;
   if (layerId === RIVERS_LAYER_ID) {
