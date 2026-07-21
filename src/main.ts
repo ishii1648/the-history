@@ -483,10 +483,11 @@ function buildCityLabelLayer(
     fontSettings: { sdf: true },
     outlineWidth: 2,
     outlineColor: [255, 255, 255, 220],
-    // マーカー（3px + 白縁）の右上に寄せ、ドットを覆わない
-    getPixelOffset: [6, -6],
-    getTextAnchor: "start",
-    getAlignmentBaseline: "bottom",
+    // マーカー（3px + 白縁）を覆わないよう少し上へずらす（オフセットのみ。
+    // getTextAnchor: "start" / getAlignmentBaseline: "bottom" は
+    // CollisionFilterExtension の衝突判定パスと相性が悪く、指定すると
+    // ラベルが全滅することを目視で確認したため既定（中央揃え）のまま使う）
+    getPixelOffset: [0, -10],
     // 日本語都市名（パリ 等）のグリフもラベル文字列から自動生成する
     characterSet: characterSetFrom(data.map((d) => d.text)),
     updateTriggers: { getText: [year], getPosition: [year] },
