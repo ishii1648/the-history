@@ -1,8 +1,9 @@
 ---
-description: backlog の次タスクを決定的に選択し、実装から finalization までを人の介入なしで繰り返すローカル自律ループ
+name: agent-loop
+description: backlog の次タスクを決定的に選択し、実装から finalization までを人の介入なしで繰り返すローカル自律ループ。ユーザーが /agent-loop を実行したとき、または自律タスクループの開始・再開を指示したときに使う。
 ---
 
-# /agent-loop — 自律タスクループ（ローカル実行）
+# agent-loop — 自律タスクループ（ローカル実行）
 
 ローカルの Claude Code セッション自身が外側ループの実行主体となり、以下を
 繰り返す。GitHub Actions からセッションを起動する方式は用いない。CI や PR の
