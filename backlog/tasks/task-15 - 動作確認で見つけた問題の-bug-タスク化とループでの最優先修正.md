@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-21 08:37'
-updated_date: '2026-07-21 08:37'
+updated_date: '2026-07-21 08:45'
 labels: []
 dependencies: []
 ordinal: 15000
@@ -36,3 +36,9 @@ ordinal: 15000
 6. 手動 E2E: ダミー bug タスク（label bug・ordinal 99000）で deno task next-task が bug を返すことを確認して削除
 7. PR 作成（TASK-15 明記）→ CI green → マージ → finalization
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+next_task.ts の bug 最優先選択を TDD（red: TS2353 ×15 → green: 25 passed）で実装。SKILL.md/development-style.md/CLAUDE.md に動作確認フェーズと bug 起票規約を追記（レビュー指摘 2 件修正済み）。deno fmt/lint/test(37)/build 全て green。E2E: label bug・ordinal 99000 のダミータスク（TASK-16、検証後アーカイブ）が ordinal 2000 の通常タスクより優先選択されることを実ファイルで確認。In Progress ガードにより deno task next-task が空を返すことも確認。
+<!-- SECTION:NOTES:END -->
