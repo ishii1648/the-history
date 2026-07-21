@@ -26,10 +26,12 @@ Deno.test("getStaticCopyTargets は distDir を反映する", () => {
   ]);
 });
 
-Deno.test("getOptionalCopyTargets は data/europe.pmtiles を dist/ にコピーする対象を返す", () => {
+Deno.test("getOptionalCopyTargets は data/ の pmtiles（ベースマップ・DEM）を dist/ にコピーする対象を返す", () => {
   const targets = getOptionalCopyTargets("dist");
   assertEquals(targets, [
     { from: "data/europe.pmtiles", to: "dist/europe.pmtiles" },
+    // TASK-34: 地形（起伏・陰影）用 DEM タイル（deno task extract-dem で生成）
+    { from: "data/europe-dem.pmtiles", to: "dist/europe-dem.pmtiles" },
   ]);
 });
 
@@ -37,6 +39,7 @@ Deno.test("getOptionalCopyTargets は distDir を反映する", () => {
   const targets = getOptionalCopyTargets("out");
   assertEquals(targets, [
     { from: "data/europe.pmtiles", to: "out/europe.pmtiles" },
+    { from: "data/europe-dem.pmtiles", to: "out/europe-dem.pmtiles" },
   ]);
 });
 

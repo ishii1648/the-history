@@ -1,2 +1,4 @@
 dist/
 *.pmtiles
+# TASK-34: extract-dem のタイルダウンロードキャッシュ（再実行時の冪等化用）
+data/dem-tiles/

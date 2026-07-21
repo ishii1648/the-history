@@ -64,6 +64,7 @@ import {
 import {
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
+  DEM_PMTILES_URL,
   FALLBACK_STYLE_URL,
   HRE_OVERLAY_YEARS,
   INITIAL_CENTER,
@@ -128,6 +129,21 @@ maplibregl.addProtocol("pmtiles", protocol.tile);
 // アーカイブを登録しておくと pmtiles:// の解決とヘッダ取得を共有できる
 const archive = new PMTiles(BASEMAP_PMTILES_URL);
 protocol.add(archive);
+
+// TASK-34: 地形 DEM（hillshade 用）の PMTiles アーカイブも登録する。
+// DEM は任意生成のため存在しない環境があり、その場合ヘッダ取得が失敗するが、
+// 握りつぶして hillshade なしの従来表示で継続する（basemap と違いフォール
+// バックはしない。dem ソースのタイル取得エラーも fallback.ts の判定が
+// sourceId で除外する）。
+const demArchive = new PMTiles(DEM_PMTILES_URL);
+protocol.add(demArchive);
+demArchive.getHeader().catch((error: unknown) => {
+  console.warn(
+    `DEM PMTiles が利用できないため hillshade なしで継続します: ${
+      String(error)
+    }`,
+  );
+});
 
 const map = new maplibregl.Map({
   container: mapContainer,
