@@ -1,11 +1,11 @@
 ---
 id: TASK-35
 title: データファイル更新時にブラウザキャッシュで旧データが配信され続ける問題への対処
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 16:27'
-updated_date: '2026-07-21 17:56'
+updated_date: '2026-07-21 18:02'
 labels:
   - 'area:scripts'
   - 'area:docs'
@@ -21,9 +21,9 @@ TASK-32 のマージ後動作確認で発見: dev サーバ（deno std file-serv
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 dev サーバ（deno task serve）でデータ再生成 + build 後の通常リロードで最新データが表示される
-- [ ] #2 本番配信を想定したキャッシュ制御方針（ヘッダ設計 or ファイル名バージョニング）が docs に記録され、必要な実装がされている
-- [ ] #3 app.js と data/ の整合が崩れる部分キャッシュ状態が発生しない（または検知して全再取得する）仕組みの検討結果が記録されている
+- [x] #1 dev サーバ（deno task serve）でデータ再生成 + build 後の通常リロードで最新データが表示される
+- [x] #2 本番配信を想定したキャッシュ制御方針（ヘッダ設計 or ファイル名バージョニング）が docs に記録され、必要な実装がされている
+- [x] #3 app.js と data/ の整合が崩れる部分キャッシュ状態が発生しない（または検知して全再取得する）仕組みの検討結果が記録されている
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -35,3 +35,19 @@ TASK-32 のマージ後動作確認で発見: dev サーバ（deno std file-serv
 4. 並列化判定（タスク内）: 見送り（理由: serve 設定 1 箇所 + ドキュメントの小規模作業で分割単位がない。単一 subagent に委譲）。TDD: 純ロジックが生じる場合（自前サーブスクリプト等）はテスト先行。設定のみの場合はその旨を記録し、検証は curl -I によるヘッダ実測と再現手順（データ再生成→build→リロード）の実測で行う。
 5. 実測検証 → PR → CI → finalization → マージ → 全タスク完了の最終レポート
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: serve タスクに --header "Cache-Control: no-cache" を追加。:8000 の実 dev サーバで curl -sI により cache-control: no-cache + ETag を確認。If-None-Match 再送 → 304、ファイル更新（touch）後の旧 ETag → 200 で新版返却（= 再生成 + build 後の通常リロードで最新データが表示される）。
+- AC#2: docs/app-spec.md §3.4 に配信キャッシュ設計を記録（no-cache + ETag 再検証の基本方針、Cloudflare Pages の _headers / R2 の設定目安、将来最適化のファイル名ハッシュ + immutable のトレードオフ）。dev 実装は serve タスクで完了。
+- AC#3: 部分キャッシュ不整合の検討結果を §3.4 に記録（no-cache 再検証でリロード時に app.js と data/* が同時再検証され実質解消。残余リスク = リロードを跨ぐ長期セッション中のデプロイ、対策案 = index.json へのビルド ID 埋め込み + 不一致検知で全再取得）。
+- deno fmt --check / lint / test（464 passed / 0 failed）/ build 全 green。PR #44 CI pass。並列化見送り（単一 subagent ecb3188、TDD 対象コードなしのため実測検証で代替）。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+dev サーバ（std/http file-server）に Cache-Control: no-cache を付与し、ETag/Last-Modified 再検証で再生成後の旧データ配信を解消。本番（Cloudflare Pages/R2）の設定方針・部分キャッシュ不整合の解消根拠と残余リスク・将来最適化を docs/app-spec.md §3.4 に文書化。検証は curl 実測（no-cache/304/200 挙動）と deno test 464 passed・CI pass。
+<!-- SECTION:FINAL_SUMMARY:END -->
