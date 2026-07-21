@@ -1,11 +1,11 @@
 ---
 id: TASK-15
 title: 動作確認で見つけた問題の bug タスク化とループでの最優先修正
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 08:37'
-updated_date: '2026-07-21 08:45'
+updated_date: '2026-07-21 09:01'
 labels: []
 dependencies: []
 ordinal: 15000
@@ -19,10 +19,10 @@ ordinal: 15000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 next_task.ts が labels をパースし、label bug を持つ To Do タスクを ordinal に関わらず最優先で選択する（テスト先行で red→green を確認）
-- [ ] #2 agent-loop SKILL.md にマージ後の動作確認フェーズと bug intake 規約（その場で修正せず起票して手順1へ戻る）が追記されている
-- [ ] #3 docs/development-style.md と CLAUDE.md に bug 起票フォーマットと bug 最優先ルールが明文化され、実装と矛盾がない
-- [ ] #4 deno fmt --check / deno lint / deno test / deno task build が全て green で CI が green
+- [x] #1 next_task.ts が labels をパースし、label bug を持つ To Do タスクを ordinal に関わらず最優先で選択する（テスト先行で red→green を確認）
+- [x] #2 agent-loop SKILL.md にマージ後の動作確認フェーズと bug intake 規約（その場で修正せず起票して手順1へ戻る）が追記されている
+- [x] #3 docs/development-style.md と CLAUDE.md に bug 起票フォーマットと bug 最優先ルールが明文化され、実装と矛盾がない
+- [x] #4 deno fmt --check / deno lint / deno test / deno task build が全て green で CI が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -42,3 +42,9 @@ ordinal: 15000
 <!-- SECTION:NOTES:BEGIN -->
 next_task.ts の bug 最優先選択を TDD（red: TS2353 ×15 → green: 25 passed）で実装。SKILL.md/development-style.md/CLAUDE.md に動作確認フェーズと bug 起票規約を追記（レビュー指摘 2 件修正済み）。deno fmt/lint/test(37)/build 全て green。E2E: label bug・ordinal 99000 のダミータスク（TASK-16、検証後アーカイブ）が ordinal 2000 の通常タスクより優先選択されることを実ファイルで確認。In Progress ガードにより deno task next-task が空を返すことも確認。
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+next_task.ts に label bug の最優先選択を TDD で実装（red: TaskMeta.labels 未定義の型エラー → green: deno test 48 passed）。agent-loop SKILL.md にマージ後動作確認フェーズ・bug intake 規約・PR mergeability 監視と conflict 解消手順を追加し、docs/development-style.md と CLAUDE.md にも bug 起票フォーマットと bug 最優先ルールを明文化。検証: deno fmt --check / lint / test / build 全 green、PR #15 の CI green（ci: pass, MERGEABLE/CLEAN）、実ファイル E2E で label bug・ordinal 99000 のダミータスクが ordinal 2000 の通常タスクより優先選択されることを確認（ダミーはアーカイブ済み）。PR #13/#14 との conflict は main 取り込みで解消し、検知漏れの再発防止（mergeability 監視必須化）を SKILL.md に規約化。
+<!-- SECTION:FINAL_SUMMARY:END -->
