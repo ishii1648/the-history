@@ -4,7 +4,9 @@ title: 河川ホバー/クリック時に河川名を国名・都市より優先
 status: To Do
 assignee: []
 created_date: '2026-07-21 14:35'
-labels: []
+updated_date: '2026-07-21 15:43'
+labels:
+  - 'area:src-main'
 dependencies:
   - TASK-24
 ordinal: 29000
