@@ -19,16 +19,13 @@ export const MAX_ZOOM = 8;
 export const INITIAL_YEAR = 1000;
 
 /**
- * ベースマップの PMTiles URL。
- * 開発段階では Protomaps の公開デモバケット（最新 v4 planet ビルドの
- * エイリアス）を使う。本番では Cloudflare R2 上の europe.pmtiles に
- * 差し替える（TASK-10）。差し替えはこの定数 1 箇所で完結させること。
- *
- * 注意: demo-bucket の CORS 許可オリジンは限定されており、ローカル開発では
- * http://localhost:5173 のみ許可されている（`deno task serve` は 5173 で起動）。
+ * ベースマップの PMTiles URL（同一オリジン配信の相対パス）。
+ * 開発時は `deno task extract-pmtiles` で data/europe.pmtiles を生成すると、
+ * scripts/build.ts が dist/europe.pmtiles にコピーして同一オリジンで配信する
+ * （CORS 制約なし）。本番は Cloudflare R2 の絶対 URL に差し替える（TASK-10）。
+ * 差し替えはこの定数 1 箇所で完結させること。
  */
-export const BASEMAP_PMTILES_URL =
-  "https://demo-bucket.protomaps.com/v4.pmtiles";
+export const BASEMAP_PMTILES_URL = "/europe.pmtiles";
 
 /** MapLibre スタイル内でベースマップのベクタソースに付ける ID */
 export const BASEMAP_SOURCE_ID = "basemap";

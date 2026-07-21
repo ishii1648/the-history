@@ -11,7 +11,7 @@
     "build-data": "deno run --allow-net --allow-read --allow-write scripts/build-data.ts",
     "build-colors": "deno run --allow-read --allow-write scripts/build-colors.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
-    "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist --port 5173",
+    "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist",
     "test": "deno test",
     "test:watch": "deno test --watch"
   },

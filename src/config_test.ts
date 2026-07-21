@@ -71,8 +71,10 @@ Deno.test("INITIAL_YEAR は SNAPSHOT_YEARS に含まれる", () => {
   assert(SNAPSHOT_YEARS.includes(INITIAL_YEAR));
 });
 
-Deno.test("BASEMAP_PMTILES_URL は https の .pmtiles URL である", () => {
-  assert(BASEMAP_PMTILES_URL.startsWith("https://"));
+Deno.test("BASEMAP_PMTILES_URL は同一オリジン配信の .pmtiles パスである", () => {
+  // 開発時は dist/ 直下に配置した europe.pmtiles を同一オリジンで配信する。
+  // 本番 R2 の絶対 URL への差し替えは TASK-10。
+  assert(BASEMAP_PMTILES_URL.startsWith("/"));
   assert(BASEMAP_PMTILES_URL.endsWith(".pmtiles"));
 });
 
