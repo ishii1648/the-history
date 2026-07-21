@@ -1,5 +1,8 @@
 import { assert, assertEquals } from "@std/assert";
 import {
+  BASEMAP_PMTILES_URL,
+  BASEMAP_SOURCE_ID,
+  FALLBACK_STYLE_URL,
   INITIAL_CENTER,
   INITIAL_YEAR,
   INITIAL_ZOOM,
@@ -66,4 +69,17 @@ Deno.test("INITIAL_YEAR は 1000 である", () => {
 
 Deno.test("INITIAL_YEAR は SNAPSHOT_YEARS に含まれる", () => {
   assert(SNAPSHOT_YEARS.includes(INITIAL_YEAR));
+});
+
+Deno.test("BASEMAP_PMTILES_URL は https の .pmtiles URL である", () => {
+  assert(BASEMAP_PMTILES_URL.startsWith("https://"));
+  assert(BASEMAP_PMTILES_URL.endsWith(".pmtiles"));
+});
+
+Deno.test("FALLBACK_STYLE_URL は OpenFreeMap のスタイル URL である", () => {
+  assert(FALLBACK_STYLE_URL.startsWith("https://tiles.openfreemap.org/"));
+});
+
+Deno.test("BASEMAP_SOURCE_ID は非空文字列である", () => {
+  assert(BASEMAP_SOURCE_ID.length > 0);
 });
