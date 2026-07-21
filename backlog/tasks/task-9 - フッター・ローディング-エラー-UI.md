@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-20 04:23'
-updated_date: '2026-07-21 11:20'
+updated_date: '2026-07-21 11:25'
 labels: []
 dependencies:
   - TASK-5
@@ -35,3 +35,9 @@ ordinal: 9000
 5. 目視確認（mainagent）: フッター常時表示・スピナー（低速回線シミュレート or 未キャッシュ年代切替）・トースト（サーバ停止 or 不在ファイルで再現）と再試行
 6. fmt/lint/test/build green → PR → CI+mergeability 監視 → マージ → マージ後動作確認 → finalization
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+実装完了（subagent）。純粋ロジック src/loading_state.ts（進行中/失敗の年代集合→スピナー可否・エラー可否・再試行対象を導出、全て純粋関数）を TDD で先行（src/loading_state_test.ts 11 tests red→green）。UI: index.html にフッター（historical-basemaps GPL-3.0 リンク・Protomaps/OSM attribution・境界精度の免責を常時表示、左下）/ スピナー（中央）/ エラートースト（上部中央・再試行/閉じるボタン）を追加、app.css にスタイル、main.ts で switchYear をラップし start/success/fail を loading_state へ通知（キャッシュヒットはスピナー抑止・失敗は reject 握りつぶしトースト誘導）。deno fmt --check / lint / test(202 passed) / build 全 green。
+<!-- SECTION:NOTES:END -->
