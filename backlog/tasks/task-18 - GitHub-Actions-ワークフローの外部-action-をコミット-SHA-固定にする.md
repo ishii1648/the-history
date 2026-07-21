@@ -1,10 +1,11 @@
 ---
 id: TASK-18
 title: GitHub Actions ワークフローの外部 action をコミット SHA 固定にする
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-21 11:32'
-updated_date: '2026-07-21 11:33'
+updated_date: '2026-07-21 11:53'
 labels: []
 dependencies: []
 ordinal: 18000
@@ -24,3 +25,14 @@ ordinal: 18000
 - [ ] #4 .github/workflows/ 配下の他ワークフローファイルにも同様の未固定 action がないか確認し、あれば同様に修正している
 - [ ] #5 GitHub Actions ワークフローに外部 action を追加・更新する際はコミット SHA で固定する旨のルールが CLAUDE.md（または docs/development-style.md 等の該当ドキュメント）に明文化されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. ブランチ task-18-pin-actions を origin/main から作成
+2. 並列化判定: 見送り（理由: ci.yml 1 ファイルの修正 + ルール文書化のみ。subagent 1 体に委譲）
+3. actions/checkout@v4 と denoland/setup-deno@v2 の最新安定タグのフルコミット SHA を GitHub API で取得し、SHA + バージョンコメント形式に置換
+4. .github/workflows/ 配下の他ワークフローに未固定 action がないか確認（現状 ci.yml のみのはず）
+5. SHA 固定ルールを CLAUDE.md または docs/development-style.md に明文化
+6. fmt green → PR → CI green（SHA 固定後も各ステップが通ること = AC#3）→ マージ → finalization
+<!-- SECTION:PLAN:END -->
