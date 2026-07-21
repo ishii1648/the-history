@@ -55,9 +55,18 @@ function stringProp(props: GeoJsonProperties, key: string): string | null {
 /**
  * 地図上の常時ラベルのテキストを返す（純粋関数）。NAME のみ。
  * NAME が無い（null・空・非文字列）feature は null（ラベルを出さない）。
+ *
+ * TASK-23: ja（英語 NAME → 日本語名のフラットマップ、name-ja.json）を渡すと
+ * 日本語表記を返す。ja に無い NAME は英語のままフォールバックし、省略時
+ * （空マップ）は従来どおり NAME を返す。
  */
-export function labelTextFor(props: GeoJsonProperties): string | null {
-  return stringProp(props, "NAME");
+export function labelTextFor(
+  props: GeoJsonProperties,
+  ja: Record<string, string> = {},
+): string | null {
+  const name = stringProp(props, "NAME");
+  if (name === null) return null;
+  return ja[name] ?? name;
 }
 
 /** 外環リングの近似面積（shoelace、座標系の単位²）。閉環前提 */
@@ -134,11 +143,15 @@ export function labelPriorityFor(feature: Feature): number {
 /**
  * FeatureCollection を TextLayer 用のラベルデータへ変換する（純粋関数）。
  * NAME が無い・ポリゴンを持たない feature は除外する。
+ * TASK-23: ja を渡すと text を日本語表記にする（未登録 NAME は英語のまま）。
  */
-export function buildLabelData(fc: FeatureCollection): LabelDatum[] {
+export function buildLabelData(
+  fc: FeatureCollection,
+  ja: Record<string, string> = {},
+): LabelDatum[] {
   const data: LabelDatum[] = [];
   for (const feature of fc.features) {
-    const text = labelTextFor(feature.properties);
+    const text = labelTextFor(feature.properties, ja);
     if (text === null) continue;
     const position = labelAnchorFor(feature);
     if (position === null) continue;

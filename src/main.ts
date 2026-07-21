@@ -158,6 +158,12 @@ let colors: Record<string, string> = {};
 /** name-overrides.json の renames（SUBJECTO 生値 → 正規化名）。ラベル整形で使う */
 let renames: Record<string, string> = {};
 
+/**
+ * name-ja.json（英語 NAME → 日本語名のフラットマップ）。ツールチップ・パネル・
+ * 地図上ラベルの表示だけを日本語化する（TASK-23）。未登録名は英語のまま。
+ */
+let nameJa: Record<string, string> = {};
+
 // 年代 GeoJSON のローダ（fetch は本番のもの）。base（europe_*）と HRE 領邦
 // オーバーレイ（hre_*、対象年のみ）を複合ローダで束ね、並行ロードして両方
 // 揃ってから反映する。HRE の取得失敗は powers.ts 側で warn + 空扱いになり、
@@ -204,7 +210,7 @@ function buildPowerLayer(
     // AC #1: ホバーで勢力ラベルをカーソル近傍にツールチップ表示（object なしで非表示）
     onHover: ({ object, x, y }) => {
       const label = object
-        ? displayLabel((object as Feature).properties, renames)
+        ? displayLabel((object as Feature).properties, renames, nameJa)
         : null;
       if (label !== null) showTooltip(label, x, y);
       else hideTooltip();
@@ -212,7 +218,7 @@ function buildPowerLayer(
     // AC #2: クリックで同ラベルを固定パネルに表示（モバイルのホバー代替）
     onClick: ({ object }) => {
       const label = object
-        ? displayLabel((object as Feature).properties, renames)
+        ? displayLabel((object as Feature).properties, renames, nameJa)
         : null;
       if (label !== null) showInfoPanel(label);
     },
@@ -232,7 +238,12 @@ function buildLabelLayer(
   base: FeatureCollection,
   hre: FeatureCollection,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
-  const data = [...buildLabelData(base), ...buildLabelData(hre)];
+  // TASK-23: ラベルは name-ja.json で日本語化する（未登録 NAME は英語のまま）。
+  // characterSet はラベル文字列から導出するため日本語グリフも自動で生成される。
+  const data = [
+    ...buildLabelData(base, nameJa),
+    ...buildLabelData(hre, nameJa),
+  ];
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
     id: LABEL_LAYER_ID,
     data,
@@ -590,10 +601,30 @@ async function loadOverrides(): Promise<void> {
   }
 }
 
+/**
+ * name-ja.json（英語 NAME → 日本語名）を取得する（TASK-23）。
+ * 失敗時は空マップのまま英語表記で継続する。
+ */
+async function loadNameJa(): Promise<void> {
+  try {
+    const res = await fetch("/data/name-ja.json");
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    nameJa = await res.json() as Record<string, string>;
+  } catch (error) {
+    console.warn(
+      `name-ja.json の取得に失敗しました。英語表記で継続します: ${
+        String(error)
+      }`,
+    );
+  }
+}
+
 /** 初期年代の勢力圏を描画する。例外で地図全体を落とさない */
 async function initPowerLayer(): Promise<void> {
   try {
-    await Promise.all([loadColors(), loadOverrides()]);
+    // TASK-23: name-ja.json のロード完了を待ってから初期描画するため、初期
+    // ラベル・ツールチップは最初から日本語で表示される（失敗時のみ英語継続）。
+    await Promise.all([loadColors(), loadOverrides(), loadNameJa()]);
     await switchYear(initialYear);
   } catch (error) {
     console.error(`勢力圏レイヤーの初期化に失敗しました: ${String(error)}`);
