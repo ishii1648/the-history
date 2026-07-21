@@ -1,0 +1,36 @@
+---
+id: TASK-16
+title: agent-loop 完了時に /code-review 実行を促す最終レポートへ変更
+status: To Do
+assignee: []
+created_date: '2026-07-21 09:21'
+updated_date: '2026-07-21 09:35'
+labels: []
+dependencies: []
+ordinal: 16000
+---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+当初は「PR 作成前に /code-review を実行するステップ」を検討したが、/code-review は disable-model-invocation のためエージェントから起動できず、ループに挟むと HITL になるため組み込みは見送る（ユーザー決定 2026-07-21）。代わりに次の 2 点を開発フロー文書（.claude/skills/agent-loop/SKILL.md、必要に応じて docs/development-style.md 4 章）に反映する:
+
+1. **完了時の /code-review 促し**: agent-loop の停止条件『deno task next-task の出力が空で In Progress もない（全タスク完了）』に達した際の最終レポートに、全タスク完了の報告とともにユーザーへ /code-review 実行を促す文言（レビュー対象の説明付き）を含める。
+2. **/code-review 指摘の bug タスク化**: ユーザーが /code-review を実行して得られた指摘（bug）は、既存の bug intake フォーマット（label bug・再現手順・期待/実際の挙動・発見契機、AC は再現テスト red → 修正で green）でタスクとして起票し、bug 最優先ルールにより /agent-loop の次イテレーションで処理できるようにする。この受け入れフローを SKILL.md の bug intake 節に追記する。
+
+経緯: TASK-4 で /code-review 試行を行い、Skill ツールからの起動が「disable-model-invocation」で拒否されることを確認済み（Implementation Notes 参照）。
+<!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 deno fmt --check が green である
+- [ ] #2 agent-loop SKILL.md の停止条件・最終レポート手順に、全タスク完了の報告とともにユーザーへ /code-review の実行を促す旨が記載されている
+- [ ] #3 PR 作成前に /code-review を自律実行する旨の記述が文書に存在しない（HITL 回避の設計判断が明記されている）
+- [ ] #4 /code-review の指摘を bug intake フォーマットで label bug タスクとして起票し agent-loop で処理する流れが SKILL.md に記載されている
+<!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+TASK-4 試行での判明事項（2026-07-21）: /code-review スキルは disable-model-invocation が設定されており、エージェント（モデル）からの自律起動は不可。Skill ツール呼び出しは「Skill code-review cannot be used with Skill tool due to disable-model-invocation」で拒否される。したがって「PR 作成前に自律ループが /code-review を実行する」という当初設計は成立しない。設計代替案: (a) ユーザーが試行タイミングで手動実行するゲートとして文書化する (b) 同等の構造化レビュー（レビュー専用 subagent に diff レビューを委譲し CONFIRMED/PLAUSIBLE を判定させる）をループ内に実装する (c) 組み込み自体を見送る。本タスク着手時に方式を決定する。
+<!-- SECTION:NOTES:END -->
