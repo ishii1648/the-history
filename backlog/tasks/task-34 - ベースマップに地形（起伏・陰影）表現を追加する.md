@@ -1,11 +1,11 @@
 ---
 id: TASK-34
 title: ベースマップに地形（起伏・陰影）表現を追加する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 15:10'
-updated_date: '2026-07-21 16:29'
+updated_date: '2026-07-21 17:39'
 labels:
   - 'area:scripts'
   - 'area:data'
@@ -23,10 +23,10 @@ ordinal: 33000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 アルプス山脈等の主要山地の起伏が地図上で視認でき、平野部と区別できる
-- [ ] #2 勢力ポリゴン・ラベル・河川・HRE オーバーレイの視認性が hillshade 追加後も維持されている
-- [ ] #3 DEM データはヨーロッパ域・必要 zoom 範囲に限定して抽出され、初期ロード時間の悪化が体感上許容範囲に収まっている
-- [ ] #4 DEM データソースの出典・ライセンスが attribution に反映されている
+- [x] #1 アルプス山脈等の主要山地の起伏が地図上で視認でき、平野部と区別できる
+- [x] #2 勢力ポリゴン・ラベル・河川・HRE オーバーレイの視認性が hillshade 追加後も維持されている
+- [x] #3 DEM データはヨーロッパ域・必要 zoom 範囲に限定して抽出され、初期ロード時間の悪化が体感上許容範囲に収まっている
+- [x] #4 DEM データソースの出典・ライセンスが attribution に反映されている
 - [ ] #5 PMTiles 取得失敗時のフォールバックが引き続き動作する
 - [ ] #6 追加したデータ処理・スタイル構築ロジックにテストがあり deno test が green
 <!-- AC:END -->
@@ -41,3 +41,21 @@ ordinal: 33000
 5. 並列化判定（タスク内）: 並列可（A/B は契約で分離・独立にテスト可能）。worktree isolation で 2 subagent 並列起動。
 6. TDD（両者 red→green）→ mainagent 統合レビュー → fmt/lint/test/build green → DEM 生成実行 → 目視確認（アルプスの陰影・各レイヤー視認性・初期ロード体感、AC#1〜3）→ PR → CI → finalization → マージ
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: Chrome（z6, アルプス周辺）でアルプス・アペニンの山脈起伏が明瞭に視認でき、ポー平原など平野部と区別できることを目視確認。
+- AC#2: 勢力塗り（バイエルン公領・ヴェネツィア共和国等）・HRE 領邦ラベル（臙脂）・国名/都市/河川ラベル・河川ラインの判読性が hillshade 追加後も維持されることを目視確認（exaggeration 0.4 + 半透明影/ハイライト、landcover と water の間に挿入）。
+- AC#3: DEM は EUROPE_BBOX × z0〜8 の 4224 タイルに限定（304.7MiB）。hillshade タイルはビューポート単位の遅延取得のため初期ロードの体感悪化なし。z7 打ち切りで約 1/4 に削減できる選択肢を notes に記録。
+- AC#4: 地図 attribution とフッターに Terrain Tiles (Mapzen/AWS) を追記（目視確認）。DEM 不在時は誤フォールバックせず hillshade なしで継続（fallback_test で担保・DEM 不在ビルドも成功）。
+- 生成物検証: pmtiles show/verify green・タイル PNG 取り出し確認。PMTiles v3 TS ライタは公式実装と tileId 全域照合一致・公式リーダ round-trip 一致。
+- 実装: subagent 2 並列（DEM 07970f9 / 表示 25ef240）+ TDD（439 passed）。PR #42 CI pass。初回抽出で S3 fetch ストールによるハングが発生 → 30s タイムアウト + バックオフ + ディスクキャッシュ（再開可能）で解消（再実行 3.5 分で完走）。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+AWS Terrain Tiles から EUROPE_BBOX×z0-8 の DEM を PMTiles v3（TS 最小ライタ・公式照合済み）で生成する extract-dem パイプラインを追加し、raster-dem + hillshade レイヤー（landcover と water の間・控えめ paint）で地形起伏を表現。DEM 不在時の誤フォールバックを fallback の sourceId 判定修正で防止。attribution 追記。検証は deno test 439 passed・CI pass・pmtiles verify・アルプス周辺の目視確認。
+<!-- SECTION:FINAL_SUMMARY:END -->
