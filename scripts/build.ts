@@ -15,6 +15,7 @@ export function getStaticCopyTargets(
   return [
     { from: "index.html", to: `${distDir}/index.html` },
     { from: "app.css", to: `${distDir}/app.css` },
+    { from: "vendor/maplibre-gl.css", to: `${distDir}/vendor/maplibre-gl.css` },
   ];
 }
 
@@ -53,6 +54,9 @@ async function bundle(entry: string, outFile: string): Promise<void> {
 
 async function copyStaticFiles(distDir: string): Promise<void> {
   for (const { from, to } of getStaticCopyTargets(distDir)) {
+    // dist/vendor/ など、コピー先の親ディレクトリを先に作成する
+    const parentDir = to.slice(0, to.lastIndexOf("/"));
+    await Deno.mkdir(parentDir, { recursive: true });
     await Deno.copyFile(from, to);
   }
 }
