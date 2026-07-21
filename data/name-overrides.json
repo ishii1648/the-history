@@ -1,0 +1,11 @@
+{
+  "renames": {
+    "Castilla": "Castile",
+    "Castille": "Castile",
+    "Scottland": "Scotland",
+    "Scottalnd": "Scotland",
+    "Poland-Llituania": "Poland-Lithuania",
+    "Baltic tribes": "Baltic Tribes",
+    "Kyivan Rus": "Kievan Rus"
+  }
+}
