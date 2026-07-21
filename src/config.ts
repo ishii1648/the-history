@@ -18,6 +18,28 @@ export const MAX_ZOOM = 8;
 /** タイムラインスライダーの初期年代 */
 export const INITIAL_YEAR = 1000;
 
+/**
+ * ベースマップの PMTiles URL。
+ * 開発段階では Protomaps の公開デモバケット（最新 v4 planet ビルドの
+ * エイリアス）を使う。本番では Cloudflare R2 上の europe.pmtiles に
+ * 差し替える（TASK-10）。差し替えはこの定数 1 箇所で完結させること。
+ *
+ * 注意: demo-bucket の CORS 許可オリジンは限定されており、ローカル開発では
+ * http://localhost:5173 のみ許可されている（`deno task serve` は 5173 で起動）。
+ */
+export const BASEMAP_PMTILES_URL =
+  "https://demo-bucket.protomaps.com/v4.pmtiles";
+
+/** MapLibre スタイル内でベースマップのベクタソースに付ける ID */
+export const BASEMAP_SOURCE_ID = "basemap";
+
+/**
+ * PMTiles 取得失敗時のフォールバック先スタイル URL（OpenFreeMap Liberty）。
+ * API キー不要・無料。docs/map-rendering-research.md §2 参照。
+ */
+export const FALLBACK_STYLE_URL =
+  "https://tiles.openfreemap.org/styles/liberty";
+
 /** 歴史的国境ポリゴンが存在する年代スナップショット一覧（昇順） */
 export const SNAPSHOT_YEARS: readonly number[] = [
   900,
