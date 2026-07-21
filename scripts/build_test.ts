@@ -5,11 +5,12 @@ import {
   getStaticCopyTargets,
 } from "./build.ts";
 
-Deno.test("getStaticCopyTargets は index.html と app.css を dist/ にコピーする対象を返す", () => {
+Deno.test("getStaticCopyTargets は index.html / app.css / vendor CSS を dist/ にコピーする対象を返す", () => {
   const targets = getStaticCopyTargets("dist");
   assertEquals(targets, [
     { from: "index.html", to: "dist/index.html" },
     { from: "app.css", to: "dist/app.css" },
+    { from: "vendor/maplibre-gl.css", to: "dist/vendor/maplibre-gl.css" },
   ]);
 });
 
@@ -18,6 +19,7 @@ Deno.test("getStaticCopyTargets は distDir を反映する", () => {
   assertEquals(targets, [
     { from: "index.html", to: "out/index.html" },
     { from: "app.css", to: "out/app.css" },
+    { from: "vendor/maplibre-gl.css", to: "out/vendor/maplibre-gl.css" },
   ]);
 });
 
