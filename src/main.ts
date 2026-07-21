@@ -11,13 +11,13 @@ import {
   decideFallback,
 } from "./fallback.ts";
 import {
-  colorKeyFor,
   createYearDataLoader,
   createYearSwitcher,
   fillColorFor,
   LINE_COLOR,
   LINE_WIDTH_PX,
 } from "./powers.ts";
+import { displayLabel } from "./info.ts";
 import {
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
@@ -90,6 +90,9 @@ const POWER_LAYER_ID = "powers";
 /** colors.json（NAME / "NAME|SUBJECTO" → HEX のフラットマップ） */
 let colors: Record<string, string> = {};
 
+/** name-overrides.json の renames（SUBJECTO 生値 → 正規化名）。ラベル整形で使う */
+let renames: Record<string, string> = {};
+
 /** 年代 GeoJSON のメモリキャッシュ付きローダ（fetch は本番のもの） */
 const dataLoader = createYearDataLoader((url) => fetch(url));
 
@@ -125,28 +128,73 @@ function buildPowerLayer(
     // AC #5: 年代切替時に塗り色を数百 ms かけて補間し、ポリゴンをフェードさせる。
     // 同一 layer id を保つため deck.gl が差分更新し、getFillColor の遷移が発火する。
     transitions: { getFillColor: { duration: 400 } },
-    onHover: ({ object }) => {
-      if (object) {
-        const f = object as Feature;
-        console.debug(
-          "[powers] hover",
-          colorKeyFor(f.properties),
-          f.properties,
-        );
-      }
+    // AC #1: ホバーで勢力ラベルをカーソル近傍にツールチップ表示（object なしで非表示）
+    onHover: ({ object, x, y }) => {
+      const label = object
+        ? displayLabel((object as Feature).properties, renames)
+        : null;
+      if (label !== null) showTooltip(label, x, y);
+      else hideTooltip();
     },
+    // AC #2: クリックで同ラベルを固定パネルに表示（モバイルのホバー代替）
     onClick: ({ object }) => {
-      if (object) {
-        const f = object as Feature;
-        console.debug(
-          "[powers] click",
-          colorKeyFor(f.properties),
-          f.properties,
-        );
-      }
+      const label = object
+        ? displayLabel((object as Feature).properties, renames)
+        : null;
+      if (label !== null) showInfoPanel(label);
     },
   });
 }
+
+// ホバー/クリック情報 UI への反映フック（setupInfoUI が実体を差し込む）。
+// buildPowerLayer は年代切替のたびに再生成されるため、レイヤー側は常にこの
+// モジュールスコープの関数を参照し、DOM 配線は 1 度だけ行う。
+let showTooltip: (label: string, x: number, y: number) => void = () => {};
+let hideTooltip: () => void = () => {};
+let showInfoPanel: (label: string) => void = () => {};
+
+/**
+ * ホバーツールチップとクリックパネルの DOM を配線する（TASK-7, app-spec §5.2）。
+ * - ツールチップ: onHover の {x, y} を使いカーソル近傍へ absolute 配置。object なしで非表示
+ * - パネル: クリックで表示し続ける固定小パネル（左上）。閉じるボタンで非表示
+ * どちらも displayLabel（純粋関数）で整形済みのラベルを受け取るだけにする。
+ */
+function setupInfoUI(): void {
+  const tooltip = document.getElementById("info-tooltip");
+  const panel = document.getElementById("info-panel");
+  const panelLabel = document.getElementById("info-panel-label");
+  const panelClose = document.getElementById("info-panel-close") as
+    | HTMLButtonElement
+    | null;
+  if (!tooltip || !panel || !panelLabel || !panelClose) {
+    console.warn("情報表示 UI 要素が見つからないため配線をスキップします");
+    return;
+  }
+
+  // カーソルとツールチップが重ならないよう少しずらす（px）
+  const OFFSET_X = 12;
+  const OFFSET_Y = 12;
+
+  showTooltip = (label, x, y) => {
+    tooltip.textContent = label;
+    tooltip.style.left = `${x + OFFSET_X}px`;
+    tooltip.style.top = `${y + OFFSET_Y}px`;
+    tooltip.hidden = false;
+  };
+  hideTooltip = () => {
+    tooltip.hidden = true;
+  };
+  showInfoPanel = (label) => {
+    panelLabel.textContent = label;
+    panel.hidden = false;
+  };
+
+  panelClose.addEventListener("click", () => {
+    panel.hidden = true;
+  });
+}
+
+setupInfoUI();
 
 // タイムライン UI への「反映」フック（setupTimeline が実体を差し込む）。
 // applyFn（最新要求のみ）から呼ぶことで、古い要求で年表示・スライダーが
@@ -289,10 +337,29 @@ async function loadColors(): Promise<void> {
   }
 }
 
+/**
+ * name-overrides.json の renames を取得する。失敗時は空マップのまま生値で継続する。
+ * ラベル整形（displayLabel）が SUBJECTO の綴りゆれを正規化するのに使う。
+ */
+async function loadOverrides(): Promise<void> {
+  try {
+    const res = await fetch("/data/name-overrides.json");
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const data = await res.json() as { renames?: Record<string, string> };
+    renames = data.renames ?? {};
+  } catch (error) {
+    console.warn(
+      `name-overrides.json の取得に失敗しました。SUBJECTO 生値で継続します: ${
+        String(error)
+      }`,
+    );
+  }
+}
+
 /** 初期年代の勢力圏を描画する。例外で地図全体を落とさない */
 async function initPowerLayer(): Promise<void> {
   try {
-    await loadColors();
+    await Promise.all([loadColors(), loadOverrides()]);
     await switchYear(INITIAL_YEAR);
   } catch (error) {
     console.error(`勢力圏レイヤーの初期化に失敗しました: ${String(error)}`);

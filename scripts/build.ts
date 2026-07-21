@@ -45,6 +45,11 @@ export function getDataCopyTargets(
   const targets: Array<{ from: string; to: string }> = [
     { from: "data/index.json", to: `${distDir}/data/index.json` },
     { from: "data/colors.json", to: `${distDir}/data/colors.json` },
+    // TASK-7: ホバー/クリックのラベル整形が SUBJECTO 正規化に使う renames マップ
+    {
+      from: "data/name-overrides.json",
+      to: `${distDir}/data/name-overrides.json`,
+    },
   ];
   for (const year of years) {
     targets.push({

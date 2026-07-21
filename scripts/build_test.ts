@@ -45,6 +45,10 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
   assertEquals(targets, [
     { from: "data/index.json", to: "dist/data/index.json" },
     { from: "data/colors.json", to: "dist/data/colors.json" },
+    {
+      from: "data/name-overrides.json",
+      to: "dist/data/name-overrides.json",
+    },
     { from: "data/europe_900.geojson", to: "dist/data/europe_900.geojson" },
     { from: "data/europe_1000.geojson", to: "dist/data/europe_1000.geojson" },
   ]);
@@ -55,6 +59,7 @@ Deno.test("getDataCopyTargets は distDir を反映する", () => {
   assertEquals(targets, [
     { from: "data/index.json", to: "out/data/index.json" },
     { from: "data/colors.json", to: "out/data/colors.json" },
+    { from: "data/name-overrides.json", to: "out/data/name-overrides.json" },
     { from: "data/europe_1492.geojson", to: "out/data/europe_1492.geojson" },
   ]);
 });
