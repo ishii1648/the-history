@@ -19,6 +19,7 @@
   "imports": {
     "@deck.gl/core": "npm:@deck.gl/core@^9.3.7",
     "@deck.gl/layers": "npm:@deck.gl/layers@^9.3.7",
+    "@deck.gl/mapbox": "npm:@deck.gl/mapbox@^9.3.7",
     "@protomaps/basemaps": "npm:@protomaps/basemaps@^5.7.2",
     "@std/assert": "jsr:@std/assert@^1.0.19",
     "@std/yaml": "jsr:@std/yaml@^1",
