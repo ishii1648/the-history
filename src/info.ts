@@ -28,18 +28,26 @@ function stringProp(props: GeoJsonProperties, key: string): string | null {
  * - 正規化後の SUBJECTO を持ち、かつ NAME と異なる場合は「NAME — SUBJECTO 領」
  * - SUBJECTO が無い／正規化後に NAME 自身／空文字の場合は NAME のみ
  * - NAME が無い（null・空・非文字列）feature は null（ツールチップを出さない）
+ *
+ * TASK-23: ja（英語 NAME → 日本語名のフラットマップ、name-ja.json）を渡すと
+ * NAME と宗主国名（renames 正規化後）の双方を日本語表記にする。ja に無い名前は
+ * 英語のままフォールバックし、省略時（空マップ）は従来どおり英語で整形する。
+ * 自己参照判定（SUBJECTO == NAME）は英語の正規化名同士で行い、表示だけ差し替える。
  */
 export function displayLabel(
   props: GeoJsonProperties,
   renames: Record<string, string> = {},
+  ja: Record<string, string> = {},
 ): string | null {
   const name = stringProp(props, "NAME");
   if (name === null) return null;
+  const displayName = ja[name] ?? name;
   const rawSubjecto = stringProp(props, "SUBJECTO");
-  if (rawSubjecto === null) return name;
+  if (rawSubjecto === null) return displayName;
   const subjecto = renames[rawSubjecto] ?? rawSubjecto;
   if (subjecto !== name) {
-    return `${name}${LABEL_SUBJECT_SEP}${subjecto}${LABEL_SUBJECT_SUFFIX}`;
+    const displaySubjecto = ja[subjecto] ?? subjecto;
+    return `${displayName}${LABEL_SUBJECT_SEP}${displaySubjecto}${LABEL_SUBJECT_SUFFIX}`;
   }
-  return name;
+  return displayName;
 }

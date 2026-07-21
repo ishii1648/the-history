@@ -49,6 +49,8 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
       from: "data/name-overrides.json",
       to: "dist/data/name-overrides.json",
     },
+    // TASK-23: 勢力名の日本語表記マップ（英語 NAME → 日本語名）
+    { from: "data/name-ja.json", to: "dist/data/name-ja.json" },
     // TASK-21: 主要河川オーバーレイ用の GeoJSON（deno task build-rivers で生成）
     { from: "data/rivers.geojson", to: "dist/data/rivers.geojson" },
     { from: "data/europe_900.geojson", to: "dist/data/europe_900.geojson" },
@@ -65,6 +67,7 @@ Deno.test("getDataCopyTargets は distDir を反映する", () => {
     { from: "data/index.json", to: "out/data/index.json" },
     { from: "data/colors.json", to: "out/data/colors.json" },
     { from: "data/name-overrides.json", to: "out/data/name-overrides.json" },
+    { from: "data/name-ja.json", to: "out/data/name-ja.json" },
     { from: "data/rivers.geojson", to: "out/data/rivers.geojson" },
     { from: "data/europe_1492.geojson", to: "out/data/europe_1492.geojson" },
     { from: "data/hre_1650.geojson", to: "out/data/hre_1650.geojson" },
