@@ -1,11 +1,11 @@
 ---
 id: TASK-12
 title: 自律タスク選択とエージェントループの外側化
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 07:05'
-updated_date: '2026-07-21 07:11'
+updated_date: '2026-07-21 07:15'
 labels: []
 dependencies:
   - TASK-11
@@ -20,12 +20,12 @@ ordinal: 12000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 docs/development-style.md に次タスク選択ルール（status が To Do かつ dependencies が全て Done のタスクのうち ordinal 最小を選ぶ）が明文化されている
-- [ ] #2 scripts/next_task.ts が backlog CLI 非依存で次タスク ID を決定的に出力し、deno task next-task で実行できる
-- [ ] #3 次タスク選択ロジックにユニットテストが先行して書かれ、deno test が green である
-- [ ] #4 .github/workflows/agent-loop.yml が main への push を起点に次タスクを判定し、ready タスクなし・既存 task-N-* ブランチあり・無効化時は安全に何もせず終了する
-- [ ] #5 人の介入を例外時（AC 曖昧・CI 恒常 red・仕様判断）に限定するエスカレーション規約が docs に明文化されている
-- [ ] #6 CLAUDE.md に次タスク選択の決定化ルールと自律ループ運用が追記されている
+- [x] #1 docs/development-style.md に次タスク選択ルール（status が To Do かつ dependencies が全て Done のタスクのうち ordinal 最小を選ぶ）が明文化されている
+- [x] #2 scripts/next_task.ts が backlog CLI 非依存で次タスク ID を決定的に出力し、deno task next-task で実行できる
+- [x] #3 次タスク選択ロジックにユニットテストが先行して書かれ、deno test が green である
+- [x] #4 .github/workflows/agent-loop.yml が main への push を起点に次タスクを判定し、ready タスクなし・既存 task-N-* ブランチあり・無効化時は安全に何もせず終了する
+- [x] #5 人の介入を例外時（AC 曖昧・CI 恒常 red・仕様判断）に限定するエスカレーション規約が docs に明文化されている
+- [x] #6 CLAUDE.md に次タスク選択の決定化ルールと自律ループ運用が追記されている
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -44,4 +44,12 @@ ordinal: 12000
 
 <!-- SECTION:NOTES:BEGIN -->
 テスト先行（red確認）→ subagent 実装 → mainagent レビューで hasActiveTask（In Progress 中はループ停止）を指摘・修正させ収束。scripts/next_task.ts + next_task_test.ts（12+3=15件）、deno task next-task 追加、@std/yaml 導入。agent-loop.yml（AGENT_LOOP_ENABLED オプトイン・二重着手ガード・claude-code-action 起動）、docs/development-style.md 4〜5章、CLAUDE.md 追記。deno fmt/lint/test(28 passed)/build 全て green。
+
+検証エビデンス: (1) deno test 28 passed / 0 failed（next_task 系 15 件、テスト先行で red 確認済み）。(2) scratchpad 上のコピーで状態シミュレーション: TASK-12 Done かつ全 To Do → TASK-2 出力 / TASK-2 In Progress → 出力なし exit 0。(3) agent-loop の pick ステップと同一ロジックをローカル実行し、In Progress 中の no-op と git ls-remote による task-N-* ブランチ照合を確認。(4) agent-loop.yml は YAML パース valid、AGENT_LOOP_ENABLED 未設定のため main マージ時も起動しない（オプトイン）。(5) PR #8 の CI (ci) は success。
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+次タスク選択を決定的ルール（To Do かつ依存全て Done のうち ordinal 最小、In Progress 残存時は選択しない）として scripts/next_task.ts に実装し、deno task next-task で判定可能にした（backlog CLI 非依存）。main マージ起点で claude-code-action により次タスクセッションを自動起動する .github/workflows/agent-loop.yml を追加（AGENT_LOOP_ENABLED でオプトイン、ready なし・In Progress あり・既存 task-N-* ブランチで no-op）。docs/development-style.md に選択ルール・外側ループ・エスカレーション規約（needs-human issue で例外時のみ人が介入）・backlog CLI フォールバックを、CLAUDE.md に決定化ルールを明文化。検証: deno fmt/lint/test(28 passed)/build green、状態シミュレーションで選択・停止挙動を確認、PR #8 の CI green。
+<!-- SECTION:FINAL_SUMMARY:END -->
