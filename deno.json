@@ -15,6 +15,7 @@
     "build-hre": "deno run --allow-net --allow-read --allow-write scripts/build-hre.ts",
     "extract-pmtiles": "deno run --allow-net=build-metadata.protomaps.dev --allow-run=pmtiles --allow-read scripts/extract-pmtiles.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
+    "next-tasks": "deno run --allow-read scripts/next_tasks.ts",
     "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist",
     "test": "deno test",
     "test:watch": "deno test --watch"
