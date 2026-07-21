@@ -1,11 +1,11 @@
 ---
 id: TASK-23
 title: 勢力名を日本語表記にする
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 13:17'
-updated_date: '2026-07-21 13:37'
+updated_date: '2026-07-21 13:52'
 labels: []
 dependencies: []
 ordinal: 23000
@@ -21,10 +21,10 @@ ordinal: 23000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 地図上の常時ラベルが日本語表記で表示される（例: フランス、神聖ローマ帝国、オーストリア）
-- [ ] #2 ホバーツールチップとクリックパネルも同じ日本語表記を使い、属領表記（「NAME — 宗主国 領」形式）も日本語になる
-- [ ] #3 全年代・全勢力の主要どころを網羅する NAME→日本語のマッピングがデータとして管理され、未登録名は英語のままフォールバックする
-- [ ] #4 追加・変更したロジックにテストがあり deno test が green
+- [x] #1 地図上の常時ラベルが日本語表記で表示される（例: フランス、神聖ローマ帝国、オーストリア）
+- [x] #2 ホバーツールチップとクリックパネルも同じ日本語表記を使い、属領表記（「NAME — 宗主国 領」形式）も日本語になる
+- [x] #3 全年代・全勢力の主要どころを網羅する NAME→日本語のマッピングがデータとして管理され、未登録名は英語のままフォールバックする
+- [x] #4 追加・変更したロジックにテストがあり deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -39,3 +39,20 @@ ordinal: 23000
    - 契約: /data/name-ja.json はフラットな Record<英語名, 日本語名>。担当ファイルは互いに素
 5. TDD: 両 subagent がテスト先行（red→green）→ mainagent 統合レビュー → fmt/lint/test/build 全 green → 目視確認（日本語ラベル・ツールチップ・属領表記）→ PR → CI → finalization → マージ → マージ後動作確認
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: Chrome で 1500 年を目視確認。地図ラベルが日本語表示（スコットランド王国・イングランド王国・フランス・ブランデンブルク・ザクセン選帝侯領・ザクセン公領・ボヘミア・バイエルン・オーストリア・スイス盟約者団・ポーランド・リトアニア・ドイツ騎士団領・キプチャク・ハン国 等）。
+- AC#2: ホバーツールチップが「ボヘミア — 神聖ローマ帝国 領」と日本語の属領表記になることを確認。クリックパネルは同一の displayLabel を使用。
+- AC#3: data/name-ja.json は全ユニーク名 298 件を 100% カバー（europe×20 + hre×4 + name-overrides renames 値側）。カバレッジ・主要国訳・孤立キーなしを scripts/name-ja_test.ts で担保。未登録名は ja[名前] ?? 名前 で英語フォールバック（info_test/labels_test で検証）。
+- AC#4: deno fmt --check / lint / test（281 passed / 0 failed）/ build 全 green。PR #32 CI pass。
+- 実装: subagent 2 並列（マッピング 29960fc / 表示適用 3428adf）+ TDD。CI が権限なし deno test のため name-ja_test は static import 方式（subagent の意図的判断・妥当と評価）。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+英語 NAME→日本語名のマッピング data/name-ja.json（298 件・カバレッジ 100%）を新設し、displayLabel / labelTextFor / buildLabelData に ja マップ引数を追加して地図ラベル・ツールチップ・属領表記を日本語化。データと colors.json のキーは英語のまま表示層のみ変更、未登録名は英語フォールバック。検証は deno test 281 passed・CI pass・Chrome での 1500 年の目視確認（ラベル日本語化・「ボヘミア — 神聖ローマ帝国 領」表記）。
+<!-- SECTION:FINAL_SUMMARY:END -->
