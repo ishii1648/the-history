@@ -6,7 +6,9 @@ assignee:
   - '@claude'
 created_date: '2026-07-21 15:05'
 updated_date: '2026-07-21 16:20'
-labels: []
+labels:
+  - 'area:scripts'
+  - 'area:data'
 dependencies:
   - TASK-19
   - TASK-23
