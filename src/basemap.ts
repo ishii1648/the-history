@@ -94,15 +94,16 @@ export function buildRiversLayer(lineColor: string): BasemapStyle["layers"][0] {
     },
     paint: {
       "line-color": lineColor,
-      // z3 で 0.5px → z8 で 2px（MAX_ZOOM=8 でも視認できる幅）
+      // z3 で 1px → z8 で 2.5px。勢力圏の半透明塗り（alpha 128）越しでも
+      // 低ズーム（初期表示の z4）で視認できるよう、細線側を太めにとる
       "line-width": [
         "interpolate",
         ["linear"],
         ["zoom"],
         3,
-        0.5,
+        1,
         8,
-        2,
+        2.5,
       ],
     },
   };
