@@ -14,6 +14,7 @@ import {
   HRE_SOURCE_LICENSE,
   HRE_TERRITORIES,
   isActiveAtYear,
+  resolveTerritoryName,
   selectMajorTerritories,
 } from "./build-hre.ts";
 
@@ -123,29 +124,45 @@ Deno.test("dedupById: 同一 id の宗派期間重複行は最初の 1 行のみ
   assertEquals(out.features[1].properties?.id, "Kurpfalz");
 });
 
-Deno.test("HRE_TERRITORIES: 主要領邦の選定結果（ドイツ語 id → 英語表示名）を固定する", () => {
+Deno.test("HRE_TERRITORIES: 主要領邦の選定結果（ドイツ語 id → 称号付き英語表示名）を固定する", () => {
   assertEquals(HRE_TERRITORIES, {
-    "Österreich": "Austria",
-    "Kurbrandenburg": "Brandenburg",
-    "Böhmen": "Bohemia",
-    "Bayern": "Bavaria",
-    "ernestinischesSachsenbis1547": "Electoral Saxony",
-    "albertinischesSachsenbis1547": "Ducal Saxony",
-    "albertinischesSachsennach1635": "Electoral Saxony",
-    "ernestinischesSachsennach1547": "Ducal Saxony",
-    "Kurpfalz": "Palatinate",
-    "Kurmainz": "Mainz",
-    "Kurtrier": "Trier",
-    "KölnErzstift": "Cologne",
-    "Württemberg": "Württemberg",
-    "Hessen": "Hesse",
-    "HessenKassel": "Hesse-Kassel",
-    "HessenDarmstadt": "Hesse-Darmstadt",
-    "SalzburgErzstift": "Salzburg",
+    "Österreich": "Archduchy of Austria",
+    "Kurbrandenburg": "Electorate of Brandenburg",
+    "Böhmen": "Kingdom of Bohemia",
+    // バイエルンは 1623 年の選帝侯昇格を境に称号が変わる（同一 id・同一領域）
+    "Bayern": [
+      { name: "Duchy of Bavaria" },
+      { name: "Electorate of Bavaria", start: 1623 },
+    ],
+    "ernestinischesSachsenbis1547": "Electorate of Saxony",
+    "albertinischesSachsenbis1547": "Duchy of Saxony",
+    "albertinischesSachsennach1635": "Electorate of Saxony",
+    "ernestinischesSachsennach1547": "Duchy of Saxony",
+    "Kurpfalz": "Electorate of the Palatinate",
+    "Kurmainz": "Archbishopric of Mainz",
+    "Kurtrier": "Archbishopric of Trier",
+    "KölnErzstift": "Archbishopric of Cologne",
+    "Württemberg": "Duchy of Württemberg",
+    "Hessen": "Landgraviate of Hesse",
+    "HessenKassel": "Landgraviate of Hesse-Kassel",
+    "HessenDarmstadt": "Landgraviate of Hesse-Darmstadt",
+    "SalzburgErzstift": "Archbishopric of Salzburg",
   });
-  // 英語表示名は 10〜15 勢力（ザクセンの選帝侯領/公領は年代で id が変わるが名前は共通）
-  const names = new Set(Object.values(HRE_TERRITORIES));
-  assert(names.size >= 10 && names.size <= 15, `表示名数 ${names.size}`);
+});
+
+Deno.test("resolveTerritoryName: 固定名はそのまま返し、期間配列は年代で解決する", () => {
+  assertEquals(
+    resolveTerritoryName("Kingdom of Bohemia", 1500),
+    "Kingdom of Bohemia",
+  );
+  const bavaria = HRE_TERRITORIES["Bayern"];
+  assertEquals(resolveTerritoryName(bavaria, 1500), "Duchy of Bavaria");
+  assertEquals(resolveTerritoryName(bavaria, 1530), "Duchy of Bavaria");
+  assertEquals(resolveTerritoryName(bavaria, 1600), "Duchy of Bavaria");
+  // 昇格前年までは公領、昇格年ちょうどから選帝侯領
+  assertEquals(resolveTerritoryName(bavaria, 1622), "Duchy of Bavaria");
+  assertEquals(resolveTerritoryName(bavaria, 1623), "Electorate of Bavaria");
+  assertEquals(resolveTerritoryName(bavaria, 1650), "Electorate of Bavaria");
 });
 
 Deno.test("selectMajorTerritories: マップ掲載 id のみ残し、properties を最小限に間引く", () => {
@@ -160,10 +177,10 @@ Deno.test("selectMajorTerritories: マップ掲載 id のみ残し、properties 
     }),
     feature({ id: "Aalen", name: "Aalen", start: 1360, end: 1803 }),
   ]);
-  const out = selectMajorTerritories(fc, HRE_TERRITORIES);
+  const out = selectMajorTerritories(fc, 1500, HRE_TERRITORIES);
   assertEquals(out.features.length, 1);
   assertEquals(out.features[0].properties, {
-    NAME: "Austria",
+    NAME: "Archduchy of Austria",
     SUBJECTO: HRE_NAME,
     PARTOF: HRE_NAME,
   });
@@ -172,11 +189,11 @@ Deno.test("selectMajorTerritories: マップ掲載 id のみ残し、properties 
 Deno.test("selectMajorTerritories: 同一表示名が重複したら最初の 1 件のみ残す", () => {
   const fc = collection([
     feature({ id: "ernestinischesSachsenbis1547" }),
-    feature({ id: "albertinischesSachsennach1635" }), // 同じ "Electoral Saxony"
+    feature({ id: "albertinischesSachsennach1635" }), // 同じ "Electorate of Saxony"
   ]);
-  const out = selectMajorTerritories(fc, HRE_TERRITORIES);
+  const out = selectMajorTerritories(fc, 1500, HRE_TERRITORIES);
   assertEquals(out.features.length, 1);
-  assertEquals(out.features[0].properties?.NAME, "Electoral Saxony");
+  assertEquals(out.features[0].properties?.NAME, "Electorate of Saxony");
 });
 
 Deno.test("HRE_RANGE_OVERRIDES: データ欠損・断絶の補正を固定する", () => {
@@ -209,13 +226,18 @@ Deno.test("buildYearCollection: 各対象年に主要領邦が揃い、表示名
     // 表示名は一意（同一年に選帝侯領ザクセンが 2 つ出たりしない）
     assertEquals(new Set(names).size, names.length);
     for (
-      const required of ["Austria", "Brandenburg", "Bohemia", "Bavaria"]
+      const required of [
+        "Archduchy of Austria",
+        "Electorate of Brandenburg",
+        "Kingdom of Bohemia",
+      ]
     ) {
       assert(names.includes(required), `${year}: ${required} が無い`);
     }
     // ザクセン系（選帝侯領・公領）が必ず含まれる
     assert(
-      names.includes("Electoral Saxony") && names.includes("Ducal Saxony"),
+      names.includes("Electorate of Saxony") &&
+        names.includes("Duchy of Saxony"),
       `${year}: ザクセン系が無い`,
     );
     // 主要領邦以外は含まれない
@@ -230,11 +252,20 @@ Deno.test("buildYearCollection: 各対象年に主要領邦が揃い、表示名
   const y1500 = buildYearCollection(fc, 1500).features.map(
     (f) => f.properties?.NAME,
   );
-  assert(!y1500.includes("Hesse-Kassel"));
-  // Bayern override（1500 でも Bavaria が出る）
-  assert(y1500.includes("Bavaria"));
+  assert(!y1500.includes("Landgraviate of Hesse-Kassel"));
+  // Bayern override（1500 でも公領バイエルンが出る）
+  assert(y1500.includes("Duchy of Bavaria"));
+  // バイエルンは 1623 年選帝侯昇格を境に NAME が切り替わる（1600 まで公領・1650 は選帝侯領）
+  for (const year of [1530, 1600]) {
+    const names = buildYearCollection(fc, year).features.map(
+      (f) => f.properties?.NAME,
+    );
+    assert(names.includes("Duchy of Bavaria"), `${year}: 公領バイエルンが無い`);
+    assert(!names.includes("Electorate of Bavaria"));
+  }
   const y1650 = buildYearCollection(fc, 1650).features.map(
     (f) => f.properties?.NAME,
   );
-  assert(y1650.includes("Bavaria")); // override end=1806
+  assert(y1650.includes("Electorate of Bavaria")); // override end=1806 + 1623 昇格
+  assert(!y1650.includes("Duchy of Bavaria"));
 });
