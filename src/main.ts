@@ -30,11 +30,25 @@ import {
   SNAPSHOT_YEARS,
 } from "./config.ts";
 import { indexOfYear, keyToStep, stepYear, yearAtIndex } from "./timeline.ts";
+import {
+  type AppState,
+  createReplaceStateUpdater,
+  decodeState,
+} from "./url_state.ts";
 
 const mapContainer = document.getElementById("map");
 if (!mapContainer) {
   throw new Error("#map 要素が見つかりません");
 }
+
+// AC #2/#3: 起動時に URL クエリから表示状態を復元する（不正値はパラメータ単位で
+// デフォルトへフォールバック）。地図の初期 center/zoom と初期年代はこの値を使う。
+const initialState = decodeState(
+  globalThis.location.search,
+  { year: INITIAL_YEAR, zoom: INITIAL_ZOOM, center: [...INITIAL_CENTER] },
+  { years: SNAPSHOT_YEARS, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM },
+);
+const initialYear = initialState.year;
 
 // PMTiles プロトコルを MapLibre に登録（1 回だけ）
 const protocol = new Protocol();
@@ -47,8 +61,8 @@ protocol.add(archive);
 const map = new maplibregl.Map({
   container: mapContainer,
   style: buildBasemapStyle(BASEMAP_PMTILES_URL) as StyleSpecification,
-  center: [...INITIAL_CENTER],
-  zoom: INITIAL_ZOOM,
+  center: initialState.center,
+  zoom: initialState.zoom,
   minZoom: MIN_ZOOM,
   maxZoom: MAX_ZOOM,
 });
@@ -210,8 +224,34 @@ const yearSwitcher = createYearSwitcher(
     overlay.setProps({ layers: [buildPowerLayer(year, data)] });
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
     reflectYearToTimeline(year);
+    // AC #1: 年代確定のたびに URL を現在の視点込みで同期する
+    syncUrlToState();
   },
 );
+
+// AC #1: 表示状態を URL クエリへ replaceState で反映する（履歴を汚さない）。
+// 同一クエリの重複更新は updater 側で抑止するため、moveend など高頻度でも安全。
+const updateUrl = createReplaceStateUpdater((query) => {
+  globalThis.history.replaceState(null, "", query);
+});
+
+/** 確定年代 + 現在の地図視点から表示状態を組み立てる */
+function currentAppState(): AppState {
+  const c = map.getCenter();
+  return {
+    year: yearSwitcher.currentYear() ?? initialYear,
+    zoom: map.getZoom(),
+    center: [c.lng, c.lat],
+  };
+}
+
+/** 現在の表示状態を URL クエリへ同期する（変化がなければ何もしない） */
+function syncUrlToState(): void {
+  updateUrl(currentAppState());
+}
+
+// AC #1: パン/ズーム確定（moveend）ごとに URL を更新。move 中の高頻度発火は拾わない。
+map.on("moveend", syncUrlToState);
 
 /**
  * 表示年代を切り替える（TASK-6 のスライダー・目視確認から呼ばれる公開 API）。
@@ -316,8 +356,9 @@ function setupTimeline(): void {
   // applyFn（最新要求のみ）からの権威ある反映をこの UI に差し込む
   reflectYearToTimeline = syncUI;
 
-  // 初期表示を INITIAL_YEAR に合わせる（実データ反映は map load 後の switchYear）
-  syncUI(INITIAL_YEAR);
+  // 初期表示を復元年（URL または INITIAL_YEAR）に合わせる（実データ反映は
+  // map load 後の switchYear）
+  syncUI(initialYear);
 }
 
 setupTimeline();
@@ -360,7 +401,7 @@ async function loadOverrides(): Promise<void> {
 async function initPowerLayer(): Promise<void> {
   try {
     await Promise.all([loadColors(), loadOverrides()]);
-    await switchYear(INITIAL_YEAR);
+    await switchYear(initialYear);
   } catch (error) {
     console.error(`勢力圏レイヤーの初期化に失敗しました: ${String(error)}`);
   }
