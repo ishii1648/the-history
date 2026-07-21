@@ -2,6 +2,7 @@ import maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol } from "pmtiles";
 import { MapboxOverlay } from "@deck.gl/mapbox";
+import type { PickingInfo } from "@deck.gl/core";
 import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
 import {
   CollisionFilterExtension,
@@ -19,12 +20,21 @@ import {
   createHreOverlayLoader,
   createYearDataLoader,
   createYearSwitcher,
+  EMPTY_FEATURE_COLLECTION,
   fillColorFor,
   LINE_COLOR,
   LINE_WIDTH_PX,
 } from "./powers.ts";
 import { displayLabel } from "./info.ts";
 import { buildLabelData, characterSetFrom, type LabelDatum } from "./labels.ts";
+import {
+  riverLabelAnchors,
+  riverLineColor,
+  riverLineWidth,
+  riverNameFor,
+  RIVERS_DATA_URL,
+  toggleRiverSelection,
+} from "./rivers.ts";
 import {
   clearErrors,
   createLoadingState,
@@ -152,6 +162,22 @@ const HRE_LAYER_ID = "hre-powers";
  */
 const LABEL_LAYER_ID = "power-labels";
 
+/**
+ * 主要河川ライン（GeoJsonLayer）のレイヤー ID（TASK-24）。
+ * powers / hre-powers の上・power-labels の下に置き、勢力の半透明塗りに
+ * 沈まず、かつラベルを覆わないようにする。
+ */
+const RIVERS_LAYER_ID = "rivers";
+
+/** 河川名ラベル（TextLayer）のレイヤー ID（TASK-24） */
+const RIVER_LABEL_LAYER_ID = "river-labels";
+
+/**
+ * picking の許容半径（px）。細い河川ライン（通常 2px）でもカーソルが多少
+ * ずれた位置のクリック/ホバーを拾えるようにする（TASK-24 AC #2）。
+ */
+const PICKING_RADIUS_PX = 6;
+
 /** colors.json（NAME / "NAME|SUBJECTO" → HEX のフラットマップ） */
 let colors: Record<string, string> = {};
 
@@ -173,9 +199,36 @@ const dataLoader = createCombinedYearLoader(
   createHreOverlayLoader((url) => fetch(url), HRE_OVERLAY_YEARS),
 );
 
+/** 主要河川 GeoJSON（起動時に 1 度ロード。失敗時は空のまま河川なしで継続） */
+let riversData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
+
+/** クリックで選択（強調）中の河川名。null は未選択（TASK-24 AC #2） */
+let selectedRiverName: string | null = null;
+
+/** 直近に反映された年代のデータ。選択変更時のレイヤー再構築で使う */
+let currentView:
+  | { year: number; base: FeatureCollection; hre: FeatureCollection }
+  | null = null;
+
 // AC #1: MapboxOverlay（interleaved）で deck.gl を MapLibre に統合する。
 // overlay と GeoJsonLayer はここで 1 度だけ生成し、年代切替では data を差し替えるのみ。
-const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
+//
+// TASK-24: ホバー/クリックは per-layer コールバックではなく Deck レベルの
+// onHover/onClick に集約する。deck.gl は「前回ホバーしていたレイヤーの leave」
+// と「新しくホバーしたレイヤーの enter」を別々の per-layer コールバックで
+// 呼ぶため、rivers（上）と powers（下）へ分けて書くとツールチップの
+// 表示/非表示が発火順に依存してしまう。Deck レベルの onHover/onClick は
+// 最前面の picking 結果 1 件（何も無ければ layer: null）で 1 回だけ呼ばれる
+// （@deck.gl/core deck.js の _applyHoverCallbacks / _dispatchPickingEvent で
+// 確認）ので、順序レースなしに河川と勢力の表示を出し分けられる。
+// pickingRadius で細い河川ラインもクリック/ホバーしやすくする。
+const overlay = new MapboxOverlay({
+  interleaved: true,
+  layers: [],
+  pickingRadius: PICKING_RADIUS_PX,
+  onHover: handlePickHover,
+  onClick: handlePickClick,
+});
 
 /**
  * 指定年代の FeatureCollection から GeoJsonLayer を 1 枚生成する。
@@ -207,21 +260,154 @@ function buildPowerLayer(
     // AC #5: 年代切替時に塗り色を数百 ms かけて補間し、ポリゴンをフェードさせる。
     // 同一 layer id を保つため deck.gl が差分更新し、getFillColor の遷移が発火する。
     transitions: { getFillColor: { duration: 400 } },
-    // AC #1: ホバーで勢力ラベルをカーソル近傍にツールチップ表示（object なしで非表示）
-    onHover: ({ object, x, y }) => {
-      const label = object
-        ? displayLabel((object as Feature).properties, renames, nameJa)
-        : null;
-      if (label !== null) showTooltip(label, x, y);
-      else hideTooltip();
-    },
-    // AC #2: クリックで同ラベルを固定パネルに表示（モバイルのホバー代替）
-    onClick: ({ object }) => {
-      const label = object
-        ? displayLabel((object as Feature).properties, renames, nameJa)
-        : null;
+    // ホバー/クリックの表示処理は Deck レベルの handlePickHover / handlePickClick
+    // に集約する（TASK-24。per-layer に分けると rivers との発火順レースになる）
+  });
+}
+
+/**
+ * picking 結果からツールチップ/パネル用の表示ラベルを整形する（TASK-24）。
+ * - rivers: 河川名（name-ja.json 適用。未登録は英語のまま）
+ * - powers / hre-powers: 勢力ラベル（displayLabel。宗主国込み表記）
+ * - それ以外（picking なし・ラベル系レイヤー）は null
+ */
+function pickedLabel(info: PickingInfo): string | null {
+  const layerId = info.layer?.id;
+  const feature = info.object as Feature | undefined;
+  if (feature === undefined || layerId === undefined) return null;
+  if (layerId === RIVERS_LAYER_ID) {
+    const name = riverNameFor(feature.properties);
+    return name === null ? null : nameJa[name] ?? name;
+  }
+  if (layerId === POWER_LAYER_ID || layerId === HRE_LAYER_ID) {
+    return displayLabel(feature.properties, renames, nameJa);
+  }
+  return null;
+}
+
+/**
+ * Deck レベルのホバー処理（TASK-24 AC #3）。最前面の picking 結果 1 件だけを
+ * 受け取るため、河川ライン上では河川名、勢力ポリゴン上では勢力ラベル、
+ * どちらも無ければ非表示、が一意に決まる（rivers が powers のホバーを阻害しない）。
+ */
+function handlePickHover(info: PickingInfo): void {
+  const label = pickedLabel(info);
+  if (label !== null) showTooltip(label, info.x, info.y);
+  else hideTooltip();
+}
+
+/**
+ * Deck レベルのクリック処理（TASK-24 AC #2/#3）。
+ * - 河川ライン: 選択をトグルし、選択時は情報パネルに河川名を表示
+ * - 勢力ポリゴン: 従来どおり勢力ラベルをパネル表示し、河川選択は解除
+ * - 何も無い場所: 河川選択を解除（Deck の onClick は picking なしでも
+ *   layer: null の info で呼ばれることを @deck.gl/core の実装で確認済み）
+ */
+function handlePickClick(info: PickingInfo): void {
+  const layerId = info.layer?.id;
+  if (layerId === RIVERS_LAYER_ID && info.object !== undefined) {
+    const name = riverNameFor((info.object as Feature).properties);
+    applyRiverSelection(toggleRiverSelection(selectedRiverName, name));
+    if (selectedRiverName !== null) {
+      const label = pickedLabel(info);
       if (label !== null) showInfoPanel(label);
+    }
+    return;
+  }
+  // 河川以外（勢力ポリゴン・空白）のクリックは選択を解除する
+  applyRiverSelection(null);
+  const label = pickedLabel(info);
+  if (label !== null) showInfoPanel(label);
+}
+
+/** 河川の選択状態を更新し、変化があればレイヤーを再構築して反映する */
+function applyRiverSelection(next: string | null): void {
+  if (next === selectedRiverName) return;
+  selectedRiverName = next;
+  renderLayers();
+}
+
+/**
+ * 主要河川ラインの GeoJsonLayer を生成する（TASK-24）。
+ * 色・幅は rivers.ts の純粋関数で決め、選択中の河川全体（同名 feature）を
+ * 太く濃色で強調する。選択状態は updateTriggers で再評価させる。
+ */
+function buildRiversLineLayer(): GeoJsonLayer {
+  return new GeoJsonLayer({
+    id: RIVERS_LAYER_ID,
+    data: riversData,
+    pickable: true,
+    stroked: false,
+    filled: false,
+    getLineColor: (f: Feature) =>
+      riverLineColor(riverNameFor(f.properties), selectedRiverName),
+    lineWidthUnits: "pixels",
+    getLineWidth: (f: Feature) =>
+      riverLineWidth(riverNameFor(f.properties), selectedRiverName),
+    lineWidthMinPixels: 1,
+    lineCapRounded: true,
+    lineJointRounded: true,
+    updateTriggers: {
+      getLineColor: [selectedRiverName],
+      getLineWidth: [selectedRiverName],
     },
+  });
+}
+
+/**
+ * 河川名ラベルの TextLayer を生成する（TASK-24 AC #1）。
+ * アンカーは最長 LineString の中点（rivers.ts riverLabelAnchors）。勢力ラベル
+ * より小さめの水色系文字 + 白 halo で「水系の注記」に見えるようにし、
+ * CollisionFilterExtension（勢力ラベルと同一衝突空間）でライン長由来の
+ * priority により長い川を優先表示する。pickable: false でライン・ポリゴンの
+ * picking を妨げない。
+ */
+function buildRiverLabelLayer(): TextLayer<
+  LabelDatum,
+  CollisionFilterExtensionProps<LabelDatum>
+> {
+  const data = riverLabelAnchors(riversData, nameJa);
+  return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
+    id: RIVER_LABEL_LAYER_ID,
+    data,
+    pickable: false,
+    getText: (d) => d.text,
+    getPosition: (d) => d.position,
+    // 勢力ラベル（13px）より控えめな 11px・濃い水色（#0277bd）+ 白 halo
+    getSize: 11,
+    sizeUnits: "pixels",
+    getColor: [2, 119, 189, 255],
+    fontFamily: "sans-serif",
+    fontWeight: 600,
+    fontSettings: { sdf: true },
+    outlineWidth: 2,
+    outlineColor: [255, 255, 255, 220],
+    // 日本語名（ライン川 等）のグリフもラベル文字列から自動生成する
+    characterSet: characterSetFrom(data.map((d) => d.text)),
+    extensions: [new CollisionFilterExtension()],
+    collisionTestProps: { sizeScale: 2 },
+    getCollisionPriority: (d: LabelDatum) => d.priority,
+  });
+}
+
+/**
+ * 現在の年代データ + 河川 + ラベルの全レイヤーを組み立てて overlay へ反映する。
+ * 描画順（配列順 = 下から上）: powers → hre-powers → rivers → power-labels →
+ * river-labels。河川ラインは勢力の半透明塗りの上・ラベルの下に置く（TASK-24）。
+ * 年代切替と河川選択の変更はどちらもこの関数経由で反映し、レイヤー id を
+ * 保つことで deck.gl の差分更新に任せる。
+ */
+function renderLayers(): void {
+  if (currentView === null) return;
+  const { year, base, hre } = currentView;
+  overlay.setProps({
+    layers: [
+      buildPowerLayer(POWER_LAYER_ID, year, base),
+      buildPowerLayer(HRE_LAYER_ID, year, hre),
+      buildRiversLineLayer(),
+      buildLabelLayer(year, base, hre),
+      buildRiverLabelLayer(),
+    ],
   });
 }
 
@@ -333,14 +519,9 @@ let reflectYearToTimeline: (year: number) => void = () => {};
 const yearSwitcher = createYearSwitcher(
   dataLoader,
   (year, data) => {
-    overlay.setProps({
-      layers: [
-        buildPowerLayer(POWER_LAYER_ID, year, data.base),
-        buildPowerLayer(HRE_LAYER_ID, year, data.hre),
-        // TASK-20: 勢力名ラベルは常に最前面（powers / hre-powers の上）
-        buildLabelLayer(year, data.base, data.hre),
-      ],
-    });
+    // TASK-24: レイヤー組み立ては renderLayers に集約（河川選択の変更と共用）
+    currentView = { year, base: data.base, hre: data.hre };
+    renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
     reflectYearToTimeline(year);
     // AC #1: 年代確定のたびに URL を現在の視点込みで同期する
@@ -619,12 +800,36 @@ async function loadNameJa(): Promise<void> {
   }
 }
 
+/**
+ * rivers.geojson（主要河川ライン）を取得する（TASK-24）。
+ * 失敗時は空 FeatureCollection のまま河川なしで継続する（colors.json 等と同様）。
+ */
+async function loadRivers(): Promise<void> {
+  try {
+    const res = await fetch(RIVERS_DATA_URL);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    riversData = await res.json() as FeatureCollection;
+  } catch (error) {
+    console.warn(
+      `rivers.geojson の取得に失敗しました。河川なしで継続します: ${
+        String(error)
+      }`,
+    );
+  }
+}
+
 /** 初期年代の勢力圏を描画する。例外で地図全体を落とさない */
 async function initPowerLayer(): Promise<void> {
   try {
     // TASK-23: name-ja.json のロード完了を待ってから初期描画するため、初期
     // ラベル・ツールチップは最初から日本語で表示される（失敗時のみ英語継続）。
-    await Promise.all([loadColors(), loadOverrides(), loadNameJa()]);
+    // TASK-24: rivers.geojson も初期描画前に揃え、初回から河川を重ねる。
+    await Promise.all([
+      loadColors(),
+      loadOverrides(),
+      loadNameJa(),
+      loadRivers(),
+    ]);
     await switchYear(initialYear);
   } catch (error) {
     console.error(`勢力圏レイヤーの初期化に失敗しました: ${String(error)}`);
