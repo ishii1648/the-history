@@ -4,7 +4,11 @@ title: 年代ごとの歴史解説パネルを表示する
 status: To Do
 assignee: []
 created_date: '2026-07-21 15:10'
-labels: []
+updated_date: '2026-07-21 15:48'
+labels:
+  - 'area:src-main'
+  - 'area:data'
+  - 'area:scripts'
 dependencies:
   - TASK-6
 ordinal: 32000
