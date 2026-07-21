@@ -17,7 +17,7 @@
     "extract-dem": "deno run --allow-net=s3.amazonaws.com --allow-read --allow-write scripts/extract-dem.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
     "next-tasks": "deno run --allow-read scripts/next_tasks.ts",
-    "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist",
+    "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist --header \"Cache-Control: no-cache\"",
     "test": "deno test",
     "test:watch": "deno test --watch"
   },
