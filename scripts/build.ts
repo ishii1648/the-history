@@ -50,6 +50,8 @@ export function getDataCopyTargets(
       from: "data/name-overrides.json",
       to: `${distDir}/data/name-overrides.json`,
     },
+    // TASK-21: 主要河川オーバーレイ用の GeoJSON（deno task build-rivers で生成）
+    { from: "data/rivers.geojson", to: `${distDir}/data/rivers.geojson` },
   ];
   for (const year of years) {
     targets.push({
