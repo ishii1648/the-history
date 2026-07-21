@@ -2,7 +2,7 @@ import maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol } from "pmtiles";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { PickingInfo } from "@deck.gl/core";
+import type { Layer, PickingInfo } from "@deck.gl/core";
 import { GeoJsonLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import {
   CollisionFilterExtension,
@@ -81,6 +81,15 @@ import {
   isContentHidden,
   reduceFooterEvent,
 } from "./footer.ts";
+import {
+  CITY_LAYER_ID,
+  HRE_LAYER_ID,
+  layerOrderMatchesPickingPriority,
+  PICKING_PRIORITY,
+  POWER_LAYER_ID,
+  renderOrderFromPickingPriority,
+  RIVERS_LAYER_ID,
+} from "./picking.ts";
 
 const mapContainer = document.getElementById("map");
 if (!mapContainer) {
@@ -162,15 +171,10 @@ map.on("error", (event) => {
 
 // ---- 勢力圏ポリゴンレイヤー（TASK-5, docs/app-spec.md §3.3, §4.3）----
 
-/** GeoJsonLayer の ID。年代切替でも同一 ID を保ち、overlay は再生成しない */
-const POWER_LAYER_ID = "powers";
-
-/**
- * HRE（神聖ローマ帝国）主要領邦オーバーレイの GeoJsonLayer ID（TASK-19）。
- * powers の上に重ねる。非対象年もレイヤー自体は同一 ID で維持し、data を
- * 空 FeatureCollection に差し替えるだけにして deck.gl の差分更新に任せる。
- */
-const HRE_LAYER_ID = "hre-powers";
+// pickable なレイヤーの ID（powers / hre-powers / cities / rivers）は
+// picking.ts に集約した（TASK-29）。picking の優先順位（PICKING_PRIORITY）と
+// 描画順の対応を 1 箇所で管理するため。各レイヤーとも年代切替・選択変更で
+// 同一 ID を保ち、data 差し替えのみで deck.gl の差分更新に任せる方針は不変。
 
 /**
  * 勢力名ラベル（TextLayer）のレイヤー ID（TASK-20）。
@@ -178,22 +182,8 @@ const HRE_LAYER_ID = "hre-powers";
  */
 const LABEL_LAYER_ID = "power-labels";
 
-/**
- * 主要河川ライン（GeoJsonLayer）のレイヤー ID（TASK-24）。
- * powers / hre-powers の上・power-labels の下に置き、勢力の半透明塗りに
- * 沈まず、かつラベルを覆わないようにする。
- */
-const RIVERS_LAYER_ID = "rivers";
-
 /** 河川名ラベル（TextLayer）のレイヤー ID（TASK-24） */
 const RIVER_LABEL_LAYER_ID = "river-labels";
-
-/**
- * 主要都市マーカー（ScatterplotLayer）のレイヤー ID（TASK-27）。
- * hre-powers の上・rivers の下に置く。picking は上のレイヤーが勝つため、
- * この配置で優先順位が 河川 > 都市 > 国名（勢力ポリゴン）になる（AC #6）。
- */
-const CITY_LAYER_ID = "cities";
 
 /** 都市名ラベル（TextLayer）のレイヤー ID（TASK-27） */
 const CITY_LABEL_LAYER_ID = "city-labels";
@@ -303,6 +293,12 @@ function buildPowerLayer(
  * - cities: 都市名（TASK-27。name-ja.json 適用。未登録は英語のまま）
  * - powers / hre-powers: 勢力ラベル（displayLabel。宗主国込み表記）
  * - それ以外（picking なし・ラベル系レイヤー）は null
+ *
+ * TASK-29: 引数の info は Deck レベル onHover/onClick が渡す単一の picking
+ * 結果で、deck.gl は最前面のレイヤーを返す。renderLayers が描画順を
+ * PICKING_PRIORITY の逆順（優先が高いほど上）から導出しているため、
+ * 「単一 pick = PICKING_PRIORITY の最優先候補」が成立し、河川と勢力が重なる
+ * 位置では常に河川名が優先される（AC #2。pickMultipleObjects は不要）。
  */
 function pickedLabel(info: PickingInfo): string | null {
   const layerId = info.layer?.id;
@@ -500,26 +496,43 @@ function buildCityLabelLayer(
 /**
  * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
  * 反映する。描画順（配列順 = 下から上）: powers → hre-powers → cities →
- * rivers → power-labels → river-labels → city-labels。河川ラインは勢力の
- * 半透明塗りの上・ラベルの下に置き（TASK-24）、都市マーカーは hre-powers の
- * 上・rivers の下に置いて picking を 河川 > 都市 > 国名 にする（TASK-27）。
+ * rivers → power-labels → river-labels → city-labels。
+ *
+ * TASK-29: pickable レイヤーの並びは picking.ts の PICKING_PRIORITY
+ * （河川 > 都市 > HRE > 勢力。先頭が最優先）から導出する。deck.gl の picking
+ * は最前面（配列の最後）が勝つため、描画順 = 優先順の逆順にすることで
+ * 「河川と勢力が重なる位置では河川名を優先」（AC #2）がレイヤー順だけで
+ * 担保される。ラベル系（pickable: false）は picking に関与しないため
+ * その上へ後置し、layerOrderMatchesPickingPriority で全体の整合を検証する。
  * 年代切替と河川選択の変更はどちらもこの関数経由で反映し、レイヤー id を
  * 保つことで deck.gl の差分更新に任せる。
  */
 function renderLayers(): void {
   if (currentView === null) return;
   const { year, base, hre } = currentView;
-  overlay.setProps({
-    layers: [
-      buildPowerLayer(POWER_LAYER_ID, year, base),
-      buildPowerLayer(HRE_LAYER_ID, year, hre),
-      buildCityMarkerLayer(year),
-      buildRiversLineLayer(),
-      buildLabelLayer(year, base, hre),
-      buildRiverLabelLayer(),
-      buildCityLabelLayer(year),
-    ],
-  });
+  const buildPickableLayer: Record<string, () => Layer> = {
+    [POWER_LAYER_ID]: () => buildPowerLayer(POWER_LAYER_ID, year, base),
+    [HRE_LAYER_ID]: () => buildPowerLayer(HRE_LAYER_ID, year, hre),
+    [CITY_LAYER_ID]: () => buildCityMarkerLayer(year),
+    [RIVERS_LAYER_ID]: () => buildRiversLineLayer(),
+  };
+  const layers = [
+    // picking 優先順（PICKING_PRIORITY）の逆順 = 下→上の描画順で並べる
+    ...renderOrderFromPickingPriority(PICKING_PRIORITY).map((id) => {
+      const build = buildPickableLayer[id];
+      if (build === undefined) {
+        throw new Error(`PICKING_PRIORITY のレイヤー ${id} に builder が無い`);
+      }
+      return build();
+    }),
+    buildLabelLayer(year, base, hre),
+    buildRiverLabelLayer(),
+    buildCityLabelLayer(year),
+  ];
+  if (!layerOrderMatchesPickingPriority(layers.map((l) => l.id))) {
+    throw new Error("レイヤー順が PICKING_PRIORITY と整合していない");
+  }
+  overlay.setProps({ layers });
 }
 
 /**
