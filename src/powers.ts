@@ -78,6 +78,28 @@ export function dataUrlFor(year: number): string {
   return `/data/europe_${year}.geojson`;
 }
 
+/** HRE（神聖ローマ帝国）領邦オーバーレイ GeoJSON の配信 URL を返す（純粋関数） */
+export function hreDataUrlFor(year: number): string {
+  return `/data/hre_${year}.geojson`;
+}
+
+/** 指定年に HRE オーバーレイが存在するか（純粋関数）。対象年は config.HRE_OVERLAY_YEARS */
+export function hasHreOverlay(
+  year: number,
+  overlayYears: readonly number[],
+): boolean {
+  return overlayYears.includes(year);
+}
+
+/**
+ * feature を持たない空の FeatureCollection（非対象年の HRE オーバーレイ用）。
+ * 同一参照を返し続けることで deck.gl の data 差分判定を最小化する。
+ */
+export const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
+  type: "FeatureCollection",
+  features: [],
+};
+
 /** fetch の最小契約（テストでモックできるよう Response 全体には依存しない） */
 export interface FetchResponseLike {
   ok: boolean;
@@ -102,8 +124,12 @@ export interface YearDataLoader {
  * - 同一年代への並行呼び出しは 1 回の fetch に集約する（inflight 共有）
  * - 失敗時はキャッシュも inflight も残さず、再試行できるようにする
  * fetch 部を引数で受けることで DOM 非依存にテストできる。
+ * urlFor で URL 規則を差し替えられる（既定は base の europe_<year>、HRE は hre_<year>）。
  */
-export function createYearDataLoader(fetchFn: FetchLike): YearDataLoader {
+export function createYearDataLoader(
+  fetchFn: FetchLike,
+  urlFor: (year: number) => string = dataUrlFor,
+): YearDataLoader {
   const cache = new Map<number, FeatureCollection>();
   const inflight = new Map<number, Promise<FeatureCollection>>();
 
@@ -117,7 +143,7 @@ export function createYearDataLoader(fetchFn: FetchLike): YearDataLoader {
 
       const promise = (async () => {
         try {
-          const res = await fetchFn(dataUrlFor(year));
+          const res = await fetchFn(urlFor(year));
           if (!res.ok) {
             throw new Error(
               `GeoJSON 取得失敗 (year=${year}, status=${res.status})`,
@@ -136,9 +162,82 @@ export function createYearDataLoader(fetchFn: FetchLike): YearDataLoader {
   };
 }
 
+/**
+ * HRE 領邦オーバーレイ用のローダを作る。
+ * - オーバーレイが無い年（hasHreOverlay が false）は fetch せず空 FC を即返す
+ * - 対象年は hre_<year>.geojson をキャッシュ・inflight 共有付きで取得する
+ * - 取得失敗は reject せず warnFn へ通知して空 FC で解決する。オーバーレイは
+ *   base 地図の付加情報であり、その欠落で年代切替全体（base の表示・ローディング
+ *   /エラー UI）を失敗扱いにしない方針のため。失敗はキャッシュされず、次の
+ *   切替時に再試行される。
+ */
+export function createHreOverlayLoader(
+  fetchFn: FetchLike,
+  overlayYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  const inner = createYearDataLoader(fetchFn, hreDataUrlFor);
+  return {
+    // 非対象年は fetch 自体が不要なので常に「取得済み」扱い（スピナー抑止）
+    has: (year) => !hasHreOverlay(year, overlayYears) || inner.has(year),
+    load(year) {
+      if (!hasHreOverlay(year, overlayYears)) {
+        return Promise.resolve(EMPTY_FEATURE_COLLECTION);
+      }
+      return inner.load(year).catch((error: unknown) => {
+        warnFn(
+          `HRE オーバーレイの取得に失敗しました。基本地図のみ表示します: ${
+            String(error)
+          }`,
+        );
+        return EMPTY_FEATURE_COLLECTION;
+      });
+    },
+  };
+}
+
+/** 年代切替で同時に反映する base（europe_*）と hre（hre_*）のデータ組 */
+export interface YearLayerData {
+  /** 勢力圏 base レイヤーの FeatureCollection */
+  base: FeatureCollection;
+  /** HRE 領邦オーバーレイの FeatureCollection（非対象年・取得失敗時は空） */
+  hre: FeatureCollection;
+}
+
+/** base + hre をまとめてロードする複合ローダ */
+export interface CombinedYearLoader {
+  /** base と hre を並行ロードし、両方揃ってから返す */
+  load(year: number): Promise<YearLayerData>;
+  /** base と hre の両方が取得済み（fetch 不要）か */
+  has(year: number): boolean;
+}
+
+/**
+ * base ローダと HRE オーバーレイローダを束ねた複合ローダを作る。
+ * Promise.all で並行ロードし、両方揃ってから解決するため、applyFn には常に
+ * base と hre が同じ年で対になって渡る（片方だけ先に反映されるちらつきが無い）。
+ * base の失敗は reject（既存のローディング/エラー UI が処理）、hre の失敗は
+ * createHreOverlayLoader 側で空 FC に落ちるため、ここでは特別扱いしない。
+ */
+export function createCombinedYearLoader(
+  baseLoader: YearDataLoader,
+  hreLoader: YearDataLoader,
+): CombinedYearLoader {
+  return {
+    has: (year) => baseLoader.has(year) && hreLoader.has(year),
+    async load(year) {
+      const [base, hre] = await Promise.all([
+        baseLoader.load(year),
+        hreLoader.load(year),
+      ]);
+      return { base, hre };
+    },
+  };
+}
+
 /** createYearSwitcher が必要とする loader の最小契約（load のみ） */
-export interface YearLoaderLike {
-  load(year: number): Promise<FeatureCollection>;
+export interface YearLoaderLike<T = FeatureCollection> {
+  load(year: number): Promise<T>;
 }
 
 /** 表示年代の切替を担う（並行要求の競合ガード付き） */
@@ -159,10 +258,12 @@ export interface YearSwitcher {
  *
  * applyFn は「取得済みデータを実際に表示へ反映する」副作用（overlay 更新など）を担う。
  * loader はキャッシュ・fetch を担い、ここには DOM も deck.gl も持ち込まない。
+ * データ型はジェネリクス T（既定 FeatureCollection）で、複合ローダの
+ * YearLayerData（base+hre）もそのまま扱える。
  */
-export function createYearSwitcher(
-  loader: YearLoaderLike,
-  applyFn: (year: number, data: FeatureCollection) => void,
+export function createYearSwitcher<T = FeatureCollection>(
+  loader: YearLoaderLike<T>,
+  applyFn: (year: number, data: T) => void,
 ): YearSwitcher {
   let latestToken = 0;
   let applied: number | undefined = undefined;

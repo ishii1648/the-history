@@ -37,6 +37,14 @@ export const BASEMAP_SOURCE_ID = "basemap";
 export const FALLBACK_STYLE_URL =
   "https://tiles.openfreemap.org/styles/liberty";
 
+/**
+ * 神聖ローマ帝国の主要領邦オーバーレイ（hre_<year>.geojson）が存在する年代（昇順）。
+ * 出典の ETH Zürich Roller データセット（doi:10.3929/ethz-b-000472583）が
+ * カバーするのは 1500 前後〜1650 のスナップショットのみで、SNAPSHOT_YEARS の
+ * うちこの 4 年だけにオーバーレイを配信する。他の年代にはファイル自体が無い。
+ */
+export const HRE_OVERLAY_YEARS: readonly number[] = [1500, 1530, 1600, 1650];
+
 /** 歴史的国境ポリゴンが存在する年代スナップショット一覧（昇順） */
 export const SNAPSHOT_YEARS: readonly number[] = [
   900,
