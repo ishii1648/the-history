@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 15:05'
-updated_date: '2026-07-21 16:20'
+updated_date: '2026-07-21 16:24'
 labels:
   - 'area:scripts'
   - 'area:data'
@@ -27,8 +27,8 @@ ordinal: 31000
 - [x] #2 選帝侯 7 家（ボヘミア王含む）の表記ルールが統一されている（聖界 3 選帝侯の表記方針も一貫）
 - [x] #3 年代依存の称号変化（バイエルン: 1650 のみ選帝侯領）がスナップショット年代ごとに正しく表示される
 - [x] #4 ザクセンの選帝侯領/公領の 2 系統区別と 1547 年前後の系統入れ替わりが引き続き正しく表示される
-- [ ] #5 勢力名・河川名など既存の日本語表記に退行がない
-- [ ] #6 称号マッピングのロジックにテストがあり deno test が green
+- [x] #5 勢力名・河川名など既存の日本語表記に退行がない
+- [x] #6 称号マッピングのロジックにテストがあり deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -51,6 +51,10 @@ ordinal: 31000
 - AC#4: Electorate of Saxony / Duchy of Saxony の 2 系統と 1547 系統入れ替え（重心座標の入れ替わり）を生成物検証・テストで確認。
 - deno fmt --check / lint / test（376 passed）/ build 全 green。PR #40 CI pass。並列化見送り（単一 subagent d429c21）。TDD red→green。
 - 留意: ローカル dev サーバのヒューリスティックキャッシュで旧 geojson が残る事象を検証中に確認（cache: reload で解消）。本番配信のキャッシュ制御は別タスクで扱う。
+
+追加 AC（ユーザーがマージ中に追記）の検証:
+- AC#5: 勢力名・河川名の日本語表記に退行なし — name-ja_test のカバレッジ完全一致検査（勢力・河川・都市の全ユニーク名）green、1500/1650 目視で勢力ラベル（フランス・ヴェネツィア共和国等）・河川ラベル（ライン川・ドナウ川・オーデル川等）の表示を確認。
+- AC#6: 称号マッピングのロジック（resolveTerritoryName の期間別解決・HRE_TERRITORIES 定義）は build-hre_test の 14 テストで担保（TDD red→green 実施）。deno test 全 green。
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
