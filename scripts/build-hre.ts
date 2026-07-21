@@ -49,10 +49,11 @@ export function buildBitstreamUrl(uuid: string): string {
 }
 
 /**
- * オーバーレイ対象年。表示側（src/config.ts に依存する HRE 表示年）と同じ値を
- * 持つ契約。元データが 16 世紀（宗教改革期）中心のため、この 4 年代に限る。
+ * オーバーレイ対象年。src/config.ts の HRE_OVERLAY_YEARS を唯一の定義元とし、
+ * 表示側との二重定義によるドリフトを避ける（build-data.ts の YEARS と同じ方針）。
  */
-export const HRE_OVERLAY_YEARS: readonly number[] = [1500, 1530, 1600, 1650];
+import { HRE_OVERLAY_YEARS } from "../src/config.ts";
+export { HRE_OVERLAY_YEARS };
 
 /** 出力 1 ファイルあたりのサイズ上限（バイト） */
 export const HRE_SIZE_LIMIT_BYTES = 200 * 1000;
