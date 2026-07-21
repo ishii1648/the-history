@@ -26,7 +26,13 @@ import {
   LINE_WIDTH_PX,
 } from "./powers.ts";
 import { displayLabel } from "./info.ts";
-import { buildLabelData, characterSetFrom, type LabelDatum } from "./labels.ts";
+import {
+  buildLabelData,
+  characterSetFrom,
+  labelColorFor,
+  type LabelDatum,
+} from "./labels.ts";
+import { extractHreExtent, shouldHighlightHre } from "./hre_extent.ts";
 import {
   riverLabelAnchors,
   riverLineColor,
@@ -189,6 +195,33 @@ const RIVER_LABEL_LAYER_ID = "river-labels";
 const CITY_LABEL_LAYER_ID = "city-labels";
 
 /**
+ * HRE 帝国範囲の強調オーバーレイ（GeoJsonLayer）のレイヤー ID（TASK-30）。
+ * pickable: false のため PICKING_PRIORITY には含めない（picking 非関与）。
+ */
+const HRE_EXTENT_LAYER_ID = "hre-extent";
+
+/**
+ * 帝国範囲の強調色（TASK-30 AC #2）。HRE 領邦ラベルの臙脂
+ * （labels.ts HRE_LABEL_COLOR）と同系色で「帝国系」の記号を揃える。
+ * 外縁線は不透明、塗りはごく薄くして下の勢力塗り・領邦境界を隠さない。
+ */
+const HRE_EXTENT_LINE_COLOR: [number, number, number, number] = [
+  140,
+  30,
+  30,
+  255,
+];
+const HRE_EXTENT_FILL_COLOR: [number, number, number, number] = [
+  140,
+  30,
+  30,
+  30,
+];
+
+/** 帝国範囲の外縁線の太さ（px）。通常の勢力境界（1px 白）より明確に太くする */
+const HRE_EXTENT_LINE_WIDTH_PX = 3;
+
+/**
  * picking の許容半径（px）。細い河川ライン（通常 2px）でもカーソルが多少
  * ずれた位置のクリック/ホバーを拾えるようにする（TASK-24 AC #2）。
  */
@@ -226,6 +259,12 @@ let citiesData: CitiesData = { years: {} };
 
 /** クリックで選択（強調）中の河川名。null は未選択（TASK-24 AC #2） */
 let selectedRiverName: string | null = null;
+
+/**
+ * HRE 本体・域内領邦のホバー/クリック中に帝国範囲を強調表示するか
+ * （TASK-30 AC #2/#3）。判定は hre_extent.ts の shouldHighlightHre に委ねる。
+ */
+let hreHighlighted = false;
 
 /** 直近に反映された年代のデータ。選択変更時のレイヤー再構築で使う */
 let currentView:
@@ -327,6 +366,31 @@ function handlePickHover(info: PickingInfo): void {
   const label = pickedLabel(info);
   if (label !== null) showTooltip(label, info.x, info.y);
   else hideTooltip();
+  // TASK-30 AC #2/#3: HRE 本体・域内領邦のホバーで帝国範囲を強調し、
+  // ホバー解除（picking なし・非 HRE 対象）で通常表示へ戻す
+  applyHreHighlight(hreHighlightFromPick(info));
+}
+
+/**
+ * picking 結果から帝国範囲を強調すべきかを判定する（TASK-30）。
+ * 判定本体は hre_extent.ts の shouldHighlightHre（純粋関数）。都市マーカーの
+ * picking 結果は GeoJSON Feature ではないが、shouldHighlightHre がレイヤー ID
+ * を先に見るため properties が undefined でも安全に false になる。
+ */
+function hreHighlightFromPick(info: PickingInfo): boolean {
+  if (info.object === undefined || info.layer === null) return false;
+  return shouldHighlightHre(
+    info.layer.id,
+    (info.object as Feature).properties,
+    renames,
+  );
+}
+
+/** 帝国範囲の強調状態を更新し、変化があればレイヤーを再構築して反映する */
+function applyHreHighlight(next: boolean): void {
+  if (next === hreHighlighted) return;
+  hreHighlighted = next;
+  renderLayers();
 }
 
 /**
@@ -337,6 +401,11 @@ function handlePickHover(info: PickingInfo): void {
  *   layer: null の info で呼ばれることを @deck.gl/core の実装で確認済み）
  */
 function handlePickClick(info: PickingInfo): void {
+  // TASK-30 AC #2/#3: クリックでも帝国範囲の強調/解除を反映する（デスクトップ
+  // ではホバー経路で既に反映済みだが、ホバーの無いタッチ操作でも成立させる。
+  // 別の場所（河川・都市・非 HRE 勢力・空白）のクリックは false 側へ倒れて
+  // 強調が解除される）
+  applyHreHighlight(hreHighlightFromPick(info));
   const layerId = info.layer?.id;
   if (layerId === RIVERS_LAYER_ID && info.object !== undefined) {
     const name = riverNameFor((info.object as Feature).properties);
@@ -494,9 +563,38 @@ function buildCityLabelLayer(
 }
 
 /**
+ * HRE 帝国範囲の強調オーバーレイ（GeoJsonLayer）を生成する（TASK-30 AC #2〜#4）。
+ * データは base の HRE 本体ポリゴン（extractHreExtent）で、領邦オーバーレイの
+ * 有無に依らず帝国全体の輪郭が取れる。太い臙脂の外縁線 + ごく薄い塗りで
+ * 「どこからどこまでが帝国か」を一目で示す。pickable: false のため picking の
+ * 優先順位（PICKING_PRIORITY）・ツールチップ・パネルには一切関与しない
+ * （AC #5）。強調の on/off は visible で切り替え、レイヤー ID を保って
+ * deck.gl の差分更新に任せる。
+ */
+function buildHreExtentLayer(
+  year: number,
+  base: FeatureCollection,
+): GeoJsonLayer {
+  return new GeoJsonLayer({
+    id: HRE_EXTENT_LAYER_ID,
+    data: extractHreExtent(base),
+    visible: hreHighlighted,
+    pickable: false,
+    stroked: true,
+    filled: true,
+    getFillColor: HRE_EXTENT_FILL_COLOR,
+    getLineColor: HRE_EXTENT_LINE_COLOR,
+    lineWidthUnits: "pixels",
+    getLineWidth: HRE_EXTENT_LINE_WIDTH_PX,
+    opacity: 1,
+    updateTriggers: { getFillColor: [year], getLineColor: [year] },
+  });
+}
+
+/**
  * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
- * 反映する。描画順（配列順 = 下から上）: powers → hre-powers → cities →
- * rivers → power-labels → river-labels → city-labels。
+ * 反映する。描画順（配列順 = 下から上）: powers → hre-powers → hre-extent →
+ * cities → rivers → power-labels → river-labels → city-labels。
  *
  * TASK-29: pickable レイヤーの並びは picking.ts の PICKING_PRIORITY
  * （河川 > 都市 > HRE > 勢力。先頭が最優先）から導出する。deck.gl の picking
@@ -516,19 +614,25 @@ function renderLayers(): void {
     [CITY_LAYER_ID]: () => buildCityMarkerLayer(year),
     [RIVERS_LAYER_ID]: () => buildRiversLineLayer(),
   };
-  const layers = [
-    // picking 優先順（PICKING_PRIORITY）の逆順 = 下→上の描画順で並べる
-    ...renderOrderFromPickingPriority(PICKING_PRIORITY).map((id) => {
-      const build = buildPickableLayer[id];
-      if (build === undefined) {
-        throw new Error(`PICKING_PRIORITY のレイヤー ${id} に builder が無い`);
-      }
-      return build();
-    }),
+  const layers: Layer[] = [];
+  // picking 優先順（PICKING_PRIORITY）の逆順 = 下→上の描画順で並べる
+  for (const id of renderOrderFromPickingPriority(PICKING_PRIORITY)) {
+    const build = buildPickableLayer[id];
+    if (build === undefined) {
+      throw new Error(`PICKING_PRIORITY のレイヤー ${id} に builder が無い`);
+    }
+    layers.push(build());
+    // TASK-30: 帝国範囲の強調は powers/hre-powers の上・cities の下に挿入する
+    // （領邦の塗りの上に輪郭が乗り、都市マーカー・河川は隠さない）。
+    // pickable: false のため PICKING_PRIORITY 外の ID で、整合検証では
+    // 無視される（layerOrderMatchesPickingPriority の既存仕様）。
+    if (id === HRE_LAYER_ID) layers.push(buildHreExtentLayer(year, base));
+  }
+  layers.push(
     buildLabelLayer(year, base, hre),
     buildRiverLabelLayer(),
     buildCityLabelLayer(year),
-  ];
+  );
   if (!layerOrderMatchesPickingPriority(layers.map((l) => l.id))) {
     throw new Error("レイヤー順が PICKING_PRIORITY と整合していない");
   }
@@ -550,9 +654,11 @@ function buildLabelLayer(
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
   // TASK-23: ラベルは name-ja.json で日本語化する（未登録 NAME は英語のまま）。
   // characterSet はラベル文字列から導出するため日本語グリフも自動で生成される。
+  // TASK-30: kind（base/hre）を付与し、HRE 領邦ラベルだけ帝国色で塗り分ける。
+  // TextLayer は 1 枚のまま・衝突制御（共有空間・priority）も従来どおり。
   const data = [
-    ...buildLabelData(base, nameJa),
-    ...buildLabelData(hre, nameJa),
+    ...buildLabelData(base, nameJa, "base"),
+    ...buildLabelData(hre, nameJa, "hre"),
   ];
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
     id: LABEL_LAYER_ID,
@@ -560,10 +666,12 @@ function buildLabelLayer(
     pickable: false,
     getText: (d) => d.text,
     getPosition: (d) => d.position,
-    // 13px 固定・濃色文字 + 白 halo（SDF アウトライン）で塗りの上でも判読できる
+    // 13px 固定・濃色文字 + 白 halo（SDF アウトライン）で塗りの上でも判読できる。
+    // TASK-30 AC #1: 文字色は kind で塗り分け（独立国 = 濃グレー、HRE 域内の
+    // 領邦 = 臙脂 HRE_LABEL_COLOR）。ラベルだけで域内/域外を区別できる。
     getSize: 13,
     sizeUnits: "pixels",
-    getColor: [40, 40, 40, 255],
+    getColor: (d: LabelDatum) => [...labelColorFor(d)],
     fontFamily: "sans-serif",
     fontWeight: 600,
     fontSettings: { sdf: true },
