@@ -6,6 +6,7 @@ import {
   INITIAL_CENTER,
   INITIAL_YEAR,
   INITIAL_ZOOM,
+  MAP_MAX_BOUNDS,
   MAX_ZOOM,
   MIN_ZOOM,
   SNAPSHOT_YEARS,
@@ -23,9 +24,28 @@ Deno.test("MIN_ZOOM は MAX_ZOOM より小さい", () => {
   assert(MIN_ZOOM < MAX_ZOOM);
 });
 
-Deno.test("MIN_ZOOM は 3、MAX_ZOOM は 8 である", () => {
-  assertEquals(MIN_ZOOM, 3);
+Deno.test("MIN_ZOOM は 4、MAX_ZOOM は 8 である", () => {
+  // TASK-22: ヨーロッパ全域が一望できる下限に引き上げ（z3 は圏外まで見えすぎる）
+  assertEquals(MIN_ZOOM, 4);
   assertEquals(MAX_ZOOM, 8);
+});
+
+Deno.test("MAP_MAX_BOUNDS はヨーロッパ域 [[-25, 34], [60, 72]] である", () => {
+  // scripts/build-data.ts の EUROPE_BBOX ([-25, 34, 60, 72]) と同値であること
+  assertEquals(MAP_MAX_BOUNDS, [[-25, 34], [60, 72]]);
+});
+
+Deno.test("MAP_MAX_BOUNDS は南西・北東の順で矛盾がない", () => {
+  const [[west, south], [east, north]] = MAP_MAX_BOUNDS;
+  assert(west < east);
+  assert(south < north);
+});
+
+Deno.test("INITIAL_CENTER は MAP_MAX_BOUNDS の内側にある", () => {
+  const [[west, south], [east, north]] = MAP_MAX_BOUNDS;
+  const [lon, lat] = INITIAL_CENTER;
+  assert(west <= lon && lon <= east);
+  assert(south <= lat && lat <= north);
 });
 
 Deno.test("SNAPSHOT_YEARS は昇順である", () => {

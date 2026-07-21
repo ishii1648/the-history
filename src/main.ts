@@ -44,6 +44,7 @@ import {
   INITIAL_CENTER,
   INITIAL_YEAR,
   INITIAL_ZOOM,
+  MAP_MAX_BOUNDS,
   MAX_ZOOM,
   MIN_ZOOM,
   SNAPSHOT_YEARS,
@@ -60,12 +61,22 @@ if (!mapContainer) {
   throw new Error("#map 要素が見つかりません");
 }
 
-// AC #2/#3: 起動時に URL クエリから表示状態を復元する（不正値はパラメータ単位で
-// デフォルトへフォールバック）。地図の初期 center/zoom と初期年代はこの値を使う。
+// AC #2/#3: 起動時に URL クエリから表示状態を復元する（パース不能値はパラメータ
+// 単位でデフォルトへフォールバック、範囲外の zoom / center はヨーロッパ域
+// MAP_MAX_BOUNDS・MIN_ZOOM〜MAX_ZOOM 内へクランプ）。地図の初期 center/zoom と
+// 初期年代はこの値を使う（TASK-22: 範囲外 URL でも表示が制限範囲内に収まる）。
 const initialState = decodeState(
   globalThis.location.search,
   { year: INITIAL_YEAR, zoom: INITIAL_ZOOM, center: [...INITIAL_CENTER] },
-  { years: SNAPSHOT_YEARS, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM },
+  {
+    years: SNAPSHOT_YEARS,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM,
+    minLon: MAP_MAX_BOUNDS[0][0],
+    minLat: MAP_MAX_BOUNDS[0][1],
+    maxLon: MAP_MAX_BOUNDS[1][0],
+    maxLat: MAP_MAX_BOUNDS[1][1],
+  },
 );
 const initialYear = initialState.year;
 
@@ -84,6 +95,8 @@ const map = new maplibregl.Map({
   zoom: initialState.zoom,
   minZoom: MIN_ZOOM,
   maxZoom: MAX_ZOOM,
+  // TASK-22: パン・ズームアウトをヨーロッパ域内に制限する（圏外へは出られない）
+  maxBounds: MAP_MAX_BOUNDS,
 });
 
 let fallbackState = createFallbackState();
