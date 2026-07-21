@@ -24,14 +24,17 @@ export function getStaticCopyTargets(
 
 /**
  * 存在する場合のみ dist/ にコピーする任意ファイルの一覧を返す（純粋関数）。
- * data/europe.pmtiles は `deno task extract-pmtiles` で生成される成果物で、
- * CI 等の未生成環境ではスキップしてビルドは成功させる（警告表示のみ）。
+ * data/europe.pmtiles は `deno task extract-pmtiles`、data/europe-dem.pmtiles は
+ * `deno task extract-dem` で生成される成果物で、CI 等の未生成環境では
+ * スキップしてビルドは成功させる（警告表示のみ）。
  */
 export function getOptionalCopyTargets(
   distDir: string,
 ): Array<{ from: string; to: string }> {
   return [
     { from: "data/europe.pmtiles", to: `${distDir}/europe.pmtiles` },
+    // TASK-34: 地形（起伏・陰影）用 DEM タイル（deno task extract-dem で生成）
+    { from: "data/europe-dem.pmtiles", to: `${distDir}/europe-dem.pmtiles` },
   ];
 }
 
@@ -215,9 +218,12 @@ async function copyOptionalFiles(distDir: string): Promise<void> {
       if (!(error instanceof Deno.errors.NotFound)) {
         throw error;
       }
+      const task = from.includes("europe-dem")
+        ? "extract-dem"
+        : "extract-pmtiles";
       console.warn(
         `警告: ${from} が見つからないためコピーをスキップします` +
-          `（ベースマップ表示には \`deno task extract-pmtiles\` での生成が必要）`,
+          `（表示には \`deno task ${task}\` での生成が必要）`,
       );
     }
   }
