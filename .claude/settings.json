@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(backlog *)"
+      "Bash(backlog *)",
+      "Bash(gh pr merge *)"
     ]
   }
 }
