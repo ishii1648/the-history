@@ -39,10 +39,10 @@
    でテストを常時実行し、red/green
    を即座に確認しながら実装する（`deno task test:watch` として task-1
    で整備予定）。
-2. **中間ループ（実装完了〜PR前・エージェント自律）**: 実装が一通り終わったら
-   `/review-loop` を使い、逆側のエージェント（Claude 実装なら Codex、Codex
-   実装なら Claude）にレビューさせ、指摘を修正して APPROVED
-   になるまで自動で収束させる。
+2. **中間ループ（実装完了〜PR前・エージェント自律）**: 実装は subagent
+   に委譲する。実装が一通り終わったら mainagent が diff をレビューし、指摘が
+   あれば subagent に修正を指示して、mainagent が問題なしと判断するまで
+   収束させる（codex など外部エージェントによるレビューは行わない）。
 3. **外側ループ（PR ゲート・CI）**: PR 作成後は CI（fmt / lint / test /
    build）が green になるまでマージしない。CI が red の場合は修正してから再度
    push し、このループを回す。

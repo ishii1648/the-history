@@ -43,8 +43,10 @@ consistent.
   タスクと紐づくようにする。
 - TDD は必須: 実装より先にテストを書き、red（失敗）を確認してから green
   にする。詳細は `docs/development-style.md` を参照。
-- 標準タスクフロー: backlog タスク → ブランチ作成 → テスト先行 → 実装 →
-  `deno test` green → `/review-loop` で収束 → PR 作成（TASK ID 明記）→ CI green
-  → マージ → backlog finalization。
+- エージェント分担: 実装は subagent に委譲し、レビューは mainagent
+  自身が行う。codex など外部エージェントによるレビューは行わない。
+- 標準タスクフロー: backlog タスク → ブランチ作成 → テスト先行 → 実装
+  （subagent に委譲）→ `deno test` green → mainagent によるレビューで収束 →
+  PR 作成（TASK ID 明記）→ CI green → マージ → backlog finalization。
 - タスクは Acceptance Criteria が全てチェック済みかつ CI が green の場合にのみ
   Done となる。
