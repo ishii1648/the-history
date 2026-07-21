@@ -3,7 +3,7 @@ import type { StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol } from "pmtiles";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { PickingInfo } from "@deck.gl/core";
-import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import {
   CollisionFilterExtension,
   type CollisionFilterExtensionProps,
@@ -35,6 +35,14 @@ import {
   RIVERS_DATA_URL,
   toggleRiverSelection,
 } from "./rivers.ts";
+import {
+  buildCityLabelData,
+  buildCityMarkerData,
+  CITIES_DATA_URL,
+  type CitiesData,
+  cityEntriesForYear,
+  type CityMarkerDatum,
+} from "./cities.ts";
 import {
   clearErrors,
   createLoadingState,
@@ -180,6 +188,16 @@ const RIVERS_LAYER_ID = "rivers";
 const RIVER_LABEL_LAYER_ID = "river-labels";
 
 /**
+ * 主要都市マーカー（ScatterplotLayer）のレイヤー ID（TASK-27）。
+ * hre-powers の上・rivers の下に置く。picking は上のレイヤーが勝つため、
+ * この配置で優先順位が 河川 > 都市 > 国名（勢力ポリゴン）になる（AC #6）。
+ */
+const CITY_LAYER_ID = "cities";
+
+/** 都市名ラベル（TextLayer）のレイヤー ID（TASK-27） */
+const CITY_LABEL_LAYER_ID = "city-labels";
+
+/**
  * picking の許容半径（px）。細い河川ライン（通常 2px）でもカーソルが多少
  * ずれた位置のクリック/ホバーを拾えるようにする（TASK-24 AC #2）。
  */
@@ -208,6 +226,12 @@ const dataLoader = createCombinedYearLoader(
 
 /** 主要河川 GeoJSON（起動時に 1 度ロード。失敗時は空のまま河川なしで継続） */
 let riversData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
+
+/**
+ * 主要都市データ（TASK-27。起動時に 1 度ロード）。
+ * 取得失敗・未生成時は空のまま都市なしで継続する（colors.json 等と同様）。
+ */
+let citiesData: CitiesData = { years: {} };
 
 /** クリックで選択（強調）中の河川名。null は未選択（TASK-24 AC #2） */
 let selectedRiverName: string | null = null;
@@ -275,13 +299,18 @@ function buildPowerLayer(
 /**
  * picking 結果からツールチップ/パネル用の表示ラベルを整形する（TASK-24）。
  * - rivers: 河川名（name-ja.json 適用。未登録は英語のまま）
+ * - cities: 都市名（TASK-27。name-ja.json 適用。未登録は英語のまま）
  * - powers / hre-powers: 勢力ラベル（displayLabel。宗主国込み表記）
  * - それ以外（picking なし・ラベル系レイヤー）は null
  */
 function pickedLabel(info: PickingInfo): string | null {
   const layerId = info.layer?.id;
-  const feature = info.object as Feature | undefined;
-  if (feature === undefined || layerId === undefined) return null;
+  if (info.object === undefined || layerId === undefined) return null;
+  if (layerId === CITY_LAYER_ID) {
+    const name = (info.object as CityMarkerDatum).name;
+    return nameJa[name] ?? name;
+  }
+  const feature = info.object as Feature;
   if (layerId === RIVERS_LAYER_ID) {
     const name = riverNameFor(feature.properties);
     return name === null ? null : nameJa[name] ?? name;
@@ -321,7 +350,8 @@ function handlePickClick(info: PickingInfo): void {
     }
     return;
   }
-  // 河川以外（勢力ポリゴン・空白）のクリックは選択を解除する
+  // 河川以外（都市マーカー・勢力ポリゴン・空白）のクリックは河川選択を解除し、
+  // picking があれば整形済みラベル（都市名/勢力名）をパネルへ出す（TASK-27）
   applyRiverSelection(null);
   const label = pickedLabel(info);
   if (label !== null) showInfoPanel(label);
@@ -398,9 +428,79 @@ function buildRiverLabelLayer(): TextLayer<
 }
 
 /**
- * 現在の年代データ + 河川 + ラベルの全レイヤーを組み立てて overlay へ反映する。
- * 描画順（配列順 = 下から上）: powers → hre-powers → rivers → power-labels →
- * river-labels。河川ラインは勢力の半透明塗りの上・ラベルの下に置く（TASK-24）。
+ * 主要都市マーカーの ScatterplotLayer を生成する（TASK-27 AC #1/#3/#6）。
+ * 小さな濃色ドット + 白縁で、勢力の半透明塗りの上でも視認できるようにする。
+ * レイヤー順は hre-powers の上・rivers の下（renderLayers）に置き、picking の
+ * 優先順位を 河川 > 都市 > 国名 にする。年代切替では同一 ID のまま
+ * cityEntriesForYear で該当年のデータへ差し替えるだけにする。
+ */
+function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
+  return new ScatterplotLayer<CityMarkerDatum>({
+    id: CITY_LAYER_ID,
+    data: buildCityMarkerData(cityEntriesForYear(citiesData, year)),
+    pickable: true,
+    getPosition: (d) => d.position,
+    // 3px の固定ドット。国土に対する「点」の記号で、ズームに追従させない
+    radiusUnits: "pixels",
+    getRadius: 3,
+    // ラベルと同系の濃茶 fill + 白 stroke（塗りの上でも沈まない）
+    getFillColor: [90, 46, 16, 255],
+    stroked: true,
+    lineWidthUnits: "pixels",
+    getLineWidth: 1,
+    getLineColor: [255, 255, 255, 230],
+    updateTriggers: { getPosition: [year] },
+  });
+}
+
+/**
+ * 都市名ラベルの TextLayer を生成する（TASK-27 AC #2/#4）。
+ * 文字色は濃茶（#793E16）。国名ラベルの濃グレー [40,40,40]・河川ラベルの
+ * 水色と明確に異なり、白 halo 付きで一見して都市と区別できる。サイズは
+ * 河川ラベルと同じ 11px（国名 13px より控えめ）で、マーカーの右上へ
+ * ピクセルオフセットしてドットとラベルが重ならないようにする。
+ * CollisionFilterExtension は国名・河川ラベルと同一衝突空間
+ * （collisionTestProps.sizeScale: 2）に参加させ、人口由来の都市固定バンド
+ * priority（cities.ts）で大国ラベルに譲りつつ小勢力ラベルとは競らせる。
+ * pickable: false でマーカー・ポリゴンの picking を妨げない。
+ */
+function buildCityLabelLayer(
+  year: number,
+): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
+  const data = buildCityLabelData(cityEntriesForYear(citiesData, year), nameJa);
+  return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
+    id: CITY_LABEL_LAYER_ID,
+    data,
+    pickable: false,
+    getText: (d) => d.text,
+    getPosition: (d) => d.position,
+    getSize: 11,
+    sizeUnits: "pixels",
+    getColor: [121, 62, 22, 255],
+    fontFamily: "sans-serif",
+    fontWeight: 600,
+    fontSettings: { sdf: true },
+    outlineWidth: 2,
+    outlineColor: [255, 255, 255, 220],
+    // マーカー（3px + 白縁）の右上に寄せ、ドットを覆わない
+    getPixelOffset: [6, -6],
+    getTextAnchor: "start",
+    getAlignmentBaseline: "bottom",
+    // 日本語都市名（パリ 等）のグリフもラベル文字列から自動生成する
+    characterSet: characterSetFrom(data.map((d) => d.text)),
+    updateTriggers: { getText: [year], getPosition: [year] },
+    extensions: [new CollisionFilterExtension()],
+    collisionTestProps: { sizeScale: 2 },
+    getCollisionPriority: (d: LabelDatum) => d.priority,
+  });
+}
+
+/**
+ * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
+ * 反映する。描画順（配列順 = 下から上）: powers → hre-powers → cities →
+ * rivers → power-labels → river-labels → city-labels。河川ラインは勢力の
+ * 半透明塗りの上・ラベルの下に置き（TASK-24）、都市マーカーは hre-powers の
+ * 上・rivers の下に置いて picking を 河川 > 都市 > 国名 にする（TASK-27）。
  * 年代切替と河川選択の変更はどちらもこの関数経由で反映し、レイヤー id を
  * 保つことで deck.gl の差分更新に任せる。
  */
@@ -411,9 +511,11 @@ function renderLayers(): void {
     layers: [
       buildPowerLayer(POWER_LAYER_ID, year, base),
       buildPowerLayer(HRE_LAYER_ID, year, hre),
+      buildCityMarkerLayer(year),
       buildRiversLineLayer(),
       buildLabelLayer(year, base, hre),
       buildRiverLabelLayer(),
+      buildCityLabelLayer(year),
     ],
   });
 }
@@ -882,17 +984,38 @@ async function loadRivers(): Promise<void> {
   }
 }
 
+/**
+ * cities.json（年 → 主要都市配列）を取得する（TASK-27）。
+ * 失敗・未生成時は空のまま都市なしで継続する（colors.json 等と同様）。
+ * 形の検証は表示時の cityEntriesForYear が行うため、ここでは丸ごと保持する。
+ */
+async function loadCities(): Promise<void> {
+  try {
+    const res = await fetch(CITIES_DATA_URL);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    citiesData = await res.json() as CitiesData;
+  } catch (error) {
+    console.warn(
+      `cities.json の取得に失敗しました。都市なしで継続します: ${
+        String(error)
+      }`,
+    );
+  }
+}
+
 /** 初期年代の勢力圏を描画する。例外で地図全体を落とさない */
 async function initPowerLayer(): Promise<void> {
   try {
     // TASK-23: name-ja.json のロード完了を待ってから初期描画するため、初期
     // ラベル・ツールチップは最初から日本語で表示される（失敗時のみ英語継続）。
     // TASK-24: rivers.geojson も初期描画前に揃え、初回から河川を重ねる。
+    // TASK-27: cities.json も同様に揃え、初回から都市マーカーを重ねる。
     await Promise.all([
       loadColors(),
       loadOverrides(),
       loadNameJa(),
       loadRivers(),
+      loadCities(),
     ]);
     await switchYear(initialYear);
   } catch (error) {
