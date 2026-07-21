@@ -36,6 +36,13 @@ export const MIN_LABEL_PRIORITY = -1000;
 /** CollisionFilterExtension getCollisionPriority の許容レンジ上限 */
 export const MAX_LABEL_PRIORITY = 1000;
 
+/**
+ * 勢力ラベルの由来種別（TASK-30）。
+ * - "base": 独立国など base データ（europe_*）由来
+ * - "hre": HRE 領邦オーバーレイ（hre_*）由来
+ */
+export type LabelKind = "base" | "hre";
+
 /** TextLayer に渡すラベル 1 件分のデータ */
 export interface LabelDatum {
   /** 表示テキスト（NAME） */
@@ -44,6 +51,31 @@ export interface LabelDatum {
   position: [number, number];
   /** 衝突制御の優先度（大きいほど優先。MIN..MAX_LABEL_PRIORITY） */
   priority: number;
+  /** 由来種別（TASK-30 の文字色分け用。省略時は base 扱い） */
+  kind?: LabelKind;
+}
+
+/** ラベル文字色の RGBA */
+export type LabelColor = readonly [number, number, number, number];
+
+/** 独立国など通常ラベルの文字色（濃グレー。TASK-20 から不変） */
+export const BASE_LABEL_COLOR: LabelColor = [40, 40, 40, 255];
+
+/**
+ * HRE 域内領邦ラベルの文字色（TASK-30 AC #1）。
+ * 臙脂（えんじ）系の深い赤。既存のラベル色 — 国名の濃グレー [40,40,40]・
+ * 都市の茶 [121,62,22]・河川の水色 [2,119,189] — のいずれとも色相が離れて
+ * おり、白 halo 上で判読しつつ「帝国系」の記号として一目で区別できる。
+ * 帝国範囲の強調レイヤー（main.ts hre-extent）と同系色で揃える。
+ */
+export const HRE_LABEL_COLOR: LabelColor = [140, 30, 30, 255];
+
+/**
+ * ラベルの文字色を由来種別から決める（純粋関数、TASK-30 AC #1）。
+ * kind=hre のみ帝国色、それ以外（base・省略）は従来の濃グレー。
+ */
+export function labelColorFor(d: Pick<LabelDatum, "kind">): LabelColor {
+  return d.kind === "hre" ? HRE_LABEL_COLOR : BASE_LABEL_COLOR;
 }
 
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */
@@ -144,10 +176,13 @@ export function labelPriorityFor(feature: Feature): number {
  * FeatureCollection を TextLayer 用のラベルデータへ変換する（純粋関数）。
  * NAME が無い・ポリゴンを持たない feature は除外する。
  * TASK-23: ja を渡すと text を日本語表記にする（未登録 NAME は英語のまま）。
+ * TASK-30: kind を渡すと全 datum に由来種別を付与する（文字色分け用）。
+ * 省略時は kind キー自体を持たない（従来の呼び出しと完全互換）。
  */
 export function buildLabelData(
   fc: FeatureCollection,
   ja: Record<string, string> = {},
+  kind?: LabelKind,
 ): LabelDatum[] {
   const data: LabelDatum[] = [];
   for (const feature of fc.features) {
@@ -155,7 +190,13 @@ export function buildLabelData(
     if (text === null) continue;
     const position = labelAnchorFor(feature);
     if (position === null) continue;
-    data.push({ text, position, priority: labelPriorityFor(feature) });
+    const datum: LabelDatum = {
+      text,
+      position,
+      priority: labelPriorityFor(feature),
+    };
+    if (kind !== undefined) datum.kind = kind;
+    data.push(datum);
   }
   return data;
 }
