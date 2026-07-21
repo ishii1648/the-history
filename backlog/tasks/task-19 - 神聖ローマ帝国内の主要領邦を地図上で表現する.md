@@ -1,11 +1,11 @@
 ---
 id: TASK-19
 title: 神聖ローマ帝国内の主要領邦を地図上で表現する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 12:09'
-updated_date: '2026-07-21 12:42'
+updated_date: '2026-07-21 13:03'
 labels: []
 dependencies: []
 references:
@@ -25,10 +25,10 @@ ordinal: 19000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 HRE が存在するスナップショット年代のうち少なくとも代表的な年代（例: 1500）で、主要諸侯（オーストリア・ブランデンブルク・ザクセン・バイエルン・ボヘミアを含む）が個別の色・ポリゴンで識別できる
-- [ ] #2 HRE 全体の外縁境界も引き続き視認できる（領邦表示によって帝国の範囲が分からなくならない）
-- [ ] #3 追加データの出典・ライセンスが data/index.json またはフッター表記に反映されている
-- [ ] #4 追加・変更したデータ処理ロジックにテストがあり deno test が green
+- [x] #1 HRE が存在するスナップショット年代のうち少なくとも代表的な年代（例: 1500）で、主要諸侯（オーストリア・ブランデンブルク・ザクセン・バイエルン・ボヘミアを含む）が個別の色・ポリゴンで識別できる
+- [x] #2 HRE 全体の外縁境界も引き続き視認できる（領邦表示によって帝国の範囲が分からなくならない）
+- [x] #3 追加データの出典・ライセンスが data/index.json またはフッター表記に反映されている
+- [x] #4 追加・変更したデータ処理ロジックにテストがあり deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -44,3 +44,21 @@ ordinal: 19000
    - A/B 間の契約: URL "/data/hre_<year>.geojson"（year ∈ {1500,1530,1600,1650}）、properties は NAME（英語名）/ SUBJECTO="Holy Roman Empire"、colors.json キーは "NAME|Holy Roman Empire"。担当ファイルは互いに素。
 6. TDD: 各 subagent がテスト先行（red→green）。統合後 mainagent レビュー → 全チェック green → PR → CI 監視 → 目視確認（1500 で領邦の色分け・HRE 外縁・ツールチップ）→ finalization → マージ → マージ後動作確認
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: dev サーバ + Chrome で 1500 年を目視確認。Austria・Brandenburg・Bohemia・Bavaria・Electoral/Ducal Saxony・Palatinate・Mainz・Trier・Cologne・Württemberg・Hesse・Salzburg が個別色ポリゴンで識別可能。1650 では領邦構成の年代差（ザクセン選帝侯領の拡大、Hesse-Kassel/Darmstadt 分割）も反映されることを確認。ツールチップは「Bohemia — Holy Roman Empire 領」形式で表示。
+- AC#2: 領邦オーバーレイ表示中も HRE 外縁の白境界線と帝国全体の塗りが維持されることを 1500/1650 のスクリーンショットで確認。非対象年（1700）は従来どおり単一表示。
+- AC#3: フッターに「帝国領邦: ETH Zürich (Roller)（CC BY-NC-SA 4.0）」を DOI リンク付きで表示（目視確認 + basemap/index.html のコード）。CC BY-NC-SA データは GPL-3.0 派生の europe_<year>.geojson と別ファイル（data/hre_<year>.geojson）に分離。
+- AC#4: deno fmt --check / deno lint / deno test（246 passed / 0 failed）/ deno task build 全 green。PR #29 の CI pass。
+- 実装: subagent 2 並列（worktree isolation、データ側 3b72b7a / 表示側 4e608c3）+ TDD。mainagent レビューで HRE_OVERLAY_YEARS の定義元を src/config.ts に統一（fa81ca3）。
+- 留意点: colors.json 再生成で既存 60 キーの色がプロービング連鎖のずれにより変化（決定的割当・全色相異は維持）。ETH データの欠損は HRE_RANGE_OVERRIDES で補正（Bayern 1500-1806 近似等）。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+ETH Zürich Roller データセット（DOI 10.3929/ethz-b-000472583, CC BY-NC-SA 4.0, bitstream UUID ピン留め）から scripts/build-hre.ts で主要領邦 15 勢力を抽出し data/hre_{1500,1530,1600,1650}.geojson を生成。buildColorMap に独立色化拡張（HRE 配下は NAME ベースのプロービング色）を加え、フロントは base+overlay の複合ローダと hre-powers レイヤーで powers の上に重ねる。NC ライセンスのため GPL 派生データとはファイル分離し出典をフッターに明記。検証は deno test 246 passed・CI pass・Chrome での 1500/1650/1700 目視確認。
+<!-- SECTION:FINAL_SUMMARY:END -->
