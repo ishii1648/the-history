@@ -65,6 +65,13 @@ import {
   createReplaceStateUpdater,
   decodeState,
 } from "./url_state.ts";
+import {
+  ariaExpandedValue,
+  createFooterState,
+  type FooterEvent,
+  isContentHidden,
+  reduceFooterEvent,
+} from "./footer.ts";
 
 const mapContainer = document.getElementById("map");
 if (!mapContainer) {
@@ -505,6 +512,59 @@ function setupInfoUI(): void {
 }
 
 setupInfoUI();
+
+/**
+ * attribution フッターの折りたたみ UI を配線する（TASK-26）。
+ * 状態遷移は footer.ts の reducer（純粋関数）に集約し、ここでは
+ * 「イベント → reducer → aria-expanded / hidden の同期」だけを行う。
+ * - ⓘボタン click でトグル（native button なので Enter/Space は標準動作。AC #4）
+ * - フッター外の click / Escape キーで折りたたみ（展開時のみ。AC #3）
+ */
+function setupFooter(): void {
+  const footer = document.getElementById("app-footer");
+  const toggle = document.getElementById("footer-toggle") as
+    | HTMLButtonElement
+    | null;
+  const content = document.getElementById("footer-content");
+  if (!footer || !toggle || !content) {
+    console.warn("フッター UI 要素が見つからないため配線をスキップします");
+    return;
+  }
+
+  let state = createFooterState();
+
+  /** 現在の状態を aria-expanded / hidden へ反映する（AC #1/#2/#4） */
+  function render(): void {
+    toggle!.setAttribute("aria-expanded", ariaExpandedValue(state));
+    content!.hidden = isContentHidden(state);
+  }
+
+  function dispatch(event: FooterEvent): void {
+    state = reduceFooterEvent(state, event);
+    render();
+  }
+
+  toggle.addEventListener("click", () => dispatch("toggle"));
+
+  // AC #3: 展開中にフッター外をクリック/タップしたら折りたたむ。
+  // ⓘボタン自身のクリックは footer 内なのでここでは処理せず、二重発火しない。
+  document.addEventListener("click", (e) => {
+    if (!state.expanded) return;
+    if (e.target instanceof Node && footer!.contains(e.target)) return;
+    dispatch("outside-click");
+  });
+
+  // AC #3/#4: Escape キーで折りたたむ（未展開時は reducer が状態を変えない）
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!state.expanded) return;
+    dispatch("escape");
+  });
+
+  render();
+}
+
+setupFooter();
 
 // タイムライン UI への「反映」フック（setupTimeline が実体を差し込む）。
 // applyFn（最新要求のみ）から呼ぶことで、古い要求で年表示・スライダーが
