@@ -89,6 +89,18 @@ import {
   reduceFooterEvent,
 } from "./footer.ts";
 import {
+  createNotesState,
+  isNotesPanelHidden,
+  NOTES_DATA_URL,
+  notesAriaExpanded,
+  type NotesData,
+  type NotesEvent,
+  notesForYear,
+  notesHeadingFor,
+  parseNotesData,
+  reduceNotesEvent,
+} from "./notes.ts";
+import {
   CITY_LAYER_ID,
   HRE_LAYER_ID,
   layerOrderMatchesPickingPriority,
@@ -807,6 +819,108 @@ function setupFooter(): void {
 
 setupFooter();
 
+// ---- 年代ごとの歴史解説パネル（TASK-33）----
+
+/**
+ * 解説データ（/data/notes.json）。取得失敗・未生成時は null のままで、
+ * トグルボタンごと非表示にして従来表示を維持する（colors.json 等と同様）。
+ */
+let notesData: NotesData | null = null;
+
+// 解説 UI への反映フック（setupNotesUI が実体を差し込む）。
+// reflectYearToNotes は applyFn（最新要求のみ）から呼ばれ、確定した年の解説へ
+// 内容を差し替える（reflectYearToTimeline と同じタイミング保証）。
+let reflectYearToNotes: (year: number) => void = () => {};
+
+// loadNotes 成功時にトグルボタンを表示するフック（欠如時は hidden のまま）
+let revealNotesToggle: () => void = () => {};
+
+/**
+ * 年代解説パネルの DOM を配線する（TASK-33）。
+ * 状態遷移は notes.ts の reducer（純粋関数）に集約し、ここでは
+ * 「イベント → reducer → aria-expanded / hidden の同期」と内容描画だけを行う。
+ * - 「解説」トグル click で開閉（native button なので Enter/Space は標準動作）
+ * - Escape キーで折りたたみ（展開時のみ）
+ * - outside-click では閉じない（地図クリック操作で解説が誤って閉じないため。
+ *   方針は notes.ts の先頭コメント参照）
+ */
+function setupNotesUI(): void {
+  const toggle = document.getElementById("notes-toggle") as
+    | HTMLButtonElement
+    | null;
+  const panel = document.getElementById("notes-panel");
+  const heading = document.getElementById("notes-heading");
+  const points = document.getElementById("notes-points");
+  const summary = document.getElementById("notes-summary");
+  if (!toggle || !panel || !heading || !points || !summary) {
+    console.warn("解説 UI 要素が見つからないため配線をスキップします");
+    return;
+  }
+
+  let state = createNotesState();
+  let currentYear: number | null = null;
+
+  /** 現在の状態を aria-expanded / hidden へ反映する */
+  function render(): void {
+    toggle!.setAttribute("aria-expanded", notesAriaExpanded(state));
+    panel!.hidden = isNotesPanelHidden(state);
+  }
+
+  /**
+   * 指定年の解説を見出し・箇条書き・まとめへ描画する。
+   * その年の解説が欠落・不正形（notesForYear が null）の場合は箇条書きを
+   * 空にして案内文だけ出す（データ契約上は全 20 年分あるため防御的措置）。
+   */
+  function renderContent(year: number): void {
+    heading!.textContent = notesHeadingFor(year);
+    const entry = notesData === null ? null : notesForYear(notesData, year);
+    if (entry === null) {
+      points!.replaceChildren();
+      summary!.textContent = "この年代の解説はまだありません。";
+      return;
+    }
+    points!.replaceChildren(...entry.points.map((p) => {
+      const li = document.createElement("li");
+      li.textContent = p;
+      return li;
+    }));
+    summary!.textContent = entry.summary;
+  }
+
+  function dispatch(event: NotesEvent): void {
+    state = reduceNotesEvent(state, event);
+    render();
+  }
+
+  toggle.addEventListener("click", () => dispatch("toggle"));
+
+  // Escape キーで折りたたむ（未展開時は何もしない）
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!state.expanded) return;
+    dispatch("escape");
+  });
+
+  // AC #1: 年代切替の確定（applyFn。最新要求のみ到達）に追従して内容を
+  // 差し替える。展開中でも即時に新しい年の解説へ切り替わる。
+  reflectYearToNotes = (year) => {
+    currentYear = year;
+    renderContent(year);
+  };
+
+  // notes.json のロード成功時のみトグルを表示する。ロード前に年が確定して
+  // いた場合（通常は Promise.all で先にロードが終わるため起きない）にも
+  // 備えて内容を描き直す。
+  revealNotesToggle = () => {
+    toggle!.hidden = false;
+    if (currentYear !== null) renderContent(currentYear);
+  };
+
+  render();
+}
+
+setupNotesUI();
+
 // タイムライン UI への「反映」フック（setupTimeline が実体を差し込む）。
 // applyFn（最新要求のみ）から呼ぶことで、古い要求で年表示・スライダーが
 // 巻き戻らないことを担保する（TASK-6 の UI 反映タイミング）。
@@ -825,6 +939,8 @@ const yearSwitcher = createYearSwitcher(
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
     reflectYearToTimeline(year);
+    // TASK-33 AC #1: 解説パネルも確定年に追従させる
+    reflectYearToNotes(year);
     // AC #1: 年代確定のたびに URL を現在の視点込みで同期する
     syncUrlToState();
   },
@@ -1142,6 +1258,27 @@ async function loadCities(): Promise<void> {
   }
 }
 
+/**
+ * notes.json（年 → 歴史解説）を取得する（TASK-33）。
+ * 失敗・未生成・不正形（parseNotesData が null）のときは notesData を null の
+ * まま維持し、revealNotesToggle を呼ばないためトグルボタンごと非表示になる
+ * （従来表示を一切変えない）。
+ */
+async function loadNotes(): Promise<void> {
+  try {
+    const res = await fetch(NOTES_DATA_URL);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const parsed = parseNotesData(await res.json());
+    if (parsed === null) throw new Error("years が不正または空");
+    notesData = parsed;
+    revealNotesToggle();
+  } catch (error) {
+    console.warn(
+      `notes.json の取得に失敗しました。解説なしで継続します: ${String(error)}`,
+    );
+  }
+}
+
 /** 初期年代の勢力圏を描画する。例外で地図全体を落とさない */
 async function initPowerLayer(): Promise<void> {
   try {
@@ -1149,12 +1286,15 @@ async function initPowerLayer(): Promise<void> {
     // ラベル・ツールチップは最初から日本語で表示される（失敗時のみ英語継続）。
     // TASK-24: rivers.geojson も初期描画前に揃え、初回から河川を重ねる。
     // TASK-27: cities.json も同様に揃え、初回から都市マーカーを重ねる。
+    // TASK-33: notes.json も初期描画前に揃え、初回の年確定（applyFn →
+    // reflectYearToNotes）の時点で解説を描画できるようにする。
     await Promise.all([
       loadColors(),
       loadOverrides(),
       loadNameJa(),
       loadRivers(),
       loadCities(),
+      loadNotes(),
     ]);
     await switchYear(initialYear);
   } catch (error) {
