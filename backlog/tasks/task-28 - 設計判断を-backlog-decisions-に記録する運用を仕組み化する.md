@@ -4,6 +4,7 @@ title: 設計判断を backlog decisions に記録する運用を仕組み化す
 status: To Do
 assignee: []
 created_date: '2026-07-21 14:32'
+updated_date: '2026-07-21 14:46'
 labels: []
 dependencies: []
 ordinal: 28000
@@ -17,7 +18,7 @@ ordinal: 28000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 設計判断を decision として記録する基準（何を記録し何を記録しないか）が docs/development-style.md に定義されている
+- [ ] #1 設計判断を decision として記録する基準（何を記録し何を記録しないか。タスク単位の実装意図・Why までは対象に含めず、タスク横断で影響する判断に粒度を絞る）が docs/development-style.md に定義されている
 - [ ] #2 agent-loop skill のタスク実行フローに decision 記録の判断ステップが組み込まれている
 - [ ] #3 過去タスクの主要な設計判断（現在も有効なもの）が backlog decision として遡及記録されている
 - [ ] #4 decision の一覧・参照方法（CLI コマンド）が docs/development-style.md に記載されている
