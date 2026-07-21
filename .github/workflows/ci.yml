@@ -28,7 +28,10 @@ jobs:
         if: steps.check_deno_config.outputs.exists == 'true'
         uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          # fmt の正準形が deno バージョン間で異なり CI とローカルで衝突するため、
+          # 開発環境と同一バージョンにピン留めして決定性を確保する（TASK-9 で発生、
+          # vendor CSS・空 div の整形が 2.7.14 と最新版で互いに非互換だった）
+          deno-version: "2.7.14"
 
       - name: deno fmt --check
         if: steps.check_deno_config.outputs.exists == 'true'
