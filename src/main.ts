@@ -19,6 +19,17 @@ import {
 } from "./powers.ts";
 import { displayLabel } from "./info.ts";
 import {
+  clearErrors,
+  createLoadingState,
+  failedYears,
+  failLoading,
+  hasError,
+  isSpinnerVisible,
+  type LoadingState,
+  startLoading,
+  succeedLoading,
+} from "./loading_state.ts";
+import {
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
   FALLBACK_STYLE_URL,
@@ -253,13 +264,98 @@ function syncUrlToState(): void {
 // AC #1: パン/ズーム確定（moveend）ごとに URL を更新。move 中の高頻度発火は拾わない。
 map.on("moveend", syncUrlToState);
 
+// ---- ローディング/エラー UI（TASK-9, docs/app-spec.md §5.4）----
+
+// ロード状態機械（DOM 非依存ロジックは loading_state.ts に集約）。
+// switchYear が開始/成功/失敗を通知し、setupLoadingUI が差し込む描画関数へ反映する。
+let loadingState = createLoadingState();
+
+// ロード状態を UI へ反映するフック（setupLoadingUI が実体を差し込む）。
+let renderLoadingUI: (state: LoadingState) => void = () => {};
+
+/** ロード状態を更新し、最新状態を UI へ反映する */
+function updateLoadingState(next: LoadingState): void {
+  loadingState = next;
+  renderLoadingUI(loadingState);
+}
+
 /**
  * 表示年代を切り替える（TASK-6 のスライダー・目視確認から呼ばれる公開 API）。
  * 連続呼び出し時は最後に要求した年代だけが反映される。
+ *
+ * TASK-9: ロードの開始/成功/失敗を loading_state へ通知してスピナー・トーストを制御する。
+ * - キャッシュ済み年代は fetch が発生しないためスピナーを出さない（開始を通知しない）。
+ * - 失敗しても reject を握りつぶし（トーストで再試行に誘導するため）、
+ *   `void switchYear(...)` 呼び出し側で未処理 rejection を出さない。
  */
 export function switchYear(year: number): Promise<void> {
-  return yearSwitcher.switchTo(year);
+  const cached = dataLoader.has(year);
+  if (!cached) updateLoadingState(startLoading(loadingState, year));
+  return yearSwitcher.switchTo(year).then(
+    () => {
+      if (!cached) updateLoadingState(succeedLoading(loadingState, year));
+    },
+    (error: unknown) => {
+      updateLoadingState(failLoading(loadingState, year));
+      console.error(
+        `年代 ${year} の GeoJSON 取得に失敗しました: ${String(error)}`,
+      );
+    },
+  );
 }
+
+/**
+ * スピナーとエラートースト（app-spec §5.4）の DOM を配線する。
+ * 表示可否は loading_state の状態機械から導出し、この関数は描画に徹する。
+ * - スピナー: 進行中のロードが 1 つ以上ある間だけ表示（キャッシュヒットでは出ない）
+ * - トースト: 失敗した年代があれば表示し、「再試行」で失敗年代を再取得、「閉じる」で消す
+ */
+function setupLoadingUI(): void {
+  const spinner = document.getElementById("loading-spinner");
+  const toast = document.getElementById("error-toast");
+  const toastMessage = document.getElementById("error-toast-message");
+  const retryBtn = document.getElementById("error-toast-retry") as
+    | HTMLButtonElement
+    | null;
+  const closeBtn = document.getElementById("error-toast-close") as
+    | HTMLButtonElement
+    | null;
+  if (!spinner || !toast || !toastMessage || !retryBtn || !closeBtn) {
+    console.warn(
+      "ローディング/エラー UI 要素が見つからないため配線をスキップします",
+    );
+    return;
+  }
+
+  renderLoadingUI = (state) => {
+    spinner.hidden = !isSpinnerVisible(state);
+    if (hasError(state)) {
+      const years = failedYears(state);
+      toastMessage.textContent = `${
+        years.join("・")
+      } 年の地図データ取得に失敗しました`;
+      toast.hidden = false;
+    } else {
+      toast.hidden = true;
+    }
+  };
+
+  // AC #3: 失敗した年代を再取得する。成功すれば hasError が false になりトーストが消える。
+  retryBtn.addEventListener("click", () => {
+    for (const year of failedYears(loadingState)) {
+      void switchYear(year);
+    }
+  });
+
+  // ユーザーが明示的に閉じたら失敗集合をクリアする（再試行はしない）
+  closeBtn.addEventListener("click", () => {
+    updateLoadingState(clearErrors(loadingState));
+  });
+
+  renderLoadingUI(loadingState);
+}
+
+setupLoadingUI();
 
 /**
  * タイムラインスライダー（app-spec §5.1）を組み立てて配線する。
