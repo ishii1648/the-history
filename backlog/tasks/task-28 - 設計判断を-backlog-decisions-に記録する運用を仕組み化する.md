@@ -4,8 +4,10 @@ title: 設計判断を backlog decisions に記録する運用を仕組み化す
 status: To Do
 assignee: []
 created_date: '2026-07-21 14:32'
-updated_date: '2026-07-21 14:46'
-labels: []
+updated_date: '2026-07-21 15:43'
+labels:
+  - 'area:docs'
+  - 'area:workflow'
 dependencies: []
 ordinal: 28000
 ---

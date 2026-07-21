@@ -9,7 +9,7 @@
 
 import { parse } from "@std/yaml";
 
-const TASKS_DIR = "backlog/tasks";
+export const TASKS_DIR = "backlog/tasks";
 const DEFAULT_TERMINAL_STATUSES = ["Done"];
 const DEFAULT_ACTIVE_STATUSES = ["In Progress"];
 
@@ -59,7 +59,7 @@ function taskIdNumber(id: string): number {
 }
 
 /** label "bug" を含むタスクを最優先 → ordinal 昇順（null は最後）→ ID の数値部分昇順の比較（純粋関数） */
-function compareTasks(a: TaskMeta, b: TaskMeta): number {
+export function compareTasks(a: TaskMeta, b: TaskMeta): number {
   const aIsBug = a.labels.includes("bug");
   const bIsBug = b.labels.includes("bug");
   if (aIsBug !== bIsBug) return aIsBug ? -1 : 1;
@@ -71,23 +71,34 @@ function compareTasks(a: TaskMeta, b: TaskMeta): number {
 }
 
 /**
- * 次に着手すべきタスクを選ぶ（純粋関数）。
+ * 着手可能な候補タスクを抽出する（純粋関数）。
  * 候補 = status が "To Do" かつ dependencies の全てが tasks 内に存在し
- * terminalStatuses に含まれるステータスであるタスク。候補の中から
- * label "bug" を含むタスクを最優先で選ぶ（compareTasks 参照）。候補がなければ null。
+ * terminalStatuses に含まれるステータスであるタスク。
  */
-export function selectNextTask(
+export function selectCandidates(
   tasks: TaskMeta[],
   terminalStatuses: string[] = DEFAULT_TERMINAL_STATUSES,
-): TaskMeta | null {
+): TaskMeta[] {
   const byId = new Map(tasks.map((task) => [task.id, task]));
-  const candidates = tasks.filter((task) =>
+  return tasks.filter((task) =>
     task.status === "To Do" &&
     task.dependencies.every((dep) => {
       const depTask = byId.get(dep);
       return depTask !== undefined && terminalStatuses.includes(depTask.status);
     })
   );
+}
+
+/**
+ * 次に着手すべきタスクを選ぶ（純粋関数）。
+ * 候補（selectCandidates 参照）の中から label "bug" を含むタスクを
+ * 最優先で選ぶ（compareTasks 参照）。候補がなければ null。
+ */
+export function selectNextTask(
+  tasks: TaskMeta[],
+  terminalStatuses: string[] = DEFAULT_TERMINAL_STATUSES,
+): TaskMeta | null {
+  const candidates = selectCandidates(tasks, terminalStatuses);
   candidates.sort(compareTasks);
   return candidates[0] ?? null;
 }
@@ -105,7 +116,7 @@ export function hasActiveTask(
 }
 
 /** backlog/tasks/*.md を読み込み TaskMeta の一覧にする */
-async function readTasks(dir: string): Promise<TaskMeta[]> {
+export async function readTasks(dir: string): Promise<TaskMeta[]> {
   const tasks: TaskMeta[] = [];
   for await (const entry of Deno.readDir(dir)) {
     if (!entry.isFile || !entry.name.endsWith(".md")) continue;

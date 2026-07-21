@@ -1,9 +1,11 @@
 ---
 id: TASK-31
 title: agent-loop をタスク間並列実行に対応させる（残タスク全体の並列可能性判定）
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-07-21 14:55'
+updated_date: '2026-07-21 15:47'
 labels: []
 dependencies: []
 ordinal: 27500
@@ -17,10 +19,42 @@ ordinal: 27500
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 next-task 相当のスクリプトが、着手可能なタスク集合と並列実行可否（ファイル衝突リスク評価込み）を決定的に返す
-- [ ] #2 agent-loop SKILL.md にタスク間並列実行の手順（並列判定・worktree isolation・タスクごとの個別 PR・複数 PR の CI/mergeability 同時監視・マージ順序）が定義されている
-- [ ] #3 CLAUDE.md と docs/development-style.md の直列実行前提の記述が新ルールと矛盾なく更新されている
-- [ ] #4 並列不可（ファイル衝突リスク高・依存あり）の場合は従来どおり直列実行にフォールバックすることが明記されている
-- [ ] #5 bug 最優先ルールとステータス遷移の一意性（各タスクの In Progress → Done が曖昧にならないこと）が並列実行時も維持される
-- [ ] #6 変更したスクリプトにテストがあり deno test が green
+- [x] #1 next-task 相当のスクリプトが、着手可能なタスク集合と並列実行可否（ファイル衝突リスク評価込み）を決定的に返す
+- [x] #2 agent-loop SKILL.md にタスク間並列実行の手順（並列判定・worktree isolation・タスクごとの個別 PR・複数 PR の CI/mergeability 同時監視・マージ順序）が定義されている
+- [x] #3 CLAUDE.md と docs/development-style.md の直列実行前提の記述が新ルールと矛盾なく更新されている
+- [x] #4 並列不可（ファイル衝突リスク高・依存あり）の場合は従来どおり直列実行にフォールバックすることが明記されている
+- [x] #5 bug 最優先ルールとステータス遷移の一意性（各タスクの In Progress → Done が曖昧にならないこと）が並列実行時も維持される
+- [x] #6 変更したスクリプトにテストがあり deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 設計方針: タスク間並列の可否判定を決定的にするため「area ラベル」規約を導入する。タスクに label `area:<領域>` を付与し（領域一覧と対応パスは docs/development-style.md に定義: docs / workflow(.claude ほか) / scripts / data / src-main(src/main.ts・index.html・app.css 等の UI 統合) / src-<module>(独立モジュール)）、area が互いに素なタスク同士のみ並列可とする。area 未付与タスクは保守的に「単独実行のみ」。
+2. スクリプト（A/B 間の契約）: scripts/next_tasks.ts 新規（next_task.ts の純関数を再利用）。選定規則: 候補 = To Do かつ dependencies 全 Done。bug ラベル群があれば bug 群のみを候補にする（既存の bug 最優先を維持）。候補を (bug優先, ordinal, ID) 順に走査し、area が既選択タスクと交差しないものを貪欲に追加（決定的）。area 未付与タスクは先頭でのみ選択され集合を打ち切る。出力は JSON: {"tasks":[{"id":"TASK-28","areas":["docs","workflow"]}],"skipped":[{"id":"TASK-30","reason":"area conflict: src-main (TASK-29)"}]}。deno task next-tasks を追加。従来の next-task（単一）は互換維持。
+3. ドキュメント/運用: agent-loop SKILL.md にタスク間並列イテレーションの手順（next-tasks による集合判定 → 各タスクを In Progress + プラン + 個別ブランチ task-N-slug + subagent/worktree で並列実装 → タスクごとに個別 PR → 複数 PR の CI/mergeability を単一 Monitor で同時監視 → ready になった PR から順にマージし、後続 PR の BEHIND/conflict は従来手順で解消）を定義。1 タスク = 1 PR・bug 最優先・ステータス遷移の一意性（In Progress/Done は各タスク個別に遷移）は維持し、「1 イテレーション = 1 タスク」の制約のみ緩める。並列不可（area 交差・未付与・依存あり）は従来どおり直列にフォールバック。CLAUDE.md と docs/development-style.md 4 章の直列前提記述を矛盾なく更新。既存 To Do タスクへ area ラベル付与（TASK-28: area:docs, area:workflow / TASK-29: area:src-main / TASK-30: area:src-main）。
+4. 並列化判定: 並列可（独立サブ作業 2 件、worktree isolation）
+   - subagent A（スクリプト）: scripts/next_tasks.ts / next_tasks_test.ts 新規、deno.json task 追加。担当: scripts/next_tasks*.ts / deno.json
+   - subagent B（ドキュメント/運用）: .claude/skills/agent-loop/SKILL.md / CLAUDE.md / docs/development-style.md の更新、TASK-28〜30 への area ラベル付与（backlog CLI 使用、対象 3 ファイルのみ）。担当: 上記ドキュメント + backlog/tasks/task-{28,29,30}*.md（CLI 経由）
+   - 契約: 上記 2 のスクリプト仕様（コマンド名・選定規則・JSON 形式）と area 領域一覧。担当ファイルは互いに素
+5. TDD（A は red→green 必須）→ mainagent 統合レビュー → fmt/lint/test/build 全 green → next-tasks の実出力確認（TASK-28/29/30 で期待集合になるか）→ PR → CI → finalization → マージ → マージ後動作確認（次イテレーションから新ルール適用）
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: scripts/next_tasks.ts が area ラベル（area:<領域>）ベースの衝突リスク評価込みで着手可能集合を決定的に返す（bug 最優先 → ordinal → ID の貪欲選択、JSON 出力、skipped 理由付き）。実出力検証: In Progress あり時は空集合、TASK-31 Done 仮定のシミュレーションで tasks=[TASK-28(docs,workflow), TASK-29(src-main)]・skipped=[TASK-30: area conflict: src-main (TASK-29), TASK-32〜34: no area labels] を確認。
+- AC#2: agent-loop SKILL.md に集合判定 → 個別ブランチ/個別 PR の worktree 並列実装 → 複数 PR の単一 Monitor 監視（check-runs + mergeability）→ ready 順マージと BEHIND/CONFLICTING 解消 の手順を定義。
+- AC#3: CLAUDE.md と docs/development-style.md（4.2 章新設・4.3/4.4 改番）の直列前提記述を新ルールと矛盾なく更新。
+- AC#4: area 交差・未付与・依存ありは直列フォールバック（スクリプトの保守的フォールバック + ドキュメント明記）。
+- AC#5: bug 群絞り込みをスクリプトで維持、In Progress→Done の一意性維持を SKILL/docs に明記（テストで bug 優先・決定性を担保）。
+- AC#6: next_tasks_test 18 テスト（純関数・CI 権限制約対応）。deno test 375 passed / 0 failed、fmt/lint/build green、PR #37 CI pass。
+- 実装: subagent 2 並列（スクリプト b7edd5e / ドキュメント 442d1b4）+ TDD。TASK-28〜30 へ area ラベル付与済み。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+area ラベル規約と scripts/next_tasks.ts（決定的な並列集合選定・JSON 出力）を導入し、agent-loop SKILL / CLAUDE.md / development-style.md をタスク間並列実行（個別ブランチ・個別 PR・複数 PR 同時監視・直列フォールバック）に対応させた。bug 最優先・1 タスク = 1 PR・ステータス遷移一意性は維持。検証は deno test 375 passed・CI pass・実出力とシミュレーション（TASK-28+29 並列 / TASK-30 衝突スキップ）。
+<!-- SECTION:FINAL_SUMMARY:END -->
