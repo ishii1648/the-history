@@ -48,11 +48,14 @@ consistent.
 - default branch（main）上で作業しない。編集・コミットは必ず作業ブランチで行い、
   main への反映は常に PR 経由とする。
 - タスクの直列実行は維持しつつ、タスク内で並列作業が可能な場合は作業効率を
-  上げるため subagent を並列に複数起動する。subagent 同士の衝突を避けるため
-  worktree isolation を利用し、成果物の conflict は PR で解消する。
-- 標準タスクフロー: backlog タスク → ブランチ作成 → テスト先行 → 実装 （subagent
-  に委譲）→ `deno test` green → mainagent によるレビューで収束 → PR 作成（TASK
-  ID 明記）→ CI green → マージ → backlog finalization。
+  上げるため subagent を並列に複数起動する。並列化可否の判定は実装プラン
+  記録時に必須で行い、判定結果と根拠（見送りの場合は理由）をプランに記録する。
+  subagent 同士の衝突を避けるため worktree isolation を利用し、成果物の conflict
+  は PR で解消する。
+- 標準タスクフロー: backlog タスク → ブランチ作成 → 並列化判定（実装プランに
+  記録）→ テスト先行 → 実装（subagent に委譲、並列可なら複数起動）→ `deno test`
+  green → mainagent によるレビューで収束 → PR 作成（TASK ID 明記）→ CI green →
+  マージ → backlog finalization。
 - タスクは Acceptance Criteria が全てチェック済みかつ CI が green の場合にのみ
   Done となる。
 - 次タスクの選択は人の指名ではなく決定的ルールで行う: status が `To Do` かつ
