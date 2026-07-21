@@ -1,11 +1,11 @@
 ---
 id: TASK-28
 title: 設計判断を backlog decisions に記録する運用を仕組み化する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 14:32'
-updated_date: '2026-07-21 15:49'
+updated_date: '2026-07-21 16:19'
 labels:
   - 'area:docs'
   - 'area:workflow'
@@ -21,11 +21,11 @@ ordinal: 28000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 設計判断を decision として記録する基準（何を記録し何を記録しないか。タスク単位の実装意図・Why までは対象に含めず、タスク横断で影響する判断に粒度を絞る）が docs/development-style.md に定義されている
-- [ ] #2 agent-loop skill のタスク実行フローに decision 記録の判断ステップが組み込まれている
-- [ ] #3 過去タスクの主要な設計判断（現在も有効なもの）が backlog decision として遡及記録されている
-- [ ] #4 decision の一覧・参照方法（CLI コマンド）が docs/development-style.md に記載されている
-- [ ] #5 コンテキストコミットの decision 行との棲み分け（重複記録を避ける方針）が明文化されている
+- [x] #1 設計判断を decision として記録する基準（何を記録し何を記録しないか。タスク単位の実装意図・Why までは対象に含めず、タスク横断で影響する判断に粒度を絞る）が docs/development-style.md に定義されている
+- [x] #2 agent-loop skill のタスク実行フローに decision 記録の判断ステップが組み込まれている
+- [x] #3 過去タスクの主要な設計判断（現在も有効なもの）が backlog decision として遡及記録されている
+- [x] #4 decision の一覧・参照方法（CLI コマンド）が docs/development-style.md に記載されている
+- [x] #5 コンテキストコミットの decision 行との棲み分け（重複記録を避ける方針）が明文化されている
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -37,3 +37,21 @@ ordinal: 28000
 4. 並列化判定（タスク内）: 見送り（理由: ドキュメント 2 本と decision 群の作成は同一の基準定義に依存する単一の運用整備作業で、独立にテスト可能な分割単位がない。単一 subagent に委譲）。
 5. チェック: deno fmt --check / lint / test green（md fmt 対象）→ PR → CI → finalization → マージ
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: docs/development-style.md 2.1 節に記録基準（タスク横断で影響する判断のみ: アーキテクチャ・データソース・ライセンス方針・規約変更・トレードオフある採否）と記録しないもの（タスク限りの実装意図・Why）を定義。
+- AC#2: agent-loop SKILL.md の finalization に decision 記録要否の判断ステップを追加（1 箇所のみ、過剰化回避）。
+- AC#3: decision-1〜8 を backlog CLI で作成（データソース 4 件・色割当・日本語表記方式・picking 設計・タスク間並列判定）。backlog search --type decision --plain で 8 件の一覧を確認。
+- AC#4: 一覧・参照方法を実在コマンドで記載（backlog.md v1.48 に decision list/view は無いことを実機確認し、search --type decision を documented）。
+- AC#5: コンテキストコミット decision: 行との棲み分け（タスク横断は decision 本体 + コミットは ID 参照、転記禁止）を明文化。
+- deno fmt --check / lint / test（375 passed）green。PR #39 CI pass。並列化見送り（単一 subagent 9ed54db）。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+設計判断の記録先を backlog decisions に一本化する運用（記録基準・棲み分け・CLI 参照方法）を docs/development-style.md 2.1 節と agent-loop SKILL に定義し、現在も有効な主要判断 8 件（decision-1〜8）を遡及記録した。検証は fmt/lint/test green・CI pass・decision 一覧の実機確認。
+<!-- SECTION:FINAL_SUMMARY:END -->
