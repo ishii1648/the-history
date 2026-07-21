@@ -1,8 +1,9 @@
 /**
  * 自律タスク選択スクリプト。
- * - backlog/tasks/*.md の YAML frontmatter から id / status / ordinal / dependencies を読み取る
+ * - backlog/tasks/*.md の YAML frontmatter から id / status / ordinal / dependencies / labels を読み取る
  * - status が "To Do" かつ依存タスクが全て終端ステータスのものを候補とし、
- *   ordinal 昇順（null は最後）→ ID の数値部分昇順で次に着手すべきタスクを選ぶ
+ *   label "bug" を含むタスクを最優先 → ordinal 昇順（null は最後）→ ID の数値部分昇順で
+ *   次に着手すべきタスクを選ぶ
  * - CLI として実行すると次タスクの ID（例: TASK-2）を stdout に出力する（候補なしなら出力なし）
  */
 
@@ -18,6 +19,7 @@ export interface TaskMeta {
   status: string;
   ordinal: number | null;
   dependencies: string[];
+  labels: string[];
 }
 
 /** markdown の YAML frontmatter（`---` 区切り）から TaskMeta を取り出す（純粋関数） */
@@ -34,7 +36,7 @@ export function parseTaskFrontmatter(markdown: string): TaskMeta | null {
   if (typeof data !== "object" || data === null) return null;
 
   const record = data as Record<string, unknown>;
-  const { id, status, ordinal, dependencies } = record;
+  const { id, status, ordinal, dependencies, labels } = record;
   if (typeof id !== "string" || id === "") return null;
 
   return {
@@ -43,6 +45,9 @@ export function parseTaskFrontmatter(markdown: string): TaskMeta | null {
     ordinal: typeof ordinal === "number" ? ordinal : null,
     dependencies: Array.isArray(dependencies)
       ? dependencies.filter((dep): dep is string => typeof dep === "string")
+      : [],
+    labels: Array.isArray(labels)
+      ? labels.filter((label): label is string => typeof label === "string")
       : [],
   };
 }
@@ -53,8 +58,12 @@ function taskIdNumber(id: string): number {
   return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
 }
 
-/** ordinal 昇順（null は最後）→ ID の数値部分昇順の比較（純粋関数） */
+/** label "bug" を含むタスクを最優先 → ordinal 昇順（null は最後）→ ID の数値部分昇順の比較（純粋関数） */
 function compareTasks(a: TaskMeta, b: TaskMeta): number {
+  const aIsBug = a.labels.includes("bug");
+  const bIsBug = b.labels.includes("bug");
+  if (aIsBug !== bIsBug) return aIsBug ? -1 : 1;
+
   const aOrdinal = a.ordinal ?? Number.POSITIVE_INFINITY;
   const bOrdinal = b.ordinal ?? Number.POSITIVE_INFINITY;
   if (aOrdinal !== bOrdinal) return aOrdinal - bOrdinal;
@@ -64,7 +73,8 @@ function compareTasks(a: TaskMeta, b: TaskMeta): number {
 /**
  * 次に着手すべきタスクを選ぶ（純粋関数）。
  * 候補 = status が "To Do" かつ dependencies の全てが tasks 内に存在し
- * terminalStatuses に含まれるステータスであるタスク。候補がなければ null。
+ * terminalStatuses に含まれるステータスであるタスク。候補の中から
+ * label "bug" を含むタスクを最優先で選ぶ（compareTasks 参照）。候補がなければ null。
  */
 export function selectNextTask(
   tasks: TaskMeta[],
