@@ -42,6 +42,15 @@ description: backlog の次タスクを決定的に選択し、実装から fina
    - CI の完了は Monitor ツール（例: PR の check-runs をポーリングし、 success /
      failure / cancelled など終端ステータスを検知したら通知する
      スクリプト）で監視する。フォアグラウンドの sleep 待ちはしない。
+   - 監視は check-runs だけでなく
+     mergeability（`gh pr view --json
+     mergeable,mergeStateStatus`）も必ず対象にする。conflict
+     中の PR は pull_request の CI 自体が走らず check-runs
+     監視は沈黙し続けるため、 check-runs のみの監視は「conflict
+     の検知漏れ」を起こす（禁止）。
+   - `CONFLICTING` / `DIRTY` を検知したら、main をタスクブランチに取り込んで
+     conflict を解消し（双方の変更意図を統合する。自分側を機械的に優先しない）、
+     全チェック green を確認して再 push し、CI green を再確認する。
    - CI red なら修正して再 push し、green になるまでこのループを回す。
    - CI green になったら finalization（AC を検証エビデンス付きでチェック → final
      summary → `Done`）をタスクブランチ上でコミットし、再度 CI green を
