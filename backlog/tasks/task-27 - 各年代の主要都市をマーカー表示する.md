@@ -1,11 +1,11 @@
 ---
 id: TASK-27
 title: 各年代の主要都市をマーカー表示する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-21 14:06'
-updated_date: '2026-07-21 14:48'
+updated_date: '2026-07-21 15:28'
 labels: []
 dependencies:
   - TASK-20
@@ -20,12 +20,12 @@ ordinal: 27000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 各年代スナップショットで、その時代の主要都市がポイントマーカーとして地図上に表示される
-- [ ] #2 都市名ラベルの文字色が国名ラベルの文字色と異なり、一見して国と都市を区別できる
-- [ ] #3 都市マーカー・ラベルはタイムラインの年代切り替えに追従して更新される
-- [ ] #4 都市ラベルと国名ラベルが重なる場合の視認性（衝突制御 or 優先度）が考慮されている
-- [ ] #5 都市データ→表示データへの変換ロジックに単体テストがある
-- [ ] #6 ホバー/クリックの picking 優先順位（河川 > 都市 > 国名、TASK-29 参照）と整合している
+- [x] #1 各年代スナップショットで、その時代の主要都市がポイントマーカーとして地図上に表示される
+- [x] #2 都市名ラベルの文字色が国名ラベルの文字色と異なり、一見して国と都市を区別できる
+- [x] #3 都市マーカー・ラベルはタイムラインの年代切り替えに追従して更新される
+- [x] #4 都市ラベルと国名ラベルが重なる場合の視認性（衝突制御 or 優先度）が考慮されている
+- [x] #5 都市データ→表示データへの変換ロジックに単体テストがある
+- [x] #6 ホバー/クリックの picking 優先順位（河川 > 都市 > 国名、TASK-29 参照）と整合している
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -39,3 +39,22 @@ ordinal: 27000
    - subagent B（表示）: src/cities.ts（+test、変換・優先度・色の純ロジック）、src/main.ts（マーカー/ラベルレイヤーと picking 分岐）。担当: src/*。B はスタブデータでテストし A の中身に依存しない
 5. TDD（red→green）→ mainagent 統合レビュー → fmt/lint/test/build 全 green → 目視確認（マーカー表示・色区別・年代追従・衝突・ホバー）→ PR → CI → finalization → マージ → マージ後動作確認
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス:
+- AC#1: Chrome で 1500（ミラノ・ヴェネツィア・ジェノヴァ・ボローニャ・フィレンツェ等）と 1914（ロンドン・ベルリン・ハンブルク・パリ・プラハ・ブリュッセル等）のマーカー表示を目視確認。データは Reba et al. 2016（CC BY 4.0・コミット固定）から全 20 年 × 20 都市生成。
+- AC#2: 都市ラベルは茶色（#793E16）で国名（濃グレー）・河川（水色）と一見区別できることを目視確認。
+- AC#3: 年代切替（1500→1914）で都市が入れ替わることを確認（renderLayers + updateTriggers）。
+- AC#4: 共有 CollisionFilterExtension + 都市固定優先度バンド 150-220。レビューで「getTextAnchor/getAlignmentBaseline 指定時に衝突判定パスと干渉しラベル全滅」というバグを発見し、既定アンカー + getPixelOffset [0,-10] へ修正（切り分けデバッグの過程はコミット 58df3f0 以降参照）。
+- AC#5: cities_test 15+ テスト（年キー欠落・不正形・ja 適用・priority バンド・cityDisplayName オーバーライド）+ build-cities_test。deno test 356 passed / 0 failed。CI pass。
+- AC#6: レイヤー順 powers → hre → cities → rivers で picking は 河川 > 都市 > 国名（TASK-29 の前提と整合）。
+- レビュー修正 2 件: 勢力名衝突キー（Venice 等）の都市訳オーバーライド（58df3f0）、衝突拡張とアンカー props の干渉修正（コミット済み）。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Reba et al. 2016 Historical Urban Population（CC BY 4.0）から各年 20 都市の data/cities.json を生成し、ScatterplotLayer マーカー + 茶色 TextLayer ラベル（衝突制御・人口優先度バンド付き）で表示。picking は 河川 > 都市 > 国名。日本語訳 88 件追加、勢力名衝突キーは都市専用オーバーライドで解決。衝突拡張とテキストアンカーの干渉バグをレビューで発見・修正。検証は deno test 356 passed・CI pass・1500/1914 の目視確認。
+<!-- SECTION:FINAL_SUMMARY:END -->
