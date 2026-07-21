@@ -44,6 +44,23 @@ deno task build-data
 - 取得元コミットは `scripts/build-data.ts` の `SOURCE_COMMIT`
   でピン留めしています。
 
+勢力ごとの塗り色は `scripts/build-colors.ts` で `data/colors.json`
+に静的生成します（クライアントは参照のみ・実行時ハッシュ計算なし）。
+
+```bash
+# data/colors.json（勢力名 → 色）を生成する
+deno task build-colors
+```
+
+- 形式は「キー → `#rrggbb`」のフラットマップです。キーは独立勢力が `NAME`、
+  属領（`SUBJECTO` を持ち `NAME` と異なる feature）が `NAME|SUBJECTO`。
+  クライアントは feature の生プロパティから同じキーを組み立てて O(1)
+  で引きます。
+- `NAME` をキーに決定的ハッシュ（FNV-1a）でパレット色を割り当て、同一勢力は
+  全年代で同色になります。属領は宗主国の色相を保ち明度をずらした色にします
+  （`SUBJECTO` は `name-overrides.json` の renames で正規化してから引きます）。
+- `NAME` が null の feature は載せません（クライアント側でデフォルト色）。
+
 ## 出典・ライセンス
 
 歴史的国境・勢力圏のポリゴンデータは

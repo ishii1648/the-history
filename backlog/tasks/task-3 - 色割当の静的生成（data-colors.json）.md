@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-20 04:22'
-updated_date: '2026-07-21 08:50'
+updated_date: '2026-07-21 09:00'
 labels: []
 dependencies:
   - TASK-2
@@ -36,3 +36,10 @@ ordinal: 3000
 6. deno.json に build-colors タスク追加
 7. fmt/lint/test/build green → PR（TASK-3 明記）→ CI green → マージ → finalization
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+mainagent レビュー第1ラウンド: 実装・テスト・SUBJECTO 正規化（renames 経由の宗主国解決）は良好。要修正 1 件を指摘: fnv1a % 288 の誕生日衝突で独立勢力 256 中 150 が完全同色（66 グループ、例: Prussia と Kingdom of Sardinia が同色）。ソート順の線形プロービングによる決定的衝突解決を指示。
+観察（スコープ外・将来の name-overrides 候補）: 'Aragón'/'Aragon'、'Norway'/'Kingdom of Norway'、'Burgandy'、'Irlanda' 等の表記ゆれが colors.json のキーに残存。TASK-2 の overrides カバレッジの問題であり本タスクでは非対応。
+<!-- SECTION:NOTES:END -->
