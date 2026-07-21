@@ -1,11 +1,11 @@
 ---
 id: TASK-7
 title: ホバー/クリック情報表示と地図挙動
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-20 04:23'
-updated_date: '2026-07-21 10:50'
+updated_date: '2026-07-21 11:04'
 labels: []
 dependencies:
   - TASK-5
@@ -20,10 +20,10 @@ ordinal: 7000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 ホバーで勢力名（SUBJECTO があれば「NAME — SUBJECTO 領」）がツールチップ表示される
-- [ ] #2 クリックで同情報がパネル表示される（モバイルのホバー代替）
-- [ ] #3 ズームが z3〜z8 程度に制限される
-- [ ] #4 初期表示が center ≈ [15, 50]・zoom 4・年代 1000 年である
+- [x] #1 ホバーで勢力名（SUBJECTO があれば「NAME — SUBJECTO 領」）がツールチップ表示される
+- [x] #2 クリックで同情報がパネル表示される（モバイルのホバー代替）
+- [x] #3 ズームが z3〜z8 程度に制限される
+- [x] #4 初期表示が center ≈ [15, 50]・zoom 4・年代 1000 年である
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -38,3 +38,9 @@ ordinal: 7000
 5. 目視確認（mainagent）: ホバーでツールチップ、クリックでパネル、ズーム端で制限、リロード初期状態
 6. fmt/lint/test/build green → PR → CI+mergeability 監視 → マージ → マージ後動作確認 → finalization
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+ホバー/クリック情報表示を PR #21 で実装。検証エビデンス（ブラウザ実機）: (AC1) ホバーでカーソル近傍ツールチップ（Holy Roman Empire 等）。属領は「NAME — SUBJECTO 領」形式。レビューで補正前綴り自己参照バグ（Scotland — Scottland 領）を検出し、renames 正規化（TASK-3 色割当と同一規則）で修正、修正後に Scotland/Castile の正常表示を確認 (AC2) クリックで左上パネル表示・閉じるボタン動作を確認 (AC3) ダブルクリック連打で z8 収束（スクリーンショット完全一致）、shift+ダブルクリックで z3 収束を実測 (AC4) リロードで center≈[15,50]・zoom4・1000 年を確認。displayLabel 純粋関数 13 テスト（TDD red→green）、計 167 tests。CI green・MERGEABLE/CLEAN。
+<!-- SECTION:FINAL_SUMMARY:END -->
