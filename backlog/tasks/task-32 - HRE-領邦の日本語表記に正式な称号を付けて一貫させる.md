@@ -4,7 +4,10 @@ title: HRE 領邦の日本語表記に正式な称号を付けて一貫させる
 status: To Do
 assignee: []
 created_date: '2026-07-21 15:05'
-labels: []
+updated_date: '2026-07-21 15:48'
+labels:
+  - 'area:scripts'
+  - 'area:data'
 dependencies:
   - TASK-19
   - TASK-23

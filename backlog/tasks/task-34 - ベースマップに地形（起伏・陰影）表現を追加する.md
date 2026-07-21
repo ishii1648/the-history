@@ -4,7 +4,11 @@ title: ベースマップに地形（起伏・陰影）表現を追加する
 status: To Do
 assignee: []
 created_date: '2026-07-21 15:10'
-labels: []
+updated_date: '2026-07-21 15:48'
+labels:
+  - 'area:scripts'
+  - 'area:data'
+  - 'area:src-basemap'
 dependencies:
   - TASK-4
 ordinal: 33000

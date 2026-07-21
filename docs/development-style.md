@@ -46,6 +46,52 @@
   - dependencies は原則空、ordinal は通常どおり採番する（優先順位は label `bug`
     が担保するため、選択順に ordinal は使わない）。
 
+### 2.1 設計判断の記録（backlog decisions）
+
+タスク横断で影響する設計判断は backlog decision として記録し、後続タスクが
+判断の背景・根拠を参照できるようにする。
+
+**記録する判断（タスク横断で影響するもののみ）:**
+
+- アーキテクチャ・データフローの方式選択（例: 色割当の静的生成、picking の
+  レイヤー順制御）
+- データソースの採用・不採用（例: historical-basemaps のコミット固定採用）
+- ライセンス方針（例: NC ライセンスデータの GPL 派生データからのファイル分離）
+- プロジェクト規約の新設・変更（例: area ラベルによるタスク間並列判定）
+- 複数の選択肢からトレードオフを比較して下した採否で、後続タスクの実装を
+  制約するもの
+
+**記録しない判断:**
+
+- タスク限りの実装意図・Why（そのタスクのスコープで完結し、後続タスクを
+  制約しないもの）。これらはコンテキストコミットの `intent:` / `decision:` 行と
+  backlog task の Implementation Notes に記録すれば十分であり、decision
+  へ転記しない（重複記録は同期切れ・形骸化を招くため禁止）。
+
+**コンテキストコミットとの棲み分け:** コミット本文の `decision:` 行は「その
+コミット/タスク限りの判断」を残す場所、backlog decision は「タスク横断の
+判断」を残す場所と区別する。タスク横断の判断が実装中に生まれた場合は backlog
+decision に本体を書き、コミット側は decision ID（例: `decision-3 参照`）を
+参照するに留める（本文の二重管理をしない）。
+
+**記録タイミング:** `/agent-loop` の finalization 時に「このタスクで下した
+判断にタスク横断で影響するものがあるか」を判定して記録する
+（`.claude/skills/agent-loop/SKILL.md` の手順に組み込み済み）。
+
+**CLI の使い方**（backlog.md v1.48 時点。`backlog decision --help` /
+`backlog search --help` で確認済み。decision には list / view / edit
+サブコマンドは存在しない）:
+
+- 作成: `backlog decision create -s accepted "<タイトル>"`。タイトルは
+  検索しやすい日本語で「何をどう決めたか」まで含める。CLI は本文の編集を
+  サポートしないため、作成直後に生成ファイルの `## Context` / `## Decision` /
+  `## Consequences` セクションを埋める（背景・決定・根拠・関連 TASK を
+  簡潔に。frontmatter は CLI 管理のため編集しない）。
+- 一覧: `backlog search --type decision --plain`
+- キーワード検索: `backlog search "<キーワード>" --type decision --plain`
+- 本文の参照: 一覧で得たファイル `backlog/decisions/decision-N - <タイトル>.md`
+  を直接読む（読み取りの直接参照は 5 章のフォールバックと同じ扱いで可）。
+
 ## 3. ループエンジニアリング（3 層ループ運用）
 
 開発中は次の 3 つのフィードバックループを内側から外側へ多重に回す。
