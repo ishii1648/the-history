@@ -13,7 +13,10 @@ ordinal: 16000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-当初は「PR 作成前に /code-review を実行するステップ」を検討したが、/code-review は disable-model-invocation のためエージェントから起動できず、ループに挟むと HITL になるため組み込みは見送る（ユーザー決定 2026-07-21）。代わりに、agent-loop の停止条件『deno task next-task の出力が空で In Progress もない（全タスク完了）』に達した際の最終レポートに、(1) 全タスク完了の報告と (2) ユーザーへの /code-review 実行の促し（レビュー対象の説明付き）を含めるよう .claude/skills/agent-loop/SKILL.md を更新する。必要に応じて docs/development-style.md 4 章にも同趣旨を反映する。
+当初は「PR 作成前に /code-review を実行するステップ」を検討したが、/code-review は disable-model-invocation のためエージェントから起動できず、ループに挟むと HITL になるため組み込みは見送る（ユーザー決定 2026-07-21）。代わりに次の 2 点を開発フロー文書（.claude/skills/agent-loop/SKILL.md、必要に応じて docs/development-style.md 4 章）に反映する:
+
+1. **完了時の /code-review 促し**: agent-loop の停止条件『deno task next-task の出力が空で In Progress もない（全タスク完了）』に達した際の最終レポートに、全タスク完了の報告とともにユーザーへ /code-review 実行を促す文言（レビュー対象の説明付き）を含める。
+2. **/code-review 指摘の bug タスク化**: ユーザーが /code-review を実行して得られた指摘（bug）は、既存の bug intake フォーマット（label bug・再現手順・期待/実際の挙動・発見契機、AC は再現テスト red → 修正で green）でタスクとして起票し、bug 最優先ルールにより /agent-loop の次イテレーションで処理できるようにする。この受け入れフローを SKILL.md の bug intake 節に追記する。
 
 経緯: TASK-4 で /code-review 試行を行い、Skill ツールからの起動が「disable-model-invocation」で拒否されることを確認済み（Implementation Notes 参照）。
 <!-- SECTION:DESCRIPTION:END -->
@@ -23,6 +26,7 @@ ordinal: 16000
 - [ ] #1 deno fmt --check が green である
 - [ ] #2 agent-loop SKILL.md の停止条件・最終レポート手順に、全タスク完了の報告とともにユーザーへ /code-review の実行を促す旨が記載されている
 - [ ] #3 PR 作成前に /code-review を自律実行する旨の記述が文書に存在しない（HITL 回避の設計判断が明記されている）
+- [ ] #4 /code-review の指摘を bug intake フォーマットで label bug タスクとして起票し agent-loop で処理する流れが SKILL.md に記載されている
 <!-- AC:END -->
 
 ## Implementation Notes
