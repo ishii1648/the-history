@@ -1,9 +1,11 @@
 ---
 id: TASK-35
 title: データファイル更新時にブラウザキャッシュで旧データが配信され続ける問題への対処
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-21 16:27'
+updated_date: '2026-07-21 17:56'
 labels:
   - 'area:scripts'
   - 'area:docs'
@@ -23,3 +25,13 @@ TASK-32 のマージ後動作確認で発見: dev サーバ（deno std file-serv
 - [ ] #2 本番配信を想定したキャッシュ制御方針（ヘッダ設計 or ファイル名バージョニング）が docs に記録され、必要な実装がされている
 - [ ] #3 app.js と data/ の整合が崩れる部分キャッシュ状態が発生しない（または検知して全再取得する）仕組みの検討結果が記録されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. dev サーバ（AC#1）: deno.json の serve タスク（std/http file-server）に Cache-Control: no-cache ヘッダを付与する（file-server の -H/--header オプション対応を確認して適用。未対応バージョンなら薄い自前サーブスクリプト scripts/serve.ts で Cache-Control を付けて配信）。no-cache は「使用前に必ず再検証」の意味で、ETag/Last-Modified による 304 運用になり、再生成後の通常リロードで常に最新が返る。
+2. 本番方針の文書化（AC#2）: docs/ に配信キャッシュ設計を追記 — 推奨: 全アセット Cache-Control: no-cache（ETag 再検証・CDN エッジで 304 吸収）を基本とし、将来最適化としてファイル名ハッシュ化 + immutable の選択肢を記録。Cloudflare R2/Pages での設定方法の目安も記す。
+3. 整合性の検討結果記録（AC#3）: app.js と data/ の部分キャッシュ不整合について、no-cache 再検証方式なら「デプロイ後の初回リロードで全ファイルが同時に再検証される」ため実質解消されることと、残余リスク（リロードを跨ぐ長期セッション）への言及を docs に記録。
+4. 並列化判定（タスク内）: 見送り（理由: serve 設定 1 箇所 + ドキュメントの小規模作業で分割単位がない。単一 subagent に委譲）。TDD: 純ロジックが生じる場合（自前サーブスクリプト等）はテスト先行。設定のみの場合はその旨を記録し、検証は curl -I によるヘッダ実測と再現手順（データ再生成→build→リロード）の実測で行う。
+5. 実測検証 → PR → CI → finalization → マージ → 全タスク完了の最終レポート
+<!-- SECTION:PLAN:END -->
