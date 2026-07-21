@@ -2,16 +2,23 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import type { FeatureCollection } from "geojson";
 import {
   colorKeyFor,
+  createCombinedYearLoader,
+  createHreOverlayLoader,
   createYearDataLoader,
   createYearSwitcher,
   dataUrlFor,
   DEFAULT_FILL_COLOR,
+  EMPTY_FEATURE_COLLECTION,
   FILL_ALPHA,
   fillColorFor,
+  hasHreOverlay,
   hexToRgb,
+  hreDataUrlFor,
   LINE_COLOR,
   type Rgba,
+  type YearLayerData,
 } from "./powers.ts";
+import { HRE_OVERLAY_YEARS, SNAPSHOT_YEARS } from "./config.ts";
 
 Deno.test("colorKeyFor は独立勢力（SUBJECTO が NAME と同じ）では NAME を返す", () => {
   assertEquals(colorKeyFor({ NAME: "Cyprus", SUBJECTO: "Cyprus" }), "Cyprus");
@@ -261,4 +268,275 @@ Deno.test("createYearSwitcher は連続要求で最後の要求だけを反映�
   await Promise.all(ps);
   assertEquals(applied, [1400]);
   assertEquals(switcher.currentYear(), 1400);
+});
+
+// ---- TASK-19: HRE（神聖ローマ帝国）領邦オーバーレイ ----
+
+Deno.test("HRE_OVERLAY_YEARS は ETH データのカバー年のみで、全て SNAPSHOT_YEARS に含まれる", () => {
+  assertEquals([...HRE_OVERLAY_YEARS], [1500, 1530, 1600, 1650]);
+  for (const year of HRE_OVERLAY_YEARS) {
+    assert(SNAPSHOT_YEARS.includes(year));
+  }
+});
+
+Deno.test("hreDataUrlFor は HRE オーバーレイ GeoJSON のパスを返す", () => {
+  assertEquals(hreDataUrlFor(1500), "/data/hre_1500.geojson");
+  assertEquals(hreDataUrlFor(1650), "/data/hre_1650.geojson");
+});
+
+Deno.test("hasHreOverlay は対象年のみ true を返す", () => {
+  assert(hasHreOverlay(1500, HRE_OVERLAY_YEARS));
+  assert(hasHreOverlay(1650, HRE_OVERLAY_YEARS));
+  assert(!hasHreOverlay(1400, HRE_OVERLAY_YEARS));
+  assert(!hasHreOverlay(1700, HRE_OVERLAY_YEARS));
+});
+
+Deno.test("EMPTY_FEATURE_COLLECTION は feature を持たない FeatureCollection", () => {
+  assertEquals(EMPTY_FEATURE_COLLECTION, {
+    type: "FeatureCollection",
+    features: [],
+  });
+});
+
+Deno.test("createHreOverlayLoader は非対象年で fetch せず空 FeatureCollection を返す", async () => {
+  const calls: string[] = [];
+  const loader = createHreOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Austria")),
+    });
+  }, HRE_OVERLAY_YEARS);
+  const fc = await loader.load(1400);
+  assertEquals(fc, EMPTY_FEATURE_COLLECTION);
+  assertEquals(calls, []);
+  // 非対象年は fetch 不要なので「取得済み」扱い（スピナーを出さない）
+  assert(loader.has(1400));
+});
+
+Deno.test("createHreOverlayLoader は対象年で hre URL を fetch して返す（キャッシュあり）", async () => {
+  const calls: string[] = [];
+  const loader = createHreOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Austria")),
+    });
+  }, HRE_OVERLAY_YEARS);
+  assert(!loader.has(1500));
+  const fc = await loader.load(1500);
+  assertEquals(fc.features[0].properties?.NAME, "Austria");
+  assertEquals(calls, ["/data/hre_1500.geojson"]);
+  await loader.load(1500);
+  assertEquals(calls, ["/data/hre_1500.geojson"]);
+  assert(loader.has(1500));
+});
+
+Deno.test("createHreOverlayLoader は取得失敗時に warn して空 FC を返す（キャッシュせず再試行可能）", async () => {
+  let count = 0;
+  const warns: string[] = [];
+  const loader = createHreOverlayLoader(
+    (_url) => {
+      count++;
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      });
+    },
+    HRE_OVERLAY_YEARS,
+    (msg) => warns.push(msg),
+  );
+  const fc = await loader.load(1500);
+  assertEquals(fc, EMPTY_FEATURE_COLLECTION);
+  assertEquals(warns.length, 1);
+  assert(!loader.has(1500));
+  // 失敗はキャッシュされず、次のロードで再試行される
+  await loader.load(1500);
+  assertEquals(count, 2);
+});
+
+Deno.test("createHreOverlayLoader は fetch 自体の reject でも空 FC を返す", async () => {
+  const warns: string[] = [];
+  const loader = createHreOverlayLoader(
+    (_url) => Promise.reject(new Error("network down")),
+    HRE_OVERLAY_YEARS,
+    (msg) => warns.push(msg),
+  );
+  const fc = await loader.load(1600);
+  assertEquals(fc, EMPTY_FEATURE_COLLECTION);
+  assertEquals(warns.length, 1);
+});
+
+/** base（europe_*）と hre（hre_*）を出し分けるモック fetch を作る */
+function makeCombinedFetch(calls: string[]) {
+  return (url: string) => {
+    calls.push(url);
+    const name = url.includes("hre_") ? "Austria" : "France";
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(name)),
+    });
+  };
+}
+
+Deno.test("createCombinedYearLoader は対象年で base と hre を両方ロードして返す", async () => {
+  const calls: string[] = [];
+  const fetchFn = makeCombinedFetch(calls);
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1500);
+  assertEquals(data.base.features[0].properties?.NAME, "France");
+  assertEquals(data.hre.features[0].properties?.NAME, "Austria");
+  assertEquals(calls.sort(), [
+    "/data/europe_1500.geojson",
+    "/data/hre_1500.geojson",
+  ]);
+});
+
+Deno.test("createCombinedYearLoader は非対象年で base のみ fetch し hre は空 FC", async () => {
+  const calls: string[] = [];
+  const fetchFn = makeCombinedFetch(calls);
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1400);
+  assertEquals(data.base.features[0].properties?.NAME, "France");
+  assertEquals(data.hre, EMPTY_FEATURE_COLLECTION);
+  assertEquals(calls, ["/data/europe_1400.geojson"]);
+});
+
+Deno.test("createCombinedYearLoader は base と hre を並行に要求する", async () => {
+  const calls: string[] = [];
+  const pending = new Map<string, ReturnType<typeof deferred<unknown>>>();
+  const loader = createCombinedYearLoader(
+    createYearDataLoader((url) => {
+      calls.push(url);
+      const d = deferred<unknown>();
+      pending.set(url, d);
+      return d.promise as Promise<{
+        ok: boolean;
+        status: number;
+        json: () => Promise<unknown>;
+      }>;
+    }),
+    createHreOverlayLoader((url) => {
+      calls.push(url);
+      const d = deferred<unknown>();
+      pending.set(url, d);
+      return d.promise as Promise<{
+        ok: boolean;
+        status: number;
+        json: () => Promise<unknown>;
+      }>;
+    }, HRE_OVERLAY_YEARS),
+  );
+  const p = loader.load(1530);
+  // どちらの fetch も解決していない時点で、両方の要求が発行されている（並行ロード）
+  assertEquals(calls.sort(), [
+    "/data/europe_1530.geojson",
+    "/data/hre_1530.geojson",
+  ]);
+  for (const [url, d] of pending) {
+    d.resolve({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve(fakeCollection(url.includes("hre_") ? "A" : "B")),
+    });
+  }
+  const data = await p;
+  assertEquals(data.base.features[0].properties?.NAME, "B");
+  assertEquals(data.hre.features[0].properties?.NAME, "A");
+});
+
+Deno.test("createCombinedYearLoader は base 失敗で reject する（hre は成功しても）", async () => {
+  const loader = createCombinedYearLoader(
+    createYearDataLoader((_url) =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+      })
+    ),
+    createHreOverlayLoader(
+      (_url) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(fakeCollection("Austria")),
+        }),
+      HRE_OVERLAY_YEARS,
+    ),
+  );
+  await assertRejects(() => loader.load(1500));
+});
+
+Deno.test("createCombinedYearLoader は hre 失敗でも base を返す（overlay は空扱い）", async () => {
+  const warns: string[] = [];
+  const loader = createCombinedYearLoader(
+    createYearDataLoader((_url) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(fakeCollection("France")),
+      })
+    ),
+    createHreOverlayLoader(
+      (_url) =>
+        Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+        }),
+      HRE_OVERLAY_YEARS,
+      (msg) => warns.push(msg),
+    ),
+  );
+  const data = await loader.load(1500);
+  assertEquals(data.base.features[0].properties?.NAME, "France");
+  assertEquals(data.hre, EMPTY_FEATURE_COLLECTION);
+  assertEquals(warns.length, 1);
+});
+
+Deno.test("createCombinedYearLoader の has は base と hre の両方が取得済みのとき true", async () => {
+  const calls: string[] = [];
+  const fetchFn = makeCombinedFetch(calls);
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  assert(!loader.has(1500));
+  await loader.load(1500);
+  assert(loader.has(1500));
+  // 非対象年は hre 側が常に「取得済み」なので base のキャッシュ状況に従う
+  assert(!loader.has(1400));
+  await loader.load(1400);
+  assert(loader.has(1400));
+});
+
+Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求を破棄する", async () => {
+  const d1400 = deferred<YearLayerData>();
+  const d1500 = deferred<YearLayerData>();
+  const loader = {
+    load: (year: number) => year === 1400 ? d1400.promise : d1500.promise,
+  };
+  const applied: Array<{ year: number; hreCount: number }> = [];
+  const switcher = createYearSwitcher(loader, (year, data) => {
+    applied.push({ year, hreCount: data.hre.features.length });
+  });
+  const p1 = switcher.switchTo(1400);
+  const p2 = switcher.switchTo(1500);
+  // 新しい 1500 が先に、古い 1400 が後から解決する
+  d1500.resolve({ base: fakeCollection("F"), hre: fakeCollection("A") });
+  d1400.resolve({ base: fakeCollection("F"), hre: EMPTY_FEATURE_COLLECTION });
+  await Promise.all([p1, p2]);
+  assertEquals(applied, [{ year: 1500, hreCount: 1 }]);
+  assertEquals(switcher.currentYear(), 1500);
 });
