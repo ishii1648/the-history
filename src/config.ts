@@ -49,6 +49,19 @@ export const BASEMAP_PMTILES_URL = "/europe.pmtiles";
 export const BASEMAP_SOURCE_ID = "basemap";
 
 /**
+ * 地形 DEM（terrarium エンコーディング・zoom 0〜8・EUROPE_BBOX 域）の
+ * PMTiles URL（同一オリジン配信の相対パス）。TASK-34 の hillshade 表現に使う。
+ * DEM アーカイブは任意生成: `deno task extract-dem` 等で data/europe-dem.pmtiles
+ * を生成した場合のみ dist 直下へコピーされ配信される。存在しない環境では
+ * 取得エラーになるが、hillshade なしの従来表示で継続する（フォールバックは
+ * 発動しない。src/fallback.ts 参照）。
+ */
+export const DEM_PMTILES_URL = "/europe-dem.pmtiles";
+
+/** MapLibre スタイル内で DEM（raster-dem）ソースに付ける ID */
+export const DEM_SOURCE_ID = "dem";
+
+/**
  * PMTiles 取得失敗時のフォールバック先スタイル URL（OpenFreeMap Liberty）。
  * API キー不要・無料。docs/map-rendering-research.md §2 参照。
  */

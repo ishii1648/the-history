@@ -34,15 +34,21 @@ const FETCH_ERROR_PATTERN =
 
 /**
  * ベースマップのタイル/メタデータ取得失敗エラーかを判定する純粋関数。
- * ソース ID が一致するエラーは内容を問わず該当とみなす（ベースマップ
- * ソースのエラーは取得失敗以外に実質存在しないため）。
+ * - ソース ID があるイベントは ID の一致だけで判定する。一致すれば内容を
+ *   問わず該当（ベースマップソースのエラーは取得失敗以外に実質存在しない）、
+ *   不一致なら不該当。TASK-34 で任意生成の DEM（"dem" ソース）が加わり、
+ *   アーカイブ不在時に pmtiles/ネットワーク系メッセージのエラーを出すため、
+ *   メッセージパターンを別ソースへ適用するとフォールバックが誤発動する。
+ *   DEM 欠如時は hillshade なしの従来表示で継続するのが仕様（AC #4）。
+ * - ソース ID が無いイベント（archive.getHeader() 由来等）のみ、メッセージの
+ *   パターンで取得失敗かを推定する。
  */
 export function isBasemapFetchError(
   event: BasemapErrorEvent,
   basemapSourceId: string,
 ): boolean {
-  if (event.sourceId === basemapSourceId) {
-    return true;
+  if (event.sourceId !== undefined) {
+    return event.sourceId === basemapSourceId;
   }
   const message = event.error?.message ?? "";
   return FETCH_ERROR_PATTERN.test(message);
