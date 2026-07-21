@@ -46,25 +46,76 @@ export function filterBasemapLayers<T extends { id: string }>(
   return layerList.filter((layer) => KEEP_IDS.has(layer.id));
 }
 
+/** ベクタタイルソースの最小型（MapLibre VectorSourceSpecification 互換） */
+export interface BasemapVectorSource {
+  type: "vector";
+  url: string;
+  attribution?: string;
+}
+
+/** GeoJSON ソースの最小型（MapLibre GeoJSONSourceSpecification 互換） */
+export interface BasemapGeoJsonSource {
+  type: "geojson";
+  data: string;
+  attribution?: string;
+}
+
 /** buildBasemapStyle が返すスタイルの最小型（MapLibre StyleSpecification 互換） */
 export interface BasemapStyle {
   version: 8;
   sources: {
-    [id: string]: {
-      type: "vector";
-      url: string;
-      attribution?: string;
-    };
+    [id: string]: BasemapVectorSource | BasemapGeoJsonSource;
   };
   layers: Array<{ id: string; type: string; [key: string]: unknown }>;
+}
+
+/** 主要河川オーバーレイのソース/レイヤー id（TASK-21） */
+export const RIVERS_SOURCE_ID = "rivers";
+
+/** 主要河川 GeoJSON の配信 URL（scripts/ 側の生成物と一致させる契約） */
+export const RIVERS_DATA_URL = "/data/rivers.geojson";
+
+/**
+ * Natural Earth 由来の主要河川を描画する line レイヤーを組み立てる純粋関数。
+ *
+ * ベースマップの water_river は minzoom 9 のためアプリの MAX_ZOOM=8 では
+ * 一切描画されない。低ズーム帯（z3〜z8）でも主要河川が見えるよう、
+ * Natural Earth 50m rivers_lake_centerlines の GeoJSON を重ねる。
+ * 色は light flavor の water と同一にし、水域ポリゴンと調和させる。
+ */
+export function buildRiversLayer(lineColor: string): BasemapStyle["layers"][0] {
+  return {
+    id: RIVERS_SOURCE_ID,
+    type: "line",
+    source: RIVERS_SOURCE_ID,
+    layout: {
+      "line-cap": "round",
+      "line-join": "round",
+    },
+    paint: {
+      "line-color": lineColor,
+      // z3 で 0.5px → z8 で 2px（MAX_ZOOM=8 でも視認できる幅）
+      "line-width": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        3,
+        0.5,
+        8,
+        2,
+      ],
+    },
+  };
 }
 
 /**
  * PMTiles URL からベースマップ用の MapLibre スタイルを組み立てる純粋関数。
  * ラベルレイヤーを生成しないため glyphs / sprite は不要。
+ * 末尾に Natural Earth 主要河川のオーバーレイを追加する（陸地の上に描画）。
  */
 export function buildBasemapStyle(pmtilesUrl: string): BasemapStyle {
-  const allLayers = layers(BASEMAP_SOURCE_ID, namedFlavor("light"));
+  const flavor = namedFlavor("light");
+  const allLayers = layers(BASEMAP_SOURCE_ID, flavor);
   return {
     version: 8,
     sources: {
@@ -74,7 +125,16 @@ export function buildBasemapStyle(pmtilesUrl: string): BasemapStyle {
         attribution:
           '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
       },
+      [RIVERS_SOURCE_ID]: {
+        type: "geojson",
+        data: RIVERS_DATA_URL,
+        attribution:
+          '<a href="https://www.naturalearthdata.com">Natural Earth</a>',
+      },
     },
-    layers: filterBasemapLayers(allLayers) as BasemapStyle["layers"],
+    layers: [
+      ...(filterBasemapLayers(allLayers) as BasemapStyle["layers"]),
+      buildRiversLayer(flavor.water),
+    ],
   };
 }
