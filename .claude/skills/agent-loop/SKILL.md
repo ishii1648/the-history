@@ -51,6 +51,22 @@ description: backlog の次タスクを決定的に選択し、実装から fina
    - `CONFLICTING` / `DIRTY` を検知したら、main をタスクブランチに取り込んで
      conflict を解消し（双方の変更意図を統合する。自分側を機械的に優先しない）、
      全チェック green を確認して再 push し、CI green を再確認する。
+   - conflict でも CI red でもなくマージ自体がブロックされた場合 （`mergeable`
+     が `false`、または `mergeStateStatus` が `BLOCKED` / `BEHIND`
+     等）は、原因を分析して**自動修正の可否を切り分ける**。
+     `gh pr view <PR> --json mergeable,mergeStateStatus` と、必要に応じて
+     `gh api repos/:owner/:repo/branches/main/protection`
+     でブランチ保護要件を確認する。
+     - **自動修正可**: ループ内の操作で解消できるブロック。例）`BEHIND` （head
+       branch が base に未追従・strict protection）は main を取り込んで 再 push
+       し CI green を再確認すれば解消する（TASK-2 のマージで実際に
+       発生し、この手順で解消した実績がある）。リポジトリ設定で auto-merge が
+       無効（`enablePullRequestAutoMerge` エラー）な場合も「修正不可」では
+       なく、CI green 確認後に**手動マージ**で代替する。
+     - **自動修正不可**: ループ内の操作では解消できないブロック。例）branch
+       protection の必須レビュー承認を満たす承認者がループ内に存在しない、
+       恒常的に満たせない必須 status check、リポジトリのマージ権限が無い等。
+       この場合は手順 5 のエスカレーションに従いループを停止する。
    - CI red なら修正して再 push し、green になるまでこのループを回す。
    - CI green になったら finalization（AC を検証エビデンス付きでチェック → final
      summary → `Done`）をタスクブランチ上でコミットし、再度 CI green を
@@ -66,9 +82,14 @@ description: backlog の次タスクを決定的に選択し、実装から fina
      をチェックする前（マージ前）に dev サーバ等で確認を済ませておく。
      このフェーズではマージ後の main 上での再確認・回帰確認を行う。
 5. **例外時のみエスカレーション**
-   - AC が曖昧・CI が恒常 red・仕様判断が必要な場合に限り、`needs-human`
-     ラベル付き issue（ブロック内容・検討した選択肢・推奨案を記載）を起票して
-     ループを停止する。それ以外で人の指示を待たない。
+   - 以下のいずれかに限り、`needs-human` ラベル付き issue（**原因・検討した
+     選択肢・推奨対応**を記載）を起票してループを停止する。それ以外で人の
+     指示を待たない。
+     - AC が曖昧・CI が恒常 red・仕様判断が必要な場合。
+     - 手順 3 で **自動修正不可** と切り分けたマージブロック（必須レビュー
+       承認者の不在、恒常的に満たせない必須 status check、マージ権限不足
+       等）。auto-merge 無効のようにループ内で代替手段（手動マージ）が
+       あるものは「修正不可」ではないため、ここには含めない。
 6. **次イテレーション**
    - マージ完了後、手順 1 に戻る。
 
