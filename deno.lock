@@ -6,8 +6,10 @@
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/yaml@1": "1.1.2",
     "npm:@deck.gl/core@^9.3.7": "9.3.7",
+    "npm:@deck.gl/extensions@^9.3.7": "9.3.7_@deck.gl+core@9.3.7_@luma.gl+core@9.3.6_@luma.gl+engine@9.3.6__@luma.gl+core@9.3.6__@luma.gl+shadertools@9.3.6___@luma.gl+core@9.3.6",
     "npm:@deck.gl/layers@^9.3.7": "9.3.7_@deck.gl+core@9.3.7_@loaders.gl+core@4.4.3_@luma.gl+core@9.3.6_@luma.gl+engine@9.3.6__@luma.gl+core@9.3.6__@luma.gl+shadertools@9.3.6___@luma.gl+core@9.3.6",
     "npm:@deck.gl/mapbox@^9.3.7": "9.3.7_@deck.gl+core@9.3.7_@luma.gl+core@9.3.6_@math.gl+web-mercator@4.1.0",
+    "npm:@mapbox/polylabel@^1.0.2": "1.0.2",
     "npm:@protomaps/basemaps@^5.7.2": "5.7.2",
     "npm:@turf/bbox-clip@7": "7.3.5",
     "npm:@turf/helpers@7": "7.3.5",
@@ -52,6 +54,17 @@
         "@types/offscreencanvas",
         "gl-matrix",
         "mjolnir.js"
+      ]
+    },
+    "@deck.gl/extensions@9.3.7_@deck.gl+core@9.3.7_@luma.gl+core@9.3.6_@luma.gl+engine@9.3.6__@luma.gl+core@9.3.6__@luma.gl+shadertools@9.3.6___@luma.gl+core@9.3.6": {
+      "integrity": "sha512-CY4Hi7yeVNMOjYfbrxNZ5PF3ftH16zGwV4JSH6g9opCTfLFxBgT2Rxbs3cwywanAs5yO7RraDDM9WyQSzAU7qg==",
+      "dependencies": [
+        "@deck.gl/core",
+        "@luma.gl/core",
+        "@luma.gl/engine",
+        "@luma.gl/shadertools",
+        "@luma.gl/webgl",
+        "@math.gl/core"
       ]
     },
     "@deck.gl/layers@9.3.7_@deck.gl+core@9.3.7_@loaders.gl+core@4.4.3_@luma.gl+core@9.3.6_@luma.gl+engine@9.3.6__@luma.gl+core@9.3.6__@luma.gl+shadertools@9.3.6___@luma.gl+core@9.3.6": {
@@ -179,6 +192,12 @@
     "@mapbox/point-geometry@0.1.0": {
       "integrity": "sha512-6j56HdLTwWGO0fJPlrZtdU/B13q8Uwmo18Ck2GnGgN9PCFyKTZ3UbXeEdRFh18i9XQ92eH2VdtpJHpBD3aripQ=="
     },
+    "@mapbox/polylabel@1.0.2": {
+      "integrity": "sha512-htPcy9pNNuTvlWIQIMZZORRgCnH2DFLEACxYc2yQHqwRYv5cO84lvQqxLUHC+4xqSbW41mIo/bhyPx+OUzofHg==",
+      "dependencies": [
+        "tinyqueue@1.2.3"
+      ]
+    },
     "@mapbox/tiny-sdf@2.2.0": {
       "integrity": "sha512-LVL4wgI9YAum5V+LNVQO6QgFBPw7/MIIY4XJPNsPDMrjEwcE+JfKk1LuIl8GnF197ejVdC9QdPaxrx5gfgdGXg=="
     },
@@ -203,7 +222,7 @@
         "minimist",
         "quickselect@2.0.0",
         "rw",
-        "tinyqueue"
+        "tinyqueue@3.0.0"
       ],
       "bin": true
     },
@@ -469,7 +488,7 @@
         "potpack",
         "quickselect@3.0.0",
         "supercluster",
-        "tinyqueue",
+        "tinyqueue@3.0.0",
         "vt-pbf"
       ]
     },
@@ -553,6 +572,9 @@
       "integrity": "sha512-hJnc6Qg3dWoOMkqP53F0dzRIgtmsAge09kxUIqGrEUS4qr5rWLckGYaQAVr+opBrIMRErGgy6f5aPnyPpyGRfg==",
       "deprecated": true
     },
+    "tinyqueue@1.2.3": {
+      "integrity": "sha512-Qz9RgWuO9l8lT+Y9xvbzhPT2efIUIFd69N7eF7tJ9lnQl0iLj1M7peK7IoUGZL9DJHw9XftqLreccfxcQgYLxA=="
+    },
     "tinyqueue@3.0.0": {
       "integrity": "sha512-gRa9gwYU3ECmQYv3lslts5hxuIa90veaEcxDYuu3QGOIAEM2mOZkVHp48ANJuu1CURtRdHKUBY5Lm1tHV+sD4g=="
     },
@@ -583,8 +605,10 @@
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/yaml@1",
       "npm:@deck.gl/core@^9.3.7",
+      "npm:@deck.gl/extensions@^9.3.7",
       "npm:@deck.gl/layers@^9.3.7",
       "npm:@deck.gl/mapbox@^9.3.7",
+      "npm:@mapbox/polylabel@^1.0.2",
       "npm:@protomaps/basemaps@^5.7.2",
       "npm:@turf/bbox-clip@7",
       "npm:@turf/helpers@7",
