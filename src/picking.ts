@@ -70,6 +70,41 @@ export function selectPreferredPick<T extends { layerId: string }>(
 }
 
 /**
+ * クリック時の半径内 picking 候補（deck.gl pickMultipleObjects 相当。カーソル
+ * 直下に何もなくても近傍の pickable オブジェクトを距離順に複数返す）から、
+ * PICKING_PRIORITY の最優先候補を選ぶ（TASK-36）。
+ *
+ * 背景: Deck レベル onClick はカーソル直下ピクセルの最前面 1 件しか返さない。
+ * powers（GeoJsonLayer）が全面を覆うため、河川ライン（描画幅 2px）の外側では
+ * 常に距離 0 の powers が勝ち、pickingRadius は「直下に何も無い場合」の近傍
+ * 探索にしか効かない。pickMultipleObjects で半径内の候補を集め、
+ * selectPreferredPick で優先順に選び直すことでこれを解消する。
+ *
+ * - 候補ゼロなら null
+ * - layer が pickable な候補が 1 件も無ければ先頭候補（layer: null の info。
+ *   何も無い場所のクリック）をそのまま返す
+ * - rivers が候補に無ければ既存挙動（先頭 = カーソル直下の最前面）と同じ結果
+ *   になる（render 順が PICKING_PRIORITY の逆順であるため、pickMultipleObjects
+ *   の先頭候補は非 rivers 候補の中でも既に最優先の層である）
+ */
+export function resolveClickPick<T extends { layer: { id: string } | null }>(
+  picks: readonly T[],
+): T | null {
+  if (picks.length === 0) return null;
+  const pickable = picks.filter(
+    (candidate): candidate is T & { layer: { id: string } } =>
+      candidate.layer !== null,
+  );
+  if (pickable.length === 0) return picks[0];
+  const withLayerId = pickable.map((info) => ({
+    layerId: info.layer.id,
+    info,
+  }));
+  const best = selectPreferredPick(withLayerId);
+  return best === null ? picks[0] : best.info;
+}
+
+/**
  * 描画レイヤー配列（下→上）の並びが PICKING_PRIORITY と整合するか検証する。
  * 「整合する」とは、配列中の pickable レイヤー（PICKING_PRIORITY に含まれる
  * ID）を出現順に抜き出したとき、優先順の逆順（優先が高いものほど上に描画）に

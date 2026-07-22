@@ -107,6 +107,7 @@ import {
   PICKING_PRIORITY,
   POWER_LAYER_ID,
   renderOrderFromPickingPriority,
+  resolveClickPick,
   RIVERS_LAYER_ID,
 } from "./picking.ts";
 
@@ -311,6 +312,17 @@ let currentView:
 // （@deck.gl/core deck.js の _applyHoverCallbacks / _dispatchPickingEvent で
 // 確認）ので、順序レースなしに河川と勢力の表示を出し分けられる。
 // pickingRadius で細い河川ラインもクリック/ホバーしやすくする。
+//
+// TASK-36: 上記の pickingRadius は「カーソル直下に何も無い場合」の近傍探索
+// にしか効かない。本アプリは全面を powers（GeoJsonLayer）が覆うため、河川
+// ライン（描画幅 2px）の外側では常に距離 0 の powers が picking に勝ち、
+// カーソルが河川の中心線から数 px ずれるだけで河川を拾えなくなる（実測:
+// |d|≤2px 命中 / |d|≥4px ミス）。これを解消するため、クリック時のみ
+// handlePickClick 内で overlay.pickMultipleObjects により半径内の複数候補を
+// 取得し、picking.ts の resolveClickPick（PICKING_PRIORITY 準拠）で選び直す。
+// ホバー（handlePickHover）は変更しない: pickMultipleObjects は mousemove
+// 毎に呼ぶには高コストなため、ホバーは従来どおり Deck onHover の単一結果に
+// 委ねる（河川優先の picking 補正はクリックに限定する設計判断）。
 const overlay = new MapboxOverlay({
   interleaved: true,
   layers: [],
@@ -364,8 +376,12 @@ function buildPowerLayer(
  * TASK-29: 引数の info は Deck レベル onHover/onClick が渡す単一の picking
  * 結果で、deck.gl は最前面のレイヤーを返す。renderLayers が描画順を
  * PICKING_PRIORITY の逆順（優先が高いほど上）から導出しているため、
- * 「単一 pick = PICKING_PRIORITY の最優先候補」が成立し、河川と勢力が重なる
- * 位置では常に河川名が優先される（AC #2。pickMultipleObjects は不要）。
+ * ホバーでは「単一 pick = PICKING_PRIORITY の最優先候補」が概ね成立する。
+ * ただし河川ラインは描画幅が細く、カーソル直下ピクセルには常に powers
+ * ポリゴンが存在するため、河川に対しては単一 pick だけでは優先が効かない
+ * （TASK-36）。クリックでは handlePickClick が resolveClickPick で選び直した
+ * info を渡すため、この関数自体は info の由来（単一 pick か選び直し後か）を
+ * 意識しない。
  */
 function pickedLabel(info: PickingInfo): string | null {
   const layerId = info.layer?.id;
@@ -422,13 +438,44 @@ function applyHreHighlight(next: boolean): void {
 }
 
 /**
- * Deck レベルのクリック処理（TASK-24 AC #2/#3）。
+ * pickMultipleObjects で近傍候補を取得する際の最大件数（depth）（TASK-36）。
+ * PICKING_PRIORITY は 4 層のみのため小さい値で十分（deck.gl デフォルトの 10
+ * より絞り、余分な GPU 読み戻しコストを抑える）。
+ */
+const CLICK_PICK_DEPTH = 6;
+
+/**
+ * Deck レベルの単一 picking 結果を、必要な場合のみ半径内の複数候補で選び
+ * 直す（TASK-36）。単一 pick が既に rivers ならそのまま使う（再ピック不要）。
+ * 単一 pick が rivers 以外（powers 等）または何も無い場合にのみ
+ * overlay.pickMultipleObjects で半径内の候補を集め、resolveClickPick
+ * （PICKING_PRIORITY 準拠）で選び直す。これにより河川の描画幅（2px）の外側
+ * でも pickingRadius 分の近傍探索が河川に対して機能するようになる。
+ * ホバーでは呼ばない（mousemove 毎の pickMultipleObjects は高コストなため、
+ * この補正はクリックに限定する設計判断。TASK-36）。
+ */
+function resolveClickInfo(info: PickingInfo): PickingInfo {
+  if (info.layer?.id === RIVERS_LAYER_ID) return info;
+  const candidates = overlay.pickMultipleObjects({
+    x: info.x,
+    y: info.y,
+    radius: PICKING_RADIUS_PX,
+    depth: CLICK_PICK_DEPTH,
+  });
+  return resolveClickPick(candidates) ?? info;
+}
+
+/**
+ * Deck レベルのクリック処理（TASK-24 AC #2/#3、TASK-36）。
  * - 河川ライン: 選択をトグルし、選択時は情報パネルに河川名を表示
  * - 勢力ポリゴン: 従来どおり勢力ラベルをパネル表示し、河川選択は解除
  * - 何も無い場所: 河川選択を解除（Deck の onClick は picking なしでも
  *   layer: null の info で呼ばれることを @deck.gl/core の実装で確認済み）
+ * TASK-36: Deck onClick が渡す単一 info をそのまま使わず、まず
+ * resolveClickInfo で半径内の河川優先の選び直しを行う。
  */
-function handlePickClick(info: PickingInfo): void {
+function handlePickClick(rawInfo: PickingInfo): void {
+  const info = resolveClickInfo(rawInfo);
   // TASK-30 AC #2/#3: クリックでも帝国範囲の強調/解除を反映する（デスクトップ
   // ではホバー経路で既に反映済みだが、ホバーの無いタッチ操作でも成立させる。
   // 別の場所（河川・都市・非 HRE 勢力・空白）のクリックは false 側へ倒れて
