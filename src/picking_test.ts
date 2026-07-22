@@ -6,6 +6,7 @@ import {
   PICKING_PRIORITY,
   POWER_LAYER_ID,
   renderOrderFromPickingPriority,
+  resolveClickPick,
   RIVERS_LAYER_ID,
   selectPreferredPick,
 } from "./picking.ts";
@@ -63,6 +64,51 @@ Deno.test("selectPreferredPick: 同順位の候補は先勝ち（安定）", () 
   const first = pick(RIVERS_LAYER_ID, "ライン川");
   const second = pick(RIVERS_LAYER_ID, "ドナウ川");
   assertEquals(selectPreferredPick([first, second]), first);
+});
+
+// ---- resolveClickPick ----
+
+/** テスト用の pickMultipleObjects 相当の候補（PickingInfo の layer 部分のみ模す） */
+function pickInfo(
+  layerId: string | null,
+  label: string,
+): { layer: { id: string } | null; label: string } {
+  return { layer: layerId === null ? null : { id: layerId }, label };
+}
+
+Deno.test("resolveClickPick: 候補ゼロなら null を返す（TASK-36）", () => {
+  assertEquals(resolveClickPick([]), null);
+});
+
+Deno.test("resolveClickPick: rivers が候補に含まれれば先頭でなくても rivers を選ぶ（TASK-36 AC）", () => {
+  const power = pickInfo(POWER_LAYER_ID, "フランス王国");
+  const river = pickInfo(RIVERS_LAYER_ID, "ライン川");
+  // pickMultipleObjects はカーソル直下（powers）を先頭で返す想定
+  assertEquals(resolveClickPick([power, river]), river);
+});
+
+Deno.test("resolveClickPick: rivers が候補に無ければ既存挙動（PICKING_PRIORITY の最優先）を返す", () => {
+  const power = pickInfo(POWER_LAYER_ID, "フランス王国");
+  const hre = pickInfo(HRE_LAYER_ID, "オーストリア大公国");
+  // hre が power より高優先のため、入力順によらず hre を返す
+  assertEquals(resolveClickPick([power, hre]), hre);
+  assertEquals(resolveClickPick([hre, power]), hre);
+});
+
+Deno.test("resolveClickPick: rivers も混在候補も無い単一候補ならそれを返す（先頭 = 直下の最前面）", () => {
+  const power = pickInfo(POWER_LAYER_ID, "フランス王国");
+  assertEquals(resolveClickPick([power]), power);
+});
+
+Deno.test("resolveClickPick: 都市 > HRE > 勢力 の優先順も rivers 同様に成立する", () => {
+  const power = pickInfo(POWER_LAYER_ID, "神聖ローマ帝国");
+  const city = pickInfo(CITY_LAYER_ID, "ウィーン");
+  assertEquals(resolveClickPick([power, city]), city);
+});
+
+Deno.test("resolveClickPick: layer が null（何も無い場所）のみなら先頭候補をそのまま返す", () => {
+  const blank = pickInfo(null, "");
+  assertEquals(resolveClickPick([blank]), blank);
 });
 
 // ---- renderOrderFromPickingPriority ----
