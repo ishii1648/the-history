@@ -1,11 +1,11 @@
 ---
 id: TASK-36
 title: 河川ホバー/クリック時の強調スタイルが反映されない
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-22 14:03'
-updated_date: '2026-07-22 14:27'
+updated_date: '2026-07-22 15:22'
 labels:
   - bug
 dependencies: []
@@ -20,10 +20,10 @@ ordinal: 35000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 報告された事象（河川クリックで強調・情報パネル反映がない）の再現手順が確立され、再現する条件（年代・ズーム・河川）が明確になっている
-- [ ] #2 原因が特定され、再現テスト（red）が追加されている
-- [ ] #3 修正によりテストが green になり、河川クリックで強調表示・情報パネル反映が実機で確認できる
-- [ ] #4 河川ホバーのツールチップ表示（TASK-29）も併せて実機確認し、退行があれば修正する
+- [x] #1 報告された事象（河川クリックで強調・情報パネル反映がない）の再現手順が確立され、再現する条件（年代・ズーム・河川）が明確になっている
+- [x] #2 原因が特定され、再現テスト（red）が追加されている
+- [x] #3 修正によりテストが green になり、河川クリックで強調表示・情報パネル反映が実機で確認できる
+- [x] #4 河川ホバーのツールチップ表示（TASK-29）も併せて実機確認し、退行があれば修正する
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -44,4 +44,17 @@ ordinal: 35000
 - 境界の定量測定: 中心線からの垂直距離 |d|≤2px で命中、|d|≥4px でミス（両側対称、DPR=1・page zoom なしを確認）。実効許容半径 ≈ ライン描画幅 2px の半値+AA ≈ 2〜3px で、PICKING_RADIUS_PX=6 が効いていない。
 - 根本原因: deck.gl の picking はカーソル直下ピクセルのオブジェクトを優先し、radius は直下が空の場合の近傍探索にのみ働く。本アプリは全面を powers ポリゴンが覆うため、河川ライン描画幅の外では常に距離 0 のポリゴンが勝ち、radius 指定は河川に対して無効化される。picking.ts の selectPreferredPick（河川最優先の選好ロジック）は定義済みだが main.ts から未配線（どこからも import されていない）。
 - 副次的発見: ベースマップ（Protomaps）の詳細な河川描画と deck の NE 50m 粗ジオメトリは場所により大きく乖離（ヴィスワ川北部で最大 ~200 CSS px）。ユーザが視認してクリックするのはベースマップ側の川であるため、乖離が大きい区間では radius をいくら広げても命中しない。本タスクでは picking 優先度の修正を行い、乖離問題は別途起票を検討。
+
+マージ後動作確認（main 63be284 相当の dist, Chrome 実機）:
+- AC#3: 修正前にミスだった中心線から 4px の点のクリックで「ヴィスワ川」が選択され、太線強調（#0288d1）と情報パネル反映をスクリーンショットで確認。選択トグル（再クリックで解除）も動作。
+- AC#4 検証の制約: claude-in-chrome の hover アクションは mousemove を DOM に届けるが deck.gl の onHover 経路を駆動しないことが対照実験で判明（別勢力上へのホバーでもツールチップが更新されない）。ホバーの実機確認は実マウスが必要なためユーザーに手動確認を依頼中。
+- 副次的発見（再掲）: ベースマップ詳細河川と deck NE50m ジオメトリの乖離（北部で最大 ~200 CSS px）は radius 6px では吸収不能。別タスク起票を検討。
+
+AC#4: 河川ホバーのツールチップ表示はユーザーの実マウスによる手動確認で「ヴィスワ川」表示を確認（2026-07-23）。退行なし。拡張機能の hover イベントが deck onHover を駆動しない制約のため手動確認で代替した。
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+deck.gl picking の「カーソル直下優先」により全面を覆う勢力ポリゴンが常に勝ち、pickingRadius が河川に無効だった問題を、クリック時のみ pickMultipleObjects + resolveClickPick（PICKING_PRIORITY 準拠、selectPreferredPick を再利用）で選び直す配線により修正（PR #46、マージ済み）。検証: 実機定量測定（修正前 |d|≥4px ミス → 修正後 4px 命中・強調/パネル反映）、resolveClickPick の TDD（red→green、deno test 470 passed）、CI green、ホバー退行なし（ユーザー手動確認）。派生問題（ベースマップ河川との経路乖離）は TASK-44 として起票。
+<!-- SECTION:FINAL_SUMMARY:END -->
