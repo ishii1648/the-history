@@ -37,6 +37,14 @@ export const RIVER_LINE_COLOR: Rgba = [128, 222, 234, 255];
 export const RIVER_SELECTED_LINE_COLOR: Rgba = [2, 136, 209, 255];
 
 /**
+ * ホバー（未選択）時のライン色（TASK-42）。選択強調（#0288d1）とは視覚的に
+ * 区別できる中間強調として、Material Design の Light Blue 300（#64B5F6）を
+ * 採用する。通常色（#80deea、明るい水色）より明確に濃く、選択強調（#0288d1、
+ * 最も濃い青）よりは淡いため、3 状態を彩度・明度の連続的な段階として知覚できる。
+ */
+export const RIVER_HOVERED_LINE_COLOR: Rgba = [100, 181, 246, 255];
+
+/**
  * 通常時の線幅（px）。TASK-44 でベースマップの川ラインを除外し deck 河川が
  * 唯一の川表示になったため、視認性を確保して 2px から 3px へ引き上げた。
  * deck.gl では選択強調（太線）と層単位の lineWidthMaxPixels が両立しない
@@ -47,6 +55,13 @@ export const RIVER_LINE_WIDTH_PX = 3;
 
 /** 選択（強調）時の線幅（px）。通常幅より明確に太くして全体を際立たせる */
 export const RIVER_SELECTED_LINE_WIDTH_PX = 4.5;
+
+/**
+ * ホバー（未選択）時の線幅（px）（TASK-42）。通常幅（3px）と選択幅（4.5px）の
+ * 中間かつやや選択寄りの 3.75px を採用する。マウス直下の反応として通常幅との
+ * 差を確実に視認させつつ、クリック確定（選択）との違いも幅の変化量で残す。
+ */
+export const RIVER_HOVERED_LINE_WIDTH_PX = 3.75;
 
 /** properties から河川名（name）を取り出す。欠落・空文字・非文字列は null */
 export function riverNameFor(props: GeoJsonProperties): string | null {
@@ -69,26 +84,33 @@ export function toggleRiverSelection(
 }
 
 /**
- * 河川ラインの色を決める（純粋関数）。選択中の河川のみ強調色にし、
- * 他の河川・name の無い feature は通常色のまま。
+ * 河川ラインの色を決める（純粋関数）。選択 / ホバー / 通常の 3 状態を持つ
+ * （TASK-42）。優先順位は選択 > ホバー > 通常: 選択中の河川にホバーしても
+ * 選択強調を維持し、中間強調で上書きしない（AC #3）。hovered 省略時（null）は
+ * 従来どおり選択 / 通常の 2 状態のまま（後方互換）。
  */
 export function riverLineColor(
   name: string | null,
   selected: string | null,
+  hovered: string | null = null,
 ): Rgba {
-  return name !== null && name === selected
-    ? RIVER_SELECTED_LINE_COLOR
-    : RIVER_LINE_COLOR;
+  if (name !== null && name === selected) return RIVER_SELECTED_LINE_COLOR;
+  if (name !== null && name === hovered) return RIVER_HOVERED_LINE_COLOR;
+  return RIVER_LINE_COLOR;
 }
 
-/** 河川ラインの線幅（px）を決める（純粋関数）。選択中の河川のみ太くする */
+/**
+ * 河川ラインの線幅（px）を決める（純粋関数）。色と同じ優先順位（選択 >
+ * ホバー > 通常）で太さを決める（TASK-42）。
+ */
 export function riverLineWidth(
   name: string | null,
   selected: string | null,
+  hovered: string | null = null,
 ): number {
-  return name !== null && name === selected
-    ? RIVER_SELECTED_LINE_WIDTH_PX
-    : RIVER_LINE_WIDTH_PX;
+  if (name !== null && name === selected) return RIVER_SELECTED_LINE_WIDTH_PX;
+  if (name !== null && name === hovered) return RIVER_HOVERED_LINE_WIDTH_PX;
+  return RIVER_LINE_WIDTH_PX;
 }
 
 /** 折れ線の全長（座標系の単位 = 度の平面近似）。ラベル配置用途には十分 */
