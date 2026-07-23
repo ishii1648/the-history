@@ -29,8 +29,17 @@ import { displayLabel } from "./info.ts";
 import {
   buildLabelData,
   characterSetFrom,
+  CITY_LABEL_COLOR,
+  CITY_LABEL_SIZE_PX,
+  LABEL_FONT_FAMILY,
+  LABEL_FONT_SETTINGS,
+  LABEL_OUTLINE_COLOR,
+  LABEL_OUTLINE_WIDTH,
   labelColorFor,
   type LabelDatum,
+  POWER_LABEL_SIZE_PX,
+  RIVER_LABEL_COLOR,
+  RIVER_LABEL_SIZE_PX,
 } from "./labels.ts";
 import { extractHreExtent, shouldHighlightHre } from "./hre_extent.ts";
 import {
@@ -551,15 +560,15 @@ function buildRiverLabelLayer(): TextLayer<
     pickable: false,
     getText: (d) => d.text,
     getPosition: (d) => d.position,
-    // 勢力ラベル（13px）より控えめな 11px・濃い水色（#0277bd）+ 白 halo
-    getSize: 11,
+    // 勢力ラベル（POWER_LABEL_SIZE_PX）より控えめなサイズ・濃い水色（#0277bd）+ 白 halo
+    getSize: RIVER_LABEL_SIZE_PX,
     sizeUnits: "pixels",
-    getColor: [2, 119, 189, 255],
-    fontFamily: "sans-serif",
+    getColor: RIVER_LABEL_COLOR,
+    fontFamily: LABEL_FONT_FAMILY,
     fontWeight: 600,
-    fontSettings: { sdf: true },
-    outlineWidth: 2,
-    outlineColor: [255, 255, 255, 220],
+    fontSettings: LABEL_FONT_SETTINGS,
+    outlineWidth: LABEL_OUTLINE_WIDTH,
+    outlineColor: LABEL_OUTLINE_COLOR,
     // 日本語名（ライン川 等）のグリフもラベル文字列から自動生成する
     characterSet: characterSetFrom(data.map((d) => d.text)),
     extensions: [new CollisionFilterExtension()],
@@ -598,7 +607,8 @@ function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
  * 都市名ラベルの TextLayer を生成する（TASK-27 AC #2/#4）。
  * 文字色は濃茶（#793E16）。国名ラベルの濃グレー [40,40,40]・河川ラベルの
  * 水色と明確に異なり、白 halo 付きで一見して都市と区別できる。サイズは
- * 河川ラベルと同じ 11px（国名 13px より控えめ）で、マーカーの右上へ
+ * 河川ラベルと同じ CITY_LABEL_SIZE_PX（国名 POWER_LABEL_SIZE_PX より控えめ）で、
+ * マーカーの右上へ
  * ピクセルオフセットしてドットとラベルが重ならないようにする。
  * CollisionFilterExtension は国名・河川ラベルと同一衝突空間
  * （collisionTestProps.sizeScale: 2）に参加させ、人口由来の都市固定バンド
@@ -615,14 +625,14 @@ function buildCityLabelLayer(
     pickable: false,
     getText: (d) => d.text,
     getPosition: (d) => d.position,
-    getSize: 11,
+    getSize: CITY_LABEL_SIZE_PX,
     sizeUnits: "pixels",
-    getColor: [121, 62, 22, 255],
-    fontFamily: "sans-serif",
+    getColor: CITY_LABEL_COLOR,
+    fontFamily: LABEL_FONT_FAMILY,
     fontWeight: 600,
-    fontSettings: { sdf: true },
-    outlineWidth: 2,
-    outlineColor: [255, 255, 255, 220],
+    fontSettings: LABEL_FONT_SETTINGS,
+    outlineWidth: LABEL_OUTLINE_WIDTH,
+    outlineColor: LABEL_OUTLINE_COLOR,
     // マーカー（3px + 白縁）を覆わないよう少し上へずらす（オフセットのみ。
     // getTextAnchor: "start" / getAlignmentBaseline: "bottom" は
     // CollisionFilterExtension の衝突判定パスと相性が悪く、指定すると
@@ -741,17 +751,17 @@ function buildLabelLayer(
     pickable: false,
     getText: (d) => d.text,
     getPosition: (d) => d.position,
-    // 13px 固定・濃色文字 + 白 halo（SDF アウトライン）で塗りの上でも判読できる。
+    // POWER_LABEL_SIZE_PX 固定・濃色文字 + 白 halo（SDF アウトライン）で塗りの上でも判読できる。
     // TASK-30 AC #1: 文字色は kind で塗り分け（独立国 = 濃グレー、HRE 域内の
     // 領邦 = 臙脂 HRE_LABEL_COLOR）。ラベルだけで域内/域外を区別できる。
-    getSize: 13,
+    getSize: POWER_LABEL_SIZE_PX,
     sizeUnits: "pixels",
     getColor: (d: LabelDatum) => [...labelColorFor(d)],
-    fontFamily: "sans-serif",
+    fontFamily: LABEL_FONT_FAMILY,
     fontWeight: 600,
-    fontSettings: { sdf: true },
-    outlineWidth: 2,
-    outlineColor: [255, 255, 255, 220],
+    fontSettings: LABEL_FONT_SETTINGS,
+    outlineWidth: LABEL_OUTLINE_WIDTH,
+    outlineColor: LABEL_OUTLINE_COLOR,
     // ü などの非 ASCII 文字（Württemberg 等）もグリフを生成する
     characterSet: characterSetFrom(data.map((d) => d.text)),
     updateTriggers: { getText: [year], getPosition: [year] },
