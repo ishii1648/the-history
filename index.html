@@ -143,6 +143,36 @@
         progress）。
       </div>
     </footer>
+    <!-- TASK-46: データの既知の制限（表示できない情報）一覧。TASK-26 の折りたたみ
+         attribution と同じ操作性（アイコンボタン + クリック/タップ/キーボードで
+         展開/格納）を流用し、attribution の少し上に積む（左下で左揃え・同じ幅上限）。
+         トグルは known-limitations.json のロード成功時のみ main.ts が表示する
+         （欠如時は hidden のまま従来表示を維持。notes.json と同じ方針）。 -->
+    <aside
+      id="known-limitations"
+      class="known-limitations"
+      aria-label="データの既知の制限"
+    >
+      <button
+        id="known-limitations-toggle"
+        class="known-limitations-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="known-limitations-content"
+        aria-label="データの既知の制限"
+        hidden
+      >
+        ⚠
+      </button>
+      <div
+        id="known-limitations-content"
+        class="known-limitations-content"
+        hidden
+      >
+        <p class="known-limitations-heading">データの既知の制限</p>
+        <ul id="known-limitations-list" class="known-limitations-list"></ul>
+      </div>
+    </aside>
     <!-- TASK-33: 年代ごとの歴史解説パネル。右下（maplibre attribution の少し上）に
          「解説」トグルボタンを置き、展開時はその真上へ吹き出し状パネルを表示する。
          トグルは notes.json のロード成功時のみ main.ts が表示する（欠如時は
