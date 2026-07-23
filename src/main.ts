@@ -299,6 +299,12 @@ let citiesData: CitiesData = { years: {} };
 let selectedRiverName: string | null = null;
 
 /**
+ * ホバー中の河川名。null はホバーなし（TASK-42）。選択とは独立に管理し、
+ * riverLineColor/riverLineWidth で選択 > ホバー > 通常の優先度で強調へ変換する。
+ */
+let hoveredRiverName: string | null = null;
+
+/**
  * HRE 本体・域内領邦のホバー/クリック中に帝国範囲を強調表示するか
  * （TASK-30 AC #2/#3）。判定は hre_extent.ts の shouldHighlightHre に委ねる。
  */
@@ -329,9 +335,11 @@ let currentView:
 // |d|≤2px 命中 / |d|≥4px ミス）。これを解消するため、クリック時のみ
 // handlePickClick 内で overlay.pickMultipleObjects により半径内の複数候補を
 // 取得し、picking.ts の resolveClickPick（PICKING_PRIORITY 準拠）で選び直す。
-// ホバー（handlePickHover）は変更しない: pickMultipleObjects は mousemove
-// 毎に呼ぶには高コストなため、ホバーは従来どおり Deck onHover の単一結果に
-// 委ねる（河川優先の picking 補正はクリックに限定する設計判断）。
+// ホバー（handlePickHover）の picking 方式自体は変更しない: pickMultipleObjects
+// は mousemove 毎に呼ぶには高コストなため、ホバーは従来どおり Deck onHover の
+// 単一結果に委ねる（河川優先の picking 補正はクリックに限定する設計判断）。
+// TASK-42: 単一結果が rivers であればその河川名を hoveredRiverName とし、
+// 中間強調（riverLineColor/riverLineWidth の hovered 引数）に反映する。
 const overlay = new MapboxOverlay({
   interleaved: true,
   layers: [],
@@ -422,6 +430,14 @@ function handlePickHover(info: PickingInfo): void {
   // TASK-30 AC #2/#3: HRE 本体・域内領邦のホバーで帝国範囲を強調し、
   // ホバー解除（picking なし・非 HRE 対象）で通常表示へ戻す
   applyHreHighlight(hreHighlightFromPick(info));
+  // TASK-42: 河川ホバー中の中間強調。pick が rivers 以外・picking なしの場合は
+  // null（通常表示）に戻す。ホバーの picking 方式自体（直下 pick）は変更しない
+  // （TASK-36 の半径補正はクリック限定という設計判断を維持）。
+  applyRiverHover(
+    info.layer?.id === RIVERS_LAYER_ID && info.object !== undefined
+      ? riverNameFor((info.object as Feature).properties)
+      : null,
+  );
 }
 
 /**
@@ -515,9 +531,22 @@ function applyRiverSelection(next: string | null): void {
 }
 
 /**
+ * 河川のホバー状態を更新し、変化があればレイヤーを再構築して反映する
+ * （TASK-42）。毎 mousemove で呼ばれるため、値が変化しない限り
+ * renderLayers() を呼ばない（無駄な再構築を避ける）。
+ */
+function applyRiverHover(next: string | null): void {
+  if (next === hoveredRiverName) return;
+  hoveredRiverName = next;
+  renderLayers();
+}
+
+/**
  * 主要河川ラインの GeoJsonLayer を生成する（TASK-24）。
  * 色・幅は rivers.ts の純粋関数で決め、選択中の河川全体（同名 feature）を
- * 太く濃色で強調する。選択状態は updateTriggers で再評価させる。
+ * 太く濃色で強調する。TASK-42: ホバー中（未選択）の河川は中間強調にする
+ * （選択 > ホバー > 通常の優先度は rivers.ts 側で解決）。選択・ホバーの
+ * いずれも updateTriggers で再評価させる。
  */
 function buildRiversLineLayer(): GeoJsonLayer {
   return new GeoJsonLayer({
@@ -527,16 +556,24 @@ function buildRiversLineLayer(): GeoJsonLayer {
     stroked: false,
     filled: false,
     getLineColor: (f: Feature) =>
-      riverLineColor(riverNameFor(f.properties), selectedRiverName),
+      riverLineColor(
+        riverNameFor(f.properties),
+        selectedRiverName,
+        hoveredRiverName,
+      ),
     lineWidthUnits: "pixels",
     getLineWidth: (f: Feature) =>
-      riverLineWidth(riverNameFor(f.properties), selectedRiverName),
+      riverLineWidth(
+        riverNameFor(f.properties),
+        selectedRiverName,
+        hoveredRiverName,
+      ),
     lineWidthMinPixels: 1,
     lineCapRounded: true,
     lineJointRounded: true,
     updateTriggers: {
-      getLineColor: [selectedRiverName],
-      getLineWidth: [selectedRiverName],
+      getLineColor: [selectedRiverName, hoveredRiverName],
+      getLineWidth: [selectedRiverName, hoveredRiverName],
     },
   });
 }

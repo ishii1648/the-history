@@ -1,6 +1,8 @@
 import { assert, assertEquals } from "@std/assert";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import {
+  RIVER_HOVERED_LINE_COLOR,
+  RIVER_HOVERED_LINE_WIDTH_PX,
   RIVER_LINE_COLOR,
   RIVER_LINE_WIDTH_PX,
   RIVER_SELECTED_LINE_COLOR,
@@ -79,6 +81,66 @@ Deno.test("riverLineWidth: 未選択時は通常幅、選択中は太くなる",
 Deno.test("riverLineWidth: 選択中でも他の河川は通常幅のまま", () => {
   assertEquals(riverLineWidth("Danube", "Rhine"), RIVER_LINE_WIDTH_PX);
   assertEquals(riverLineWidth(null, "Rhine"), RIVER_LINE_WIDTH_PX);
+});
+
+// ---- riverLineColor / riverLineWidth: hovered（TASK-42） ----
+
+Deno.test("riverLineColor: ホバー中（未選択）は中間強調色を返す", () => {
+  assertEquals(
+    riverLineColor("Rhine", null, "Rhine"),
+    RIVER_HOVERED_LINE_COLOR,
+  );
+});
+
+Deno.test("riverLineColor: 選択中の河川にホバーしても選択強調を維持する（AC #3）", () => {
+  assertEquals(
+    riverLineColor("Rhine", "Rhine", "Rhine"),
+    RIVER_SELECTED_LINE_COLOR,
+  );
+});
+
+Deno.test("riverLineColor: ホバー中でも他の河川は通常色のまま", () => {
+  assertEquals(riverLineColor("Danube", null, "Rhine"), RIVER_LINE_COLOR);
+});
+
+Deno.test("riverLineColor: hovered が null なら通常色（回帰）", () => {
+  assertEquals(riverLineColor("Rhine", null, null), RIVER_LINE_COLOR);
+});
+
+Deno.test("riverLineColor: 中間強調色は通常色と選択強調色のどちらとも異なる", () => {
+  assert(
+    RIVER_HOVERED_LINE_COLOR !== RIVER_LINE_COLOR &&
+      RIVER_HOVERED_LINE_COLOR !== RIVER_SELECTED_LINE_COLOR,
+  );
+});
+
+Deno.test("riverLineWidth: ホバー中（未選択）は中間幅を返す", () => {
+  assertEquals(
+    riverLineWidth("Rhine", null, "Rhine"),
+    RIVER_HOVERED_LINE_WIDTH_PX,
+  );
+});
+
+Deno.test("riverLineWidth: 選択中の河川にホバーしても選択幅を維持する（AC #3）", () => {
+  assertEquals(
+    riverLineWidth("Rhine", "Rhine", "Rhine"),
+    RIVER_SELECTED_LINE_WIDTH_PX,
+  );
+});
+
+Deno.test("riverLineWidth: ホバー中でも他の河川は通常幅のまま", () => {
+  assertEquals(riverLineWidth("Danube", null, "Rhine"), RIVER_LINE_WIDTH_PX);
+});
+
+Deno.test("riverLineWidth: hovered が null なら通常幅（回帰）", () => {
+  assertEquals(riverLineWidth("Rhine", null, null), RIVER_LINE_WIDTH_PX);
+});
+
+Deno.test("riverLineWidth: 中間幅は通常幅より太く選択幅より細い", () => {
+  assert(
+    RIVER_HOVERED_LINE_WIDTH_PX > RIVER_LINE_WIDTH_PX &&
+      RIVER_HOVERED_LINE_WIDTH_PX < RIVER_SELECTED_LINE_WIDTH_PX,
+  );
 });
 
 // ---- riverNameFor ----
