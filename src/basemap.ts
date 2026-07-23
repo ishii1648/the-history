@@ -1,12 +1,14 @@
 /**
  * ベースマップスタイルの組み立て（DOM 非依存の純粋ロジック）。
  *
- * 歴史地図の下地として「地形・海岸線・河川」だけを描画し、現代の
+ * 歴史地図の下地として「地形・海岸線」だけを描画し、現代の
  * 国境・地名・道路等はスタイル定義の段階で除外する（docs/app-spec.md §2.2）。
  *
  * Natural Earth 主要河川オーバーレイ（TASK-21）は、クリック/ホバー可能に
  * するため TASK-24 で deck.gl の GeoJsonLayer（src/rivers.ts + main.ts）へ
  * 移行した。ここでは MapLibre style に rivers ソース/レイヤーを含めない。
+ * さらに TASK-44 でベースマップ側の川ライン（water_river / water_stream）も
+ * 除外し、河川の見た目とクリック対象を deck オーバーレイへ一本化した。
  */
 
 import { layers, namedFlavor } from "@protomaps/basemaps";
@@ -16,13 +18,16 @@ import { BASEMAP_SOURCE_ID, DEM_PMTILES_URL, DEM_SOURCE_ID } from "./config.ts";
  * @protomaps/basemaps ^5.7.2 の nolabels_layers()（src/base_layers.ts）に
  * 実在するレイヤー id のうち、採用するもの。
  *
- * 採用（地形・海岸線・河川に相当）:
+ * 採用（地形・海岸線に相当）:
  * - background:   下地色
  * - earth:        陸地ポリゴン（海との境界 = 海岸線の描画を担う）
  * - landcover:    森林・草地・氷河など自然被覆（地形の表現）
  * - water:        海洋・湖沼ポリゴン
- * - water_river:  河川（線）
- * - water_stream: 小河川（線）
+ *
+ * 除外（河川ライン。TASK-44）:
+ * - water_river / water_stream: ベースマップの川ラインは deck.gl の pickable
+ *   河川（NE50m, src/rivers.ts）と経路が乖離し、クリックできないデコイに
+ *   なるため採用しない。河川表示は deck オーバーレイへ一本化する。
  *
  * 除外（現代の情報が歴史地図に透けるため）:
  * - boundaries / boundaries_country: 現代の国境・行政境界
@@ -37,8 +42,6 @@ export const BASEMAP_LAYER_IDS: readonly string[] = [
   "earth",
   "landcover",
   "water",
-  "water_stream",
-  "water_river",
 ];
 
 const KEEP_IDS: ReadonlySet<string> = new Set(BASEMAP_LAYER_IDS);

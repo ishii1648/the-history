@@ -37,12 +37,13 @@ export const RIVER_LINE_COLOR: Rgba = [128, 222, 234, 255];
 export const RIVER_SELECTED_LINE_COLOR: Rgba = [2, 136, 209, 255];
 
 /**
- * 通常時の線幅（px）。TASK-21 の zoom 補間（z3=1px → z8=2.5px）の中庸値。
+ * 通常時の線幅（px）。TASK-44 でベースマップの川ラインを除外し deck 河川が
+ * 唯一の川表示になったため、視認性を確保して 2px から 3px へ引き上げた。
  * deck.gl では選択強調（太線）と層単位の lineWidthMaxPixels が両立しない
  * （clamp が強調幅も潰す）ため、固定 px 幅 + getLineWidth の per-feature
  * 切替で近似する。
  */
-export const RIVER_LINE_WIDTH_PX = 2;
+export const RIVER_LINE_WIDTH_PX = 3;
 
 /** 選択（強調）時の線幅（px）。通常幅より明確に太くして全体を際立たせる */
 export const RIVER_SELECTED_LINE_WIDTH_PX = 4.5;
