@@ -1,11 +1,11 @@
 ---
 id: TASK-38
 title: 国名・都市名・河川名ラベルの視認性を改善する（フォント・サイズ・縁取り）
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-22 14:04'
-updated_date: '2026-07-23 13:43'
+updated_date: '2026-07-23 14:05'
 labels: []
 dependencies:
   - TASK-27
@@ -21,11 +21,11 @@ ordinal: 37000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 国名・HRE 領邦名・都市名・河川名のいずれのラベルも、白（または十分なコントラストの）縁取りが付き、任意の背景色の上で文字が判読できる
-- [ ] #2 フォントサイズが従来より見やすく調整されている（過度な画面占有・ラベル同士の重なり増加がないこと）
-- [ ] #3 既存のラベル色分け（TASK-30 HRE 領邦色・都市色・河川色）が維持されている
-- [ ] #4 衝突制御（CollisionFilterExtension）の優先度ロジックに退行がない
-- [ ] #5 変更前後のスクリーンショット等で視認性向上が目視確認されている
+- [x] #1 国名・HRE 領邦名・都市名・河川名のいずれのラベルも、白（または十分なコントラストの）縁取りが付き、任意の背景色の上で文字が判読できる
+- [x] #2 フォントサイズが従来より見やすく調整されている（過度な画面占有・ラベル同士の重なり増加がないこと）
+- [x] #3 既存のラベル色分け（TASK-30 HRE 領邦色・都市色・河川色）が維持されている
+- [x] #4 衝突制御（CollisionFilterExtension）の優先度ロジックに退行がない
+- [x] #5 変更前後のスクリーンショット等で視認性向上が目視確認されている
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -38,3 +38,21 @@ ordinal: 37000
 5. 実機確認（AC#5）: 変更前後のスクリーンショットを取得し視認性向上を目視確認（hillshade 上・濃色ポリゴン上を含む）。AC#4 の衝突制御はズーム操作でラベル重なりが増えていないことを確認。
 6. 並列化判定: 見送り（理由: 変更対象が src/labels.ts / main.ts のラベル定義に集中する単一領域の小規模修正で、ファイル競合なく分割できる独立サブ作業がない。実装は単一 subagent、実機確認は mainagent）。
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス（実機, Chrome, before=:8002(main)/after=:8003(task-38) 同一ビュー ?year=1500&zoom=4.8&center=17.5,50.1）:
+- AC#1: after のスクリーンショットで国名・HRE 領邦名（臙脂）・都市名・河川名すべてに白 halo（alpha 235）が付き、濃緑ポリゴン + hillshade 上でも判読可能（拡大確認: ブランデンブルク選帝侯領・ケルン大司教領・ライン川・プラハ等）。
+- AC#2: サイズ 13→14 / 11→12px の控えめな引き上げで before 比の判読性向上を目視確認。ラベル数・重なりは before と同等（過度な画面占有なし）。
+- AC#3: 色分け定数（BASE/HRE/CITY/RIVER）は不変（labels_test.ts で回帰テスト、実機でも臙脂/濃茶/水色/濃グレーを確認）。
+- AC#4: CollisionFilterExtension の優先度・collisionTestProps は diff 上未変更（レビュー確認）。実機でラベル重なりの増加なし。
+- AC#5: before/after スクリーンショットを取得し比較（本ノート記載のとおり視認性向上を確認）。
+- ゲート: deno fmt/lint/test（478 passed, red→green）/ build 全 green。PR #50 CI green。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+全 TextLayer（国名・HRE 領邦名・都市名・河川名）のフォントを和文対応 sans-serif スタックへ変更し、白 halo を強化（alpha 220→235 + smoothing 0.15）、サイズを国名 13→14px・都市/河川 11→12px へ控えめに引き上げ。色分けと衝突制御は不変。ラベル設定は labels.ts の定数へ集約。検証: TDD red→green（478 passed）、CI green、before/after 実機スクリーンショット比較で視認性向上を確認。
+<!-- SECTION:FINAL_SUMMARY:END -->
