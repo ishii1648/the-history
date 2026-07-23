@@ -13,19 +13,50 @@ body {
   height: 100%;
 }
 
-/* TASK-7: ホバーツールチップ（app-spec §5.2）。カーソル近傍に追従表示する */
+/* TASK-40: 羊皮紙/古地図デザインの共通トークン。
+   パレット: クリーム地(--parchment*) / 焦茶インク(--ink*) / 真鍮(--brass*) /
+   封蝋レッド(--wax*)。書体はセリフ体（和文はゴシックの明朝相当にフォールバック）。 */
+:root {
+  --parchment: #f4ecd7;
+  --parchment-shade: #e7d9b2;
+  --parchment-deep: #ddc999;
+  --ink: #3a2712;
+  --ink-soft: #5c3d22;
+  --frame: #5c3d22;
+  --frame-dark: #3a2712;
+  --brass: #b8894f;
+  --brass-light: #d9b878;
+  --wax: #7a2e22;
+  --wax-light: #a5453a;
+  --font-serif:
+    Georgia,
+    "Times New Roman",
+    "Hiragino Mincho ProN",
+    "Yu Mincho",
+    serif;
+}
+
+/* TASK-40: 情報パネル・タイムラインの角の渦巻き装飾に共通で使う SVG（インク色の
+   手書き風フラーリッシュ）。data URI で自己完結し外部画像は読み込まない。 */
+:root {
+  --corner-flourish: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M6 6 C6 20 20 24 24 12 C26 6 34 8 32 16 C30 22 22 22 22 22' fill='none' stroke='%235c3d22' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* TASK-7: ホバーツールチップ（app-spec §5.2）。カーソル近傍に追従表示する。
+   TASK-40: 羊皮紙トーンへ統一（クリーム地・焦茶インク・セリフ体） */
 .info-tooltip {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 20;
   max-width: 260px;
-  padding: 4px 8px;
-  background: rgba(20, 22, 28, 0.9);
-  border-radius: 6px;
+  padding: 4px 9px;
+  background: var(--parchment);
+  border: 1px solid var(--frame);
+  border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  color: #f5f5f5;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  font-family: var(--font-serif);
   font-size: 14px;
   line-height: 1.3;
   white-space: nowrap;
@@ -40,7 +71,8 @@ body {
 /* TASK-7/TASK-25: クリック情報パネル（モバイルのホバー代替）。
    タイムラインが左端の垂直中央帯へ移ったため、低い viewport でも重ならないよう
    右上固定へ移動（上中央のエラートーストとは横位置で、右下の attribution とは
-   縦位置で分離されており衝突しない） */
+   縦位置で分離されており衝突しない）。
+   TASK-40: クリーム地の羊皮紙 + 焦茶の二重罫 + 対角の渦巻き装飾で古地図風に。 */
 .info-panel {
   position: absolute;
   top: 16px;
@@ -50,45 +82,76 @@ body {
   align-items: center;
   gap: 10px;
   max-width: min(320px, calc(100% - 32px));
-  padding: 10px 12px;
-  background: rgba(20, 22, 28, 0.9);
-  border-radius: 10px;
+  padding: 12px 16px;
+  background: var(--parchment);
+  border: 2px solid var(--frame);
+  outline: 1px solid var(--brass);
+  outline-offset: -6px;
+  border-radius: 3px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  color: #f5f5f5;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  font-family: var(--font-serif);
 }
 
 .info-panel[hidden] {
   display: none;
 }
 
+/* 対角の角に渦巻き装飾（左上=正立 / 右下=180°回転）。手書き縁飾りの体裁で
+   全 4 隅を埋めなくても「角の装飾」として成立させ、過剰装飾を避ける */
+.info-panel::before,
+.info-panel::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background-image: var(--corner-flourish);
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.info-panel::before {
+  top: 3px;
+  left: 3px;
+}
+
+.info-panel::after {
+  right: 3px;
+  bottom: 3px;
+  transform: rotate(180deg);
+}
+
 .info-panel-label {
   font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .info-panel-close {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
-  border: none;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #f5f5f5;
-  font-size: 16px;
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: var(--parchment-shade);
+  color: var(--ink);
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
 }
 
 .info-panel-close:hover {
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--brass-light);
 }
 
 /* TASK-6/TASK-25: タイムラインスライダー（app-spec §5.1）。
    画面左端の垂直中央帯に縦向きで固定する（上=古い 900 / 下=新しい 1914）。
    高さは clamp した vh ベースに抑え、上下に余白を残して左上の UI・左下の
-   フッターと重ならないようにする */
+   フッターと重ならないようにする。
+   TASK-40: 縦帯を木目調（繰り返しグラデーション）にし、年号はアンティーク
+   真鍮のセリフ数字で表示する。 */
 .timeline {
   position: absolute;
   left: 16px;
@@ -99,21 +162,34 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 12px 10px 14px;
+  padding: 14px 12px 16px;
   box-sizing: border-box;
-  background: rgba(20, 22, 28, 0.82);
-  border-radius: 12px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  color: #f5f5f5;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background:
+    repeating-linear-gradient(
+      100deg,
+      rgba(0, 0, 0, 0.12) 0px,
+      rgba(0, 0, 0, 0.12) 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    linear-gradient(160deg, #5a3a22 0%, #4a2f1c 55%, #3c2716 100%);
+  border: 1px solid var(--frame-dark);
+  border-radius: 8px;
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(184, 137, 79, 0.35);
+  color: var(--brass-light);
+  font-family: var(--font-serif);
 }
 
 /* AC #3: 現在年を最上部に大きく表示（縦帯に収まるようサイズは控えめ） */
 .timeline-year {
   font-size: 24px;
   font-weight: 700;
-  line-height: 1;
   letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--brass-light);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
   font-variant-numeric: tabular-nums;
 }
 
@@ -127,19 +203,19 @@ body {
 
 .timeline-btn {
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #f5f5f5;
-  font-size: 14px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--brass);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--brass-light);
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
 }
 
 .timeline-btn:hover {
-  background: rgba(255, 255, 255, 0.24);
+  background: rgba(184, 137, 79, 0.35);
 }
 
 .timeline-btn:disabled {
@@ -149,12 +225,13 @@ body {
 
 /* TASK-25: writing-mode で range を縦向き化（vertical-lr は min が上端に来るため
    index 0 = 900 が最上部になり「上=古い」の並びと一致。direction 反転は不要）。
-   datalist の目盛りはこの縦トラックに沿って描画される */
+   datalist の目盛りはこの縦トラックに沿って描画される。
+   TASK-40: accent-color を真鍮系に変更しアンティーク調に。 */
 .timeline-slider {
   flex: 0 0 auto;
   writing-mode: vertical-lr;
   height: clamp(200px, 46vh, 460px);
-  accent-color: #6ea8fe;
+  accent-color: var(--brass);
   cursor: pointer;
 }
 
@@ -168,19 +245,20 @@ body {
   left: 8px;
   bottom: 6px;
   z-index: 5;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-serif);
 }
 
-/* AC #1: 常時表示の目印。小さな半透明の円形ボタン（native button でキーボード操作可） */
+/* AC #1: 常時表示の目印。小さな半透明の円形ボタン（native button でキーボード操作可）
+   TASK-40: 焦茶レザー調のトーンに統一 */
 .footer-toggle {
   display: block;
   width: 28px;
   height: 28px;
   padding: 0;
-  border: none;
+  border: 1px solid var(--brass);
   border-radius: 50%;
-  background: rgba(20, 22, 28, 0.62);
-  color: rgba(245, 245, 245, 0.85);
+  background: rgba(58, 39, 18, 0.82);
+  color: var(--brass-light);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
@@ -188,23 +266,25 @@ body {
 
 .footer-toggle:hover,
 .footer-toggle[aria-expanded="true"] {
-  background: rgba(20, 22, 28, 0.9);
-  color: #f5f5f5;
+  background: rgba(58, 39, 18, 0.95);
+  color: var(--parchment);
 }
 
 /* AC #2: 展開時の attribution 全文パネル。ⓘボタンの真上に吹き出し状に重ね、
-   文字サイズ・配色・最大幅は TASK-9 の常時表示フッターと同等にする */
+   文字サイズ・配色・最大幅は TASK-9 の常時表示フッターと同等にする。
+   TASK-40: 羊皮紙地のカードに統一 */
 .footer-content {
   position: absolute;
   left: 0;
   bottom: calc(100% + 6px);
   width: max-content;
   max-width: min(46ch, calc(100vw - 32px));
-  padding: 6px 10px;
-  background: rgba(20, 22, 28, 0.9);
-  border-radius: 6px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  color: rgba(245, 245, 245, 0.9);
+  padding: 7px 11px;
+  background: var(--parchment);
+  border: 1px solid var(--frame);
+  border-radius: 5px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  color: var(--ink);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -214,7 +294,7 @@ body {
 }
 
 .footer-content a {
-  color: #9ec5ff;
+  color: var(--wax);
 }
 
 /* TASK-33: 年代ごとの歴史解説パネル。右下の maplibre attribution
@@ -230,20 +310,20 @@ body {
   right: 8px;
   bottom: 34px;
   z-index: 15;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-serif);
 }
 
 /* 常時表示の目印。「解説」ラベル付きの小さな半透明ボタン
-   （native button でキーボード操作可。タイムライン等と同トーン） */
+   TASK-40: 焦茶レザー調のトーンでタイムラインと揃える */
 .notes-toggle {
   display: block;
-  padding: 6px 14px;
-  border: none;
+  padding: 6px 15px;
+  border: 1px solid var(--brass);
   border-radius: 16px;
-  background: rgba(20, 22, 28, 0.72);
-  color: rgba(245, 245, 245, 0.9);
+  background: rgba(58, 39, 18, 0.82);
+  color: var(--brass-light);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
 }
@@ -254,12 +334,13 @@ body {
 
 .notes-toggle:hover,
 .notes-toggle[aria-expanded="true"] {
-  background: rgba(20, 22, 28, 0.92);
-  color: #f5f5f5;
+  background: rgba(58, 39, 18, 0.95);
+  color: var(--parchment);
 }
 
 /* 展開時の解説パネル。トグルの真上に吹き出し状に重ね、長文でも画面を
-   覆わないよう最大幅 340px・max-height 50vh で内部を縦スクロールさせる */
+   覆わないよう最大幅 340px・max-height 50vh で内部を縦スクロールさせる。
+   TASK-40: 情報パネルと同系の羊皮紙カードに統一 */
 .notes-panel {
   position: absolute;
   right: 0;
@@ -268,11 +349,12 @@ body {
   width: min(340px, calc(100vw - 32px));
   max-height: 50vh;
   overflow-y: auto;
-  padding: 12px 14px;
-  background: rgba(20, 22, 28, 0.9);
-  border-radius: 10px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  color: #f5f5f5;
+  padding: 13px 15px;
+  background: var(--parchment);
+  border: 1px solid var(--frame);
+  border-radius: 6px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  color: var(--ink);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -284,9 +366,10 @@ body {
 /* 年代見出し（例: 1500 年） */
 .notes-heading {
   margin: 0 0 6px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.3;
+  color: var(--ink-soft);
 }
 
 /* 出来事の箇条書き */
@@ -302,10 +385,11 @@ body {
 /* まとめ段落（本文よりわずかに淡くして見出し・箇条書きと区別する） */
 .notes-summary {
   margin: 0;
-  color: rgba(245, 245, 245, 0.85);
+  color: var(--ink-soft);
 }
 
-/* TASK-9: ロード中スピナー（app-spec §5.4）。地図中央にオーバーレイ */
+/* TASK-9: ロード中スピナー（app-spec §5.4）。地図中央にオーバーレイ。
+   TASK-40: 真鍮アクセントに統一 */
 .loading-spinner {
   position: absolute;
   top: 50%;
@@ -314,8 +398,8 @@ body {
   width: 40px;
   height: 40px;
   margin: -20px 0 0 -20px;
-  border: 4px solid rgba(255, 255, 255, 0.25);
-  border-top-color: #6ea8fe;
+  border: 4px solid rgba(58, 39, 18, 0.25);
+  border-top-color: var(--brass);
   border-radius: 50%;
   animation: loading-spin 0.8s linear infinite;
   pointer-events: none;
@@ -338,7 +422,8 @@ body {
   }
 }
 
-/* TASK-9: fetch 失敗時のエラートースト + 再試行（app-spec §5.4）。上部中央に表示 */
+/* TASK-9: fetch 失敗時のエラートースト + 再試行（app-spec §5.4）。上部中央に表示。
+   TASK-40: 封蝋レッド（--wax）に統一しつつ警告としての視認性は維持 */
 .error-toast {
   position: absolute;
   top: 16px;
@@ -349,12 +434,13 @@ body {
   align-items: center;
   gap: 12px;
   max-width: min(520px, calc(100% - 32px));
-  padding: 10px 12px;
-  background: rgba(120, 30, 34, 0.95);
-  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--wax);
+  border: 1px solid var(--frame-dark);
+  border-radius: 6px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
-  color: #fff;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--parchment);
+  font-family: var(--font-serif);
   font-size: 14px;
 }
 
@@ -368,33 +454,33 @@ body {
 
 .error-toast-retry {
   flex: 0 0 auto;
-  padding: 5px 12px;
-  border: none;
-  border-radius: 6px;
-  background: #fff;
-  color: #7a1e22;
+  padding: 5px 13px;
+  border: 1px solid var(--frame-dark);
+  border-radius: 4px;
+  background: var(--parchment);
+  color: var(--wax);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .error-toast-retry:hover {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--brass-light);
 }
 
 .error-toast-close {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
-  border: none;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  border: 1px solid rgba(244, 236, 215, 0.55);
+  border-radius: 4px;
+  background: rgba(244, 236, 215, 0.15);
+  color: var(--parchment);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
 
 .error-toast-close:hover {
-  background: rgba(255, 255, 255, 0.32);
+  background: rgba(244, 236, 215, 0.3);
 }
