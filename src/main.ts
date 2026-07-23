@@ -43,6 +43,8 @@ import {
 } from "./labels.ts";
 import { extractHreExtent, shouldHighlightHre } from "./hre_extent.ts";
 import {
+  RIVER_HIT_LINE_COLOR,
+  RIVER_HIT_LINE_WIDTH_PX,
   riverLabelAnchors,
   riverLineColor,
   riverLineWidth,
@@ -112,11 +114,13 @@ import {
 import {
   CITY_LAYER_ID,
   HRE_LAYER_ID,
+  isRiversPickLayerId,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
   POWER_LAYER_ID,
   renderOrderFromPickingPriority,
   resolveClickPick,
+  RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
 } from "./picking.ts";
 
@@ -408,7 +412,7 @@ function pickedLabel(info: PickingInfo): string | null {
     return cityDisplayName((info.object as CityMarkerDatum).name, nameJa);
   }
   const feature = info.object as Feature;
-  if (layerId === RIVERS_LAYER_ID) {
+  if (isRiversPickLayerId(layerId)) {
     const name = riverNameFor(feature.properties);
     return name === null ? null : nameJa[name] ?? name;
   }
@@ -434,7 +438,7 @@ function handlePickHover(info: PickingInfo): void {
   // null（通常表示）に戻す。ホバーの picking 方式自体（直下 pick）は変更しない
   // （TASK-36 の半径補正はクリック限定という設計判断を維持）。
   applyRiverHover(
-    info.layer?.id === RIVERS_LAYER_ID && info.object !== undefined
+    isRiversPickLayerId(info.layer?.id) && info.object !== undefined
       ? riverNameFor((info.object as Feature).properties)
       : null,
   );
@@ -480,7 +484,7 @@ const CLICK_PICK_DEPTH = 6;
  * この補正はクリックに限定する設計判断。TASK-36）。
  */
 function resolveClickInfo(info: PickingInfo): PickingInfo {
-  if (info.layer?.id === RIVERS_LAYER_ID) return info;
+  if (isRiversPickLayerId(info.layer?.id)) return info;
   const candidates = overlay.pickMultipleObjects({
     x: info.x,
     y: info.y,
@@ -507,7 +511,7 @@ function handlePickClick(rawInfo: PickingInfo): void {
   // 強調が解除される）
   applyHreHighlight(hreHighlightFromPick(info));
   const layerId = info.layer?.id;
-  if (layerId === RIVERS_LAYER_ID && info.object !== undefined) {
+  if (isRiversPickLayerId(layerId) && info.object !== undefined) {
     const name = riverNameFor((info.object as Feature).properties);
     applyRiverSelection(toggleRiverSelection(selectedRiverName, name));
     if (selectedRiverName !== null) {
@@ -615,6 +619,31 @@ function buildRiverLabelLayer(): TextLayer<
 }
 
 /**
+ * 河川の透明ヒットライン層（GeoJsonLayer）を生成する（TASK-43）。
+ * rivers と同一データ（riversData）を完全透明・RIVER_HIT_LINE_WIDTH_PX（14px）
+ * で描画し、renderLayers で rivers の最前面に重ねる判定専用レイヤー。
+ * 見た目（色・線幅の選択/ホバー/通常 3 状態）には一切関与しないため、
+ * getLineColor/getLineWidth は固定値のままで良く、selectedRiverName /
+ * hoveredRiverName への依存も無い（updateTriggers 不要）。data（riversData）
+ * 自体は起動時に 1 度だけロードされ年代に依存しないため、rivers 層と同様に
+ * data の updateTriggers も不要。
+ */
+function buildRiversHitLayer(): GeoJsonLayer {
+  return new GeoJsonLayer({
+    id: RIVERS_HIT_LAYER_ID,
+    data: riversData,
+    pickable: true,
+    stroked: false,
+    filled: false,
+    getLineColor: RIVER_HIT_LINE_COLOR,
+    lineWidthUnits: "pixels",
+    getLineWidth: RIVER_HIT_LINE_WIDTH_PX,
+    lineCapRounded: true,
+    lineJointRounded: true,
+  });
+}
+
+/**
  * 主要都市マーカーの ScatterplotLayer を生成する（TASK-27 AC #1/#3/#6）。
  * 小さな濃色ドット + 白縁で、勢力の半透明塗りの上でも視認できるようにする。
  * レイヤー順は hre-powers の上・rivers の下（renderLayers）に置き、picking の
@@ -716,7 +745,9 @@ function buildHreExtentLayer(
 /**
  * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
  * 反映する。描画順（配列順 = 下から上）: powers → hre-powers → hre-extent →
- * cities → rivers → power-labels → river-labels → city-labels。
+ * cities → rivers → rivers-hit → power-labels → river-labels → city-labels。
+ * rivers-hit（TASK-43）は rivers と同一データの透明太幅ヒットライン層で、
+ * 最前面から picking 専用に重ねる（見た目には影響しない）。
  *
  * TASK-29: pickable レイヤーの並びは picking.ts の PICKING_PRIORITY
  * （河川 > 都市 > HRE > 勢力。先頭が最優先）から導出する。deck.gl の picking
@@ -735,6 +766,7 @@ function renderLayers(): void {
     [HRE_LAYER_ID]: () => buildPowerLayer(HRE_LAYER_ID, year, hre),
     [CITY_LAYER_ID]: () => buildCityMarkerLayer(year),
     [RIVERS_LAYER_ID]: () => buildRiversLineLayer(),
+    [RIVERS_HIT_LAYER_ID]: () => buildRiversHitLayer(),
   };
   const layers: Layer[] = [];
   // picking 優先順（PICKING_PRIORITY）の逆順 = 下→上の描画順で並べる

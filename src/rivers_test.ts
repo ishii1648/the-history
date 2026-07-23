@@ -1,6 +1,8 @@
 import { assert, assertEquals } from "@std/assert";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import {
+  RIVER_HIT_LINE_COLOR,
+  RIVER_HIT_LINE_WIDTH_PX,
   RIVER_HOVERED_LINE_COLOR,
   RIVER_HOVERED_LINE_WIDTH_PX,
   RIVER_LINE_COLOR,
@@ -14,6 +16,16 @@ import {
   RIVERS_DATA_URL,
   toggleRiverSelection,
 } from "./rivers.ts";
+
+// ---- 透明ヒットライン層（TASK-43）----
+
+Deno.test("RIVER_HIT_LINE_WIDTH_PX: 12px 以上（ホバー/クリックの実効判定幅を広げる）", () => {
+  assert(RIVER_HIT_LINE_WIDTH_PX >= 12);
+});
+
+Deno.test("RIVER_HIT_LINE_COLOR: 完全透明（alpha 0）", () => {
+  assertEquals(RIVER_HIT_LINE_COLOR[3], 0);
+});
 
 /** テスト用の河川 feature を組み立てる */
 function riverFeature(
