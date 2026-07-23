@@ -85,4 +85,6 @@ consistent.
   `docs/development-style.md` の 4 章を参照。
 - 人の介入は例外時のみ: AC が曖昧・CI が恒常 red・仕様判断が必要な場合に限り
   `needs-human` ラベル付き issue を起票して停止し、判断を仰ぐ。それ以外で人の
-  指示を待たない。
+  指示を待たない。加えて、CI red 連続回数・実装 subagent 試行回数・タスク
+  着手からの経過時間・停滞検出のいずれかが定量上限を超えた場合も強制的に
+  エスカレーションする（上限値は `docs/development-style.md` 4.4.1 章を参照）。
