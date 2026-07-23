@@ -63,6 +63,21 @@ export const RIVER_SELECTED_LINE_WIDTH_PX = 4.5;
  */
 export const RIVER_HOVERED_LINE_WIDTH_PX = 3.75;
 
+/**
+ * 透明ヒットライン層（picking.ts RIVERS_HIT_LAYER_ID）の線幅（px）（TASK-43）。
+ * rivers と同一データをこの幅・完全透明で rivers の最前面に重ね、
+ * ホバー/クリックの実効判定幅（±半分 = 7px 程度）を確保する。TASK-36 の
+ * pickingRadius（PICKING_RADIUS_PX = 6px）と同程度の判定幅をカーソル直下
+ * pick だけで得られるよう、6px の余裕を見て 14px を採る。
+ */
+export const RIVER_HIT_LINE_WIDTH_PX = 14;
+
+/**
+ * 透明ヒットライン層の色。完全透明（alpha 0）にし、見た目上は rivers の
+ * 通常表示（色・線幅の 3 状態）を一切変えない判定専用レイヤーにする。
+ */
+export const RIVER_HIT_LINE_COLOR: Rgba = [0, 0, 0, 0];
+
 /** properties から河川名（name）を取り出す。欠落・空文字・非文字列は null */
 export function riverNameFor(props: GeoJsonProperties): string | null {
   const v = props?.name;

@@ -24,16 +24,40 @@ export const CITY_LAYER_ID = "cities";
 export const RIVERS_LAYER_ID = "rivers";
 
 /**
- * picking の優先順（先頭が最優先）: 河川 > 都市 > HRE 領邦 > 勢力（AC #4）。
- * pickable なレイヤーだけを含む（ラベル系レイヤーは pickable: false のため
- * picking に関与せず、このリストにも含めない）。
+ * 河川の透明ヒットライン層（GeoJsonLayer）のレイヤー ID（TASK-43）。
+ * rivers と同一データを完全透明・太幅（RIVER_HIT_LINE_WIDTH_PX）で描画し、
+ * rivers の最前面に重ねる判定専用レイヤー。deck.gl の picking はカーソル
+ * 直下オブジェクト優先で、全面を覆う powers ポリゴンの手前では rivers の
+ * 実効判定幅が描画ライン幅（3px）の半分程度しかなく、特にホバーが
+ * pickingRadius（直下に何も無い場合のみ効く）では補えない（TASK-36 で実測）。
+ * この層を rivers の上に重ねることで、ホバー/クリックとも直下 pick だけで
+ * 太幅分の判定幅を得る。
+ */
+export const RIVERS_HIT_LAYER_ID = "rivers-hit";
+
+/**
+ * picking の優先順（先頭が最優先）: 河川ヒット層 ≧ 河川 > 都市 > HRE 領邦 >
+ * 勢力（AC #4、TASK-43 で rivers-hit を追加）。pickable なレイヤーだけを
+ * 含む（ラベル系レイヤーは pickable: false のため picking に関与せず、
+ * このリストにも含めない）。
  */
 export const PICKING_PRIORITY: readonly string[] = [
+  RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
   CITY_LAYER_ID,
   HRE_LAYER_ID,
   POWER_LAYER_ID,
 ];
+
+/**
+ * layerId が河川系（rivers 本体 / rivers-hit 判定専用層）のいずれかかを
+ * 判定する（TASK-43）。main.ts のホバー/クリック処理は河川名の取得元を
+ * layerId === RIVERS_LAYER_ID で判定していたが、rivers-hit 追加後は
+ * このヘルパーで両方をまとめて扱う。
+ */
+export function isRiversPickLayerId(id: string | undefined): boolean {
+  return id === RIVERS_LAYER_ID || id === RIVERS_HIT_LAYER_ID;
+}
 
 /**
  * picking 優先順から描画レイヤー順（配列順 = 下→上）を導出する。
