@@ -1,11 +1,11 @@
 ---
 id: TASK-44
 title: 河川のベースマップ描画と picking 対象ジオメトリの乖離でクリック位置がずれる
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-22 15:12'
-updated_date: '2026-07-22 18:01'
+updated_date: '2026-07-23 13:32'
 labels:
   - bug
 dependencies: []
@@ -20,9 +20,9 @@ TASK-36 のマージ後動作確認（実機・Chrome）で発見。ベースマ
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 再現手順が実機で確認され、乖離の大きい代表区間が記録されている
-- [ ] #2 対応方針が決定され、選定理由が記録されている（decision 化の要否判定を含む）
-- [ ] #3 実装により乖離区間でも河川がクリックで選択できることを実機確認、または対応不要の判断が記録されている
+- [x] #1 再現手順が実機で確認され、乖離の大きい代表区間が記録されている
+- [x] #2 対応方針が決定され、選定理由が記録されている（decision 化の要否判定を含む）
+- [x] #3 実装により乖離区間でも河川がクリックで選択できることを実機確認、または対応不要の判断が記録されている
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -35,3 +35,19 @@ TASK-36 のマージ後動作確認（実機・Chrome）で発見。ベースマ
 5. finalization で decision 記録: 「ベースマップの水系ライン描画を廃止し河川表示を deck オーバーレイへ一本化」はタスク横断の表示方針変更のため backlog decision create で記録（AC#2）。
 6. 並列化判定: 見送り（理由: basemap.ts / rivers.ts の定数変更 + テスト + docs の小規模一体作業で、ファイル競合なく分割できる独立サブ作業がない。単一 subagent に委譲、実機確認は mainagent）。
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス（マージ前実機確認, Chrome 実機, task-44 ビルド :8002）:
+- AC#1: 再現手順（?year=1500&zoom=6&center=19.0,52.0 でヴィスワ川河口付近のベースマップ川筋をクリック → 勢力が選ばれる）と代表区間（ヴィスワ川北部、乖離最大 ~200 CSS px）は TASK-36 Implementation Notes と本タスク Description に記録済み。
+- AC#2: 方針決定（ベースマップ water_river/water_stream 除外 + deck 河川 3px 化、NE10m 案は棄却）を実装プランに記録。タスク横断の表示方針変更のため decision-9 として記録（status: accepted）。
+- AC#3: 実機確認 — ベースマップのラベル無し細流が消滅し、川はラベル付き deck 河川のみ。ヴィスワ川クリックで情報パネル・ツールチップ「ヴィスワ川」表示と太線強調をスクリーンショット確認。線幅 3px 化によりホバーツールチップも河川名を表示するようになった（副次改善）。
+- 品質ゲート: deno fmt --check / lint / test（472 passed, red→green）/ build 全 green。PR #48 CI green。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+ベースマップ（Protomaps）の water_river / water_stream を BASEMAP_LAYER_IDS から除外し、河川の見た目とクリック対象を deck オーバーレイ（NE50m）へ一本化。唯一の川表示となる deck 河川は線幅 2→3px で視認性を底上げ。表示方針の変更として decision-9 を記録。検証: TDD red→green（472 passed）、CI green、実機確認（デコイ消滅・ヴィスワ川クリック選択・ツールチップ表示）。
+<!-- SECTION:FINAL_SUMMARY:END -->
