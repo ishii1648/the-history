@@ -78,6 +78,67 @@ export function labelColorFor(d: Pick<LabelDatum, "kind">): LabelColor {
   return d.kind === "hre" ? HRE_LABEL_COLOR : BASE_LABEL_COLOR;
 }
 
+/**
+ * 都市名ラベルの文字色（濃茶。TASK-27 から不変）。国名の濃グレー・
+ * HRE 領邦の臙脂・河川の水色のいずれとも色相が離れており、白 halo 上で
+ * 都市だと一見して区別できる。
+ */
+export const CITY_LABEL_COLOR: LabelColor = [121, 62, 22, 255];
+
+/**
+ * 河川名ラベルの文字色（水色系。TASK-24 から不変）。国名・HRE 領邦・都市の
+ * いずれとも異なる色相で「水系の注記」だと一見して区別できる。
+ */
+export const RIVER_LABEL_COLOR: LabelColor = [2, 119, 189, 255];
+
+/**
+ * 全 TextLayer（国名・HRE 領邦名・都市名・河川名）に共通のフォントスタック
+ * （TASK-38 AC #2）。日本語ラベル（name-ja.json、TASK-23）と欧文ラベルの
+ * 双方を高い可読性で描画できるよう、主要 OS の高品質な和文/欧文 sans-serif を
+ * 優先し、最後に総称フォールバックを置く。deck.gl TextLayer は
+ * CanvasRenderingContext2D でグリフを生成するため、CSS のフォントスタック
+ * 文字列がそのまま使える。
+ */
+export const LABEL_FONT_FAMILY =
+  '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", ' +
+  '"Noto Sans JP", "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+
+/**
+ * 全 TextLayer 共通の fontSettings（TASK-38 AC #1）。sdf: true は
+ * outlineWidth/outlineColor（白 halo）の前提であり、既存の日本語グリフ対応
+ * （characterSet をラベル文字列から動的に導出する運用、TASK-23）とも両立する
+ * （sdf は生成された characterSet 内のグリフに対して機能するため、
+ * characterSet を明示的に絞り込んでいる既存実装への影響はない）。
+ * smoothing はやや低め（デフォルト 0.1 よりわずかに強調）にして輪郭を
+ * くっきりさせ、白 halo との境界を判別しやすくする。
+ */
+export const LABEL_FONT_SETTINGS = { sdf: true, smoothing: 0.15 } as const;
+
+/** 全 TextLayer 共通のアウトライン（白 halo）色。十分に白く・不透明（TASK-38 AC #1） */
+export const LABEL_OUTLINE_COLOR: LabelColor = [255, 255, 255, 235];
+
+/** 全 TextLayer 共通のアウトライン幅（px）。0 より大きく、視認性補強に十分な太さ（TASK-38 AC #1） */
+export const LABEL_OUTLINE_WIDTH = 2;
+
+/**
+ * 国名・HRE 領邦名ラベルのサイズ（px）。従来 13px から 14px へ（TASK-38 AC #2）。
+ * +1px 程度の控えめな引き上げに留め、CollisionFilterExtension による
+ * ラベル間引き（sizeScale: 2 の衝突判定）への影響を小さくする。
+ */
+export const POWER_LABEL_SIZE_PX = 14;
+
+/**
+ * 河川名ラベルのサイズ（px）。従来 11px から 12px へ（TASK-38 AC #2）。
+ * 国名ラベル（14px）より小さいままとし、既存の「注記」としての位置づけを保つ。
+ */
+export const RIVER_LABEL_SIZE_PX = 12;
+
+/**
+ * 都市名ラベルのサイズ（px）。従来 11px から 12px へ（TASK-38 AC #2）。
+ * 国名ラベル（14px）より小さいままとし、既存の視覚的な階層を保つ。
+ */
+export const CITY_LABEL_SIZE_PX = 12;
+
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */
 function stringProp(props: GeoJsonProperties, key: string): string | null {
   const v = props?.[key];
