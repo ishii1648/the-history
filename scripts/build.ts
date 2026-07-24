@@ -64,6 +64,11 @@ export function getDataCopyTargets(
     { from: "data/cities.json", to: `${distDir}/data/cities.json` },
     // TASK-33: 年代ごとの歴史解説パネル用テキスト
     { from: "data/notes.json", to: `${distDir}/data/notes.json` },
+    // TASK-46: データの既知の制限（表示できない情報）一覧
+    {
+      from: "data/known-limitations.json",
+      to: `${distDir}/data/known-limitations.json`,
+    },
   ];
   for (const year of years) {
     targets.push({

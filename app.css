@@ -297,6 +297,82 @@ body {
   color: var(--wax);
 }
 
+/* TASK-46: データの既知の制限一覧。attribution（左下 left:8/bottom:6, 直径28px。
+   上端は 34px）の真上に 6px の余白を挟んで積む。折りたたみ時は小さな
+   トグルボタンだけが残り、既存 UI（attribution・解説パネル・情報パネル・
+   トースト）とは位置が分離しているため衝突しない。
+   TASK-40: 焦茶レザー調のトーンで attribution と揃える */
+.known-limitations {
+  position: absolute;
+  left: 8px;
+  bottom: 40px;
+  z-index: 6;
+  font-family: var(--font-serif);
+}
+
+/* 常時表示の目印。attribution のⓘトグルと同じ意匠の円形ボタン */
+.known-limitations-toggle {
+  display: block;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--brass);
+  border-radius: 50%;
+  background: rgba(58, 39, 18, 0.82);
+  color: var(--brass-light);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.known-limitations-toggle[hidden] {
+  display: none;
+}
+
+.known-limitations-toggle:hover,
+.known-limitations-toggle[aria-expanded="true"] {
+  background: rgba(58, 39, 18, 0.95);
+  color: var(--parchment);
+}
+
+/* 展開時の制限事項一覧パネル。トグルの真上に吹き出し状に重ね、
+   attribution-content と同系の羊皮紙カードに統一 */
+.known-limitations-content {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  width: max-content;
+  max-width: min(46ch, calc(100vw - 32px));
+  padding: 9px 12px;
+  background: var(--parchment);
+  border: 1px solid var(--frame);
+  border-radius: 5px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.known-limitations-content[hidden] {
+  display: none;
+}
+
+.known-limitations-heading {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.known-limitations-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.known-limitations-list li {
+  margin: 3px 0;
+}
+
 /* TASK-33: 年代ごとの歴史解説パネル。右下の maplibre attribution
    （高さ 20px 程度）の少し上に「解説」トグルを常時アンカーし、展開時は
    その真上へ吹き出し状パネルを重ねる。既存 UI との位置関係:

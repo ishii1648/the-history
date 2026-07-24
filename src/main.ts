@@ -112,6 +112,11 @@ import {
   reduceNotesEvent,
 } from "./notes.ts";
 import {
+  KNOWN_LIMITATIONS_DATA_URL,
+  type KnownLimitation,
+  parseKnownLimitations,
+} from "./known_limitations.ts";
+import {
   CITY_LAYER_ID,
   HRE_LAYER_ID,
   isRiversPickLayerId,
@@ -945,6 +950,102 @@ function setupFooter(): void {
 
 setupFooter();
 
+// ---- データの既知の制限一覧（TASK-46）----
+
+// revealKnownLimitations は loadKnownLimitations 成功時にトグルボタンを表示し
+// 一覧を描画するフック（setupKnownLimitationsUI が実体を差し込む。notes.json と
+// 同じ「未生成時はトグルごと非表示で従来表示を維持」方針）
+let revealKnownLimitations: (limitations: KnownLimitation[]) => void = () => {};
+
+/**
+ * データの既知の制限一覧 UI を配線する（TASK-46）。
+ * 折りたたみの状態遷移は attribution フッターと同一の操作性（トグル click /
+ * フッター外 click / Escape）なので footer.ts の reducer をそのまま再利用する。
+ * ここでは「イベント → reducer → aria-expanded / hidden の同期」と一覧の描画
+ * だけを行う。
+ */
+function setupKnownLimitationsUI(): void {
+  const container = document.getElementById("known-limitations");
+  const toggle = document.getElementById("known-limitations-toggle") as
+    | HTMLButtonElement
+    | null;
+  const content = document.getElementById("known-limitations-content");
+  const list = document.getElementById("known-limitations-list");
+  if (!container || !toggle || !content || !list) {
+    console.warn(
+      "既知の制限 UI 要素が見つからないため配線をスキップします",
+    );
+    return;
+  }
+
+  let state = createFooterState();
+
+  /** 現在の状態を aria-expanded / hidden へ反映する */
+  function render(): void {
+    toggle!.setAttribute("aria-expanded", ariaExpandedValue(state));
+    content!.hidden = isContentHidden(state);
+  }
+
+  function dispatch(event: FooterEvent): void {
+    state = reduceFooterEvent(state, event);
+    render();
+  }
+
+  toggle.addEventListener("click", () => dispatch("toggle"));
+
+  // 展開中にコンテナ外をクリック/タップしたら折りたたむ（attribution と同じ）
+  document.addEventListener("click", (e) => {
+    if (!state.expanded) return;
+    if (e.target instanceof Node && container!.contains(e.target)) return;
+    dispatch("outside-click");
+  });
+
+  // Escape キーで折りたたむ（未展開時は reducer が状態を変えない）
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!state.expanded) return;
+    dispatch("escape");
+  });
+
+  // known-limitations.json のロード成功時のみトグルを表示し、一覧を描画する
+  // （AC #3: 制限事項の追加はデータ編集のみで可能。年代非依存で全件表示する
+  // 最小実装 — 年代に応じた強調は任意のため見送り）
+  revealKnownLimitations = (limitations) => {
+    if (limitations.length === 0) return;
+    list!.replaceChildren(...limitations.map((limitation) => {
+      const li = document.createElement("li");
+      li.textContent = limitation.text;
+      return li;
+    }));
+    toggle!.hidden = false;
+  };
+
+  render();
+}
+
+setupKnownLimitationsUI();
+
+/**
+ * known-limitations.json（データの既知の制限一覧）を取得する（TASK-46）。
+ * 失敗・未生成・全件不正のときは revealKnownLimitations を呼ばないため
+ * トグルボタンごと非表示になる（従来表示を一切変えない。notes.json と同じ方針）。
+ */
+async function loadKnownLimitations(): Promise<void> {
+  try {
+    const res = await fetch(KNOWN_LIMITATIONS_DATA_URL);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const parsed = parseKnownLimitations(await res.json());
+    if (parsed.length === 0) throw new Error("limitations が空または不正");
+    revealKnownLimitations(parsed);
+  } catch (error) {
+    console.warn(
+      `known-limitations.json の取得に失敗しました。制限事項なしで継続します: ${
+        String(error)
+      }`,
+    );
+  }
+}
+
 // ---- 年代ごとの歴史解説パネル（TASK-33）----
 
 /**
@@ -1414,6 +1515,7 @@ async function initPowerLayer(): Promise<void> {
     // TASK-27: cities.json も同様に揃え、初回から都市マーカーを重ねる。
     // TASK-33: notes.json も初期描画前に揃え、初回の年確定（applyFn →
     // reflectYearToNotes）の時点で解説を描画できるようにする。
+    // TASK-46: known-limitations.json も同様に揃え、初回描画前にトグルを出す。
     await Promise.all([
       loadColors(),
       loadOverrides(),
@@ -1421,6 +1523,7 @@ async function initPowerLayer(): Promise<void> {
       loadRivers(),
       loadCities(),
       loadNotes(),
+      loadKnownLimitations(),
     ]);
     await switchYear(initialYear);
   } catch (error) {
