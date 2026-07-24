@@ -547,6 +547,25 @@ function applyRiverHover(next: string | null): void {
 }
 
 /**
+ * rivers（表示ライン）と rivers-hit（透明ヒットライン）で共通の GeoJsonLayer
+ * base props（TASK-53）。両層は同一データをライン描画する層で、picking 可否や
+ * ラインの丸め方も揃える。riversData は loadRivers がモジュール変数を差し替える
+ * ため、モジュール定数に data を焼き込むと初期の空 FC を参照し続けてしまう。
+ * 呼び出し時に評価する関数にして常に最新の riversData を返す（挙動不変）。
+ */
+function riversLayerBaseProps() {
+  return {
+    data: riversData,
+    pickable: true,
+    stroked: false,
+    filled: false,
+    lineWidthUnits: "pixels",
+    lineCapRounded: true,
+    lineJointRounded: true,
+  } as const;
+}
+
+/**
  * 主要河川ラインの GeoJsonLayer を生成する（TASK-24）。
  * 色・幅は rivers.ts の純粋関数で決め、選択中の河川全体（同名 feature）を
  * 太く濃色で強調する。TASK-42: ホバー中（未選択）の河川は中間強調にする
@@ -555,18 +574,14 @@ function applyRiverHover(next: string | null): void {
  */
 function buildRiversLineLayer(): GeoJsonLayer {
   return new GeoJsonLayer({
+    ...riversLayerBaseProps(),
     id: RIVERS_LAYER_ID,
-    data: riversData,
-    pickable: true,
-    stroked: false,
-    filled: false,
     getLineColor: (f: Feature) =>
       riverLineColor(
         riverNameFor(f.properties),
         selectedRiverName,
         hoveredRiverName,
       ),
-    lineWidthUnits: "pixels",
     getLineWidth: (f: Feature) =>
       riverLineWidth(
         riverNameFor(f.properties),
@@ -574,8 +589,6 @@ function buildRiversLineLayer(): GeoJsonLayer {
         hoveredRiverName,
       ),
     lineWidthMinPixels: 1,
-    lineCapRounded: true,
-    lineJointRounded: true,
     updateTriggers: {
       getLineColor: [selectedRiverName, hoveredRiverName],
       getLineWidth: [selectedRiverName, hoveredRiverName],
@@ -647,16 +660,10 @@ function buildRiverLabelLayer(): TextLayer<
  */
 function buildRiversHitLayer(): GeoJsonLayer {
   return new GeoJsonLayer({
+    ...riversLayerBaseProps(),
     id: RIVERS_HIT_LAYER_ID,
-    data: riversData,
-    pickable: true,
-    stroked: false,
-    filled: false,
     getLineColor: RIVER_HIT_LINE_COLOR,
-    lineWidthUnits: "pixels",
     getLineWidth: RIVER_HIT_LINE_WIDTH_PX,
-    lineCapRounded: true,
-    lineJointRounded: true,
   });
 }
 
