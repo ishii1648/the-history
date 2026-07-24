@@ -113,14 +113,60 @@ export function clipRiversToBbox(
 }
 
 /**
+ * NE 50m データは河川が国境をまたぐ区間で呼称のみ変わり、実体は同一の川が
+ * 複数 feature・複数 name に分割される（TASK-56）。src/rivers.ts の選択強調
+ * （riverLineColor/riverLineWidth）は feature の name 完全一致で判定するため、
+ * 正規化しないと該当区間だけ強調から漏れ、クリック/ホバー時に川全体ではなく
+ * 途中で強調が切れる不具合になる。
+ *
+ * 実データ（座標）で確認した継続区間（前後の feature の端点座標が一致する
+ * = 実体は 1 本の連続したライン）:
+ * - Rhein（独、2 feature）→ Rhin（仏）→ Rhine（英名。独仏国境をまたぐ本流）
+ * - Donau（独墺）→ Danube（バルカン以東）
+ * - Dicle（トルコ）→ Tigris（イラク）
+ * - Firat/Al Furat（トルコ・シリア、各 2 feature）→ Euphrates（イラク）
+ * - Dnepre → Dnipro（白・宇。範囲が重なる並行区間）
+ *
+ * 一方、デルタの分流（Rhine の Nederrijn/Lek/Waal、Danube の
+ * Bratul Chillia/Bratul Sfintu Gheorghe/Bratul Sulina/Borcea）は本流から
+ * 分岐した別水路という実体があり、data/name-ja.json でも個別の日本語名を
+ * 持つため正規化の対象外とする。
+ *
+ * 正規化先（値）は data/name-ja.json に既存のキーを持つ名前を選び、
+ * name-ja.json 側の変更を不要にしている。
+ */
+export const RIVER_NAME_ALIASES: Record<string, string> = {
+  "Rhein": "Rhine",
+  "Rhin": "Rhine",
+  "Donau": "Danube",
+  "Dicle": "Tigris",
+  "Firat": "Euphrates",
+  "Al Furat": "Euphrates",
+  "Dnepre": "Dnipro",
+};
+
+/**
+ * 河川名を代表名（canonical name）へ正規化する（純粋関数）。
+ * RIVER_NAME_ALIASES に無い名前（デルタの分流・別名を持たない河川）はそのまま返す。
+ */
+export function canonicalRiverName(name: string): string {
+  return RIVER_NAME_ALIASES[name] ?? name;
+}
+
+/**
  * properties を name / scalerank の最小限に間引く（純粋関数）。
- * name はオーバーレイ側のラベル表示と主要河川の含有テストに使う。
- * scalerank はズームに応じた表示制御に使えるよう残す。name 欠損は null に正規化。
+ * name はオーバーレイ側のラベル表示と主要河川の含有テストに使う。国境をまたぐ
+ * 呼称違い（RIVER_NAME_ALIASES）は canonicalRiverName で代表名へ正規化し、
+ * 選択強調（riverLineColor 等）が同一河川の全区間に一致するようにする
+ * （TASK-56）。scalerank はズームに応じた表示制御に使えるよう残す。
+ * name 欠損は null に正規化。
  */
 export function pruneRiverProperties(fc: FeatureCollection): FeatureCollection {
   const features = fc.features.map((feature) => {
     const props = feature.properties ?? {};
-    const name = typeof props.name === "string" ? props.name : null;
+    const name = typeof props.name === "string"
+      ? canonicalRiverName(props.name)
+      : null;
     return { ...feature, properties: { name, scalerank: props.scalerank } };
   });
   return { type: "FeatureCollection", features };
