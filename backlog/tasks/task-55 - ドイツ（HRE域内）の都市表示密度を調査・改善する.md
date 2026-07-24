@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-24 13:00'
-updated_date: '2026-07-24 15:52'
+updated_date: '2026-07-24 16:07'
 labels: []
 dependencies:
   - TASK-27
@@ -39,3 +39,26 @@ ordinal: 53000
 6. 並列化判定: 見送り（理由: パイプライン変更 → データ再生成 → 表示確認が逐次依存し、独立サブ作業に分割できない）。実装は単一 subagent（worktree isolation）に委譲し mainagent がレビュー。
 7. deno fmt/lint/test/build green → PR（TASK-55 明記）→ CI green → finalization → マージ → マージ後動作確認。
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+実態調査（AC #1、subagent 実測。HRE 域内 = bbox [5.5,45.5,17,55] 近似）:
+| 年 | before | after | 域内候補プール |
+|---|---|---|---|
+| 900 | 2 | 2 | 2（全候補採用） |
+| 1000 | 0 | 6 | 8 |
+| 1100 | 0 | 4 | 4（全候補採用） |
+| 1200 | 1 | 6 | 21 |
+| 1279/1300 | 1 | 6 | 20 |
+| 1400 | 1 | 6 | 19 |
+| 1492/1500/1530 | 1 | 6 | 29–30 |
+| 1600 | 1 | 6 | 29 |
+| 1650 | 0 | 6 | 27 |
+| 1700–1815 | 1–3 | 6 | 33–46 |
+| 1880–1914 | 3–5 | 6 | 119–123 |
+N=6 の根拠（AC #2）: 総数 20 の 3 割で体感差が明確・1200 年以降の候補プール（19 件以上）が安定して満たせる・総数据え置きのため TASK-54 のラベル密度対策に逆行しない。候補不足年（900/1100）は無理に埋めず全候補のみ。
+TDD 証跡（AC #5）: (1) 定数未実装の TS2305 で red → 実装 green (2) 生成物テストが『1000 年の域内 0 件』で red → build-cities 再生成で green (3) rename テスト red → CITY_RENAMES 追加で green。deno test 559 passed。
+表示検証（AC #3/#4）: CDP スクリーンショットで 1500 年ドイツ周辺がプラハのみ → 5 都市に増加、TASK-54 背景パネル下で破綻なし。注: subagent worktree には europe.pmtiles が無くフォールバックベースマップでの検証のため、マージ後動作確認で本番ビルドを再確認する。軽微な観察: 1500 年 z6 でウィーンのラベルがオーストリア大公領ラベル末尾にわずかに重なる（既存の衝突挙動の範囲）。
+選外の帰結: 総数据え置き方針により Antwerp/Barcelona/Bologna 等 18 都市が年によって表示から外れる（プラン記録済み方針の帰結）。
+<!-- SECTION:NOTES:END -->
