@@ -58,6 +58,28 @@ export const FUTURE_WINDOW_YEARS = 25;
 
 /** 各年で採用する都市数（人口上位から） */
 export const CITIES_PER_YEAR = 20;
+
+/**
+ * HRE（神聖ローマ帝国）域内を近似する bbox（[west, south, east, north]）。
+ * 独語圏を中心とした簡易領域で、正確な帝国境界（data/hre_*.geojson）とは
+ * 別物。都市表示の地域偏り是正（TASK-55）のための選定用しきい値であり、
+ * Cologne/Nuremberg/Prague/Vienna/Hamburg を含み、Paris/Venice/Milan/Rome
+ * は含まない。
+ */
+export const HRE_REGION_BBOX: BBox = [5.5, 45.5, 17, 55];
+
+/**
+ * HRE 域内（HRE_REGION_BBOX）で最低限採用する都市数（TASK-55）。
+ * 人口上位 CITIES_PER_YEAR 件のみの選定では地中海・ビザンツ/オスマン圏が
+ * 優位で、900〜1700 年の HRE 域内採用数は 0〜1 件だった（調査値。域内候補
+ * プールは 1200 年以降で常に 19 件以上ある）。総数 CITIES_PER_YEAR は変えず、
+ * 域内候補を人口順に 6 件まで確保し、その分だけ域外の人口最下位を明け渡す。
+ * 6 は「総数の 3 割・候補プールが下限を安定して満たせる値」として採用した。
+ * 域内候補が 6 件未満の年（900 年: 2 件、1100 年: 4 件）は無理に埋めず
+ * 候補全件を採用する。
+ */
+export const HRE_REGION_MIN_CITIES = 6;
+
 /** 検証: 各年の都市数の下限（A/B 契約の「15〜25 都市程度」） */
 export const MIN_CITIES_PER_YEAR = 15;
 /** 検証: 各年の都市数の上限 */
@@ -93,6 +115,8 @@ export const EXCLUDED_RECORDS: ReadonlyArray<{ name: string; year: number }> = [
  * - Istanbul→Constantinople: 公式改名は 1930 年で、本アプリの全スナップショット年
  *   （900〜1914）では英語圏の慣用名は Constantinople
  * - その他は元データの現地語綴りを英語の慣用綴りへ（Genova→Genoa 等）
+ * - Augsberg は元データの誤綴り（正: Augsburg）、Nurnberg は英語慣用綴りの
+ *   Nuremberg へ（TASK-55 で HRE 域内都市が採用されるようになったため追加）
  */
 export const CITY_RENAMES: Readonly<Record<string, string>> = {
   Istanbul: "Constantinople",
@@ -100,6 +124,8 @@ export const CITY_RENAMES: Readonly<Record<string, string>> = {
   Brussel: "Brussels",
   Gent: "Ghent",
   Brugge: "Bruges",
+  Augsberg: "Augsburg",
+  Nurnberg: "Nuremberg",
 };
 
 /** chandler.csv の 1 行（人口記録を 1 つ以上持つ都市） */
@@ -219,6 +245,18 @@ export function pickNearestRecord(
   return best;
 }
 
+/** 座標が bbox（[west, south, east, north]）内かどうか（純粋関数） */
+function isInBbox(lon: number, lat: number, bbox: BBox): boolean {
+  const [west, south, east, north] = bbox;
+  return lon >= west && lon <= east && lat >= south && lat <= north;
+}
+
+/** 人口降順・同数なら name 昇順の比較関数（選定順序の唯一の定義） */
+function byPopulationDescThenName(a: CityMarker, b: CityMarker): number {
+  return (b.population ?? 0) - (a.population ?? 0) ||
+    (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+}
+
 /**
  * 1 つのスナップショット年の都市マーカーを選定する（純粋関数）。
  * 1. 既知異常（EXCLUDED_CITY_NAMES / EXCLUDED_RECORDS）を除外
@@ -226,6 +264,9 @@ export function pickNearestRecord(
  * 3. CITY_RENAMES で英語慣用名へ正規化
  * 4. 同名都市は人口最大の 1 件へ統合（Brest 仏/白露のような同名別都市の重複防止）
  * 5. 人口降順（同数なら name 昇順）で CITIES_PER_YEAR 件に切り詰め
+ * 6. HRE 域内（HRE_REGION_BBOX）の採用数が HRE_REGION_MIN_CITIES に満たない
+ *    場合、域内候補を人口順に補い、その分だけ域外の人口最下位の枠を明け渡す
+ *    （総数は CITIES_PER_YEAR のまま。TASK-55: 地域偏り是正）
  */
 export function selectCitiesForYear(
   rows: CityRow[],
@@ -254,12 +295,30 @@ export function selectCitiesForYear(
       });
     }
   }
-  return [...byName.values()]
-    .sort((a, b) =>
-      (b.population ?? 0) - (a.population ?? 0) ||
-      (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
-    )
-    .slice(0, CITIES_PER_YEAR);
+  const sorted = [...byName.values()].sort(byPopulationDescThenName);
+  const selected = sorted.slice(0, CITIES_PER_YEAR);
+
+  // HRE 域内の下限確保（TASK-55）: 域内候補の人口上位 HRE_REGION_MIN_CITIES 件
+  // を「保護対象」とし、選外の保護対象がある限り、域外（非保護）の人口最下位と
+  // 入れ替える。候補が下限未満の年は候補全件が保護対象になるだけで埋め合わせは
+  // しない。
+  const protectedCities = sorted
+    .filter((m) => isInBbox(m.lon, m.lat, HRE_REGION_BBOX))
+    .slice(0, HRE_REGION_MIN_CITIES);
+  const protectedNames = new Set(protectedCities.map((m) => m.name));
+  const selectedNames = new Set(selected.map((m) => m.name));
+  const toAdd = protectedCities.filter((m) => !selectedNames.has(m.name));
+  for (const candidate of toAdd) {
+    // 末尾（人口最下位）から保護対象でないものを探して明け渡す
+    for (let i = selected.length - 1; i >= 0; i--) {
+      if (!protectedNames.has(selected[i].name)) {
+        selected.splice(i, 1);
+        selected.push(candidate);
+        break;
+      }
+    }
+  }
+  return selected.sort(byPopulationDescThenName);
 }
 
 /** 全スナップショット年の出力データを組み立てる（純粋関数） */
@@ -276,7 +335,9 @@ export function buildCitiesData(
     source: {
       description: "Major European cities per snapshot year (top " +
         `${CITIES_PER_YEAR} by population, nearest record within ` +
-        `-${PAST_WINDOW_YEARS}/+${FUTURE_WINDOW_YEARS} years), derived from ` +
+        `-${PAST_WINDOW_YEARS}/+${FUTURE_WINDOW_YEARS} years, with at least ` +
+        `${HRE_REGION_MIN_CITIES} cities from the Holy Roman Empire region ` +
+        "when available), derived from " +
         "the Historical Urban Population dataset (Chandler, digitized by " +
         "Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX)",
       license: CITIES_SOURCE_LICENSE,
