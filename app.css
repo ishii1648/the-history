@@ -373,6 +373,26 @@ body {
   margin: 3px 0;
 }
 
+/* TASK-52: 現在の年代に該当する制限事項を封蝋レッド（--wax）で視覚強調する。
+   絞り込みではなく全件表示のまま該当項目だけ目立たせる方針のため、
+   非該当項目の表示は変えない（AC: 既存の全件表示・折りたたみ操作性は不変）。 */
+.known-limitations-item--active {
+  color: var(--wax);
+  font-weight: 700;
+}
+
+.known-limitations-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid var(--wax);
+  border-radius: 3px;
+  color: var(--wax);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
 /* TASK-33: 年代ごとの歴史解説パネル。右下の maplibre attribution
    （高さ 20px 程度）の少し上に「解説」トグルを常時アンカーし、展開時は
    その真上へ吹き出し状パネルを重ねる。既存 UI との位置関係:
