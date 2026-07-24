@@ -1,11 +1,11 @@
 ---
 id: TASK-54
 title: 密集地域（HRE領邦・河川合流部）のラベル視認性をさらに改善する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-24 12:58'
-updated_date: '2026-07-24 15:21'
+updated_date: '2026-07-24 15:34'
 labels: []
 dependencies:
   - TASK-38
@@ -20,11 +20,11 @@ ordinal: 52000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 参考スクリーンショットで指摘された具体的な密集箇所（ライン川/ワール川/レク川周辺、ケルン大司教領周辺、ザクセン選帝侯領/公領周辺）が改善後に判読できる
-- [ ] #2 HRE 外縁境界線とラベルが重なる場合でも両方が判読できる（線がラベルを隠さない、またはラベルが線を避ける）
-- [ ] #3 複数の改善案を比較検討した記録が実装プランに残っている（採用案とその理由）
-- [ ] #4 既存の衝突制御・優先度ロジック（labels.ts）に対する変更がある場合、テストが追加され deno test が green
-- [ ] #5 改善前後のスクリーンショットで密集地域の視認性向上が確認できる
+- [x] #1 参考スクリーンショットで指摘された具体的な密集箇所（ライン川/ワール川/レク川周辺、ケルン大司教領周辺、ザクセン選帝侯領/公領周辺）が改善後に判読できる
+- [x] #2 HRE 外縁境界線とラベルが重なる場合でも両方が判読できる（線がラベルを隠さない、またはラベルが線を避ける）
+- [x] #3 複数の改善案を比較検討した記録が実装プランに残っている（採用案とその理由）
+- [x] #4 既存の衝突制御・優先度ロジック（labels.ts）に対する変更がある場合、テストが追加され deno test が green
+- [x] #5 改善前後のスクリーンショットで密集地域の視認性向上が確認できる
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -37,3 +37,19 @@ ordinal: 52000
 5. 並列化判定: 見送り（理由: labels.ts と main.ts のラベル設定に集中する単一領域の変更でファイル競合なしに分割できない）。実装は単一 subagent（worktree isolation）に委譲し mainagent がレビュー。
 6. deno fmt/lint/test/build green → PR（TASK-54 明記）→ CI green → finalization → マージ → マージ後動作確認。
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス（mainagent レビュー, 2026-07-25）:
+- AC#1/#2/#5: ヘッドレス CDP の前後スクリーンショット（ライン川/ワール川/レク川合流部・ケルン大司教領周辺・ザクセン選帝侯領/公領周辺・HRE 外縁 + zoom5 全体観）で、半透明背景パネルにより密集ラベル・境界線干渉の判読性向上と過剰間引きなしを確認。
+- AC#3: 案A（背景パネル）+ 案B（sizeScale 2→2.2）採用、案C（オフセット調整）は案A で吸収を実測確認し不採用。2.6 は閾値付近のラベルが低透明度フェードで固着する副作用（8 秒待機でも回復せず）を実測で発見し却下 — 採否と根拠を実装プラン・本ノートに記録。
+- AC#4: 新定数を labels.ts へ export し TDD（red: TS2305 → green）。deno test 551 passed・fmt/lint/build green・CI green（PR #66）。
+- 備考: subagent が worktree と共有ディレクトリで二重実装し不要な merge を放置していたため、mainagent が merge --abort で HEAD（完全実装）に収束させた。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+密集地域のラベル可読性を、全ラベルへの羊皮紙トーン半透明背景パネル（alpha 200）+ 衝突間引きの適正化（sizeScale 2→2.2、2.6 のフェード固着副作用を実測却下）で改善。HRE 外縁境界線との干渉は背景パネルで吸収。改善案 3 種の比較記録付き。検証: TDD red→green（551 passed）・CI green・前後スクリーンショット比較で密集 3 箇所 + 境界の判読性向上を確認。
+<!-- SECTION:FINAL_SUMMARY:END -->
