@@ -42,6 +42,7 @@ import {
   RIVER_LABEL_SIZE_PX,
 } from "./labels.ts";
 import { extractHreExtent, shouldHighlightHre } from "./hre_extent.ts";
+import { memoizeLatest } from "./memo.ts";
 import {
   RIVER_HIT_LINE_COLOR,
   RIVER_HIT_LINE_WIDTH_PX,
@@ -589,6 +590,20 @@ function buildRiversLineLayer(): GeoJsonLayer {
 }
 
 /**
+ * 河川名ラベルのデータ + characterSet をメモ化する（TASK-50）。
+ * riversData・nameJa は起動時に一度ロードされたあと year に関わらず不変な
+ * ため、hover/selection だけを変える renderLayers 呼び出しでは引数の参照が
+ * 前回と同じになり、riverLabelAnchors と characterSetFrom の再計算を
+ * スキップできる。
+ */
+const memoizedRiverLabelData = memoizeLatest(
+  (fc: FeatureCollection, ja: Record<string, string>) => {
+    const data = riverLabelAnchors(fc, ja);
+    return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
+  },
+);
+
+/**
  * 河川名ラベルの TextLayer を生成する（TASK-24 AC #1）。
  * アンカーは最長 LineString の中点（rivers.ts riverLabelAnchors）。勢力ラベル
  * より小さめの水色系文字 + 白 halo で「水系の注記」に見えるようにし、
@@ -600,7 +615,7 @@ function buildRiverLabelLayer(): TextLayer<
   LabelDatum,
   CollisionFilterExtensionProps<LabelDatum>
 > {
-  const data = riverLabelAnchors(riversData, nameJa);
+  const { data, characterSet } = memoizedRiverLabelData(riversData, nameJa);
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
     id: RIVER_LABEL_LAYER_ID,
     data,
@@ -617,7 +632,7 @@ function buildRiverLabelLayer(): TextLayer<
     outlineWidth: LABEL_OUTLINE_WIDTH,
     outlineColor: LABEL_OUTLINE_COLOR,
     // 日本語名（ライン川 等）のグリフもラベル文字列から自動生成する
-    characterSet: characterSetFrom(data.map((d) => d.text)),
+    characterSet,
     extensions: [new CollisionFilterExtension()],
     collisionTestProps: { sizeScale: 2 },
     getCollisionPriority: (d: LabelDatum) => d.priority,
@@ -691,10 +706,32 @@ function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
  * priority（cities.ts）で大国ラベルに譲りつつ小勢力ラベルとは競らせる。
  * pickable: false でマーカー・ポリゴンの picking を妨げない。
  */
+/**
+ * 都市名ラベルのデータ + characterSet をメモ化する（TASK-50）。
+ * cityEntriesForYear は毎回新しい配列を返すため、citiesData・year・nameJa
+ * （呼び出し側の参照が同一なら）をキーにし、buildCityLabelData・
+ * characterSetFrom の再計算を hover/selection の renderLayers ではスキップする。
+ * year が変わる（switchYear 経由）と再計算される。
+ */
+const memoizedCityLabelData = memoizeLatest(
+  (data: CitiesData, year: number, ja: Record<string, string>) => {
+    const entries = cityEntriesForYear(data, year);
+    const labelData = buildCityLabelData(entries, ja);
+    return {
+      data: labelData,
+      characterSet: characterSetFrom(labelData.map((d) => d.text)),
+    };
+  },
+);
+
 function buildCityLabelLayer(
   year: number,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
-  const data = buildCityLabelData(cityEntriesForYear(citiesData, year), nameJa);
+  const { data, characterSet } = memoizedCityLabelData(
+    citiesData,
+    year,
+    nameJa,
+  );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
     id: CITY_LABEL_LAYER_ID,
     data,
@@ -715,7 +752,7 @@ function buildCityLabelLayer(
     // ラベルが全滅することを目視で確認したため既定（中央揃え）のまま使う）
     getPixelOffset: [0, -10],
     // 日本語都市名（パリ 等）のグリフもラベル文字列から自動生成する
-    characterSet: characterSetFrom(data.map((d) => d.text)),
+    characterSet,
     updateTriggers: { getText: [year], getPosition: [year] },
     extensions: [new CollisionFilterExtension()],
     collisionTestProps: { sizeScale: 2 },
@@ -815,19 +852,47 @@ function renderLayers(): void {
  * pickable は false（ラベル自体はホバー対象にせず、下のポリゴンの picking を
  * 妨げない）。年代切替では同一 ID のまま data を差し替えるのみ。
  */
+/**
+ * 勢力名ラベルのデータ + characterSet をメモ化する（TASK-50）。
+ * 直近実測 ~4.3ms/回の主因だった buildLabelData（全 base+hre feature への
+ * polylabel）を、year・base・hre・nameJa の参照同値でキャッシュする。
+ * applyRiverHover / applyRiverSelection / applyHreHighlight は currentView
+ * （base/hre）を書き換えずに renderLayers() を呼ぶだけなので、同じ引数の
+ * 参照が渡り続けてキャッシュヒットし polylabel は走らない。switchYear
+ * 経由で currentView が新しい base/hre に置き換わったとき（年代切替・
+ * データ再ロード）だけ、参照が変わって正しく再計算される。
+ */
+const memoizedPowerLabelData = memoizeLatest(
+  (
+    // year 自体は未使用だがメモ化キーの一部として渡す（base/hre と揃えて
+    // 明示的に年代依存であることを示す）
+    _year: number,
+    base: FeatureCollection,
+    hre: FeatureCollection,
+    ja: Record<string, string>,
+  ) => {
+    // TASK-23: ラベルは name-ja.json で日本語化する（未登録 NAME は英語のまま）。
+    // TASK-30: kind（base/hre）を付与し、HRE 領邦ラベルだけ帝国色で塗り分ける。
+    const data = [
+      ...buildLabelData(base, ja, "base"),
+      ...buildLabelData(hre, ja, "hre"),
+    ];
+    return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
+  },
+);
+
 function buildLabelLayer(
   year: number,
   base: FeatureCollection,
   hre: FeatureCollection,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
-  // TASK-23: ラベルは name-ja.json で日本語化する（未登録 NAME は英語のまま）。
-  // characterSet はラベル文字列から導出するため日本語グリフも自動で生成される。
-  // TASK-30: kind（base/hre）を付与し、HRE 領邦ラベルだけ帝国色で塗り分ける。
   // TextLayer は 1 枚のまま・衝突制御（共有空間・priority）も従来どおり。
-  const data = [
-    ...buildLabelData(base, nameJa, "base"),
-    ...buildLabelData(hre, nameJa, "hre"),
-  ];
+  const { data, characterSet } = memoizedPowerLabelData(
+    year,
+    base,
+    hre,
+    nameJa,
+  );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
     id: LABEL_LAYER_ID,
     data,
@@ -846,7 +911,7 @@ function buildLabelLayer(
     outlineWidth: LABEL_OUTLINE_WIDTH,
     outlineColor: LABEL_OUTLINE_COLOR,
     // ü などの非 ASCII 文字（Württemberg 等）もグリフを生成する
-    characterSet: characterSetFrom(data.map((d) => d.text)),
+    characterSet,
     updateTriggers: { getText: [year], getPosition: [year] },
     // 衝突制御: 判定時はラベルを 2 倍サイズとして扱い、初期ズーム（z4）での
     // 密集を抑える（実表示より広い余白を確保し、判読不能な重なりを防ぐ）
