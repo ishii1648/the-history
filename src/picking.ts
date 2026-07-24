@@ -26,25 +26,37 @@ export const RIVERS_LAYER_ID = "rivers";
 /**
  * 河川の透明ヒットライン層（GeoJsonLayer）のレイヤー ID（TASK-43）。
  * rivers と同一データを完全透明・太幅（RIVER_HIT_LINE_WIDTH_PX）で描画し、
- * rivers の最前面に重ねる判定専用レイヤー。deck.gl の picking はカーソル
- * 直下オブジェクト優先で、全面を覆う powers ポリゴンの手前では rivers の
- * 実効判定幅が描画ライン幅（3px）の半分程度しかなく、特にホバーが
- * pickingRadius（直下に何も無い場合のみ効く）では補えない（TASK-36 で実測）。
- * この層を rivers の上に重ねることで、ホバー/クリックとも直下 pick だけで
- * 太幅分の判定幅を得る。
+ * 判定専用レイヤーとして重ねる。deck.gl の picking はカーソル直下オブジェクト
+ * 優先で、全面を覆う powers ポリゴンの手前では rivers の実効判定幅が描画
+ * ライン幅（3px）の半分程度しかなく、特にホバーが pickingRadius（直下に
+ * 何も無い場合のみ効く）では補えない（TASK-36 で実測）。この層を重ねることで、
+ * ホバー/クリックとも直下 pick だけで太幅分の判定幅を得る。
+ *
+ * PICKING_PRIORITY 上は cities より劣後させる（TASK-49）。rivers-hit は
+ * 幅 14px（±7px）と太く、河畔都市（ズーム 4〜7 のパリ等）のマーカーを帯の
+ * 内側に含んでしまい、cities より優先だと都市の picking を構造的に遮蔽して
+ * クリック/ホバー不能にするバグがあった（TASK-49 で確認）。rivers-hit は
+ * あくまで「可視の河川ライン・都市ドットのどちらの上でもない場所」を河川と
+ * みなすための補助層であり、都市ドットには勝たない設計とする。
  */
 export const RIVERS_HIT_LAYER_ID = "rivers-hit";
 
 /**
- * picking の優先順（先頭が最優先）: 河川ヒット層 ≧ 河川 > 都市 > HRE 領邦 >
- * 勢力（AC #4、TASK-43 で rivers-hit を追加）。pickable なレイヤーだけを
- * 含む（ラベル系レイヤーは pickable: false のため picking に関与せず、
- * このリストにも含めない）。
+ * picking の優先順（先頭が最優先）: 河川 > 都市 > 河川ヒット層 > HRE 領邦 >
+ * 勢力（AC #4、TASK-49 で rivers-hit を cities より劣後させ都市 picking の
+ * 遮蔽を解消）。pickable なレイヤーだけを含む（ラベル系レイヤーは
+ * pickable: false のため picking に関与せず、このリストにも含めない）。
+ *
+ * rivers-hit を cities の下・hre-powers/powers の上に置くことで:
+ * - 可視の河川ライン（3px）直上は常に河川が最優先（従来どおり、decision-7 維持）
+ * - 都市ドット直上は都市が rivers-hit の判定帯より優先（TASK-49 で解消したバグ）
+ * - 帯内でラインにも都市にも乗っていない位置は rivers-hit = 河川として扱われ、
+ *   TASK-43 が意図した判定幅拡大は維持される
  */
 export const PICKING_PRIORITY: readonly string[] = [
-  RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
   CITY_LAYER_ID,
+  RIVERS_HIT_LAYER_ID,
   HRE_LAYER_ID,
   POWER_LAYER_ID,
 ];
@@ -111,6 +123,17 @@ export function selectPreferredPick<T extends { layerId: string }>(
  *   になる（render 順が PICKING_PRIORITY の逆順であるため、pickMultipleObjects
  *   の先頭候補は非 rivers 候補の中でも既に最優先の層である）
  */
+/**
+ * クリックの直下 pick をそのまま確定してよいレイヤーか（TASK-49）。
+ * rivers/rivers-hit に加え cities も確定扱いにする: 都市ドットの直下ヒットを
+ * 近傍河川の radius 再ピック（PICKING_PRIORITY で rivers > cities）が奪うと、
+ * 河畔都市がクリック不能になるため。radius 再ピックは「直下が powers/HRE/空白
+ * だった場合の近傍探索」に限定する。
+ */
+export function isDirectPickFinal(id: string | undefined): boolean {
+  return isRiversPickLayerId(id) || id === CITY_LAYER_ID;
+}
+
 export function resolveClickPick<T extends { layer: { id: string } | null }>(
   picks: readonly T[],
 ): T | null {

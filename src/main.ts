@@ -119,6 +119,7 @@ import {
 import {
   CITY_LAYER_ID,
   HRE_LAYER_ID,
+  isDirectPickFinal,
   isRiversPickLayerId,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
@@ -489,7 +490,7 @@ const CLICK_PICK_DEPTH = 6;
  * この補正はクリックに限定する設計判断。TASK-36）。
  */
 function resolveClickInfo(info: PickingInfo): PickingInfo {
-  if (isRiversPickLayerId(info.layer?.id)) return info;
+  if (isDirectPickFinal(info.layer?.id)) return info;
   const candidates = overlay.pickMultipleObjects({
     x: info.x,
     y: info.y,
@@ -626,12 +627,14 @@ function buildRiverLabelLayer(): TextLayer<
 /**
  * 河川の透明ヒットライン層（GeoJsonLayer）を生成する（TASK-43）。
  * rivers と同一データ（riversData）を完全透明・RIVER_HIT_LINE_WIDTH_PX（14px）
- * で描画し、renderLayers で rivers の最前面に重ねる判定専用レイヤー。
- * 見た目（色・線幅の選択/ホバー/通常 3 状態）には一切関与しないため、
- * getLineColor/getLineWidth は固定値のままで良く、selectedRiverName /
- * hoveredRiverName への依存も無い（updateTriggers 不要）。data（riversData）
- * 自体は起動時に 1 度だけロードされ年代に依存しないため、rivers 層と同様に
- * data の updateTriggers も不要。
+ * で描画する判定専用レイヤー。PICKING_PRIORITY 上は cities より劣後（TASK-49）
+ * のため renderLayers では rivers・cities の下に描画され、見た目には影響しない
+ * （完全透明）まま「河川ライン・都市ドットのどちらの上でもない帯内」だけを
+ * 河川として判定する。見た目（色・線幅の選択/ホバー/通常 3 状態）には一切
+ * 関与しないため、getLineColor/getLineWidth は固定値のままで良く、
+ * selectedRiverName / hoveredRiverName への依存も無い（updateTriggers 不要）。
+ * data（riversData）自体は起動時に 1 度だけロードされ年代に依存しないため、
+ * rivers 層と同様に data の updateTriggers も不要。
  */
 function buildRiversHitLayer(): GeoJsonLayer {
   return new GeoJsonLayer({
@@ -651,9 +654,11 @@ function buildRiversHitLayer(): GeoJsonLayer {
 /**
  * 主要都市マーカーの ScatterplotLayer を生成する（TASK-27 AC #1/#3/#6）。
  * 小さな濃色ドット + 白縁で、勢力の半透明塗りの上でも視認できるようにする。
- * レイヤー順は hre-powers の上・rivers の下（renderLayers）に置き、picking の
- * 優先順位を 河川 > 都市 > 国名 にする。年代切替では同一 ID のまま
- * cityEntriesForYear で該当年のデータへ差し替えるだけにする。
+ * レイヤー順は rivers-hit の上・rivers の下（renderLayers）に置き、picking の
+ * 優先順位を 河川 > 都市 > 河川ヒット層 > HRE 領邦 > 勢力 にする（TASK-49）。
+ * cities を rivers-hit より優先することで、河畔都市（河川の判定帯 ±7px 内の
+ * マーカー）の picking が rivers-hit に遮蔽されないようにする。年代切替では
+ * 同一 ID のまま cityEntriesForYear で該当年のデータへ差し替えるだけにする。
  */
 function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
   return new ScatterplotLayer<CityMarkerDatum>({
@@ -750,18 +755,22 @@ function buildHreExtentLayer(
 /**
  * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
  * 反映する。描画順（配列順 = 下から上）: powers → hre-powers → hre-extent →
- * cities → rivers → rivers-hit → power-labels → river-labels → city-labels。
+ * rivers-hit → cities → rivers → power-labels → river-labels → city-labels。
  * rivers-hit（TASK-43）は rivers と同一データの透明太幅ヒットライン層で、
- * 最前面から picking 専用に重ねる（見た目には影響しない）。
+ * picking 専用に重ねる（見た目には影響しない）。cities の下に描画すること
+ * （TASK-49）で、河畔都市マーカーの picking を rivers-hit が遮蔽しないように
+ * する。
  *
  * TASK-29: pickable レイヤーの並びは picking.ts の PICKING_PRIORITY
- * （河川 > 都市 > HRE > 勢力。先頭が最優先）から導出する。deck.gl の picking
- * は最前面（配列の最後）が勝つため、描画順 = 優先順の逆順にすることで
- * 「河川と勢力が重なる位置では河川名を優先」（AC #2）がレイヤー順だけで
- * 担保される。ラベル系（pickable: false）は picking に関与しないため
- * その上へ後置し、layerOrderMatchesPickingPriority で全体の整合を検証する。
- * 年代切替と河川選択の変更はどちらもこの関数経由で反映し、レイヤー id を
- * 保つことで deck.gl の差分更新に任せる。
+ * （河川 > 都市 > 河川ヒット層 > HRE 領邦 > 勢力。先頭が最優先。TASK-49 で
+ * cities を rivers-hit より優先に変更）から導出する。deck.gl の picking は
+ * 最前面（配列の最後）が勝つため、描画順 = 優先順の逆順にすることで
+ * 「河川と勢力が重なる位置では河川名を優先」（AC #2）と「都市ドット直上では
+ * 都市を優先」（TASK-49）がレイヤー順だけで担保される。ラベル系
+ * （pickable: false）は picking に関与しないためその上へ後置し、
+ * layerOrderMatchesPickingPriority で全体の整合を検証する。年代切替と河川
+ * 選択の変更はどちらもこの関数経由で反映し、レイヤー id を保つことで
+ * deck.gl の差分更新に任せる。
  */
 function renderLayers(): void {
   if (currentView === null) return;
