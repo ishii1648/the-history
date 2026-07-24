@@ -31,6 +31,9 @@ import {
   characterSetFrom,
   CITY_LABEL_COLOR,
   CITY_LABEL_SIZE_PX,
+  COLLISION_SIZE_SCALE,
+  LABEL_BACKGROUND_COLOR,
+  LABEL_BACKGROUND_PADDING,
   LABEL_FONT_FAMILY,
   LABEL_FONT_SETTINGS,
   LABEL_OUTLINE_COLOR,
@@ -638,10 +641,15 @@ function buildRiverLabelLayer(): TextLayer<
     fontSettings: LABEL_FONT_SETTINGS,
     outlineWidth: LABEL_OUTLINE_WIDTH,
     outlineColor: LABEL_OUTLINE_COLOR,
+    // TASK-54 AC #1/#2: 密集地帯（ライン/ワール/レク川合流部）・HRE 外縁の
+    // 赤境界線とラベルが重なっても判読できるよう半透明の背景パネルを敷く
+    background: true,
+    getBackgroundColor: [...LABEL_BACKGROUND_COLOR],
+    backgroundPadding: LABEL_BACKGROUND_PADDING,
     // 日本語名（ライン川 等）のグリフもラベル文字列から自動生成する
     characterSet,
     extensions: [new CollisionFilterExtension()],
-    collisionTestProps: { sizeScale: 2 },
+    collisionTestProps: { sizeScale: COLLISION_SIZE_SCALE },
     getCollisionPriority: (d: LabelDatum) => d.priority,
   });
 }
@@ -752,11 +760,16 @@ function buildCityLabelLayer(
     // CollisionFilterExtension の衝突判定パスと相性が悪く、指定すると
     // ラベルが全滅することを目視で確認したため既定（中央揃え）のまま使う）
     getPixelOffset: [0, -10],
+    // TASK-54 AC #1: ケルン大司教領周辺など都市名が密集する箇所でも
+    // 判読できるよう半透明の背景パネルを敷く（国名・河川ラベルと共通）
+    background: true,
+    getBackgroundColor: [...LABEL_BACKGROUND_COLOR],
+    backgroundPadding: LABEL_BACKGROUND_PADDING,
     // 日本語都市名（パリ 等）のグリフもラベル文字列から自動生成する
     characterSet,
     updateTriggers: { getText: [year], getPosition: [year] },
     extensions: [new CollisionFilterExtension()],
-    collisionTestProps: { sizeScale: 2 },
+    collisionTestProps: { sizeScale: COLLISION_SIZE_SCALE },
     getCollisionPriority: (d: LabelDatum) => d.priority,
   });
 }
@@ -911,13 +924,20 @@ function buildLabelLayer(
     fontSettings: LABEL_FONT_SETTINGS,
     outlineWidth: LABEL_OUTLINE_WIDTH,
     outlineColor: LABEL_OUTLINE_COLOR,
+    // TASK-54 AC #1/#2: ケルン大司教領・ザクセン選帝侯領/公領周辺の密集や
+    // HRE 外縁の赤境界線との重なりでも判読できるよう半透明の背景パネルを敷く
+    background: true,
+    getBackgroundColor: [...LABEL_BACKGROUND_COLOR],
+    backgroundPadding: LABEL_BACKGROUND_PADDING,
     // ü などの非 ASCII 文字（Württemberg 等）もグリフを生成する
     characterSet,
     updateTriggers: { getText: [year], getPosition: [year] },
-    // 衝突制御: 判定時はラベルを 2 倍サイズとして扱い、初期ズーム（z4）での
-    // 密集を抑える（実表示より広い余白を確保し、判読不能な重なりを防ぐ）
+    // 衝突制御: 判定時はラベルを COLLISION_SIZE_SCALE 倍サイズとして扱い、
+    // 初期ズーム（z4）や密集地帯での重なりを抑える（実表示より広い余白を
+    // 確保し、判読不能な重なりを防ぐ。TASK-54 で 2 → COLLISION_SIZE_SCALE
+    // に引き上げ、下位優先ラベルをより積極的に間引く）
     extensions: [new CollisionFilterExtension()],
-    collisionTestProps: { sizeScale: 2 },
+    collisionTestProps: { sizeScale: COLLISION_SIZE_SCALE },
     getCollisionPriority: (d: LabelDatum) => d.priority,
   });
 }

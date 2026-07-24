@@ -139,6 +139,39 @@ export const RIVER_LABEL_SIZE_PX = 12;
  */
 export const CITY_LABEL_SIZE_PX = 12;
 
+/**
+ * 全 TextLayer（国名・HRE 領邦名・河川名・都市名）共通のラベル背景パネル色
+ * （TASK-54 AC #1/#2。案A: TextLayer の background/getBackgroundColor）。
+ * 密集地域（ケルン大司教領周辺・ザクセン選帝侯領/公領周辺）でラベル同士や
+ * HRE 外縁の赤境界線（TASK-30 hre-extent）と文字が重なっても地色との
+ * コントラストを保てるよう、basemap の羊皮紙系の地色に近い明るい暖色
+ * （そのままだと同化するため実際の下地よりやや明るく）を半透明で敷く。
+ * 完全不透明にすると下の地物の塗りが見えなくなり領域の把握を妨げるため、
+ * alpha は「文字は確実に読めるが地物の塗りも透けて見える」程度に留める。
+ */
+export const LABEL_BACKGROUND_COLOR: LabelColor = [244, 236, 215, 210];
+
+/**
+ * ラベル背景パネルの余白（[padding_x, padding_y] px。TASK-54 AC #1）。
+ * 文字のすぐ際まで背景色にすると窮屈で可読性向上効果が薄いため、
+ * 小さくとも視認できる余白を確保する。
+ */
+export const LABEL_BACKGROUND_PADDING: readonly [number, number] = [4, 3];
+
+/**
+ * CollisionFilterExtension の collisionTestProps.sizeScale（TASK-54 AC #1）。
+ * 従来値 2（TASK-20 以来）から引き上げ、ケルン大司教領・ザクセン選帝侯領/
+ * 公領のような密集地帯で衝突判定領域を実表示より大きく取り、下位優先の
+ * ラベルをより積極的に間引く（案B）。実測（ヘッドレス CDP スクリーンショット）
+ * では 2.6 まで上げると、衝突境界ぎりぎりのラベル（例: ケルン大司教領、
+ * zoom 5 の広域表示）が CollisionFilterExtension の連続フェード処理により
+ * 中途半端な低不透明度で常時描画され続ける事例が確認できたため、密集地帯の
+ * 可読性向上とこの副作用のバランスを見て 2.2 に決めた（同じ密集 3 箇所の
+ * ラベル残存数・判読性は 2.6 と同等）。
+ * 全 3 TextLayer（国名/HRE 領邦・河川・都市）で共通の衝突空間に使う。
+ */
+export const COLLISION_SIZE_SCALE = 2.2;
+
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */
 function stringProp(props: GeoJsonProperties, key: string): string | null {
   const v = props?.[key];
