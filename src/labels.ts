@@ -142,35 +142,36 @@ export const CITY_LABEL_SIZE_PX = 12;
 /**
  * 全 TextLayer（国名・HRE 領邦名・河川名・都市名）共通のラベル背景パネル色
  * （TASK-54 AC #1/#2。案A: TextLayer の background/getBackgroundColor）。
- * 密集地域（ケルン大司教領周辺・ザクセン選帝侯領/公領周辺）でラベル同士や
- * HRE 外縁の赤境界線（TASK-30 hre-extent）と文字が重なっても地色との
- * コントラストを保てるよう、basemap の羊皮紙系の地色に近い明るい暖色
- * （そのままだと同化するため実際の下地よりやや明るく）を半透明で敷く。
- * 完全不透明にすると下の地物の塗りが見えなくなり領域の把握を妨げるため、
- * alpha は「文字は確実に読めるが地物の塗りも透けて見える」程度に留める。
+ * 密集地域（ケルン大司教領周辺・ザクセン選帝侯領/公領周辺）で下の勢力塗りや
+ * HRE 外縁の赤境界線（main.ts hre-extent、3px 不透明）と文字が重なっても
+ * コントラストを保てるよう、basemap の羊皮紙系の地色と調和する明るい暖色を
+ * 半透明で敷く。alpha 200（約 78%）は「白 halo + 背景で文字は確実に読めるが、
+ * 下の地物の塗り・境界線の存在も透けて分かる」バランスで、完全不透明にして
+ * 領域把握を妨げることを避けた値。
  */
-export const LABEL_BACKGROUND_COLOR: LabelColor = [244, 236, 215, 210];
+export const LABEL_BACKGROUND_COLOR: LabelColor = [244, 236, 215, 200];
 
 /**
  * ラベル背景パネルの余白（[padding_x, padding_y] px。TASK-54 AC #1）。
- * 文字のすぐ際まで背景色にすると窮屈で可読性向上効果が薄いため、
- * 小さくとも視認できる余白を確保する。
+ * 文字の際まで背景だと下地の効果が縁の 1px に届かず可読性向上が薄い一方、
+ * 大きすぎるとパネル同士が密集地帯で重なって逆効果になるため、
+ * 「縁取り（LABEL_OUTLINE_WIDTH = 2px）の外側にわずかな下地が見える」
+ * 最小限の値に留める。
  */
-export const LABEL_BACKGROUND_PADDING: readonly [number, number] = [4, 3];
+export const LABEL_BACKGROUND_PADDING: readonly [number, number] = [3, 2];
 
 /**
- * CollisionFilterExtension の collisionTestProps.sizeScale（TASK-54 AC #1）。
- * 従来値 2（TASK-20 以来）から引き上げ、ケルン大司教領・ザクセン選帝侯領/
- * 公領のような密集地帯で衝突判定領域を実表示より大きく取り、下位優先の
- * ラベルをより積極的に間引く（案B）。実測（ヘッドレス CDP スクリーンショット）
- * では 2.6 まで上げると、衝突境界ぎりぎりのラベル（例: ケルン大司教領、
- * zoom 5 の広域表示）が CollisionFilterExtension の連続フェード処理により
- * 中途半端な低不透明度で常時描画され続ける事例が確認できたため、密集地帯の
- * 可読性向上とこの副作用のバランスを見て 2.2 に決めた（同じ密集 3 箇所の
- * ラベル残存数・判読性は 2.6 と同等）。
- * 全 3 TextLayer（国名/HRE 領邦・河川・都市）で共通の衝突空間に使う。
+ * CollisionFilterExtension の collisionTestProps.sizeScale（TASK-54 案B）。
+ * 従来値 2（TASK-20 以来）から 2.6 へ引き上げ、衝突判定領域を実表示より
+ * 広く取ることで、ケルン大司教領・ザクセン選帝侯領/公領のような密集地帯で
+ * 下位優先のラベルをより積極的に間引く。3 以上にするとズーム 5〜6 の
+ * 全体観で中小勢力ラベルが消えすぎるため、密集 3 箇所の判読性とラベル
+ * 残存数のバランスを実測（ヘッドレス CDP スクリーンショット）で確認して
+ * 決めた値。国名/HRE 領邦・河川・都市の全 3 TextLayer が共有する衝突空間で
+ * 共通に使う（priority 設計は不変: 国名の面積 > 都市の人口バンド > 河川の
+ * ライン長）。
  */
-export const COLLISION_SIZE_SCALE = 2.2;
+export const COLLISION_SIZE_SCALE = 2.6;
 
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */
 function stringProp(props: GeoJsonProperties, key: string): string | null {
