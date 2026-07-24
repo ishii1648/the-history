@@ -24,6 +24,21 @@ export const CITY_LAYER_ID = "cities";
 export const RIVERS_LAYER_ID = "rivers";
 
 /**
+ * picking の許容半径（px）（TASK-36、TASK-51 で main.ts から移設）。
+ * deck.gl Deck の pickingRadius（ホバー）・pickMultipleObjects の radius
+ * （クリック時の近傍再ピック、main.ts resolveClickInfo）両方に使う値。
+ * 「カーソル直下に何も無い場合」の近傍探索半径で、細い河川ライン（通常
+ * 3px）でもカーソルが多少ずれた位置のクリック/ホバーを拾えるようにする
+ * （TASK-24 AC #2）。
+ *
+ * rivers.ts の RIVER_HIT_LINE_WIDTH_PX（透明ヒットライン層の幅）とは別の
+ * 実効判定幅の構成要素で、河川クリックの実効許容範囲は
+ * 「ヒットライン半幅（RIVER_HIT_LINE_WIDTH_PX / 2）+ この半径」の合成になる。
+ * 導出値は rivers.ts の RIVER_CLICK_TOLERANCE_PX を参照（TASK-51）。
+ */
+export const PICKING_RADIUS_PX = 6;
+
+/**
  * 河川の透明ヒットライン層（GeoJsonLayer）のレイヤー ID（TASK-43）。
  * rivers と同一データを完全透明・太幅（RIVER_HIT_LINE_WIDTH_PX）で描画し、
  * 判定専用レイヤーとして重ねる。deck.gl の picking はカーソル直下オブジェクト

@@ -22,6 +22,7 @@ import {
   MAX_LABEL_PRIORITY,
   MIN_LABEL_PRIORITY,
 } from "./labels.ts";
+import { PICKING_RADIUS_PX } from "./picking.ts";
 
 /** 主要河川 GeoJSON の配信 URL（scripts/build.ts のコピー先と一致させる契約） */
 export const RIVERS_DATA_URL = "/data/rivers.geojson";
@@ -67,8 +68,10 @@ export const RIVER_HOVERED_LINE_WIDTH_PX = 3.75;
  * 透明ヒットライン層（picking.ts RIVERS_HIT_LAYER_ID）の線幅（px）（TASK-43）。
  * rivers と同一データをこの幅・完全透明で rivers の最前面に重ね、
  * ホバー/クリックの実効判定幅（±半分 = 7px 程度）を確保する。TASK-36 の
- * pickingRadius（PICKING_RADIUS_PX = 6px）と同程度の判定幅をカーソル直下
- * pick だけで得られるよう、6px の余裕を見て 14px を採る。
+ * pickingRadius（picking.ts PICKING_RADIUS_PX = 6px）と同程度の判定幅を
+ * カーソル直下 pick だけで得られるよう、6px の余裕を見て 14px を採る。
+ * この半幅（7px）と PICKING_RADIUS_PX（6px）は独立に合成され、河川クリックの
+ * 実効許容範囲になる（RIVER_CLICK_TOLERANCE_PX を参照、TASK-51）。
  */
 export const RIVER_HIT_LINE_WIDTH_PX = 14;
 
@@ -77,6 +80,30 @@ export const RIVER_HIT_LINE_WIDTH_PX = 14;
  * 通常表示（色・線幅の 3 状態）を一切変えない判定専用レイヤーにする。
  */
 export const RIVER_HIT_LINE_COLOR: Rgba = [0, 0, 0, 0];
+
+/**
+ * 河川クリックの実効許容範囲（px）（TASK-51）。透明ヒットライン層の半幅
+ * （RIVER_HIT_LINE_WIDTH_PX / 2 = 7px、上記）と、main.ts のクリック時
+ * 近傍再ピック半径（picking.ts PICKING_RADIUS_PX = 6px、main.ts
+ * resolveClickInfo が pickMultipleObjects の radius に使う）が合成された値。
+ *
+ * 背景（TASK-36 → TASK-43 → TASK-49 → TASK-51）: PICKING_RADIUS_PX は
+ * 「カーソル直下に pick 対象が無い場合」の近傍探索にしか効かず、全面を覆う
+ * powers ポリゴンがある本アプリでは単独では河川の実効判定幅を広げられない
+ * （TASK-36）。そこで TASK-43 は rivers と同一形状・完全透明・太幅
+ * （RIVER_HIT_LINE_WIDTH_PX）の判定専用層を重ね、直下 pick だけで太幅分の
+ * 判定幅を得るようにした。この 2 つは独立した仕組みだが、resolveClickInfo は
+ * 直下 pick が河川系（rivers/rivers-hit）でない場合にのみ PICKING_RADIUS_PX
+ * 半径の再ピックへフォールバックするため、実際にユーザーが河川をクリック
+ * できる範囲はヒット帯の半幅の外側にさらに PICKING_RADIUS_PX 分の余裕が乗り、
+ * 結果として「半幅 + 半径」が合成された範囲になる。
+ *
+ * どちらか一方の定数だけを変更すると、この合成範囲は既存テストを壊さずに
+ * 暗黙に変わってしまう。RIVER_CLICK_TOLERANCE_PX をテストで固定することで、
+ * 変更時に必ずこの関係を意識させる。
+ */
+export const RIVER_CLICK_TOLERANCE_PX = RIVER_HIT_LINE_WIDTH_PX / 2 +
+  PICKING_RADIUS_PX;
 
 /** properties から河川名（name）を取り出す。欠落・空文字・非文字列は null */
 export function riverNameFor(props: GeoJsonProperties): string | null {

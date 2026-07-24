@@ -124,6 +124,7 @@ import {
   isRiversPickLayerId,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
+  PICKING_RADIUS_PX,
   POWER_LAYER_ID,
   renderOrderFromPickingPriority,
   resolveClickPick,
@@ -269,12 +270,6 @@ const HRE_EXTENT_FILL_COLOR: [number, number, number, number] = [
 
 /** 帝国範囲の外縁線の太さ（px）。通常の勢力境界（1px 白）より明確に太くする */
 const HRE_EXTENT_LINE_WIDTH_PX = 3;
-
-/**
- * picking の許容半径（px）。細い河川ライン（通常 2px）でもカーソルが多少
- * ずれた位置のクリック/ホバーを拾えるようにする（TASK-24 AC #2）。
- */
-const PICKING_RADIUS_PX = 6;
 
 /** colors.json（NAME / "NAME|SUBJECTO" → HEX のフラットマップ） */
 let colors: Record<string, string> = {};
@@ -489,6 +484,10 @@ const CLICK_PICK_DEPTH = 6;
  * でも pickingRadius 分の近傍探索が河川に対して機能するようになる。
  * ホバーでは呼ばない（mousemove 毎の pickMultipleObjects は高コストなため、
  * この補正はクリックに限定する設計判断。TASK-36）。
+ *
+ * TASK-51: この PICKING_RADIUS_PX（picking.ts、near-cursor 再ピック半径）と
+ * rivers.ts の透明ヒットライン半幅（RIVER_HIT_LINE_WIDTH_PX / 2）が合成され、
+ * 河川クリックの実効許容範囲になる（rivers.ts RIVER_CLICK_TOLERANCE_PX を参照）。
  */
 function resolveClickInfo(info: PickingInfo): PickingInfo {
   if (isDirectPickFinal(info.layer?.id)) return info;
