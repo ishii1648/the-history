@@ -1,11 +1,11 @@
 ---
 id: TASK-59
 title: agent-loop の単一セッションガードと暴走ジョブ復旧手順を docs 化する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-24 16:01'
-updated_date: '2026-07-24 16:02'
+updated_date: '2026-07-24 16:09'
 labels:
   - 'area:docs'
 dependencies: []
@@ -21,9 +21,9 @@ ordinal: 56000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 docs/ 配下に上記 (1)〜(5) を含む運用ドキュメントが作成されている
-- [ ] #2 docs/development-style.md の agent-loop 関連章から参照が張られている
-- [ ] #3 deno fmt --check が green
+- [x] #1 docs/ 配下に上記 (1)〜(5) を含む運用ドキュメントが作成されている
+- [x] #2 docs/development-style.md の agent-loop 関連章から参照が張られている
+- [x] #3 deno fmt --check が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -34,3 +34,9 @@ ordinal: 56000
 3. deno fmt 適用 → fmt/lint/test/build green → PR（TASK-59 明記）。
 4. 並列化判定: 見送り（理由: 単一ドキュメント作成 + 参照追記 1 箇所のみで分割の意味がない。docs 領域は実装中の TASK-55（scripts/data/src）と互いに素のためタスク間並列は成立）。ユーザー直接指示につき mainagent が直接実装する（TASK-41 の docs タスク前例に倣う）。
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+docs/agent-loop-recovery.md を新規作成し、(1) 単一セッション事前チェック (2) daemon ジョブ検知（~/.claude/jobs/state.json・daemon.log） (3) 停止手順（SIGKILL・jobs リネーム無効化・git ls-remote 静穏確認） (4) launchd/crontab/tmux が無関係である調査結果 (5) subagent の git 操作制約を、2026-07-24〜25 のインシデント記録とともに文書化。development-style.md 4.3.2 節から参照を接続。検証: 全項目は本セッションで実際に実行・確認した手順の転記であり、deno fmt --check / lint / test (551 passed) / build green。
+<!-- SECTION:FINAL_SUMMARY:END -->
