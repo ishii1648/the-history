@@ -1,9 +1,11 @@
 ---
 id: TASK-55
 title: ドイツ（HRE域内）の都市表示密度を調査・改善する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-24 13:00'
+updated_date: '2026-07-24 15:52'
 labels: []
 dependencies:
   - TASK-27
@@ -25,3 +27,15 @@ ordinal: 53000
 - [ ] #4 都市数増加によるラベル密度・視認性への悪影響がないか確認する（TASK-54 との整合）
 - [ ] #5 データ処理ロジックの変更にテストがあり deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 実態調査（AC #1）: scripts/build-cities.ts と data/cities.json を機械走査し、年代ごとの HRE 域内（対象年代の HRE/独語圏 bbox 近似）採用都市数を記録する。chandler.csv の候補プールにあるドイツ都市の規模（採用漏れの件数）も確認する。
+2. 方針比較（AC #2）: (a) CITIES_PER_YEAR 引き上げ — 全域で増えるため人口優位の地中海圏が先に増え、目的（HRE 域内）への効きが薄い。(b) 地域別最低件数 — HRE 域内で最低 N 件を人口順に確保。局所目標に直結しパイプラインの複雑化も限定的。(c) 追加データソース — 出典・ライセンス管理の複雑化に対して見合わない。基本線は (b)（必要に応じ (a) を小幅併用）とし、調査結果で N を確定して記録する。
+3. 出自の注記: この比較検討の骨子は、暴走していた daemon ジョブ（停止済み）が中断時に残した未コミットプランを引き継いだもの。実装しかけの diff（build-cities.ts/tests/name-ja、コード 259 行 + データ再生成）は参考資料として subagent に渡すが、TDD で正規に実装し直し、採否はレビューで判断する。
+4. TDD（AC #5）: 選定ロジック（地域最低確保）のテストを先行（red→green）。data/cities.json は手書きせずパイプライン再生成。新規都市の日本語表記は name-ja.json に追加。
+5. 検証（AC #3/#4）: ヘッドレス CDP で 1500 年ドイツ周辺の改善前後スクリーンショットを比較。都市数の体感増と、TASK-54 の背景パネル・間引き強化の下でラベル密集が破綻しないことを確認する。
+6. 並列化判定: 見送り（理由: パイプライン変更 → データ再生成 → 表示確認が逐次依存し、独立サブ作業に分割できない）。実装は単一 subagent（worktree isolation）に委譲し mainagent がレビュー。
+7. deno fmt/lint/test/build green → PR（TASK-55 明記）→ CI green → finalization → マージ → マージ後動作確認。
+<!-- SECTION:PLAN:END -->
