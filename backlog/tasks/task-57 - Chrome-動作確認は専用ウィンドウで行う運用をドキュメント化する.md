@@ -1,9 +1,11 @@
 ---
 id: TASK-57
 title: Chrome 動作確認は専用ウィンドウで行う運用をドキュメント化する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-24 13:31'
+updated_date: '2026-07-24 16:16'
 labels: []
 dependencies: []
 ordinal: 55000
@@ -22,3 +24,12 @@ claude-in-chrome での実機動作確認は、ユーザーの普段遣いウィ
 - [ ] #3 地図タブが hidden 状態になると maplibre の描画（rAF）が停止するため、検証前に専用ウィンドウを前面化する必要がある旨が記載されている
 - [ ] #4 既存タブへの navigate を基本とし、タブ・ウィンドウを無駄に増やさない運用方針が記載されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. docs/development-style.md 4.3.1（動作確認の標準: ヘッドレス CDP）の直後に、claude-in-chrome を最終手段として使う場合の運用を追記する: (a) 専用 Chrome ウィンドウ（MCP タブグループ）で行う (b) tabs_context_mcp {createIfEmpty: true} は普段遣いウィンドウ内にタブグループを作る場合があり、その際はタブを別ウィンドウへ切り離す (c) 地図タブが hidden だと maplibre の rAF が停止するため検証前に前面化する (d) 既存タブへの navigate を基本としタブ/ウィンドウを増やさない。
+2. TASK-58 の standard（CDP）との位置づけを明記し、矛盾なく接続する。
+3. 並列化判定: 見送り（理由: 既存ドキュメント 1 箇所への追記のみで分割対象がない）。docs 領域のみの小規模変更のため TASK-41/59 の前例に倣い mainagent が直接実装する。
+4. deno fmt → fmt/lint/test/build green → PR（TASK-57 明記）→ CI green → finalization → マージ。
+<!-- SECTION:PLAN:END -->
