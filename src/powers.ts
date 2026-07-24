@@ -272,7 +272,16 @@ export function createYearSwitcher<T = FeatureCollection>(
     currentYear: () => applied,
     async switchTo(year) {
       const token = ++latestToken;
-      const data = await loader.load(year);
+      let data: T;
+      try {
+        data = await loader.load(year);
+      } catch (error) {
+        // TASK-48: 追い越された（stale）要求の失敗は成功時と同様に黙殺する。
+        // reject を伝播すると、呼び出し側（switchYear）が現在表示と無関係な
+        // 年代の失敗トーストを出してしまう。最新要求の失敗のみ伝播する。
+        if (token !== latestToken) return;
+        throw error;
+      }
       // 自分より後に発行された要求があれば、この解決は古い ＝ 破棄する
       if (token !== latestToken) return;
       applied = year;
