@@ -115,6 +115,7 @@ import {
 import {
   KNOWN_LIMITATIONS_DATA_URL,
   type KnownLimitation,
+  knownLimitationEntries,
   parseKnownLimitations,
 } from "./known_limitations.ts";
 import {
@@ -1030,12 +1031,20 @@ setupFooter();
 // 同じ「未生成時はトグルごと非表示で従来表示を維持」方針）
 let revealKnownLimitations: (limitations: KnownLimitation[]) => void = () => {};
 
+// reflectYearToKnownLimitations は年代切替の確定（applyFn。最新要求のみ到達）に
+// 追従して一覧の該当年代表示を更新するフック（setupKnownLimitationsUI が実体を
+// 差し込む。reflectYearToNotes と同じタイミング保証）。TASK-52。
+let reflectYearToKnownLimitations: (year: number) => void = () => {};
+
 /**
  * データの既知の制限一覧 UI を配線する（TASK-46）。
  * 折りたたみの状態遷移は attribution フッターと同一の操作性（トグル click /
  * フッター外 click / Escape）なので footer.ts の reducer をそのまま再利用する。
  * ここでは「イベント → reducer → aria-expanded / hidden の同期」と一覧の描画
  * だけを行う。
+ *
+ * TASK-52: 全件表示は維持したまま、knownLimitationEntries で現在年代の
+ * 該当判定（active）を付与し、該当項目だけ視覚強調する（削除ではなく配線）。
  */
 function setupKnownLimitationsUI(): void {
   const container = document.getElementById("known-limitations");
@@ -1052,6 +1061,31 @@ function setupKnownLimitationsUI(): void {
   }
 
   let state = createFooterState();
+  let limitations: KnownLimitation[] = [];
+  let currentYear: number | null = null;
+
+  /**
+   * 現在の limitations / currentYear を元に一覧を再描画する。
+   * currentYear が未確定（switchYear 未完了）の間は年代非依存として
+   * 全件 active 扱いにはせず、そもそも呼ばれない想定だが、防御的に
+   * limitations が空・currentYear が null のときは何もしない。
+   */
+  function renderList(): void {
+    if (limitations.length === 0 || currentYear === null) return;
+    const entries = knownLimitationEntries(limitations, currentYear);
+    list!.replaceChildren(...entries.map((entry) => {
+      const li = document.createElement("li");
+      li.textContent = entry.text;
+      li.classList.toggle("known-limitations-item--active", entry.active);
+      if (entry.active) {
+        const badge = document.createElement("span");
+        badge.className = "known-limitations-badge";
+        badge.textContent = "この年代に該当";
+        li.append(" ", badge);
+      }
+      return li;
+    }));
+  }
 
   /** 現在の状態を aria-expanded / hidden へ反映する */
   function render(): void {
@@ -1081,16 +1115,21 @@ function setupKnownLimitationsUI(): void {
   });
 
   // known-limitations.json のロード成功時のみトグルを表示し、一覧を描画する
-  // （AC #3: 制限事項の追加はデータ編集のみで可能。年代非依存で全件表示する
-  // 最小実装 — 年代に応じた強調は任意のため見送り）
-  revealKnownLimitations = (limitations) => {
-    if (limitations.length === 0) return;
-    list!.replaceChildren(...limitations.map((limitation) => {
-      const li = document.createElement("li");
-      li.textContent = limitation.text;
-      return li;
-    }));
+  // （AC #3: 制限事項の追加はデータ編集のみで可能。全件表示は維持したまま、
+  // TASK-52 で現在年代の該当項目を視覚強調する）
+  revealKnownLimitations = (loaded) => {
+    if (loaded.length === 0) return;
+    limitations = loaded;
+    renderList();
     toggle!.hidden = false;
+  };
+
+  // AC 相当: 年代切替の確定（applyFn。最新要求のみ到達）に追従して
+  // 一覧の該当年代表示を更新する。パネルの開閉状態に関わらず内容を
+  // 最新化しておくことで、次回展開時は常に現在年代の判定を表示する。
+  reflectYearToKnownLimitations = (year) => {
+    currentYear = year;
+    renderList();
   };
 
   render();
@@ -1241,6 +1280,8 @@ const yearSwitcher = createYearSwitcher(
     reflectYearToTimeline(year);
     // TASK-33 AC #1: 解説パネルも確定年に追従させる
     reflectYearToNotes(year);
+    // TASK-52: 既知の制限一覧も確定年に追従させ、該当項目の強調を更新する
+    reflectYearToKnownLimitations(year);
     // AC #1: 年代確定のたびに URL を現在の視点込みで同期する
     syncUrlToState();
   },
