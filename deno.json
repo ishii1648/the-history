@@ -18,6 +18,7 @@
     "next-task": "deno run --allow-read scripts/next_task.ts",
     "next-tasks": "deno run --allow-read scripts/next_tasks.ts",
     "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist --header \"Cache-Control: no-cache\"",
+    "verify:smoke": "deno run -A scripts/verify/cdp.ts",
     "test": "deno test",
     "test:watch": "deno test --watch"
   },

@@ -2,3 +2,5 @@ dist/
 *.pmtiles
 # TASK-34: extract-dem のタイルダウンロードキャッシュ（再実行時の冪等化用）
 data/dem-tiles/
+# TASK-58: scripts/verify/checks の実行時に生成されるスクリーンショット
+scripts/verify/checks/.smoke-screenshot.png

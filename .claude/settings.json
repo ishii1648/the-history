@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(backlog *)",
-      "Bash(gh pr merge *)"
+      "Bash(gh pr merge *)",
+      "Bash(deno task verify:*)",
+      "Bash(deno run -A scripts/verify/*)"
     ]
   }
 }
