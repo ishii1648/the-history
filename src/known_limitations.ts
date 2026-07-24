@@ -122,3 +122,25 @@ export function isKnownLimitationActiveForYear(
   if (limitation.years === undefined) return true;
   return year >= limitation.years.from && year <= limitation.years.to;
 }
+
+/** UI 描画用に年代該当フラグを付与した制限事項（TASK-52） */
+export interface KnownLimitationEntry extends KnownLimitation {
+  /** isKnownLimitationActiveForYear(this, year) の結果。この年代に該当するか */
+  readonly active: boolean;
+}
+
+/**
+ * 全件を保持したまま各項目に isKnownLimitationActiveForYear の判定結果を
+ * 付与する（TASK-52）。UI 側はこれを使って「全件表示 + 該当年代を視覚強調」
+ * できる（絞り込み・除外はしない。既存の全件表示という挙動は変えない方針）。
+ * 順序は入力の limitations と同一のまま維持する。
+ */
+export function knownLimitationEntries(
+  limitations: readonly KnownLimitation[],
+  year: number,
+): KnownLimitationEntry[] {
+  return limitations.map((limitation) => ({
+    ...limitation,
+    active: isKnownLimitationActiveForYear(limitation, year),
+  }));
+}

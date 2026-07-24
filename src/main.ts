@@ -93,13 +93,7 @@ import {
   createReplaceStateUpdater,
   decodeState,
 } from "./url_state.ts";
-import {
-  ariaExpandedValue,
-  createFooterState,
-  type FooterEvent,
-  isContentHidden,
-  reduceFooterEvent,
-} from "./footer.ts";
+import { wireCollapsiblePanel } from "./collapsible.ts";
 import {
   createNotesState,
   isNotesPanelHidden,
@@ -115,6 +109,7 @@ import {
 import {
   KNOWN_LIMITATIONS_DATA_URL,
   type KnownLimitation,
+  knownLimitationEntries,
   parseKnownLimitations,
 } from "./known_limitations.ts";
 import {
@@ -552,6 +547,25 @@ function applyRiverHover(next: string | null): void {
 }
 
 /**
+ * rivers（表示ライン）と rivers-hit（透明ヒットライン）で共通の GeoJsonLayer
+ * base props（TASK-53）。両層は同一データをライン描画する層で、picking 可否や
+ * ラインの丸め方も揃える。riversData は loadRivers がモジュール変数を差し替える
+ * ため、モジュール定数に data を焼き込むと初期の空 FC を参照し続けてしまう。
+ * 呼び出し時に評価する関数にして常に最新の riversData を返す（挙動不変）。
+ */
+function riversLayerBaseProps() {
+  return {
+    data: riversData,
+    pickable: true,
+    stroked: false,
+    filled: false,
+    lineWidthUnits: "pixels",
+    lineCapRounded: true,
+    lineJointRounded: true,
+  } as const;
+}
+
+/**
  * 主要河川ラインの GeoJsonLayer を生成する（TASK-24）。
  * 色・幅は rivers.ts の純粋関数で決め、選択中の河川全体（同名 feature）を
  * 太く濃色で強調する。TASK-42: ホバー中（未選択）の河川は中間強調にする
@@ -560,18 +574,14 @@ function applyRiverHover(next: string | null): void {
  */
 function buildRiversLineLayer(): GeoJsonLayer {
   return new GeoJsonLayer({
+    ...riversLayerBaseProps(),
     id: RIVERS_LAYER_ID,
-    data: riversData,
-    pickable: true,
-    stroked: false,
-    filled: false,
     getLineColor: (f: Feature) =>
       riverLineColor(
         riverNameFor(f.properties),
         selectedRiverName,
         hoveredRiverName,
       ),
-    lineWidthUnits: "pixels",
     getLineWidth: (f: Feature) =>
       riverLineWidth(
         riverNameFor(f.properties),
@@ -579,8 +589,6 @@ function buildRiversLineLayer(): GeoJsonLayer {
         hoveredRiverName,
       ),
     lineWidthMinPixels: 1,
-    lineCapRounded: true,
-    lineJointRounded: true,
     updateTriggers: {
       getLineColor: [selectedRiverName, hoveredRiverName],
       getLineWidth: [selectedRiverName, hoveredRiverName],
@@ -652,16 +660,10 @@ function buildRiverLabelLayer(): TextLayer<
  */
 function buildRiversHitLayer(): GeoJsonLayer {
   return new GeoJsonLayer({
+    ...riversLayerBaseProps(),
     id: RIVERS_HIT_LAYER_ID,
-    data: riversData,
-    pickable: true,
-    stroked: false,
-    filled: false,
     getLineColor: RIVER_HIT_LINE_COLOR,
-    lineWidthUnits: "pixels",
     getLineWidth: RIVER_HIT_LINE_WIDTH_PX,
-    lineCapRounded: true,
-    lineJointRounded: true,
   });
 }
 
@@ -972,8 +974,9 @@ setupInfoUI();
 
 /**
  * attribution フッターの折りたたみ UI を配線する（TASK-26）。
- * 状態遷移は footer.ts の reducer（純粋関数）に集約し、ここでは
- * 「イベント → reducer → aria-expanded / hidden の同期」だけを行う。
+ * 状態遷移は footer.ts の reducer（純粋関数）、イベント購読と
+ * aria-expanded / hidden の同期は collapsible.ts の共通配線（TASK-53）に
+ * 集約されており、ここでは要素の取得と root 内判定の注入だけを行う。
  * - ⓘボタン click でトグル（native button なので Enter/Space は標準動作。AC #4）
  * - フッター外の click / Escape キーで折りたたみ（展開時のみ。AC #3）
  */
@@ -988,37 +991,16 @@ function setupFooter(): void {
     return;
   }
 
-  let state = createFooterState();
-
-  /** 現在の状態を aria-expanded / hidden へ反映する（AC #1/#2/#4） */
-  function render(): void {
-    toggle!.setAttribute("aria-expanded", ariaExpandedValue(state));
-    content!.hidden = isContentHidden(state);
-  }
-
-  function dispatch(event: FooterEvent): void {
-    state = reduceFooterEvent(state, event);
-    render();
-  }
-
-  toggle.addEventListener("click", () => dispatch("toggle"));
-
-  // AC #3: 展開中にフッター外をクリック/タップしたら折りたたむ。
-  // ⓘボタン自身のクリックは footer 内なのでここでは処理せず、二重発火しない。
-  document.addEventListener("click", (e) => {
-    if (!state.expanded) return;
-    if (e.target instanceof Node && footer!.contains(e.target)) return;
-    dispatch("outside-click");
+  // AC #1〜#4: 配線仕様（トグル / 外側 click / Escape / 属性同期）は
+  // wireCollapsiblePanel に共通化した。ⓘボタン自身のクリックは footer 内
+  // なので outside-click にならず、二重発火しない。
+  wireCollapsiblePanel({
+    toggle,
+    content,
+    containsTarget: (target) =>
+      target instanceof Node && footer.contains(target),
+    eventSource: document,
   });
-
-  // AC #3/#4: Escape キーで折りたたむ（未展開時は reducer が状態を変えない）
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (!state.expanded) return;
-    dispatch("escape");
-  });
-
-  render();
 }
 
 setupFooter();
@@ -1030,12 +1012,20 @@ setupFooter();
 // 同じ「未生成時はトグルごと非表示で従来表示を維持」方針）
 let revealKnownLimitations: (limitations: KnownLimitation[]) => void = () => {};
 
+// reflectYearToKnownLimitations は年代切替の確定（applyFn。最新要求のみ到達）に
+// 追従して一覧の該当年代表示を更新するフック（setupKnownLimitationsUI が実体を
+// 差し込む。reflectYearToNotes と同じタイミング保証）。TASK-52。
+let reflectYearToKnownLimitations: (year: number) => void = () => {};
+
 /**
  * データの既知の制限一覧 UI を配線する（TASK-46）。
- * 折りたたみの状態遷移は attribution フッターと同一の操作性（トグル click /
- * フッター外 click / Escape）なので footer.ts の reducer をそのまま再利用する。
- * ここでは「イベント → reducer → aria-expanded / hidden の同期」と一覧の描画
- * だけを行う。
+ * 折りたたみは attribution フッターと同一の操作性（トグル click /
+ * コンテナ外 click / Escape）なので、reducer（footer.ts）ごと共通配線
+ * wireCollapsiblePanel（collapsible.ts、TASK-53）を再利用する。
+ * ここでは一覧の描画と表示フックの差し込みだけを行う。
+ *
+ * TASK-52: 全件表示は維持したまま、knownLimitationEntries で現在年代の
+ * 該当判定（active）を付与し、該当項目だけ視覚強調する（削除ではなく配線）。
  */
 function setupKnownLimitationsUI(): void {
   const container = document.getElementById("known-limitations");
@@ -1051,49 +1041,59 @@ function setupKnownLimitationsUI(): void {
     return;
   }
 
-  let state = createFooterState();
+  let limitations: KnownLimitation[] = [];
+  let currentYear: number | null = null;
 
-  /** 現在の状態を aria-expanded / hidden へ反映する */
-  function render(): void {
-    toggle!.setAttribute("aria-expanded", ariaExpandedValue(state));
-    content!.hidden = isContentHidden(state);
+  /**
+   * 現在の limitations / currentYear を元に一覧を再描画する。
+   * currentYear が未確定（switchYear 未完了）の間は年代非依存として
+   * 全件 active 扱いにはせず、そもそも呼ばれない想定だが、防御的に
+   * limitations が空・currentYear が null のときは何もしない。
+   */
+  function renderList(): void {
+    if (limitations.length === 0 || currentYear === null) return;
+    const entries = knownLimitationEntries(limitations, currentYear);
+    list!.replaceChildren(...entries.map((entry) => {
+      const li = document.createElement("li");
+      li.textContent = entry.text;
+      li.classList.toggle("known-limitations-item--active", entry.active);
+      if (entry.active) {
+        const badge = document.createElement("span");
+        badge.className = "known-limitations-badge";
+        badge.textContent = "この年代に該当";
+        li.append(" ", badge);
+      }
+      return li;
+    }));
   }
 
-  function dispatch(event: FooterEvent): void {
-    state = reduceFooterEvent(state, event);
-    render();
-  }
-
-  toggle.addEventListener("click", () => dispatch("toggle"));
-
-  // 展開中にコンテナ外をクリック/タップしたら折りたたむ（attribution と同じ）
-  document.addEventListener("click", (e) => {
-    if (!state.expanded) return;
-    if (e.target instanceof Node && container!.contains(e.target)) return;
-    dispatch("outside-click");
-  });
-
-  // Escape キーで折りたたむ（未展開時は reducer が状態を変えない）
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (!state.expanded) return;
-    dispatch("escape");
+  // 折りたたみの配線（トグル / コンテナ外 click / Escape / 属性同期）は
+  // attribution と同じ共通配線に委譲する（TASK-53）
+  wireCollapsiblePanel({
+    toggle,
+    content,
+    containsTarget: (target) =>
+      target instanceof Node && container.contains(target),
+    eventSource: document,
   });
 
   // known-limitations.json のロード成功時のみトグルを表示し、一覧を描画する
-  // （AC #3: 制限事項の追加はデータ編集のみで可能。年代非依存で全件表示する
-  // 最小実装 — 年代に応じた強調は任意のため見送り）
-  revealKnownLimitations = (limitations) => {
-    if (limitations.length === 0) return;
-    list!.replaceChildren(...limitations.map((limitation) => {
-      const li = document.createElement("li");
-      li.textContent = limitation.text;
-      return li;
-    }));
+  // （AC #3: 制限事項の追加はデータ編集のみで可能。全件表示は維持したまま、
+  // TASK-52 で現在年代の該当項目を視覚強調する）
+  revealKnownLimitations = (loaded) => {
+    if (loaded.length === 0) return;
+    limitations = loaded;
+    renderList();
     toggle!.hidden = false;
   };
 
-  render();
+  // AC 相当: 年代切替の確定（applyFn。最新要求のみ到達）に追従して
+  // 一覧の該当年代表示を更新する。パネルの開閉状態に関わらず内容を
+  // 最新化しておくことで、次回展開時は常に現在年代の判定を表示する。
+  reflectYearToKnownLimitations = (year) => {
+    currentYear = year;
+    renderList();
+  };
 }
 
 setupKnownLimitationsUI();
@@ -1241,6 +1241,8 @@ const yearSwitcher = createYearSwitcher(
     reflectYearToTimeline(year);
     // TASK-33 AC #1: 解説パネルも確定年に追従させる
     reflectYearToNotes(year);
+    // TASK-52: 既知の制限一覧も確定年に追従させ、該当項目の強調を更新する
+    reflectYearToKnownLimitations(year);
     // AC #1: 年代確定のたびに URL を現在の視点込みで同期する
     syncUrlToState();
   },

@@ -2,6 +2,7 @@ import { assertEquals } from "@std/assert";
 import {
   isKnownLimitationActiveForYear,
   type KnownLimitation,
+  knownLimitationEntries,
   parseKnownLimitations,
 } from "./known_limitations.ts";
 
@@ -133,6 +134,45 @@ Deno.test("isKnownLimitationActiveForYear は years 範囲外で false", () => {
   };
   assertEquals(isKnownLimitationActiveForYear(limitation, 1500), false);
   assertEquals(isKnownLimitationActiveForYear(limitation, 1715), false);
+});
+
+// ---- knownLimitationEntries: UI 配線用（年代該当フラグ付きの一覧） ----
+
+Deno.test("knownLimitationEntries は年代範囲内の項目に active: true を付与する", () => {
+  const limitations: KnownLimitation[] = [
+    { id: "a", years: { from: 900, to: 1492 }, text: "t-a" },
+  ];
+  const result = knownLimitationEntries(limitations, 1200);
+  assertEquals(result, [
+    { id: "a", years: { from: 900, to: 1492 }, text: "t-a", active: true },
+  ]);
+});
+
+Deno.test("knownLimitationEntries は年代範囲外の項目に active: false を付与する", () => {
+  const limitations: KnownLimitation[] = [
+    { id: "a", years: { from: 1530, to: 1700 }, text: "t-a" },
+  ];
+  const result = knownLimitationEntries(limitations, 1500);
+  assertEquals(result, [
+    { id: "a", years: { from: 1530, to: 1700 }, text: "t-a", active: false },
+  ]);
+});
+
+Deno.test("knownLimitationEntries は years 省略項目に常に active: true を付与する", () => {
+  const limitations: KnownLimitation[] = [{ id: "a", text: "t-a" }];
+  const result = knownLimitationEntries(limitations, 900);
+  assertEquals(result, [{ id: "a", text: "t-a", active: true }]);
+});
+
+Deno.test("knownLimitationEntries は全件を保持し元の順序を維持する", () => {
+  const limitations: KnownLimitation[] = [
+    { id: "a", years: { from: 1530, to: 1700 }, text: "t-a" },
+    { id: "b", text: "t-b" },
+    { id: "c", years: { from: 900, to: 1000 }, text: "t-c" },
+  ];
+  const result = knownLimitationEntries(limitations, 950);
+  assertEquals(result.map((entry) => entry.id), ["a", "b", "c"]);
+  assertEquals(result.map((entry) => entry.active), [false, true, true]);
 });
 
 /**

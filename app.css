@@ -235,6 +235,48 @@ body {
   cursor: pointer;
 }
 
+/* TASK-53: 左下の円形トグルボタン（attribution ⓘ / 既知の制限 ⚠）の共通意匠。
+   小さな半透明の焦茶レザー調ボタン（TASK-40。native button でキーボード操作可）。
+   font-size など要素固有の差分は各クラス（.footer-toggle 等）側に残す */
+.corner-toggle-btn {
+  display: block;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--brass);
+  border-radius: 50%;
+  background: rgba(58, 39, 18, 0.82);
+  color: var(--brass-light);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.corner-toggle-btn:hover,
+.corner-toggle-btn[aria-expanded="true"] {
+  background: rgba(58, 39, 18, 0.95);
+  color: var(--parchment);
+}
+
+/* TASK-53: トグルの真上に吹き出し状に重ねる羊皮紙ポップオーバーの共通意匠
+   （TASK-40 のクリーム地カード）。padding・font-size・line-height の差分は
+   各クラス（.footer-content 等）側に残す */
+.popover-card {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  width: max-content;
+  max-width: min(46ch, calc(100vw - 32px));
+  background: var(--parchment);
+  border: 1px solid var(--frame);
+  border-radius: 5px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  color: var(--ink);
+}
+
+.popover-card[hidden] {
+  display: none;
+}
+
 /* TASK-9/TASK-26: データ出典・attribution・免責のフッター（app-spec §2.1, §5.4）。
    TASK-26 で折りたたみ式に変更: 常時表示は左下の小さな円形ⓘボタンのみで、
    展開時にボタンの真上へ従来相当の全文パネルを吹き出し表示する。
@@ -248,49 +290,18 @@ body {
   font-family: var(--font-serif);
 }
 
-/* AC #1: 常時表示の目印。小さな半透明の円形ボタン（native button でキーボード操作可）
-   TASK-40: 焦茶レザー調のトーンに統一 */
+/* AC #1: 常時表示の目印（円形の意匠は .corner-toggle-btn に共通化。TASK-53） */
 .footer-toggle {
-  display: block;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--brass);
-  border-radius: 50%;
-  background: rgba(58, 39, 18, 0.82);
-  color: var(--brass-light);
   font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.footer-toggle:hover,
-.footer-toggle[aria-expanded="true"] {
-  background: rgba(58, 39, 18, 0.95);
-  color: var(--parchment);
 }
 
 /* AC #2: 展開時の attribution 全文パネル。ⓘボタンの真上に吹き出し状に重ね、
-   文字サイズ・配色・最大幅は TASK-9 の常時表示フッターと同等にする。
-   TASK-40: 羊皮紙地のカードに統一 */
+   文字サイズ・配色・最大幅は TASK-9 の常時表示フッターと同等にする
+   （羊皮紙カードの意匠は .popover-card に共通化。TASK-53） */
 .footer-content {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 6px);
-  width: max-content;
-  max-width: min(46ch, calc(100vw - 32px));
   padding: 7px 11px;
-  background: var(--parchment);
-  border: 1px solid var(--frame);
-  border-radius: 5px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
-  color: var(--ink);
   font-size: 11px;
   line-height: 1.4;
-}
-
-.footer-content[hidden] {
-  display: none;
 }
 
 .footer-content a {
@@ -310,51 +321,24 @@ body {
   font-family: var(--font-serif);
 }
 
-/* 常時表示の目印。attribution のⓘトグルと同じ意匠の円形ボタン */
+/* 常時表示の目印。attribution のⓘトグルと同じ意匠の円形ボタン
+   （.corner-toggle-btn に共通化。TASK-53）。known-limitations.json の
+   ロード成功までは hidden のままなので [hidden] 規則だけ固有に持つ */
 .known-limitations-toggle {
-  display: block;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--brass);
-  border-radius: 50%;
-  background: rgba(58, 39, 18, 0.82);
-  color: var(--brass-light);
   font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
 }
 
 .known-limitations-toggle[hidden] {
   display: none;
 }
 
-.known-limitations-toggle:hover,
-.known-limitations-toggle[aria-expanded="true"] {
-  background: rgba(58, 39, 18, 0.95);
-  color: var(--parchment);
-}
-
 /* 展開時の制限事項一覧パネル。トグルの真上に吹き出し状に重ね、
-   attribution-content と同系の羊皮紙カードに統一 */
+   attribution-content と同系の羊皮紙カードに統一
+   （カードの意匠は .popover-card に共通化。TASK-53） */
 .known-limitations-content {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 6px);
-  width: max-content;
-  max-width: min(46ch, calc(100vw - 32px));
   padding: 9px 12px;
-  background: var(--parchment);
-  border: 1px solid var(--frame);
-  border-radius: 5px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
-  color: var(--ink);
   font-size: 12px;
   line-height: 1.5;
-}
-
-.known-limitations-content[hidden] {
-  display: none;
 }
 
 .known-limitations-heading {
@@ -371,6 +355,26 @@ body {
 
 .known-limitations-list li {
   margin: 3px 0;
+}
+
+/* TASK-52: 現在の年代に該当する制限事項を封蝋レッド（--wax）で視覚強調する。
+   絞り込みではなく全件表示のまま該当項目だけ目立たせる方針のため、
+   非該当項目の表示は変えない（AC: 既存の全件表示・折りたたみ操作性は不変）。 */
+.known-limitations-item--active {
+  color: var(--wax);
+  font-weight: 700;
+}
+
+.known-limitations-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid var(--wax);
+  border-radius: 3px;
+  color: var(--wax);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
 }
 
 /* TASK-33: 年代ごとの歴史解説パネル。右下の maplibre attribution
