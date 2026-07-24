@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-24 16:01'
-updated_date: '2026-07-24 16:27'
+updated_date: '2026-07-24 16:32'
 labels:
   - 'area:src-labels'
 dependencies: []
@@ -35,3 +35,13 @@ ordinal: 57000
 4. 並列化判定: 見送り（理由: labels.ts と labels_test.ts の対の小変更のみで分割不可）。既存レビュー済み diff の適用が主のため mainagent が直接実装する（docs タスクの直接実装前例に準ずる小規模変更）。
 5. deno fmt/lint/test/build green → PR（TASK-60 明記）→ CI green → finalization → マージ → マージ後確認。
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+sizeScale の経験的主張の衝突と裁定: 中間版（main 現行 2.2）のコメントは『2.6 では衝突境界ぎりぎりのラベルが低不透明度で常時描画される』とし、改良版（c0e1a77）は 2.6 を推していた。本番ビルドで両値を同一条件（1500 年、z5 全体観・ケルン z7・ザクセン z7、フェード定常化 5 秒待ち）で再比較した結果:
+- 2.2: z5 でレク川×ネーデルライン川のラベルが重なり判読不能（TASK-54 の目的に反する退行）。スイス付近のライン川も近接 2 枚。
+- 2.6: 重なり解消。副作用（低不透明度のライン川 1 枚）は確認されたが判読可能で軽微。ケルン z7 は全ラベル判読可能。
+→ 判読不能な重なりの解消を優先し 2.6 を採用。スクリーンショット: scratchpad verify/t60_s22_*.png（2.2）/ t60_s26_*.png（2.6）。
+テストについて: 強化テストは値域（alpha 150..254・padding<=8・sizeScale (2,4]）を固定するもので、中間版の値でも pass するため red→green の TDD 対象ではない（定数チューニングの妥当性は上記実機比較で検証）。
+<!-- SECTION:NOTES:END -->
