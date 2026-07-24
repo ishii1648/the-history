@@ -33,14 +33,16 @@ import citiesData from "../data/cities.json" with { type: "json" };
  *   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); c=json.load(open('data/cities.json')); names=set(x['name'] for cs in c['years'].values() for x in cs); print(json.dumps(sorted(names & s),ensure_ascii=False,indent=2))"
  */
 const KNOWN_CITY_POWER_NAME_COLLISIONS: string[] = [
-  "Algiers",
+  // TASK-55 の HRE 域内下限確保で Algiers / Tunis は全年代で選外となり
+  // data/cities.json から消えたため、このリストからも除外した（陳腐化検出
+  // テストが要求。src/cities.ts の CITY_NAME_JA_OVERRIDES 側は将来の復帰に
+  // 備えて残している）。
   "Florence",
   "Genoa",
   "Granada",
   "Hamburg",
   "Milan",
   "Naples",
-  "Tunis",
   "Venice",
 ];
 
