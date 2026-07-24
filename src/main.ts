@@ -93,13 +93,7 @@ import {
   createReplaceStateUpdater,
   decodeState,
 } from "./url_state.ts";
-import {
-  ariaExpandedValue,
-  createFooterState,
-  type FooterEvent,
-  isContentHidden,
-  reduceFooterEvent,
-} from "./footer.ts";
+import { wireCollapsiblePanel } from "./collapsible.ts";
 import {
   createNotesState,
   isNotesPanelHidden,
@@ -973,8 +967,9 @@ setupInfoUI();
 
 /**
  * attribution フッターの折りたたみ UI を配線する（TASK-26）。
- * 状態遷移は footer.ts の reducer（純粋関数）に集約し、ここでは
- * 「イベント → reducer → aria-expanded / hidden の同期」だけを行う。
+ * 状態遷移は footer.ts の reducer（純粋関数）、イベント購読と
+ * aria-expanded / hidden の同期は collapsible.ts の共通配線（TASK-53）に
+ * 集約されており、ここでは要素の取得と root 内判定の注入だけを行う。
  * - ⓘボタン click でトグル（native button なので Enter/Space は標準動作。AC #4）
  * - フッター外の click / Escape キーで折りたたみ（展開時のみ。AC #3）
  */
@@ -989,37 +984,16 @@ function setupFooter(): void {
     return;
   }
 
-  let state = createFooterState();
-
-  /** 現在の状態を aria-expanded / hidden へ反映する（AC #1/#2/#4） */
-  function render(): void {
-    toggle!.setAttribute("aria-expanded", ariaExpandedValue(state));
-    content!.hidden = isContentHidden(state);
-  }
-
-  function dispatch(event: FooterEvent): void {
-    state = reduceFooterEvent(state, event);
-    render();
-  }
-
-  toggle.addEventListener("click", () => dispatch("toggle"));
-
-  // AC #3: 展開中にフッター外をクリック/タップしたら折りたたむ。
-  // ⓘボタン自身のクリックは footer 内なのでここでは処理せず、二重発火しない。
-  document.addEventListener("click", (e) => {
-    if (!state.expanded) return;
-    if (e.target instanceof Node && footer!.contains(e.target)) return;
-    dispatch("outside-click");
+  // AC #1〜#4: 配線仕様（トグル / 外側 click / Escape / 属性同期）は
+  // wireCollapsiblePanel に共通化した。ⓘボタン自身のクリックは footer 内
+  // なので outside-click にならず、二重発火しない。
+  wireCollapsiblePanel({
+    toggle,
+    content,
+    containsTarget: (target) =>
+      target instanceof Node && footer.contains(target),
+    eventSource: document,
   });
-
-  // AC #3/#4: Escape キーで折りたたむ（未展開時は reducer が状態を変えない）
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (!state.expanded) return;
-    dispatch("escape");
-  });
-
-  render();
 }
 
 setupFooter();
@@ -1038,10 +1012,10 @@ let reflectYearToKnownLimitations: (year: number) => void = () => {};
 
 /**
  * データの既知の制限一覧 UI を配線する（TASK-46）。
- * 折りたたみの状態遷移は attribution フッターと同一の操作性（トグル click /
- * フッター外 click / Escape）なので footer.ts の reducer をそのまま再利用する。
- * ここでは「イベント → reducer → aria-expanded / hidden の同期」と一覧の描画
- * だけを行う。
+ * 折りたたみは attribution フッターと同一の操作性（トグル click /
+ * コンテナ外 click / Escape）なので、reducer（footer.ts）ごと共通配線
+ * wireCollapsiblePanel（collapsible.ts、TASK-53）を再利用する。
+ * ここでは一覧の描画と表示フックの差し込みだけを行う。
  *
  * TASK-52: 全件表示は維持したまま、knownLimitationEntries で現在年代の
  * 該当判定（active）を付与し、該当項目だけ視覚強調する（削除ではなく配線）。
@@ -1060,7 +1034,6 @@ function setupKnownLimitationsUI(): void {
     return;
   }
 
-  let state = createFooterState();
   let limitations: KnownLimitation[] = [];
   let currentYear: number | null = null;
 
@@ -1087,31 +1060,14 @@ function setupKnownLimitationsUI(): void {
     }));
   }
 
-  /** 現在の状態を aria-expanded / hidden へ反映する */
-  function render(): void {
-    toggle!.setAttribute("aria-expanded", ariaExpandedValue(state));
-    content!.hidden = isContentHidden(state);
-  }
-
-  function dispatch(event: FooterEvent): void {
-    state = reduceFooterEvent(state, event);
-    render();
-  }
-
-  toggle.addEventListener("click", () => dispatch("toggle"));
-
-  // 展開中にコンテナ外をクリック/タップしたら折りたたむ（attribution と同じ）
-  document.addEventListener("click", (e) => {
-    if (!state.expanded) return;
-    if (e.target instanceof Node && container!.contains(e.target)) return;
-    dispatch("outside-click");
-  });
-
-  // Escape キーで折りたたむ（未展開時は reducer が状態を変えない）
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (!state.expanded) return;
-    dispatch("escape");
+  // 折りたたみの配線（トグル / コンテナ外 click / Escape / 属性同期）は
+  // attribution と同じ共通配線に委譲する（TASK-53）
+  wireCollapsiblePanel({
+    toggle,
+    content,
+    containsTarget: (target) =>
+      target instanceof Node && container.contains(target),
+    eventSource: document,
   });
 
   // known-limitations.json のロード成功時のみトグルを表示し、一覧を描画する
@@ -1131,8 +1087,6 @@ function setupKnownLimitationsUI(): void {
     currentYear = year;
     renderList();
   };
-
-  render();
 }
 
 setupKnownLimitationsUI();
