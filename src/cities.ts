@@ -116,6 +116,11 @@ export const CITY_NAME_JA_OVERRIDES: Record<string, string> = {
   Milan: "ミラノ",
   Naples: "ナポリ",
   Granada: "グラナダ",
+  Algiers: "アルジェ",
+  Florence: "フィレンツェ",
+  Genoa: "ジェノヴァ",
+  Hamburg: "ハンブルク",
+  Tunis: "チュニス",
 };
 
 /**
