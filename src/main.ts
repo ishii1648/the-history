@@ -119,6 +119,7 @@ import {
 import {
   CITY_LAYER_ID,
   HRE_LAYER_ID,
+  isDirectPickFinal,
   isRiversPickLayerId,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
@@ -489,7 +490,7 @@ const CLICK_PICK_DEPTH = 6;
  * この補正はクリックに限定する設計判断。TASK-36）。
  */
 function resolveClickInfo(info: PickingInfo): PickingInfo {
-  if (isRiversPickLayerId(info.layer?.id)) return info;
+  if (isDirectPickFinal(info.layer?.id)) return info;
   const candidates = overlay.pickMultipleObjects({
     x: info.x,
     y: info.y,

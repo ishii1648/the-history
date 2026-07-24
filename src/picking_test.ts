@@ -2,6 +2,7 @@ import { assert, assertEquals } from "@std/assert";
 import {
   CITY_LAYER_ID,
   HRE_LAYER_ID,
+  isDirectPickFinal,
   isRiversPickLayerId,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
@@ -171,6 +172,16 @@ Deno.test("resolveClickPick: 都市 > HRE > 勢力 の優先順も rivers 同様
   const power = pickInfo(POWER_LAYER_ID, "神聖ローマ帝国");
   const city = pickInfo(CITY_LAYER_ID, "ウィーン");
   assertEquals(resolveClickPick([power, city]), city);
+});
+
+Deno.test("isDirectPickFinal: rivers/rivers-hit/cities の直下ヒットは radius 再ピックで上書きしない（TASK-49）", () => {
+  assert(isDirectPickFinal(RIVERS_LAYER_ID));
+  assert(isDirectPickFinal(RIVERS_HIT_LAYER_ID));
+  // 都市ドットの直下ヒットを近傍河川の radius 再ピックで奪ってはいけない
+  assert(isDirectPickFinal(CITY_LAYER_ID));
+  assert(!isDirectPickFinal(POWER_LAYER_ID));
+  assert(!isDirectPickFinal(HRE_LAYER_ID));
+  assert(!isDirectPickFinal(undefined));
 });
 
 Deno.test("resolveClickPick: layer が null（何も無い場所）のみなら先頭候補をそのまま返す", () => {

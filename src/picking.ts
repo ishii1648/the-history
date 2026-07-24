@@ -123,6 +123,17 @@ export function selectPreferredPick<T extends { layerId: string }>(
  *   になる（render 順が PICKING_PRIORITY の逆順であるため、pickMultipleObjects
  *   の先頭候補は非 rivers 候補の中でも既に最優先の層である）
  */
+/**
+ * クリックの直下 pick をそのまま確定してよいレイヤーか（TASK-49）。
+ * rivers/rivers-hit に加え cities も確定扱いにする: 都市ドットの直下ヒットを
+ * 近傍河川の radius 再ピック（PICKING_PRIORITY で rivers > cities）が奪うと、
+ * 河畔都市がクリック不能になるため。radius 再ピックは「直下が powers/HRE/空白
+ * だった場合の近傍探索」に限定する。
+ */
+export function isDirectPickFinal(id: string | undefined): boolean {
+  return isRiversPickLayerId(id) || id === CITY_LAYER_ID;
+}
+
 export function resolveClickPick<T extends { layer: { id: string } | null }>(
   picks: readonly T[],
 ): T | null {
