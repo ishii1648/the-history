@@ -1,9 +1,11 @@
 ---
 id: TASK-67
 title: backlog.md 形式でタスクを起票する Claude Code skill を作成する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-25 05:53'
+updated_date: '2026-07-25 06:23'
 labels:
   - 'area:workflow'
 dependencies: []
@@ -24,3 +26,9 @@ ordinal: 64000
 - [ ] #4 説明・Acceptance Criteria・依存関係・area ラベル付与の記述ルール（AC は実装手順でなく検証可能な振る舞い、バッククォートはシングルクォートで渡す等）が skill に含まれる
 - [ ] #5 skill を実際に使ってサンプルタスクを起票し、`backlog task view --plain` で説明・AC・ラベルが期待どおり作成されることを確認済み（確認後サンプルは削除またはアーカイブ）
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. .claude/skills/backlog-intake/SKILL.md を新設: 起票前の backlog search 重複確認 → スコープ判定（単一/親子/依存分割）→ backlog task create CLI 経由の起票（ファイル直接編集禁止）→ 説明/AC/依存/area ラベルの記述ルール（AC は検証可能な振る舞い・バッククォート回避等）を手順化。プロジェクトの bug intake フォーマット（development-style.md 2 章）とも整合させる。2. サンプルタスクを実起票して view で検証後、アーカイブ（AC #5）。3. 並列化判定: 見送り（単一 skill ファイル作成のため）。単一 subagent 委譲。4. deno fmt → PR → CI → finalization → マージ。
+<!-- SECTION:PLAN:END -->
