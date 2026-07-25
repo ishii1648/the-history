@@ -1,11 +1,11 @@
 ---
 id: TASK-67
 title: backlog.md 形式でタスクを起票する Claude Code skill を作成する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-25 05:53'
-updated_date: '2026-07-25 06:23'
+updated_date: '2026-07-25 06:29'
 labels:
   - 'area:workflow'
 dependencies: []
@@ -20,11 +20,11 @@ ordinal: 64000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 skill が .claude/skills/ 配下に SKILL.md として存在し、Skill ツール（スラッシュコマンド）から呼び出せる
-- [ ] #2 skill の手順に、起票前の `backlog search` による重複確認と、スコープ判定（単一タスク / 親子タスク / 依存関係付き分割）が含まれる
-- [ ] #3 skill はタスク作成を必ず `backlog task create` CLI 経由で行い、backlog/tasks/*.md の直接編集を禁止している
-- [ ] #4 説明・Acceptance Criteria・依存関係・area ラベル付与の記述ルール（AC は実装手順でなく検証可能な振る舞い、バッククォートはシングルクォートで渡す等）が skill に含まれる
-- [ ] #5 skill を実際に使ってサンプルタスクを起票し、`backlog task view --plain` で説明・AC・ラベルが期待どおり作成されることを確認済み（確認後サンプルは削除またはアーカイブ）
+- [x] #1 skill が .claude/skills/ 配下に SKILL.md として存在し、Skill ツール（スラッシュコマンド）から呼び出せる
+- [x] #2 skill の手順に、起票前の `backlog search` による重複確認と、スコープ判定（単一タスク / 親子タスク / 依存関係付き分割）が含まれる
+- [x] #3 skill はタスク作成を必ず `backlog task create` CLI 経由で行い、backlog/tasks/*.md の直接編集を禁止している
+- [x] #4 説明・Acceptance Criteria・依存関係・area ラベル付与の記述ルール（AC は実装手順でなく検証可能な振る舞い、バッククォートはシングルクォートで渡す等）が skill に含まれる
+- [x] #5 skill を実際に使ってサンプルタスクを起票し、`backlog task view --plain` で説明・AC・ラベルが期待どおり作成されることを確認済み（確認後サンプルは削除またはアーカイブ）
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -32,3 +32,9 @@ ordinal: 64000
 <!-- SECTION:PLAN:BEGIN -->
 1. .claude/skills/backlog-intake/SKILL.md を新設: 起票前の backlog search 重複確認 → スコープ判定（単一/親子/依存分割）→ backlog task create CLI 経由の起票（ファイル直接編集禁止）→ 説明/AC/依存/area ラベルの記述ルール（AC は検証可能な振る舞い・バッククォート回避等）を手順化。プロジェクトの bug intake フォーマット（development-style.md 2 章）とも整合させる。2. サンプルタスクを実起票して view で検証後、アーカイブ（AC #5）。3. 並列化判定: 見送り（単一 skill ファイル作成のため）。単一 subagent 委譲。4. deno fmt → PR → CI → finalization → マージ。
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+.claude/skills/backlog-intake/SKILL.md を新設（重複確認 → スコープ判定 3 分類 → backlog task create CLI 経由起票・直接編集禁止 → Description/AC/area/ordinal/バッククォート回避の記述ルール → view による着地確認の 5 段構成）。検証エビデンス: skill 手順どおりサンプル TASK-69 を実起票し、view で説明内バッククォートの無置換・AC 2 件・area:workflow・ordinal 66000 の着地を確認後アーカイブ（証跡は backlog/archive にコミット）。deno fmt --check green・PR #76 CI green。
+<!-- SECTION:FINAL_SUMMARY:END -->
