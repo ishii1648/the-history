@@ -1,11 +1,11 @@
 ---
 id: TASK-65
 title: 3 つの TextLayer builder の共通ラベル props を共通化する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-25 05:43'
-updated_date: '2026-07-25 05:44'
+updated_date: '2026-07-25 05:52'
 labels:
   - bug
   - 'area:src-main'
@@ -21,8 +21,8 @@ ordinal: 62000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 共通 props が単一定義に抽出され、3 builder がそれを参照する（既存テスト全 green・挙動不変）
-- [ ] #2 実機スモーク（ラベル表示 3 種）で退行がない
+- [x] #1 共通 props が単一定義に抽出され、3 builder がそれを参照する（既存テスト全 green・挙動不変）
+- [x] #2 実機スモーク（ラベル表示 3 種）で退行がない
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -30,3 +30,9 @@ ordinal: 62000
 <!-- SECTION:PLAN:BEGIN -->
 1. src/main.ts の 3 TextLayer builder（国名/都市/河川）が複製する共通 9 props（背景パネル・フォント・縁取り・衝突関連）を riversLayerBaseProps() と同様の共通関数へ抽出。層固有の props（サイズ・色・priority・characterSet 等）は各 builder に残す。2. 挙動完全維持（リファクタのみ）: 既存テスト green + CDP スモークでラベル 3 種の表示確認。3. 並列化判定: 見送り（src/main.ts 単一ファイルの変更）。単一 subagent（worktree isolation）委譲。
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+src/main.ts に labelLayerBaseProps() を新設し、国名・都市名・河川名の 3 TextLayer builder が三重複製していた共通 12 props（sizeUnits/フォント 4 種/背景パネル 3 種/衝突制御 3 種）を単一定義に集約（AC #1: 既存テスト 559 passed・値変更なしのリファクタ）。CDP 実機スモークで 1500 年 z6 ドイツ周辺のラベル 3 種が従来どおり背景パネル付きで表示されることを目視確認（AC #2）。PR #72 CI green。
+<!-- SECTION:FINAL_SUMMARY:END -->
