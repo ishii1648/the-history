@@ -1,9 +1,11 @@
 ---
 id: TASK-66
 title: 取得済み都市データを可能な限り表示し、ズーム別表示制御を導入する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-25 05:53'
+updated_date: '2026-07-25 06:23'
 labels:
   - 'area:scripts'
   - 'area:data'
@@ -40,3 +42,12 @@ ordinal: 63000
 - [ ] #5 データ選定・ズーム表示制御ロジックのテストがあり deno test が green
 - [ ] #6 実機確認（ヘッドレス CDP）でズームイン/アウトに応じた都市表示の増減と、代表年代（例: 1500 年・1880 年）でのドイツ都市の増加が確認できている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 方式: (a) データ側 — 選定を『対応付け可能な候補は原則全件採用』へ変更（既知異常除外・重複統合・rename は現行維持）。validateCitiesData の 15〜25 件契約を新前提（年別候補数の実測レンジ）へ改定。新規都市（最大 ~660 件）の日本語表記を name-ja.json へ追加（既存訳の再利用と慣用表記優先、無ければ標準カタカナ転写）。(b) 表示側 — ズーム別表示制御はデータ形式を変えず、クライアント側で年別人口ランクとズームから可視判定する純関数（src/cities.ts）を新設し buildCityMarkerLayer/ラベル層に配線。最遠ズームの表示数は現状（〜23 件）程度に固定し（AC #3）、ズームインで段階的に下位を解禁。
+2. タスク内並列化判定: 並列可。subagent A = パイプライン・データ・訳（scripts/build-cities*, data/*, name-ja_test）、subagent B = ズーム可視判定と配線（src/cities.ts, src/main.ts, src/cities_test.ts）。契約: データ形式は現行のまま（population フィールドに依存）で両者独立。src/cities_test.ts の既知衝突リストで競合の可能性があるが worktree isolation + マージ時解消で対応（分担表はここに記録）。
+3. 検証: 実機 CDP でズームイン/アウトの表示増減と 1500/1880 年のドイツ都市増加を確認（AC #6）。
+4. deno fmt/lint/test/build green → PR（TASK-66 明記）→ CI → finalization → マージ → マージ後確認。
+<!-- SECTION:PLAN:END -->
