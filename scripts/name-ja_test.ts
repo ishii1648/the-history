@@ -474,13 +474,9 @@ Deno.test("全ユニーク NAME / SUBJECTO と renames 正規化後名・都市�
  * なったもの）は下のテストが検出するので、このリストから外して陳腐化を防ぐ。
  */
 const RETAINED_CITY_NAME_JA: string[] = [
-  "Antioch",
-  "Bologna",
-  "Cartagena",
-  "Gdansk",
-  "Soltaniyeh",
-  "Targoviste",
-  "Wuppertal",
+  // TASK-66 の全件採用でかつての保持キー（Antioch/Bologna/Cartagena/Gdansk/
+  // Soltaniyeh/Targoviste/Wuppertal）は全て data/cities.json に復帰したため
+  // 空になった。選定条件の変更で再び選外の手書き訳が生じたらここへ移す。
 ];
 
 Deno.test("name-ja.json にデータ由来でない孤立キーが存在しない（保持リストのキーを除く）", () => {

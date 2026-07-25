@@ -63,7 +63,10 @@ import {
   type CitiesData,
   cityDisplayName,
   cityEntriesForYear,
+  type CityEntry,
   type CityMarkerDatum,
+  filterCitiesByZoom,
+  visibleCityRankLimit,
 } from "./cities.ts";
 import {
   clearErrors,
@@ -298,6 +301,16 @@ let riversData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
  * 取得失敗・未生成時は空のまま都市なしで継続する（colors.json 等と同様）。
  */
 let citiesData: CitiesData = { years: {} };
+
+/**
+ * 都市のズーム別表示制御に使う現在の整数ズーム段（TASK-66 AC #2）。
+ * renderLayers はズーム変化では呼ばれないため、map の zoom イベントで
+ * この値を監視し「整数段が変わった時のみ」レイヤーを再構築する
+ * （applyRiverHover と同じ変化検知パターン。小数ズームの連続変化
+ * = 毎フレームの再構築を避ける。TASK-50 の無駄な再構築回避方針）。
+ * 表示件数の段階は cities.ts の visibleCityRankLimit が決める。
+ */
+let cityZoomStep = Math.floor(initialState.zoom);
 
 /** クリックで選択（強調）中の河川名。null は未選択（TASK-24 AC #2） */
 let selectedRiverName: string | null = null;
@@ -700,6 +713,29 @@ function buildRiversHitLayer(): GeoJsonLayer {
 }
 
 /**
+ * ズームフィルタ済みの表示都市エントリをメモ化する（TASK-66 AC #2/#3）。
+ * 年内の人口降順ランクが visibleCityRankLimit(zoomStep) 内の都市だけを返す。
+ * キーは citiesData・year・cityZoomStep（整数ズーム段）で、hover/selection
+ * だけの renderLayers 呼び出しでは同じ参照が返りフィルタ再計算をスキップする
+ * （TASK-50 方針）。返り値の配列参照が安定するため、下流の
+ * memoizedCityMarkerData / memoizedCityLabelData のメモ化キーとしても機能する。
+ */
+const memoizedVisibleCityEntries = memoizeLatest(
+  (data: CitiesData, year: number, zoomStep: number) =>
+    filterCitiesByZoom(cityEntriesForYear(data, year), zoomStep),
+);
+
+/**
+ * 都市マーカーデータをメモ化する（TASK-66）。entries は
+ * memoizedVisibleCityEntries が返す安定参照なので、年・ズーム段が変わらない
+ * 限り deck.gl へ渡す data の参照も安定し、hover/selection の再構築で
+ * ScatterplotLayer の属性再計算が走らない。
+ */
+const memoizedCityMarkerData = memoizeLatest(
+  (entries: readonly CityEntry[]) => buildCityMarkerData(entries),
+);
+
+/**
  * 主要都市マーカーの ScatterplotLayer を生成する（TASK-27 AC #1/#3/#6）。
  * 小さな濃色ドット + 白縁で、勢力の半透明塗りの上でも視認できるようにする。
  * レイヤー順は rivers-hit の上・rivers の下（renderLayers）に置き、picking の
@@ -707,11 +743,14 @@ function buildRiversHitLayer(): GeoJsonLayer {
  * cities を rivers-hit より優先することで、河畔都市（河川の判定帯 ±7px 内の
  * マーカー）の picking が rivers-hit に遮蔽されないようにする。年代切替では
  * 同一 ID のまま cityEntriesForYear で該当年のデータへ差し替えるだけにする。
+ * TASK-66: data はズームフィルタ済み（人口上位ランクのみ）のエントリに
+ * 差し替え、整数ズーム段（cityZoomStep）の変化でも再評価する。
  */
 function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
+  const entries = memoizedVisibleCityEntries(citiesData, year, cityZoomStep);
   return new ScatterplotLayer<CityMarkerDatum>({
     id: CITY_LAYER_ID,
-    data: buildCityMarkerData(cityEntriesForYear(citiesData, year)),
+    data: memoizedCityMarkerData(entries),
     pickable: true,
     getPosition: (d) => d.position,
     // 3px の固定ドット。国土に対する「点」の記号で、ズームに追従させない
@@ -723,7 +762,7 @@ function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
     lineWidthUnits: "pixels",
     getLineWidth: 1,
     getLineColor: [255, 255, 255, 230],
-    updateTriggers: { getPosition: [year] },
+    updateTriggers: { getPosition: [year, cityZoomStep] },
   });
 }
 
@@ -741,14 +780,14 @@ function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
  */
 /**
  * 都市名ラベルのデータ + characterSet をメモ化する（TASK-50）。
- * cityEntriesForYear は毎回新しい配列を返すため、citiesData・year・nameJa
- * （呼び出し側の参照が同一なら）をキーにし、buildCityLabelData・
- * characterSetFrom の再計算を hover/selection の renderLayers ではスキップする。
- * year が変わる（switchYear 経由）と再計算される。
+ * TASK-66: 入力はズームフィルタ済みエントリ（memoizedVisibleCityEntries の
+ * 安定参照）に変更した。entries・nameJa の参照が変わらない限り
+ * buildCityLabelData・characterSetFrom の再計算を hover/selection の
+ * renderLayers ではスキップする。year またはズーム段が変わると
+ * memoizedVisibleCityEntries が新しい参照を返すため正しく再計算される。
  */
 const memoizedCityLabelData = memoizeLatest(
-  (data: CitiesData, year: number, ja: Record<string, string>) => {
-    const entries = cityEntriesForYear(data, year);
+  (entries: readonly CityEntry[], ja: Record<string, string>) => {
     const labelData = buildCityLabelData(entries, ja);
     return {
       data: labelData,
@@ -761,8 +800,7 @@ function buildCityLabelLayer(
   year: number,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
   const { data, characterSet } = memoizedCityLabelData(
-    citiesData,
-    year,
+    memoizedVisibleCityEntries(citiesData, year, cityZoomStep),
     nameJa,
   );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
@@ -783,7 +821,12 @@ function buildCityLabelLayer(
     getPixelOffset: [0, -10],
     // 日本語都市名（パリ 等）のグリフもラベル文字列から自動生成する
     characterSet,
-    updateTriggers: { getText: [year], getPosition: [year] },
+    // TASK-66: ズーム段の変化でも accessor を再評価させる（data 参照も
+    // memoizedVisibleCityEntries 経由で変わるが、意図を明示して二重に守る）
+    updateTriggers: {
+      getText: [year, cityZoomStep],
+      getPosition: [year, cityZoomStep],
+    },
   });
 }
 
@@ -1291,6 +1334,18 @@ function syncUrlToState(): void {
 // AC #1: パン/ズーム確定（moveend）ごとに URL を更新。move 中の高頻度発火は拾わない。
 map.on("moveend", syncUrlToState);
 
+// TASK-66 AC #2: ズーム操作に追従して都市のズーム別表示を更新する。
+// zoom イベントはズームアニメーション中に高頻度で発火するため、整数ズーム段
+// （cityZoomStep）が変わった時だけ renderLayers() を呼ぶ（毎フレームの
+// レイヤー再構築を避ける）。zoomend ではなく zoom を使うのは、ピンチ/ホイール
+// の途中でも段を跨いだ時点で即座に都市が増減し、操作へ滑らかに追従するため。
+map.on("zoom", () => {
+  const step = Math.floor(map.getZoom());
+  if (step === cityZoomStep) return;
+  cityZoomStep = step;
+  renderLayers();
+});
+
 // ---- ローディング/エラー UI（TASK-9, docs/app-spec.md §5.4）----
 
 // ロード状態機械（DOM 非依存ロジックは loading_state.ts に集約）。
@@ -1638,3 +1693,24 @@ map.on("load", () => {
 }).__setYear = switchYear;
 (globalThis as unknown as { __getYear?: () => number }).__getYear = () =>
   yearSwitcher.currentYear() ?? INITIAL_YEAR;
+
+// TASK-66: ヘッドレス CDP 検証用にズーム別都市表示の内部状態を公開する
+// （__getYear と同じ「目視/無人確認のための読み取り専用フック」。deck.gl の
+// canvas からは表示都市数を数えられないため、フィルタ結果の件数を直接返す）。
+(globalThis as unknown as {
+  __getCityDebug?: () => {
+    zoomStep: number;
+    rankLimit: number;
+    totalCities: number;
+    visibleCities: number;
+  };
+}).__getCityDebug = () => {
+  const year = yearSwitcher.currentYear() ?? INITIAL_YEAR;
+  const entries = cityEntriesForYear(citiesData, year);
+  return {
+    zoomStep: cityZoomStep,
+    rankLimit: visibleCityRankLimit(cityZoomStep),
+    totalCities: entries.length,
+    visibleCities: filterCitiesByZoom(entries, cityZoomStep).length,
+  };
+};

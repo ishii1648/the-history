@@ -7,9 +7,12 @@ import {
   CITY_LABEL_PRIORITY_MAX,
   CITY_LABEL_PRIORITY_MIN,
   CITY_NAME_JA_OVERRIDES,
+  CITY_RANK_LIMIT_BASE,
   cityDisplayName,
   cityEntriesForYear,
   type CityEntry,
+  filterCitiesByZoom,
+  visibleCityRankLimit,
 } from "./cities.ts";
 import { MAX_LABEL_PRIORITY, MIN_LABEL_PRIORITY } from "./labels.ts";
 // data/cities.json は .json 拡張子なので `with { type: "json" }` の静的 import
@@ -258,6 +261,148 @@ Deno.test("buildCityMarkerData: name と position [lon, lat] へ変換する", (
 Deno.test("buildCityMarkerData: name 空のエントリは除外する", () => {
   const markers = buildCityMarkerData([city(""), city("Rome")]);
   assertEquals(markers.map((m) => m.name), ["Rome"]);
+});
+
+// ---- visibleCityRankLimit（TASK-66 AC #2/#3）----
+
+Deno.test("visibleCityRankLimit: z4 以下は基準件数（現状密度維持。AC #3）", () => {
+  assertEquals(visibleCityRankLimit(4), CITY_RANK_LIMIT_BASE);
+  // MIN_ZOOM=4 だが maxBounds クランプ等で下回っても基準件数のまま
+  assertEquals(visibleCityRankLimit(3), CITY_RANK_LIMIT_BASE);
+  assertEquals(visibleCityRankLimit(0), CITY_RANK_LIMIT_BASE);
+});
+
+Deno.test("visibleCityRankLimit: 小数ズームは整数段へ切り捨てて判定する", () => {
+  // z4.99 はまだ z4 段（初期表示密度を保つ）。z5.0 で初めて拡大する
+  assertEquals(visibleCityRankLimit(4.99), CITY_RANK_LIMIT_BASE);
+  assertEquals(visibleCityRankLimit(5.0), visibleCityRankLimit(5.7));
+  assertEquals(visibleCityRankLimit(6.2), visibleCityRankLimit(6.9));
+});
+
+Deno.test("visibleCityRankLimit: ズーム 1 段ごとに指数的（約 2 倍）に拡大する", () => {
+  assertEquals(visibleCityRankLimit(5), 40);
+  assertEquals(visibleCityRankLimit(6), 80);
+  assertEquals(visibleCityRankLimit(7), 160);
+});
+
+Deno.test("visibleCityRankLimit: 最大ズーム z8 以上は全件（上限なし）", () => {
+  assertEquals(visibleCityRankLimit(8), Number.POSITIVE_INFINITY);
+  assertEquals(visibleCityRankLimit(12), Number.POSITIVE_INFINITY);
+});
+
+Deno.test("visibleCityRankLimit: ズームに対して単調非減少", () => {
+  let prev = visibleCityRankLimit(0);
+  for (let z = 0; z <= 10; z += 0.5) {
+    const limit = visibleCityRankLimit(z);
+    assert(limit >= prev, `z=${z} で上限が減少（${prev} → ${limit}）`);
+    prev = limit;
+  }
+});
+
+Deno.test("visibleCityRankLimit: 非有限ズーム（NaN 等）は基準件数へフォールバック", () => {
+  assertEquals(visibleCityRankLimit(Number.NaN), CITY_RANK_LIMIT_BASE);
+  assertEquals(
+    visibleCityRankLimit(Number.NEGATIVE_INFINITY),
+    CITY_RANK_LIMIT_BASE,
+  );
+});
+
+// ---- filterCitiesByZoom（TASK-66 AC #2/#3）----
+
+/** 人口 population の連番都市 n 件を生成する（C0 が最小人口） */
+function rankedCities(n: number): CityEntry[] {
+  return Array.from({ length: n }, (_, i) => city(`C${i}`, (i + 1) * 1000));
+}
+
+Deno.test("filterCitiesByZoom: 件数が上限以下なら全件をそのまま返す", () => {
+  const entries = rankedCities(10);
+  assertEquals(filterCitiesByZoom(entries, 4), entries);
+});
+
+Deno.test("filterCitiesByZoom: 人口降順の上位ランクだけを残す", () => {
+  const entries = [
+    city("Small", 1000),
+    city("Big", 900000),
+    city("Mid", 50000),
+    city("Tiny", 10),
+  ];
+  // 上限 23 のため 30 件で超過させる代わりに、小さい zoom 段の意味論を
+  // 直接テストできるよう十分な件数を用意する
+  const many = [...entries, ...rankedCities(30)];
+  const visible = filterCitiesByZoom(many, 4);
+  assertEquals(visible.length, CITY_RANK_LIMIT_BASE);
+  const names = visible.map((e) => e.name);
+  assert(names.includes("Big"), "最大人口の都市は必ず残る");
+  assert(!names.includes("Tiny"), "最小人口の都市は落ちる");
+});
+
+Deno.test("filterCitiesByZoom: 出力は元配列の並び順を保つ", () => {
+  const entries = [...rankedCities(30)].reverse(); // C29(大) → C0(小)
+  const visible = filterCitiesByZoom(entries, 4);
+  const indexes = visible.map((e) => entries.indexOf(e));
+  assertEquals(indexes, [...indexes].sort((a, b) => a - b));
+});
+
+Deno.test("filterCitiesByZoom: ズームインで表示件数が段階的に増える", () => {
+  const entries = rankedCities(200);
+  const z4 = filterCitiesByZoom(entries, 4).length;
+  const z5 = filterCitiesByZoom(entries, 5).length;
+  const z6 = filterCitiesByZoom(entries, 6).length;
+  const z7 = filterCitiesByZoom(entries, 7).length;
+  const z8 = filterCitiesByZoom(entries, 8).length;
+  assertEquals([z4, z5, z6, z7, z8], [CITY_RANK_LIMIT_BASE, 40, 80, 160, 200]);
+});
+
+Deno.test("filterCitiesByZoom: 人口同数（ランク同数）は元配列で先のものが勝つ（決定的）", () => {
+  // 上限ちょうどの境界に同人口都市を並べ、元配列順で決定的に切ること
+  const filler = rankedCities(CITY_RANK_LIMIT_BASE - 1).map((e) => ({
+    ...e,
+    population: 1_000_000, // 全員が境界より上位
+  }));
+  const entries = [...filler, city("First", 500), city("Second", 500)];
+  const visible = filterCitiesByZoom(entries, 4);
+  const names = visible.map((e) => e.name);
+  assert(names.includes("First"), "同人口なら元配列で先の都市を採用する");
+  assert(!names.includes("Second"), "同人口で後の都市は上限で落ちる");
+});
+
+Deno.test("filterCitiesByZoom: population 欠落（null）は最下位ランク扱い", () => {
+  const entries = [
+    city("Unknown", null),
+    ...rankedCities(CITY_RANK_LIMIT_BASE),
+  ];
+  const visible = filterCitiesByZoom(entries, 4);
+  const names = visible.map((e) => e.name);
+  assert(!names.includes("Unknown"), "population null は人口 0 より下位");
+  assertEquals(visible.length, CITY_RANK_LIMIT_BASE);
+});
+
+Deno.test("filterCitiesByZoom: population null は人口 0 の都市よりも下位", () => {
+  const filler = rankedCities(CITY_RANK_LIMIT_BASE - 1).map((e) => ({
+    ...e,
+    population: 1_000_000,
+  }));
+  const entries = [...filler, city("NullPop", null), city("ZeroPop", 0)];
+  const visible = filterCitiesByZoom(entries, 4);
+  const names = visible.map((e) => e.name);
+  assert(names.includes("ZeroPop"), "人口 0 は null より上位で残る");
+  assert(!names.includes("NullPop"), "population null が最下位で落ちる");
+});
+
+Deno.test("filterCitiesByZoom: 最大ズームでは population null 含め全件返す", () => {
+  const entries = [city("Unknown", null), ...rankedCities(300)];
+  assertEquals(filterCitiesByZoom(entries, 8).length, 301);
+});
+
+Deno.test("filterCitiesByZoom: 空配列は空配列のまま", () => {
+  assertEquals(filterCitiesByZoom([], 4), []);
+  assertEquals(filterCitiesByZoom([], 8), []);
+});
+
+Deno.test("CITY_RANK_LIMIT_BASE は現行データの採用上限 23 と同値（AC #3: 初期密度維持）", () => {
+  // scripts/build-cities.ts の CITIES_PER_YEAR=20 + HRE 最低 6 件補充で
+  // 実データは最大 23 件/年（TASK-61）。最遠ズームはこれと同じ密度を保つ。
+  assertEquals(CITY_RANK_LIMIT_BASE, 23);
 });
 
 // ---- 契約 ----
