@@ -3,6 +3,7 @@ import {
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
   FALLBACK_STYLE_URL,
+  HRE_OVERLAY_YEARS,
   INITIAL_CENTER,
   INITIAL_YEAR,
   INITIAL_ZOOM,
@@ -104,4 +105,15 @@ Deno.test("FALLBACK_STYLE_URL は OpenFreeMap のスタイル URL である", ()
 
 Deno.test("BASEMAP_SOURCE_ID は非空文字列である", () => {
   assert(BASEMAP_SOURCE_ID.length > 0);
+});
+
+Deno.test("HRE_OVERLAY_YEARS は 1700 を含む（1650 境界の外挿。TASK-68）", () => {
+  assertEquals([...HRE_OVERLAY_YEARS], [1500, 1530, 1600, 1650, 1700]);
+});
+
+Deno.test("HRE_OVERLAY_YEARS は 1715 以降のスナップショット年を含まない（ベースマップのドイツ諸邦個別収録との二重表示回避）", () => {
+  for (const year of HRE_OVERLAY_YEARS) {
+    assert(year < 1715, `${year} は 1715 以降（二重表示になる）`);
+    assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
 });
