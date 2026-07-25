@@ -56,29 +56,52 @@ export const PAST_WINDOW_YEARS = 50;
  */
 export const FUTURE_WINDOW_YEARS = 25;
 
-/** 各年で採用する都市数（人口上位から） */
-export const CITIES_PER_YEAR = 20;
+/**
+ * 各年で採用する都市数（人口上位から）。
+ * TASK-55 時点は 20 だったが、独語圏下限確保（GERMAN_REGION_MIN_CITIES）の
+ * 入れ替えで、従来表示されていた大都市（Bruges 1279〜1500 等）が選外に落ちる
+ * 副作用があったため、TASK-61 で 23 へ拡大した。23 は検証契約
+ * MAX_CITIES_PER_YEAR（25）の範囲内で、Bruges が歴史的に上位だった全年
+ * （1279/1300/1400/1492/1500）で復帰する最小値（22 では 1400/1492/1500 で
+ * 復帰しない。実測）。
+ */
+export const CITIES_PER_YEAR = 23;
 
 /**
- * HRE（神聖ローマ帝国）域内を近似する bbox（[west, south, east, north]）。
- * 独語圏を中心とした簡易領域で、正確な帝国境界（data/hre_*.geojson）とは
- * 別物。都市表示の地域偏り是正（TASK-55）のための選定用しきい値であり、
+ * HRE のうち独語圏を近似する bbox（[west, south, east, north]）。
+ * 都市表示の地域偏り是正（TASK-55: ユーザー要望はドイツ域内の表示密度）の
+ * ための選定用しきい値であり、正確な帝国境界（data/hre_*.geojson）とは別物。
  * Cologne/Nuremberg/Prague/Vienna/Hamburg を含み、Paris/Venice/Milan/Rome
- * は含まない。
+ * は含まない。歴史的 HRE 領のうち低地諸国（Bruges 3.2E / Ghent 3.7E /
+ * Brussels 4.35E / Antwerp 4.4E）は意図的に含めない: 西へ拡げると中世に
+ * 大都市だった低地諸国都市が下限確保枠（GERMAN_REGION_MIN_CITIES）を消費し、
+ * ドイツ域内の採用数が 6 → 3 件に落ちる（実測。TASK-55 の目的と矛盾）。
+ * かつては HRE_REGION_BBOX という名だったが、「HRE」を名乗りながら低地諸国を
+ * 除外していて誤解を招くため、実態に合わせ改名した（TASK-61）。
  */
-export const HRE_REGION_BBOX: BBox = [5.5, 45.5, 17, 55];
+export const GERMAN_REGION_BBOX: BBox = [5.5, 45.5, 17, 55];
 
 /**
- * HRE 域内（HRE_REGION_BBOX）で最低限採用する都市数（TASK-55）。
- * 人口上位 CITIES_PER_YEAR 件のみの選定では地中海・ビザンツ/オスマン圏が
- * 優位で、900〜1700 年の HRE 域内採用数は 0〜1 件だった（調査値。域内候補
- * プールは 1200 年以降で常に 19 件以上ある）。総数 CITIES_PER_YEAR は変えず、
- * 域内候補を人口順に 6 件まで確保し、その分だけ域外の人口最下位を明け渡す。
- * 6 は「総数の 3 割・候補プールが下限を安定して満たせる値」として採用した。
- * 域内候補が 6 件未満の年（900 年: 2 件、1100 年: 4 件）は無理に埋めず
- * 候補全件を採用する。
+ * 独語圏（GERMAN_REGION_BBOX）で最低限採用する都市数（TASK-55）。
+ * 人口上位のみの選定では地中海・ビザンツ/オスマン圏が優位で、900〜1700 年の
+ * 域内採用数は 0〜1 件だった（調査値。域内候補プールは 1200 年以降で常に
+ * 19 件以上ある）。総数 CITIES_PER_YEAR は変えず、域内候補を人口順に 6 件まで
+ * 確保し、その分だけ域外の人口最下位を明け渡す。6 は「候補プールが下限を
+ * 安定して満たせる値」として採用した。域内候補が 6 件未満の年
+ * （900 年: 2 件、1100 年: 4 件）は無理に埋めず候補全件を採用する。
+ * 適用は HRE 存続年代（HRE_DISSOLUTION_YEAR 以前）のみ。
  */
-export const HRE_REGION_MIN_CITIES = 6;
+export const GERMAN_REGION_MIN_CITIES = 6;
+
+/**
+ * HRE の消滅年（1806 年、ライン同盟成立とフランツ 2 世の退位）。
+ * 独語圏下限確保はこの年以前のスナップショット年（実際には 900〜1800）に
+ * のみ適用する。消滅後（1815〜1914）まで適用すると、純粋な人口上位である
+ * べき近代の選定が歪む実害があった（TASK-61: 1900 年に Barcelona 55.2 万が
+ * 消え Munich 49.9 万が入る、1880 年に Antwerp 36.1 万が消え Wuppertal
+ * 29.8 万が入る）。
+ */
+export const HRE_DISSOLUTION_YEAR = 1806;
 
 /** 検証: 各年の都市数の下限（A/B 契約の「15〜25 都市程度」） */
 export const MIN_CITIES_PER_YEAR = 15;
@@ -264,7 +287,8 @@ function byPopulationDescThenName(a: CityMarker, b: CityMarker): number {
  * 3. CITY_RENAMES で英語慣用名へ正規化
  * 4. 同名都市は人口最大の 1 件へ統合（Brest 仏/白露のような同名別都市の重複防止）
  * 5. 人口降順（同数なら name 昇順）で CITIES_PER_YEAR 件に切り詰め
- * 6. HRE 域内（HRE_REGION_BBOX）の採用数が HRE_REGION_MIN_CITIES に満たない
+ * 6. HRE 存続年代（year <= HRE_DISSOLUTION_YEAR）に限り、独語圏
+ *    （GERMAN_REGION_BBOX）の採用数が GERMAN_REGION_MIN_CITIES に満たない
  *    場合、域内候補を人口順に補い、その分だけ域外の人口最下位の枠を明け渡す
  *    （総数は CITIES_PER_YEAR のまま。TASK-55: 地域偏り是正）
  */
@@ -298,13 +322,17 @@ export function selectCitiesForYear(
   const sorted = [...byName.values()].sort(byPopulationDescThenName);
   const selected = sorted.slice(0, CITIES_PER_YEAR);
 
-  // HRE 域内の下限確保（TASK-55）: 域内候補の人口上位 HRE_REGION_MIN_CITIES 件
+  // 独語圏の下限確保は HRE 存続年代のみ。消滅後（1815 年以降のスナップショット）
+  // は純粋な人口上位を返す（TASK-61）。
+  if (year > HRE_DISSOLUTION_YEAR) return selected;
+
+  // 独語圏の下限確保（TASK-55）: 域内候補の人口上位 GERMAN_REGION_MIN_CITIES 件
   // を「保護対象」とし、選外の保護対象がある限り、域外（非保護）の人口最下位と
   // 入れ替える。候補が下限未満の年は候補全件が保護対象になるだけで埋め合わせは
   // しない。
   const protectedCities = sorted
-    .filter((m) => isInBbox(m.lon, m.lat, HRE_REGION_BBOX))
-    .slice(0, HRE_REGION_MIN_CITIES);
+    .filter((m) => isInBbox(m.lon, m.lat, GERMAN_REGION_BBOX))
+    .slice(0, GERMAN_REGION_MIN_CITIES);
   const protectedNames = new Set(protectedCities.map((m) => m.name));
   const selectedNames = new Set(selected.map((m) => m.name));
   const toAdd = protectedCities.filter((m) => !selectedNames.has(m.name));
@@ -336,8 +364,8 @@ export function buildCitiesData(
       description: "Major European cities per snapshot year (top " +
         `${CITIES_PER_YEAR} by population, nearest record within ` +
         `-${PAST_WINDOW_YEARS}/+${FUTURE_WINDOW_YEARS} years, with at least ` +
-        `${HRE_REGION_MIN_CITIES} cities from the Holy Roman Empire region ` +
-        "when available), derived from " +
+        `${GERMAN_REGION_MIN_CITIES} cities from the German-speaking region ` +
+        `when available for years up to ${HRE_DISSOLUTION_YEAR}), derived from ` +
         "the Historical Urban Population dataset (Chandler, digitized by " +
         "Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX)",
       license: CITIES_SOURCE_LICENSE,

@@ -9,8 +9,9 @@ import {
   type CitiesData,
   type CityRow,
   filterCitiesToBbox,
-  HRE_REGION_BBOX,
-  HRE_REGION_MIN_CITIES,
+  GERMAN_REGION_BBOX,
+  GERMAN_REGION_MIN_CITIES,
+  HRE_DISSOLUTION_YEAR,
   parseChandlerCsv,
   pickNearestRecord,
   selectCitiesForYear,
@@ -215,10 +216,10 @@ Deno.test("selectCitiesForYear は同名都市（Brest 仏/白露等）を人口
 // selectCitiesForYear: HRE 域内の最低件数確保（TASK-55）
 // ---------------------------------------------------------------------------
 
-/** HRE_REGION_BBOX 内の座標（ドイツ中部付近） */
+/** GERMAN_REGION_BBOX 内の座標（ドイツ中部付近） */
 const HRE_LON = 10;
 const HRE_LAT = 50;
-/** HRE_REGION_BBOX 外の座標（イベリア半島付近） */
+/** GERMAN_REGION_BBOX 外の座標（イベリア半島付近） */
 const OUT_LON = -4;
 const OUT_LAT = 40;
 
@@ -227,7 +228,7 @@ function inBbox(lon: number, lat: number, bbox: readonly number[]): boolean {
   return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
 }
 
-Deno.test("HRE_REGION_BBOX は独語圏の主要都市を含みそれ以外の大都市を含まない", () => {
+Deno.test("GERMAN_REGION_BBOX は独語圏の主要都市を含みそれ以外の大都市を含まない", () => {
   // 域内であるべき都市（HRE 域内・独語圏の代表）
   const inside: Array<[string, number, number]> = [
     ["Cologne", 6.96, 50.94],
@@ -237,27 +238,34 @@ Deno.test("HRE_REGION_BBOX は独語圏の主要都市を含みそれ以外の�
     ["Hamburg", 10.0, 53.55],
   ];
   for (const [name, lon, lat] of inside) {
-    assert(inBbox(lon, lat, HRE_REGION_BBOX), `${name} が域外扱いになっている`);
+    assert(
+      inBbox(lon, lat, GERMAN_REGION_BBOX),
+      `${name} が域外扱いになっている`,
+    );
   }
-  // 域外であるべき都市（人口上位の常連）
+  // 域外であるべき都市（人口上位の常連）。低地諸国（Bruges/Ghent）は歴史的
+  // HRE 領だが意図的に域外: 下限確保枠を低地諸国の中世大都市が消費すると
+  // ドイツ域内の採用数が落ちるため（GERMAN_REGION_BBOX の doc コメント参照）。
   const outside: Array<[string, number, number]> = [
     ["Paris", 2.35, 48.85],
     ["Venice", 12.34, 45.44],
     ["Milan", 9.19, 45.46],
     ["Constantinople", 28.96, 41.01],
     ["Rome", 12.48, 41.89],
+    ["Bruges", 3.22, 51.21],
+    ["Ghent", 3.72, 51.05],
   ];
   for (const [name, lon, lat] of outside) {
     assert(
-      !inBbox(lon, lat, HRE_REGION_BBOX),
+      !inBbox(lon, lat, GERMAN_REGION_BBOX),
       `${name} が域内扱いになっている`,
     );
   }
 });
 
-Deno.test("HRE_REGION_MIN_CITIES は 1 以上 CITIES_PER_YEAR 未満", () => {
-  assert(HRE_REGION_MIN_CITIES >= 1);
-  assert(HRE_REGION_MIN_CITIES < CITIES_PER_YEAR);
+Deno.test("GERMAN_REGION_MIN_CITIES は 1 以上 CITIES_PER_YEAR 未満", () => {
+  assert(GERMAN_REGION_MIN_CITIES >= 1);
+  assert(GERMAN_REGION_MIN_CITIES < CITIES_PER_YEAR);
 });
 
 Deno.test("selectCitiesForYear は人口上位から漏れた HRE 域内都市を下限件数まで採用する", () => {
@@ -270,7 +278,7 @@ Deno.test("selectCitiesForYear は人口上位から漏れた HRE 域内都市�
       }),
   );
   const hreRows = Array.from(
-    { length: HRE_REGION_MIN_CITIES + 2 },
+    { length: GERMAN_REGION_MIN_CITIES + 2 },
     (_, i) =>
       row(`Hre${String(i).padStart(2, "0")}`, HRE_LON, HRE_LAT, {
         1500: 30000 - i * 1000,
@@ -282,18 +290,18 @@ Deno.test("selectCitiesForYear は人口上位から漏れた HRE 域内都市�
   assertEquals(markers.length, CITIES_PER_YEAR);
   // 域内は人口上位からちょうど下限件数
   const hreAdopted = markers.filter((m) =>
-    inBbox(m.lon, m.lat, HRE_REGION_BBOX)
+    inBbox(m.lon, m.lat, GERMAN_REGION_BBOX)
   );
   assertEquals(
     hreAdopted.map((m) => m.name),
     Array.from(
-      { length: HRE_REGION_MIN_CITIES },
+      { length: GERMAN_REGION_MIN_CITIES },
       (_, i) => `Hre${String(i).padStart(2, "0")}`,
     ),
   );
   // 明け渡すのは域外の人口最下位の枠
   const evicted = outsideRows
-    .slice(CITIES_PER_YEAR - HRE_REGION_MIN_CITIES, CITIES_PER_YEAR)
+    .slice(CITIES_PER_YEAR - GERMAN_REGION_MIN_CITIES, CITIES_PER_YEAR)
     .map((r) => r.name);
   for (const name of evicted) {
     assert(!markers.some((m) => m.name === name), `${name} が残っている`);
@@ -318,7 +326,7 @@ Deno.test("selectCitiesForYear は HRE 域内候補が下限未満なら候補�
 
   assertEquals(markers.length, CITIES_PER_YEAR);
   const hreAdopted = markers.filter((m) =>
-    inBbox(m.lon, m.lat, HRE_REGION_BBOX)
+    inBbox(m.lon, m.lat, GERMAN_REGION_BBOX)
   );
   assertEquals(hreAdopted.map((m) => m.name), ["HreA", "HreB"]);
 });
@@ -326,7 +334,7 @@ Deno.test("selectCitiesForYear は HRE 域内候補が下限未満なら候補�
 Deno.test("selectCitiesForYear は HRE 域内都市が既に上位に十分あれば結果を変えない", () => {
   // 域内都市が人口最上位を占める（近代の Berlin/Vienna/Hamburg 相当）
   const hreRows = Array.from(
-    { length: HRE_REGION_MIN_CITIES + 3 },
+    { length: GERMAN_REGION_MIN_CITIES + 3 },
     (_, i) =>
       row(`Hre${String(i).padStart(2, "0")}`, HRE_LON, HRE_LAT, {
         1900: 900000 - i * 1000,
@@ -369,6 +377,55 @@ Deno.test("selectCitiesForYear は下限確保後も人口降順（同数なら 
       `index ${i} で並び順が壊れている`,
     );
   }
+});
+
+Deno.test("selectCitiesForYear は HRE 消滅後（1815 以降）の年では下限確保の入れ替えをしない", () => {
+  // 域外都市だけで上位が埋まり、域内都市が人口で見劣りする状況（1900 年）。
+  // HRE は 1806 年に消滅しているため、消滅後のスナップショット年では
+  // 地域下限確保を適用せず、純粋な人口上位を返さなければならない
+  // （TASK-61: 1900 年に Barcelona が Munich に置換される等の実害があった）。
+  const outsideRows = Array.from(
+    { length: CITIES_PER_YEAR + 5 },
+    (_, i) =>
+      row(`Out${String(i).padStart(2, "0")}`, OUT_LON, OUT_LAT, {
+        1900: 900000 - i * 1000,
+      }),
+  );
+  const hreRows = Array.from(
+    { length: GERMAN_REGION_MIN_CITIES + 2 },
+    (_, i) =>
+      row(`Hre${String(i).padStart(2, "0")}`, HRE_LON, HRE_LAT, {
+        1900: 30000 - i * 1000,
+      }),
+  );
+  const markers = selectCitiesForYear([...outsideRows, ...hreRows], 1900);
+  // 純粋な人口上位 CITIES_PER_YEAR 件と一致（域内都市への入れ替えなし）
+  assertEquals(
+    markers.map((m) => m.name),
+    outsideRows.slice(0, CITIES_PER_YEAR).map((r) => r.name),
+  );
+});
+
+Deno.test("selectCitiesForYear は HRE 存続中の最後のスナップショット年（1800）では下限確保を適用する", () => {
+  const outsideRows = Array.from(
+    { length: CITIES_PER_YEAR + 5 },
+    (_, i) =>
+      row(`Out${String(i).padStart(2, "0")}`, OUT_LON, OUT_LAT, {
+        1800: 900000 - i * 1000,
+      }),
+  );
+  const hreRows = Array.from(
+    { length: GERMAN_REGION_MIN_CITIES + 2 },
+    (_, i) =>
+      row(`Hre${String(i).padStart(2, "0")}`, HRE_LON, HRE_LAT, {
+        1800: 30000 - i * 1000,
+      }),
+  );
+  const markers = selectCitiesForYear([...outsideRows, ...hreRows], 1800);
+  const hreAdopted = markers.filter((m) =>
+    inBbox(m.lon, m.lat, GERMAN_REGION_BBOX)
+  );
+  assertEquals(hreAdopted.length, GERMAN_REGION_MIN_CITIES);
 });
 
 // ---------------------------------------------------------------------------
@@ -491,20 +548,46 @@ Deno.test("data/cities.json は代表都市を含む（900/1500: Constantinople�
   assert(names(1914).includes("Paris"));
 });
 
-Deno.test("data/cities.json は各年で HRE 域内都市を下限件数（候補不足年は全候補）含む", () => {
-  // chandler.csv の HRE 域内候補プールが下限未満の年（TASK-55 調査結果）:
+Deno.test("data/cities.json は HRE 存続年代の各年で独語圏都市を下限件数（候補不足年は全候補）含む", () => {
+  // chandler.csv の独語圏候補プールが下限未満の年（TASK-55 調査結果）:
   // 900 年は 2 件、1100 年は 4 件しか候補がなく、その場合は全候補を採用する。
+  // HRE 消滅（HRE_DISSOLUTION_YEAR = 1806）後の年は下限確保を適用しない
+  // ため検査対象外（TASK-61）。
   const poolShortage: Record<string, number> = { "900": 2, "1100": 4 };
   for (const [year, markers] of Object.entries(generated.years)) {
+    if (Number(year) > HRE_DISSOLUTION_YEAR) continue;
     const count = markers.filter((m) =>
-      inBbox(m.lon, m.lat, HRE_REGION_BBOX)
+      inBbox(m.lon, m.lat, GERMAN_REGION_BBOX)
     ).length;
-    const expectedMin = poolShortage[year] ?? HRE_REGION_MIN_CITIES;
+    const expectedMin = poolShortage[year] ?? GERMAN_REGION_MIN_CITIES;
     assert(
       count >= expectedMin,
-      `${year} 年の HRE 域内都市が ${count} 件（最低 ${expectedMin} 件必要）`,
+      `${year} 年の独語圏都市が ${count} 件（最低 ${expectedMin} 件必要）`,
     );
   }
+});
+
+Deno.test("data/cities.json: Bruges は HRE 存在年代（1279〜1500）で採用される（TASK-61）", () => {
+  // TASK-55 の地域下限確保で、従来表示されていた実 HRE 都市 Bruges が
+  // 全年代から消えた（bbox が低地諸国を含まないため保護されず、入れ替えで
+  // 選外化）。歴史的に Bruges が上位だった 5 スナップショット年での復帰を固定する。
+  for (const year of [1279, 1300, 1400, 1492, 1500]) {
+    assert(
+      generated.years[String(year)].some((m) => m.name === "Bruges"),
+      `${year} 年に Bruges がいない`,
+    );
+  }
+});
+
+Deno.test("data/cities.json: HRE 消滅後の年は人口上位そのもの（1880: Antwerp、1900: Barcelona）（TASK-61）", () => {
+  assert(
+    generated.years["1880"].some((m) => m.name === "Antwerp"),
+    "1880 年に Antwerp がいない（HRE 消滅後に入れ替えが適用されている）",
+  );
+  assert(
+    generated.years["1900"].some((m) => m.name === "Barcelona"),
+    "1900 年に Barcelona がいない（HRE 消滅後に入れ替えが適用されている）",
+  );
 });
 
 Deno.test("data/cities.json に除外対象（Istanbul/Gelibolu/Ruhr/Qum）が現れない", () => {
