@@ -36,8 +36,11 @@ function collection(
   return { type: "FeatureCollection", features };
 }
 
-Deno.test("HRE_OVERLAY_YEARS は表示側との契約どおり 1500/1530/1600/1650", () => {
-  assertEquals([...HRE_OVERLAY_YEARS], [1500, 1530, 1600, 1650]);
+Deno.test("HRE_OVERLAY_YEARS は表示側との契約どおり 1500/1530/1600/1650/1700", () => {
+  // 1700 は Roller データ範囲（〜1650）外だが、行の大半が end 欠損（無期限扱い）
+  // または override で 1806 まで延長済みのため、1650 境界の外挿として生成する
+  // （TASK-68）。
+  assertEquals([...HRE_OVERLAY_YEARS], [1500, 1530, 1600, 1650, 1700]);
 });
 
 Deno.test("出典メタデータ: DOI・ライセンス・bitstream UUID をピン留めする", () => {
@@ -268,4 +271,43 @@ Deno.test("buildYearCollection: 各対象年に主要領邦が揃い、表示名
   );
   assert(y1650.includes("Electorate of Bavaria")); // override end=1806 + 1623 昇格
   assert(!y1650.includes("Duchy of Bavaria"));
+});
+
+Deno.test("buildYearCollection: 1700 年は 1650 年と同一の 14 領邦を返す（1650 境界の外挿。TASK-68）", () => {
+  // HRE_TERRITORIES の全 17 id について、実データの start / end（override 前）を
+  // 模したフィクスチャ。Roller の行は end 欠損 = 無期限扱いが多く、Bayern /
+  // albertinischesSachsennach1635 は HRE_RANGE_OVERRIDES で 1806 まで延長される
+  // ため、1650 と 1700 の出力は同一になる（境界形状は 1650 年時点の近似）。
+  const fc = collection([
+    feature({ id: "Österreich", start: null, end: null }),
+    feature({ id: "Kurbrandenburg", start: 1157, end: 1806 }),
+    feature({ id: "Böhmen", start: 1198, end: 1806 }),
+    feature({ id: "Bayern", start: 1506, end: 1623 }),
+    feature({ id: "ernestinischesSachsenbis1547", start: 1485, end: 1547 }),
+    feature({ id: "albertinischesSachsenbis1547", start: 1485, end: 1547 }),
+    feature({ id: "albertinischesSachsennach1635", start: null, end: null }),
+    feature({ id: "ernestinischesSachsennach1547", start: 1547, end: 1806 }),
+    feature({ id: "Kurpfalz", start: 1356, end: 1777 }),
+    feature({ id: "Kurmainz", start: null, end: 1803 }),
+    feature({ id: "Kurtrier", start: null, end: 1803 }),
+    feature({ id: "KölnErzstift", start: null, end: 1803 }),
+    feature({ id: "Württemberg", start: 1495, end: 1806 }),
+    feature({ id: "Hessen", start: null, end: 1567 }),
+    feature({ id: "HessenKassel", start: 1567, end: null }),
+    feature({ id: "HessenDarmstadt", start: 1567, end: null }),
+    feature({ id: "SalzburgErzstift", start: null, end: 1803 }),
+  ]);
+  const y1650 = buildYearCollection(fc, 1650);
+  const y1700 = buildYearCollection(fc, 1700);
+  // 1700 の出力は 1650 と完全一致（同一の領邦・同一の形状・同一の表示名）
+  assertEquals(y1700, y1650);
+  // 主要領邦は 14（Hessen と bis1547 のザクセン 2 系統は 1567/1547 で終了済み）
+  assertEquals(y1700.features.length, 14);
+  const names = y1700.features.map((f) => f.properties?.NAME);
+  assertEquals(new Set(names).size, 14);
+  // バイエルン・ザクセンは 1623 昇格後 / 1635 移行後の称号で出る
+  assert(names.includes("Electorate of Bavaria"));
+  assert(names.includes("Electorate of Saxony"));
+  assert(names.includes("Duchy of Saxony"));
+  assert(!names.includes("Landgraviate of Hesse")); // 1567 分割で消滅
 });
