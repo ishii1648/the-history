@@ -1,11 +1,11 @@
 ---
 id: TASK-64
 title: agent-loop のブラウザ不可環境向け代替検証手順が docs から消えている
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-25 05:43'
-updated_date: '2026-07-25 05:44'
+updated_date: '2026-07-25 05:47'
 labels:
   - bug
   - 'area:workflow'
@@ -22,8 +22,8 @@ ordinal: 61000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 SKILL.md と development-style.md にブラウザ不可時の機械的スモークチェック代替が復活している
-- [ ] #2 deno fmt --check green
+- [x] #1 SKILL.md と development-style.md にブラウザ不可時の機械的スモークチェック代替が復活している
+- [x] #2 deno fmt --check green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -31,3 +31,9 @@ ordinal: 61000
 <!-- SECTION:PLAN:BEGIN -->
 1. SKILL.md 手順 4 と development-style.md 4.3.1 に『ヘッドレス CDP が使えない（Chrome 起動不可）環境ではビルド成果物・データ出力の機械的スモークチェックで代替する』フォールバック連鎖を復活させる。2. 並列化判定: 見送り（docs 2 箇所の小追記のみ）。mainagent 直接実装（docs タスク前例）。3. deno fmt → PR → CI green → finalization → マージ。
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+SKILL.md 手順 4 と docs/development-style.md 4.3.1 に、Chrome を起動できない環境向けの機械的スモークチェック代替（ビルド成果物・データ出力の存在・件数・スキーマ確認）をフォールバック連鎖（ヘッドレス CDP → 機械的スモーク）として復活させた（AC #1: 両ファイルの追記を grep で確認）。deno fmt --check green・PR #71 CI green（AC #2）。
+<!-- SECTION:FINAL_SUMMARY:END -->
