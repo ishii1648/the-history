@@ -154,6 +154,25 @@ export function canonicalRiverName(name: string): string {
 }
 
 /**
+ * 対象抽出後（filterMajorRivers + clipRiversToBbox）・エイリアス適用前の
+ * 生ソース名のユニーク一覧をソートして返す（純粋関数）。
+ *
+ * 回帰テスト（scripts/build-rivers_test.ts の SOURCE_RIVER_NAMES）は名寄せ前の
+ * ソース名を検証対象とする。生成物 data/rivers.geojson は正準名しか含まないため、
+ * 生成物由来の一覧では『国境またぎの名前分割がエイリアス登録漏れになっていない
+ * か』を検出できない（TASK-63）。このスナップショットの再生成には
+ * `deno task build-rivers --print-source-names` を使う。
+ */
+export function extractSourceRiverNames(fc: FeatureCollection): string[] {
+  const names = new Set<string>();
+  for (const feature of fc.features) {
+    const name = feature.properties?.name;
+    if (typeof name === "string") names.add(name);
+  }
+  return [...names].sort();
+}
+
+/**
  * properties を name / scalerank の最小限に間引く（純粋関数）。
  * name はオーバーレイ側のラベル表示と主要河川の含有テストに使う。国境をまたぐ
  * 呼称違い（RIVER_NAME_ALIASES）は canonicalRiverName で代表名へ正規化し、
@@ -186,6 +205,12 @@ async function main(): Promise<void> {
   const raw = await fetchFeatureCollection();
   const major = filterMajorRivers(raw, MAX_SCALERANK);
   const clipped = clipRiversToBbox(major, EUROPE_BBOX);
+  if (Deno.args.includes("--print-source-names")) {
+    // 回帰テスト用スナップショット（scripts/build-rivers_test.ts の
+    // SOURCE_RIVER_NAMES）の再生成モード。名寄せ前の生ソース名を出力して終了する。
+    console.log(JSON.stringify(extractSourceRiverNames(clipped), null, 2));
+    return;
+  }
   const pruned = pruneRiverProperties(clipped);
   const { fc, tolerance, size } = shrinkToLimit(
     pruned,

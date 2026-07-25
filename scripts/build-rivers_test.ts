@@ -5,6 +5,7 @@ import {
   buildRiversSourceUrl,
   canonicalRiverName,
   clipRiversToBbox,
+  extractSourceRiverNames,
   filterMajorRivers,
   MAX_SCALERANK,
   pruneRiverProperties,
@@ -231,63 +232,111 @@ Deno.test("RIVER_NAME_ALIASES の正規化先は全て name-ja.json に登録済
   }
 });
 
-// 横展開（AC#4）: 現行の主要河川名（別名込み、48 feature 由来のユニーク名）を
-// 正規化した結果、日本語表示名（name-ja.json）が同一になる名前は必ず同一の
-// canonical name に集約されることを機械検証する。これにより Rhine/Danube
-// 以外の主要河川（Euphrates/Tigris/Dnieper 系）でも同様の途切れが再発しないか
-// を一括で検出できる。デルタの分流（Nederrijn/Lek/Waal/Bratul 各分流/Borcea）は
-// name-ja.json 側で個別の日本語名を持つため、ここでの衝突検出には現れない。
-Deno.test("横展開: name-ja.json で同一表示名になる河川名は同一 canonical name に正規化される", () => {
-  // data/rivers.geojson（scripts/build-rivers.ts 生成物）に現れる全ユニーク name。
-  // .geojson は静的 import 不可（scripts/name-ja_test.ts と同じ制約）なため、
-  // データ変更時は下記コマンドで再生成して手動更新する（scripts/name-ja_test.ts
-  // の STATIC_GEOJSON_AND_RIVER_NAMES と同じ運用）:
-  //   python3 -c "import json; d=json.load(open('data/rivers.geojson')); print(sorted(set(f['properties'].get('name') for f in d['features'] if f['properties'].get('name'))))"
-  const ALL_RIVER_NAMES = [
-    "Al Furat",
-    "Amu  Darya",
-    "Borcea",
-    "Bratul Chillia",
-    "Bratul Sfintu Gheorghe",
-    "Bratul Sulina",
-    "Danube",
-    "Daugava",
-    "Dicle",
-    "Dnepre",
-    "Dnipro",
-    "Donau",
-    "Ebro",
-    "Elbe",
-    "Euphrates",
-    "Firat",
-    "Lek",
-    "Loire",
-    "Nederrijn",
-    "Neva",
-    "Oder",
-    "Pechora",
-    "Rhein",
-    "Rhin",
-    "Rhine",
-    "Seine",
-    "Severnaya Dvina",
-    "Sukhona",
-    "Svir’",
-    "Tajo",
-    "Tejo",
-    "Tigris",
-    "Ural",
-    "Vistula",
-    "Volga",
-    "Vychegda",
-    "Waal",
-  ];
+Deno.test("extractSourceRiverNames は名寄せ前のユニーク name をソートして返す", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      multiLineFeature({ name: "Rhein", scalerank: 4 }, [[[0, 0], [1, 1]]]),
+      multiLineFeature({ name: "Rhein", scalerank: 4 }, [[[1, 1], [2, 2]]]),
+      multiLineFeature({ name: "Donau", scalerank: 2 }, [[[0, 0], [1, 1]]]),
+      // name 欠損・非文字列は除外する
+      multiLineFeature({ scalerank: 3 }, [[[0, 0], [1, 1]]]),
+      multiLineFeature({ name: 42, scalerank: 3 }, [[[0, 0], [1, 1]]]),
+    ],
+  };
+
+  // 正規化（canonicalRiverName）を通す前の生ソース名がそのまま返ること
+  assertEquals(extractSourceRiverNames(fc), ["Donau", "Rhein"]);
+});
+
+// 回帰テストの土台（TASK-63）: 名寄せ「前」の生ソース名スナップショット。
+//
+// TASK-56 以前は data/rivers.geojson から名前一覧を再生成していたが、TASK-56 で
+// rivers.geojson は正準名のみ・name-ja.json もエイリアスキー剪定済みとなった。
+// その結果、生成物由来のリストでは『同一の川が国境で別名に分割されていないか』
+// のクロスチェックが対象河川に対して二度と発火しない（空振り）。そこで検証対象
+// をパイプラインの名寄せ前段（フィルタ + クリップ後、canonicalRiverName 適用前）
+// のソース名に変更する。
+//
+// Natural Earth ソースは RIVERS_SOURCE_COMMIT にピン留めされているため、この
+// スナップショットはコミットを更新しない限り安定する。CI（オフライン）では
+// ネットワークに触れず、この静的リストだけで検証する。
+//
+// 再生成コマンド（RIVERS_SOURCE_COMMIT 更新時に実行して手動更新する）:
+//   deno task build-rivers --print-source-names
+const SOURCE_RIVER_NAMES = [
+  "Al Furat",
+  "Amu  Darya",
+  "Borcea",
+  "Bratul Chillia",
+  "Bratul Sfintu Gheorghe",
+  "Bratul Sulina",
+  "Danube",
+  "Daugava",
+  "Dicle",
+  "Dnepre",
+  "Dnipro",
+  "Donau",
+  "Ebro",
+  "Elbe",
+  "Euphrates",
+  "Firat",
+  "Lek",
+  "Loire",
+  "Nederrijn",
+  "Neva",
+  "Oder",
+  "Pechora",
+  "Rhein",
+  "Rhin",
+  "Rhine",
+  "Seine",
+  "Severnaya Dvina",
+  "Sukhona",
+  "Svir’",
+  "Tajo",
+  "Tejo",
+  "Tigris",
+  "Ural",
+  "Vistula",
+  "Volga",
+  "Vychegda",
+  "Waal",
+];
+
+// 回帰テスト (i)（TASK-63）: 全ソース名が canonicalRiverName を通して「既知の
+// 正準名」（= data/name-ja.json に日本語名を持つ名前）に写ることを固定する。
+// ソース更新で新たな国境またぎ名前分割（例: Elbe/Labe）が入ると、未登録の
+// 分割名は canonicalRiverName でそのまま素通りし name-ja.json に無い名前に
+// なるため、ここで fail して RIVER_NAME_ALIASES への登録漏れを検出できる
+// （TASK-56 の「クリック/ホバー強調が川の途中で切れる」回帰の再発防止）。
+Deno.test("回帰: 全ソース名は canonicalRiverName 経由で name-ja.json 登録済みの正準名に写る", () => {
+  const ja = nameJa as Record<string, string>;
+  const unknown = SOURCE_RIVER_NAMES.filter(
+    (name) => !(canonicalRiverName(name) in ja),
+  );
+  assertEquals(
+    unknown,
+    [],
+    "正準名が name-ja.json に無いソース名がある。国境またぎの名前分割なら " +
+      "RIVER_NAME_ALIASES へ登録、独立した河川なら name-ja.json へ日本語名を追加する",
+  );
+});
+
+// 回帰テスト (ii)（TASK-63）: 同一の日本語表示名に対応するソース名群が単一の
+// 正準名へ収束することを固定する。ラベルはソース名自身のエントリを優先し、
+// 無ければ正準名で name-ja.json を引く（エイリアスキーは剪定済みのため）。
+// 新分割名に個別の name-ja.json エントリを（既存河川と同じ表示名で）追加して
+// テスト (i) をすり抜けた場合でも、表示名の衝突としてここで検出する。
+// デルタの分流（Nederrijn/Lek/Waal/Bratul 各分流/Borcea）は個別の日本語名を
+// 持つ別水路のため、ここでの衝突検出には現れない。
+Deno.test("回帰: 同一の日本語表示名になるソース名は単一の正準名に収束する", () => {
   const ja = nameJa as Record<string, string>;
   const canonicalByJa = new Map<string, string>();
   const violations: string[] = [];
-  for (const name of ALL_RIVER_NAMES) {
-    const label = ja[name] ?? name;
+  for (const name of SOURCE_RIVER_NAMES) {
     const canonical = canonicalRiverName(name);
+    const label = ja[name] ?? ja[canonical] ?? name;
     const existing = canonicalByJa.get(label);
     if (existing === undefined) {
       canonicalByJa.set(label, canonical);
@@ -298,4 +347,21 @@ Deno.test("横展開: name-ja.json で同一表示名になる河川名は同一
     }
   }
   assertEquals(violations, []);
+});
+
+// スナップショットとエイリアス表の整合（TASK-63）: RIVER_NAME_ALIASES の全キー
+// はソース名スナップショットに実在すること。ソース更新でエイリアス元の名前が
+// 消えた場合、スナップショット再生成時にここで fail し、死んだエイリアスの
+// 放置（および再生成漏れによる齟齬）を検出する。
+Deno.test("RIVER_NAME_ALIASES の全キーはソース名スナップショットに存在する", () => {
+  const sourceNames = new Set(SOURCE_RIVER_NAMES);
+  const dead = Object.keys(RIVER_NAME_ALIASES).filter(
+    (alias) => !sourceNames.has(alias),
+  );
+  assertEquals(
+    dead,
+    [],
+    "ソースに存在しないエイリアスキーがある（スナップショット再生成漏れ、" +
+      "またはソース更新で消えた名前）",
+  );
 });
