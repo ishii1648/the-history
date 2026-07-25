@@ -99,9 +99,8 @@ description: backlog の次タスクを決定的に選択し、実装から fina
    - マージ直後、次イテレーションに進む前に `deno task build` と dev
      サーバ起動で当該タスクの変更点を実際に動かして確認する。**標準は ヘッドレス
      Chrome + CDP ハーネス（`scripts/verify/`）**による無人スモーク
-     チェックとする（例:
-     `deno task verify:smoke <dev サーバ URL>
-     scripts/verify/checks/smoke.ts`）。claude-in-chrome
+     チェックとする（例: `deno task verify:smoke <dev サーバ URL>`。標準スモーク
+     `scripts/verify/checks/smoke.ts` はタスク定義に含まれる）。claude-in-chrome
      拡張（可視ウィンドウ必須・ツール呼び出し毎に人間の承認確認 = HITL
      が発生する）は、ユーザーの実体感確認が必要な場合の最終手段に限定する。
      ヘッドレス実行では以下に注意する: `document.visibilityState`
