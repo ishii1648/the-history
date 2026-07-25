@@ -1,9 +1,11 @@
 ---
 id: TASK-68
 title: 1700年の HRE 内主要領邦をオーバーレイ表示する（Roller データの 1650 境界外挿）
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-25 05:58'
+updated_date: '2026-07-25 07:07'
 labels:
   - 'area:src-main'
   - 'area:data'
@@ -24,3 +26,14 @@ ordinal: 65000
 - [ ] #3 1700 年の領邦境界が 1650 年時点の近似である旨が known-limitations（UI の既知の制限表示）に年代連動で明記される
 - [ ] #4 1715 以降の年にはオーバーレイが表示されないこと（ベースマップの Brandenburg/Prussia との二重表示回避）がテストで保証され、deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. src/config.ts の HRE_OVERLAY_YEARS に 1700 を追加し、scripts/build-hre.ts パイプラインで data/hre_1700.geojson を再生成（手作業改変なし。事前調査で 1650 と同一 14 領邦が返ることは検証済み）。
+2. known-limitations に『1700 年の領邦境界は 1650 年時点の近似（1653 ヒンターポンメルン・1680 マクデブルク獲得など未反映）』を年代連動（1700 のみ active）で追加。
+3. TDD: (a) 1700 が overlay 対象・1715 以降が対象外であることを config/データ生成のテストで固定（AC #4 red→green） (b) hre_1700.geojson の 14 領邦・スキーマをテストで固定。
+4. 実機確認: CDP で 1650→1700 切替時に領邦オーバーレイが維持されること・1715 で消えること・称号付き日本語表記/域内強調の一貫（AC #1）をスクリーンショット確認。
+5. 並列化判定: 見送り（理由: config 1 行 + データ再生成 + 制限注記 + テストが単一パイプラインの逐次変更で分割の意味がない）。単一 subagent（worktree isolation）委譲。
+6. deno fmt/lint/test/build green → PR（TASK-68 明記）→ CI → finalization → マージ → マージ後確認。
+<!-- SECTION:PLAN:END -->
