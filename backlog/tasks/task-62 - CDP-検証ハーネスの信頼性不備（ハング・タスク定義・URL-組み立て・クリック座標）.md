@@ -1,9 +1,11 @@
 ---
 id: TASK-62
 title: CDP 検証ハーネスの信頼性不備（ハング・タスク定義・URL 組み立て・クリック座標）
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-25 05:42'
+updated_date: '2026-07-25 06:03'
 labels:
   - bug
   - 'area:scripts'
@@ -25,3 +27,11 @@ ordinal: 59000
 - [ ] #3 file:// URL が正規 API で組み立てられ空白入りパスでも動く
 - [ ] #4 クリック座標が canvas の rect 原点を考慮する（PLAUSIBLE 指摘の検証込み）
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. TDD で 4 点を修正: (a) scripts/verify/cdp.ts の send() に WS onerror/onclose での pending 一括 reject とタイムアウトを追加（cdp_test.ts に fake WS でのテスト先行）。(b) deno.json の verify:smoke タスクに smoke スクリプトを含め、URL 1 引数で動く形へ（cdp.ts の CLI 引数処理と整合）。(c) file:// URL 組み立てを std の toFileUrl 等の正規 API へ置換（空白入りパスのテスト）。(d) checks/smoke.ts のクリック座標を canvas の rect 原点考慮へ（PLAUSIBLE 指摘 — 現行ヘッドレスでは rect 原点が 0,0 のため実害未確認。修正のうえ実挙動を検証）。
+2. 並列化判定: 見送り（理由: 全て scripts/verify 配下の同一ハーネスに集中し、(b) は (a)(c) と cdp.ts CLI を共有する）。単一 subagent（worktree isolation）委譲。
+3. deno fmt/lint/test/build green → 実機でスモーク 1 周（自ビルドに対して verify:smoke を実行し PASS すること自体を検証）→ PR → CI → finalization → マージ。
+<!-- SECTION:PLAN:END -->
