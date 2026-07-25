@@ -1,11 +1,11 @@
 ---
 id: TASK-61
 title: 都市選定の HRE 下限確保が年代・領域・訳データで誤っている
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-25 05:42'
-updated_date: '2026-07-25 05:44'
+updated_date: '2026-07-25 05:59'
 labels:
   - bug
   - 'area:scripts'
@@ -23,9 +23,9 @@ ordinal: 58000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 下限確保の適用年代の上限がテストで固定され、1815 以降は人口上位選定へ戻る（再現テスト red → 修正 green）
-- [ ] #2 bbox 見直し（低地諸国の扱い）の判断と根拠が記録され、Bruges が HRE 存在年代で復帰する
-- [ ] #3 削除された日本語訳 12 件が復元され、deno test green
+- [x] #1 下限確保の適用年代の上限がテストで固定され、1815 以降は人口上位選定へ戻る（再現テスト red → 修正 green）
+- [x] #2 bbox 見直し（低地諸国の扱い）の判断と根拠が記録され、Bruges が HRE 存在年代で復帰する
+- [x] #3 削除された日本語訳 12 件が復元され、deno test green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -36,3 +36,9 @@ ordinal: 58000
 3. 並列化判定: 見送り（理由: 選定ロジック・データ・訳が単一パイプラインで逐次依存）。単一 subagent 委譲。
 4. 実機確認は 1900 年（Barcelona 復帰）と 1500 年（Bruges 復帰 + ドイツ密度維持）の CDP スクリーンショット。
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+3 欠陥を修正: (a) HRE_DISSOLUTION_YEAR=1806 で下限確保を HRE 存続年代に限定（1815 以降入れ替えなしをテストで固定、1900 年 Barcelona 復帰/Munich 選外・1880 年 Antwerp 復帰を実測）。(b) 定数を GERMAN_REGION_BBOX へ改名し bbox 据え置き、CITIES_PER_YEAR 20→23 で Bruges が歴史的全該当年（1279〜1500）に復帰（西拡張案はドイツ域内 6→3 件に落ちるため実測却下、22 では不足の実測根拠付き。判断はコードコメントに記録）。(c) 手書き訳 16+1 件復元と RETAINED_CITY_NAME_JA 許容リスト方式（陳腐化検出付き）。TDD: 新規 4 テスト red→green、deno test 565 passed。CDP 実機確認（Barcelona 1900/Antwerp 1880/Bruges 1279・1500/ドイツ域内 6 件維持）。PR #73 CI green。decision 判定: 選定方式はタスク限りの定数チューニング（コメント記録で十分）のため decision 化見送り。
+<!-- SECTION:FINAL_SUMMARY:END -->
