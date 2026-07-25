@@ -220,10 +220,9 @@ CI や PR のステータスは、GitHub Actions のトリガーではなくセ�
 チェックを標準とする**。`claude-in-chrome` 拡張は可視ウィンドウが必須で、
 ツール呼び出し毎に人間の承認確認（HITL）が発生し自律ループが頻繁に停止する
 ため、ユーザーの実体感確認がどうしても必要な場合の最終手段に格下げする。
-ハーネスは
-`deno task verify:smoke <dev サーバ URL>
-scripts/verify/checks/smoke.ts`
-のように起動し、アプリ起動・年代切替・
+ハーネスは `deno task verify:smoke <dev サーバ URL>`
+のように起動し（標準スモーク `scripts/verify/checks/smoke.ts`
+はタスク定義に含まれる）、アプリ起動・年代切替・
 クリック操作・エラートースト不在確認・スクリーンショット保存を任意の JS 評価と
 CDP 経由の入力イベントで無人実行する。ヘッドレス実行の制約: (1)
 `document.visibilityState` に依存する分岐は可視性に依存しないロジックへ

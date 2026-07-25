@@ -16,6 +16,9 @@
  *
  * 使い方（CLI として）:
  *   deno run -A scripts/verify/cdp.ts <url> <checkScript.ts>
+ *   引数順は任意（http(s):// で始まる引数を URL、それ以外を checkScript と
+ *   みなす）。標準スモークは `deno task verify:smoke <url>` で起動できる
+ *   （checkScript は deno.json のタスク定義に含まれる）。
  *   checkScript.ts は `export async function run(api: CdpApi) { ... }` を
  *   export する。
  *
@@ -28,6 +31,8 @@
  *   ある。`waitFor` で目的の値になるまで明示的に待つこと
  *   （`waitForAppReady` だけでは「関数が存在する」ことしか保証しない）。
  */
+
+import { isAbsolute, join, toFileUrl } from "@std/path";
 
 const DEFAULT_CHROME_BIN =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -129,6 +134,186 @@ export function buildWaitForExpr(expr: string): string {
   return `Boolean(${expr})`;
 }
 
+/** send() のデフォルトタイムアウト。呼び出し側の waitFor（10〜30s、1 回の
+ * evaluate は即応答想定）と干渉しないよう、単発コマンドの応答としては十分
+ * 長い 30s とする。 */
+export const DEFAULT_SEND_TIMEOUT_MS = 30_000;
+
+export interface CdpSession {
+  /** CDP コマンドを送信する。応答・エラー応答・切断・タイムアウトのいずれかで
+   * 必ず settle する（永久 pending にならない）。 */
+  send(
+    method: string,
+    params?: Record<string, unknown>,
+  ): Promise<CdpMessage>;
+  /** 指定イベントの初回発火を待つ。切断時は reject される。 */
+  once(method: string): Promise<unknown>;
+  /** WebSocket の onmessage から生メッセージを渡す。 */
+  handleMessage(data: string): void;
+  /** WebSocket の onerror/onclose・プロセス死亡時に呼ぶ。pending の send と
+   * once 待機を全て reject し、以降の send を即 reject にする。 */
+  handleDisconnect(reason: string): void;
+}
+
+/**
+ * CDP メッセージの送受信セッションを作る。WebSocket 実体から切り離してあり、
+ * rawSend（送信関数）と handleMessage/handleDisconnect の呼び出しだけで
+ * 動くため、プロセス起動なしでユニットテストできる。
+ *
+ * 信頼性の保証（TASK-62）:
+ * - handleDisconnect() で pending の全 send / once 待機が reject される
+ *   （Chrome プロセス死亡・WebSocket 切断で無期限ブロックしない）。
+ * - 各 send にタイムアウト（既定 30s）を設け、応答が来ない場合も reject する。
+ */
+export function createCdpSession(
+  rawSend: (data: string) => void,
+  opts: { sendTimeoutMs?: number } = {},
+): CdpSession {
+  const sendTimeoutMs = opts.sendTimeoutMs ?? DEFAULT_SEND_TIMEOUT_MS;
+  let nextId = 1;
+  let disconnectedReason: string | null = null;
+  const pending = new Map<
+    number,
+    { resolve: (v: CdpMessage) => void; reject: (e: Error) => void }
+  >();
+  const timers = new Map<number, number>();
+  const eventListeners = new Map<string, Array<(params: unknown) => void>>();
+  const onceRejecters = new Set<(e: Error) => void>();
+
+  function settle(id: number): void {
+    const timer = timers.get(id);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timers.delete(id);
+    }
+    pending.delete(id);
+  }
+
+  function handleMessage(data: string): void {
+    const msg = JSON.parse(data) as CdpMessage;
+    if (msg.id !== undefined) {
+      const p = pending.get(msg.id);
+      if (p) {
+        settle(msg.id);
+        if (msg.error) {
+          p.reject(new Error(msg.error.message));
+        } else {
+          p.resolve(msg);
+        }
+      }
+    } else if (msg.method) {
+      const listeners = eventListeners.get(msg.method);
+      if (listeners) {
+        for (const l of [...listeners]) l(msg.params);
+      }
+    }
+  }
+
+  function handleDisconnect(reason: string): void {
+    if (disconnectedReason !== null) return;
+    disconnectedReason = reason;
+    const err = new Error(`CDP connection lost (${reason})`);
+    for (const [id, p] of [...pending]) {
+      settle(id);
+      p.reject(err);
+    }
+    for (const reject of [...onceRejecters]) reject(err);
+    onceRejecters.clear();
+    eventListeners.clear();
+  }
+
+  function send(
+    method: string,
+    params: Record<string, unknown> = {},
+  ): Promise<CdpMessage> {
+    if (disconnectedReason !== null) {
+      return Promise.reject(
+        new Error(
+          `CDP connection lost (${disconnectedReason}): cannot send ${method}`,
+        ),
+      );
+    }
+    const id = nextId++;
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      timers.set(
+        id,
+        setTimeout(() => {
+          settle(id);
+          reject(
+            new Error(`CDP send timed out after ${sendTimeoutMs}ms: ${method}`),
+          );
+        }, sendTimeoutMs),
+      );
+      try {
+        rawSend(JSON.stringify({ id, method, params }));
+      } catch (e) {
+        settle(id);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
+    });
+  }
+
+  function once(method: string): Promise<unknown> {
+    if (disconnectedReason !== null) {
+      return Promise.reject(
+        new Error(
+          `CDP connection lost (${disconnectedReason}): cannot wait for ${method}`,
+        ),
+      );
+    }
+    return new Promise((resolve, reject) => {
+      const handler = (params: unknown) => {
+        const arr = eventListeners.get(method);
+        const idx = arr?.indexOf(handler) ?? -1;
+        if (arr && idx >= 0) arr.splice(idx, 1);
+        onceRejecters.delete(reject);
+        resolve(params);
+      };
+      if (!eventListeners.has(method)) eventListeners.set(method, []);
+      eventListeners.get(method)!.push(handler);
+      onceRejecters.add(reject);
+    });
+  }
+
+  return { send, once, handleMessage, handleDisconnect };
+}
+
+const CLI_USAGE =
+  "Usage: deno run -A scripts/verify/cdp.ts <url> <checkScript.ts>\n" +
+  "  (引数順は任意。http(s):// で始まる引数を URL、それ以外を checkScript と\n" +
+  "   みなす。標準スモークは `deno task verify:smoke <url>`)";
+
+/**
+ * CLI 引数から url と checkScript パスを解決する。順不同で受け付ける
+ * （`deno task verify:smoke <url>` はタスク定義の checkScript の後ろに URL が
+ * 付くため）。重複する余分な引数は無視する。どちらかが欠ければ usage を含む
+ * 例外を投げる。
+ */
+export function parseCliArgs(
+  args: string[],
+): { url: string; checkScriptPath: string } {
+  const url = args.find((a) => /^https?:\/\//.test(a));
+  const checkScriptPath = args.find((a) => !/^https?:\/\//.test(a));
+  if (!url || !checkScriptPath) {
+    throw new Error(CLI_USAGE);
+  }
+  return { url, checkScriptPath };
+}
+
+/**
+ * checkScript のパスを dynamic import 可能な file:// URL 文字列にする。
+ * 素朴な文字列連結ではなく `toFileUrl` を使うことで、空白等を含むパスでも
+ * 正しくパーセントエンコードされる。
+ */
+export function resolveCheckScriptUrl(
+  path: string,
+  cwd: string = Deno.cwd(),
+): string {
+  const absolute = isAbsolute(path) ? path : join(cwd, path);
+  return toFileUrl(absolute).href;
+}
+
 // ---- プロセス起動・CDP 通信（副作用あり） ----
 
 function findFreePort(): Promise<number> {
@@ -188,56 +373,14 @@ export async function launch(): Promise<CdpApi> {
     ws.onerror = (e) => reject(e);
   });
 
-  let nextId = 1;
-  const pending = new Map<
-    number,
-    { resolve: (v: CdpMessage) => void; reject: (e: Error) => void }
-  >();
-  const eventListeners = new Map<string, Array<(params: unknown) => void>>();
-
-  ws.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data) as CdpMessage;
-    if (msg.id !== undefined) {
-      const p = pending.get(msg.id);
-      if (p) {
-        pending.delete(msg.id);
-        if (msg.error) {
-          p.reject(new Error(msg.error.message));
-        } else {
-          p.resolve(msg);
-        }
-      }
-    } else if (msg.method) {
-      const listeners = eventListeners.get(msg.method);
-      if (listeners) {
-        for (const l of listeners) l(msg.params);
-      }
-    }
-  };
-
-  function send(
-    method: string,
-    params: Record<string, unknown> = {},
-  ): Promise<CdpMessage> {
-    const id = nextId++;
-    return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-      ws.send(JSON.stringify({ id, method, params }));
-    });
-  }
-
-  function once(method: string): Promise<unknown> {
-    return new Promise((resolve) => {
-      const handler = (params: unknown) => {
-        const arr = eventListeners.get(method)!;
-        const idx = arr.indexOf(handler);
-        if (idx >= 0) arr.splice(idx, 1);
-        resolve(params);
-      };
-      if (!eventListeners.has(method)) eventListeners.set(method, []);
-      eventListeners.get(method)!.push(handler);
-    });
-  }
+  // send() が永久 pending にならないよう、切断（onerror/onclose・Chrome
+  // プロセス死亡による WebSocket close）とタイムアウトで必ず reject する
+  // セッションに委譲する（TASK-62）。
+  const session = createCdpSession((data) => ws.send(data));
+  ws.onmessage = (ev) => session.handleMessage(String(ev.data));
+  ws.onerror = () => session.handleDisconnect("WebSocket error");
+  ws.onclose = () => session.handleDisconnect("WebSocket closed");
+  const { send, once } = session;
 
   await send("Page.enable");
   await send("Runtime.enable");
@@ -356,19 +499,15 @@ export async function launch(): Promise<CdpApi> {
 
 // ---- CLI エントリポイント ----
 if (import.meta.main) {
-  const [url, checkScriptPath] = Deno.args;
-  if (!url || !checkScriptPath) {
-    console.error(
-      "Usage: deno run -A scripts/verify/cdp.ts <url> <checkScript.ts>",
-    );
+  let cli: { url: string; checkScriptPath: string };
+  try {
+    cli = parseCliArgs(Deno.args);
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
     Deno.exit(1);
   }
-  const mod = await import(
-    (checkScriptPath.startsWith("/")
-      ? "file://"
-      : "file://" + Deno.cwd() + "/") +
-      checkScriptPath.replace(/^\.\//, "")
-  );
+  const { url, checkScriptPath } = cli;
+  const mod = await import(resolveCheckScriptUrl(checkScriptPath));
   if (typeof mod.run !== "function") {
     console.error(`checkScript must export an async function run(api)`);
     Deno.exit(1);

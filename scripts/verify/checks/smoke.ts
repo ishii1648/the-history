@@ -8,12 +8,22 @@
  *   4. エラートースト非表示の確認
  *   5. スクリーンショット保存
  *
- * dev サーバの URL は `deno run -A scripts/verify/cdp.ts <url> scripts/verify/checks/smoke.ts`
- * の <url> 引数で渡す（deno.json の "verify:smoke" タスク参照）。
+ * dev サーバの URL は `deno task verify:smoke <url>` の <url> 引数で渡す
+ * （このスクリプト自体は deno.json の "verify:smoke" タスク定義に含まれる。
+ * 直接起動する場合は
+ * `deno run -A scripts/verify/cdp.ts <url> scripts/verify/checks/smoke.ts`）。
  */
 import type { CdpApi } from "../cdp.ts";
 
 const SCREENSHOT_PATH = "scripts/verify/checks/.smoke-screenshot.png";
+
+/**
+ * canvas 中央のビューポート座標を返すブラウザ内評価式。クリック座標は
+ * ビューポート基準のため、rect の原点（left/top）を加味する（canvas が
+ * 原点以外に配置されるレイアウトでも正しい座標になる）。
+ */
+export const CANVAS_CENTER_EXPR =
+  "(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()";
 
 // ライン川（Rhein）上の一点。URL の zoom/center クエリでこの座標を画面中央に
 // 据えることで、rivers.geojson の実座標から画面ピクセル座標を手計算する
@@ -47,9 +57,7 @@ export async function run(api: CdpApi): Promise<void> {
   );
   await api.waitForAppReady(30000);
   await api.waitFor("window.__getYear() === 1500", 15000);
-  const center = await api.evaluate<[number, number]>(
-    "(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.width / 2, r.height / 2]; })()",
-  );
+  const center = await api.evaluate<[number, number]>(CANVAS_CENTER_EXPR);
   results.clickPoint = center;
   await api.click(Math.round(center[0]), Math.round(center[1]));
   await new Promise((r) => setTimeout(r, 800));
