@@ -1,10 +1,12 @@
 /**
- * 主要都市データパイプラインスクリプト（TASK-27）。
+ * 主要都市データパイプラインスクリプト（TASK-27 / TASK-66）。
  * - Historical Urban Population データセット（Chandler 系列）の chandler.csv を
  *   GitHub ミラーから取得（コミット固定）
  * - ヨーロッパ bbox（EUROPE_BBOX）内の都市に絞る
  * - スナップショット年ごとに「過去 50 年〜未来 25 年の最近傍の人口記録」を対応付け、
- *   人口上位 CITIES_PER_YEAR 件を採用する
+ *   対応付け可能な候補を全件採用する（TASK-66。従来の「人口上位
+ *   CITIES_PER_YEAR=23 件 + 独語圏最低 6 件」の選定は廃止。画面上の間引きは
+ *   表示側（src/cities.ts のズーム別表示制御）の責務に移した）
  * - data/cities.json（年 → 都市マーカー配列）を生成する
  *
  * データソース選定の経緯:
@@ -14,9 +16,9 @@
  *   Earthdata ログイン必須で匿名の安定 URL が得られないため、同データの入力
  *   CSV（Chandler のデジタル化）を含む GitHub ミラー
  *   fasiha/Historical-Urban-Population-Growth-Data をコミット固定で参照する。
- * - 検証結果: 欧州 bbox 内で人口記録を持つ都市は 680 件。各スナップショット年の
- *   対応付け窓内の候補は 900 年で 24 件、1500 年で 183 件、1914 年で 500 件超と、
- *   全 20 年代で 15〜25 件の要件を満たすカバレッジがある。
+ * - 検証結果: 欧州 bbox 内で人口記録を持つ候補プールは全 682 行。各スナップ
+ *   ショット年の対応付け・統合後の採用数は 900 年 20 件 → 1200 年 109 件 →
+ *   1500 年 157 件 → 1880 年 609 件（ピン留めコミットでの実測。TASK-66）。
  *
  * 対応付け・整形ルール:
  * - 記録年は飛び飛びのため、各スナップショット年に対し過去 PAST_WINDOW_YEARS 年・
@@ -56,57 +58,32 @@ export const PAST_WINDOW_YEARS = 50;
  */
 export const FUTURE_WINDOW_YEARS = 25;
 
-/**
- * 各年で採用する都市数（人口上位から）。
- * TASK-55 時点は 20 だったが、独語圏下限確保（GERMAN_REGION_MIN_CITIES）の
- * 入れ替えで、従来表示されていた大都市（Bruges 1279〜1500 等）が選外に落ちる
- * 副作用があったため、TASK-61 で 23 へ拡大した。23 は検証契約
- * MAX_CITIES_PER_YEAR（25）の範囲内で、Bruges が歴史的に上位だった全年
- * （1279/1300/1400/1492/1500）で復帰する最小値（22 では 1400/1492/1500 で
- * 復帰しない。実測）。
- */
-export const CITIES_PER_YEAR = 23;
+// TASK-66 で削除した選定定数の記録（削除理由）:
+// - CITIES_PER_YEAR（23）: 「人口上位 N 件」の切り詰め自体を廃止したため不要。
+//   最遠ズームの表示件数は表示側（src/cities.ts）が自前の定数で制御する設計で、
+//   パイプライン側に件数上限を残す意味がない。
+// - GERMAN_REGION_BBOX / GERMAN_REGION_MIN_CITIES（TASK-55）: 独語圏の下限確保は
+//   「上位選定で独語圏が選外に落ちる」ことへの補正だった。全件採用では独語圏
+//   候補も常に全件含まれるため、下限確保は恒真となり不要。
+// - HRE_DISSOLUTION_YEAR（1806、TASK-61）: 独語圏下限確保の適用年代を区切る
+//   ためだけの定数で、下限確保の廃止に伴い不要。
 
 /**
- * HRE のうち独語圏を近似する bbox（[west, south, east, north]）。
- * 都市表示の地域偏り是正（TASK-55: ユーザー要望はドイツ域内の表示密度）の
- * ための選定用しきい値であり、正確な帝国境界（data/hre_*.geojson）とは別物。
- * Cologne/Nuremberg/Prague/Vienna/Hamburg を含み、Paris/Venice/Milan/Rome
- * は含まない。歴史的 HRE 領のうち低地諸国（Bruges 3.2E / Ghent 3.7E /
- * Brussels 4.35E / Antwerp 4.4E）は意図的に含めない: 西へ拡げると中世に
- * 大都市だった低地諸国都市が下限確保枠（GERMAN_REGION_MIN_CITIES）を消費し、
- * ドイツ域内の採用数が 6 → 3 件に落ちる（実測。TASK-55 の目的と矛盾）。
- * かつては HRE_REGION_BBOX という名だったが、「HRE」を名乗りながら低地諸国を
- * 除外していて誤解を招くため、実態に合わせ改名した（TASK-61）。
+ * 検証: 各年の都市数の下限。
+ * TASK-66 で「人口上位 15〜25 件」の契約から「候補全件」の契約へ改定した。
+ * 元データの薄い 900〜1100 年の実測は 20〜59 件（最少はデータ最古の 900 年の
+ * 20 件）で、下限 15 はこの最少年に多少の余裕を持たせた検知しきい値として維持
+ * する（これを割るのは対応付け窓や bbox の退行を疑うべき異常）。
  */
-export const GERMAN_REGION_BBOX: BBox = [5.5, 45.5, 17, 55];
-
-/**
- * 独語圏（GERMAN_REGION_BBOX）で最低限採用する都市数（TASK-55）。
- * 人口上位のみの選定では地中海・ビザンツ/オスマン圏が優位で、900〜1700 年の
- * 域内採用数は 0〜1 件だった（調査値。域内候補プールは 1200 年以降で常に
- * 19 件以上ある）。総数 CITIES_PER_YEAR は変えず、域内候補を人口順に 6 件まで
- * 確保し、その分だけ域外の人口最下位を明け渡す。6 は「候補プールが下限を
- * 安定して満たせる値」として採用した。域内候補が 6 件未満の年
- * （900 年: 2 件、1100 年: 4 件）は無理に埋めず候補全件を採用する。
- * 適用は HRE 存続年代（HRE_DISSOLUTION_YEAR 以前）のみ。
- */
-export const GERMAN_REGION_MIN_CITIES = 6;
-
-/**
- * HRE の消滅年（1806 年、ライン同盟成立とフランツ 2 世の退位）。
- * 独語圏下限確保はこの年以前のスナップショット年（実際には 900〜1800）に
- * のみ適用する。消滅後（1815〜1914）まで適用すると、純粋な人口上位である
- * べき近代の選定が歪む実害があった（TASK-61: 1900 年に Barcelona 55.2 万が
- * 消え Munich 49.9 万が入る、1880 年に Antwerp 36.1 万が消え Wuppertal
- * 29.8 万が入る）。
- */
-export const HRE_DISSOLUTION_YEAR = 1806;
-
-/** 検証: 各年の都市数の下限（A/B 契約の「15〜25 都市程度」） */
 export const MIN_CITIES_PER_YEAR = 15;
-/** 検証: 各年の都市数の上限 */
-export const MAX_CITIES_PER_YEAR = 25;
+/**
+ * 検証: 各年の都市数の上限。
+ * 全件採用での実測最大は 1880 年の 609 件（ピン留めコミットの chandler.csv、
+ * 欧州 bbox 内の候補プールは全 682 行）。プール全行を超えることは構造上あり
+ * えないため、700 を「対応付けロジックの暴走（窓の拡大・重複統合の破れ等）」
+ * の検知しきい値とする。
+ */
+export const MAX_CITIES_PER_YEAR = 700;
 
 /** 出力先パス */
 export const CITIES_OUTPUT_PATH = "data/cities.json";
@@ -140,6 +117,16 @@ export const EXCLUDED_RECORDS: ReadonlyArray<{ name: string; year: number }> = [
  * - その他は元データの現地語綴りを英語の慣用綴りへ（Genova→Genoa 等）
  * - Augsberg は元データの誤綴り（正: Augsburg）、Nurnberg は英語慣用綴りの
  *   Nuremberg へ（TASK-55 で HRE 域内都市が採用されるようになったため追加）
+ * - 以下は TASK-66 の全件採用で新たに出力へ露出した誤名称・誤綴りの正規化:
+ *   - Louveigne: 座標（4.70E, 50.88N）・OtherName（Louvain）とも Leuven を指す
+ *     （Louveigné はリエージュ近郊の別の村）。英語慣用名 Louvain へ
+ *   - Meckenbeuren: 座標（11.41E, 53.63N）・OtherName（Schwerin）とも Schwerin
+ *     を指す（Meckenbeuren はボーデン湖畔の別の村）
+ *   - Weisbaden: Wiesbaden の誤綴り（座標は Wiesbaden）
+ *   - Brunn: 独語綴り Brünn の ASCII 化。英語慣用名は Brno
+ *   - Mulhausen: 独語綴り Mülhausen の ASCII 化。英語慣用名は Mulhouse
+ *     （ドイツの Muhlhausen = Mühlhausen とは別都市で、正規化により両者の
+ *     取り違えも防ぐ）
  */
 export const CITY_RENAMES: Readonly<Record<string, string>> = {
   Istanbul: "Constantinople",
@@ -149,6 +136,11 @@ export const CITY_RENAMES: Readonly<Record<string, string>> = {
   Brugge: "Bruges",
   Augsberg: "Augsburg",
   Nurnberg: "Nuremberg",
+  Louveigne: "Louvain",
+  Meckenbeuren: "Schwerin",
+  Weisbaden: "Wiesbaden",
+  Brunn: "Brno",
+  Mulhausen: "Mulhouse",
 };
 
 /** chandler.csv の 1 行（人口記録を 1 つ以上持つ都市） */
@@ -268,12 +260,6 @@ export function pickNearestRecord(
   return best;
 }
 
-/** 座標が bbox（[west, south, east, north]）内かどうか（純粋関数） */
-function isInBbox(lon: number, lat: number, bbox: BBox): boolean {
-  const [west, south, east, north] = bbox;
-  return lon >= west && lon <= east && lat >= south && lat <= north;
-}
-
 /** 人口降順・同数なら name 昇順の比較関数（選定順序の唯一の定義） */
 function byPopulationDescThenName(a: CityMarker, b: CityMarker): number {
   return (b.population ?? 0) - (a.population ?? 0) ||
@@ -286,11 +272,9 @@ function byPopulationDescThenName(a: CityMarker, b: CityMarker): number {
  * 2. 最近傍記録の対応付け（窓外の都市は落とす）
  * 3. CITY_RENAMES で英語慣用名へ正規化
  * 4. 同名都市は人口最大の 1 件へ統合（Brest 仏/白露のような同名別都市の重複防止）
- * 5. 人口降順（同数なら name 昇順）で CITIES_PER_YEAR 件に切り詰め
- * 6. HRE 存続年代（year <= HRE_DISSOLUTION_YEAR）に限り、独語圏
- *    （GERMAN_REGION_BBOX）の採用数が GERMAN_REGION_MIN_CITIES に満たない
- *    場合、域内候補を人口順に補い、その分だけ域外の人口最下位の枠を明け渡す
- *    （総数は CITIES_PER_YEAR のまま。TASK-55: 地域偏り是正）
+ * 5. 人口降順（同数なら name 昇順）に並べて全件返す（TASK-66。従来の
+ *    「上位 CITIES_PER_YEAR 件 + 独語圏下限確保」は廃止。ズームレベルに応じた
+ *    表示件数の間引きは表示側 src/cities.ts の責務）
  */
 export function selectCitiesForYear(
   rows: CityRow[],
@@ -319,34 +303,7 @@ export function selectCitiesForYear(
       });
     }
   }
-  const sorted = [...byName.values()].sort(byPopulationDescThenName);
-  const selected = sorted.slice(0, CITIES_PER_YEAR);
-
-  // 独語圏の下限確保は HRE 存続年代のみ。消滅後（1815 年以降のスナップショット）
-  // は純粋な人口上位を返す（TASK-61）。
-  if (year > HRE_DISSOLUTION_YEAR) return selected;
-
-  // 独語圏の下限確保（TASK-55）: 域内候補の人口上位 GERMAN_REGION_MIN_CITIES 件
-  // を「保護対象」とし、選外の保護対象がある限り、域外（非保護）の人口最下位と
-  // 入れ替える。候補が下限未満の年は候補全件が保護対象になるだけで埋め合わせは
-  // しない。
-  const protectedCities = sorted
-    .filter((m) => isInBbox(m.lon, m.lat, GERMAN_REGION_BBOX))
-    .slice(0, GERMAN_REGION_MIN_CITIES);
-  const protectedNames = new Set(protectedCities.map((m) => m.name));
-  const selectedNames = new Set(selected.map((m) => m.name));
-  const toAdd = protectedCities.filter((m) => !selectedNames.has(m.name));
-  for (const candidate of toAdd) {
-    // 末尾（人口最下位）から保護対象でないものを探して明け渡す
-    for (let i = selected.length - 1; i >= 0; i--) {
-      if (!protectedNames.has(selected[i].name)) {
-        selected.splice(i, 1);
-        selected.push(candidate);
-        break;
-      }
-    }
-  }
-  return selected.sort(byPopulationDescThenName);
+  return [...byName.values()].sort(byPopulationDescThenName);
 }
 
 /** 全スナップショット年の出力データを組み立てる（純粋関数） */
@@ -361,13 +318,11 @@ export function buildCitiesData(
   return {
     years: byYear,
     source: {
-      description: "Major European cities per snapshot year (top " +
-        `${CITIES_PER_YEAR} by population, nearest record within ` +
-        `-${PAST_WINDOW_YEARS}/+${FUTURE_WINDOW_YEARS} years, with at least ` +
-        `${GERMAN_REGION_MIN_CITIES} cities from the German-speaking region ` +
-        `when available for years up to ${HRE_DISSOLUTION_YEAR}), derived from ` +
-        "the Historical Urban Population dataset (Chandler, digitized by " +
-        "Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX)",
+      description: "European cities per snapshot year (all cities with a " +
+        `population record within -${PAST_WINDOW_YEARS}/+` +
+        `${FUTURE_WINDOW_YEARS} years of the snapshot, sorted by population), ` +
+        "derived from the Historical Urban Population dataset (Chandler, " +
+        "digitized by Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX)",
       license: CITIES_SOURCE_LICENSE,
       repo: CITIES_SOURCE_REPO,
       commit: CITIES_SOURCE_COMMIT,
