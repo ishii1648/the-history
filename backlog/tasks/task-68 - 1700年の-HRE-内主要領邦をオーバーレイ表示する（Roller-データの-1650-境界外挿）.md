@@ -1,11 +1,11 @@
 ---
 id: TASK-68
 title: 1700年の HRE 内主要領邦をオーバーレイ表示する（Roller データの 1650 境界外挿）
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-25 05:58'
-updated_date: '2026-07-25 07:07'
+updated_date: '2026-07-25 07:17'
 labels:
   - 'area:src-main'
   - 'area:data'
@@ -21,10 +21,10 @@ ordinal: 65000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 1700 年スナップショットで HRE 内主要領邦（1650 と同じ 14 領邦）がオーバーレイ表示され、1500〜1650 年と同様の色分け・ラベル・称号付き日本語表記・域内範囲強調が一貫している
-- [ ] #2 data/hre_1700.geojson は既存の build-hre パイプライン（HRE_OVERLAY_YEARS への 1700 追加）で再現可能に生成され、手作業でのデータ改変がない
-- [ ] #3 1700 年の領邦境界が 1650 年時点の近似である旨が known-limitations（UI の既知の制限表示）に年代連動で明記される
-- [ ] #4 1715 以降の年にはオーバーレイが表示されないこと（ベースマップの Brandenburg/Prussia との二重表示回避）がテストで保証され、deno test が green
+- [x] #1 1700 年スナップショットで HRE 内主要領邦（1650 と同じ 14 領邦）がオーバーレイ表示され、1500〜1650 年と同様の色分け・ラベル・称号付き日本語表記・域内範囲強調が一貫している
+- [x] #2 data/hre_1700.geojson は既存の build-hre パイプライン（HRE_OVERLAY_YEARS への 1700 追加）で再現可能に生成され、手作業でのデータ改変がない
+- [x] #3 1700 年の領邦境界が 1650 年時点の近似である旨が known-limitations（UI の既知の制限表示）に年代連動で明記される
+- [x] #4 1715 以降の年にはオーバーレイが表示されないこと（ベースマップの Brandenburg/Prussia との二重表示回避）がテストで保証され、deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -37,3 +37,9 @@ ordinal: 65000
 5. 並列化判定: 見送り（理由: config 1 行 + データ再生成 + 制限注記 + テストが単一パイプラインの逐次変更で分割の意味がない）。単一 subagent（worktree isolation）委譲。
 6. deno fmt/lint/test/build green → PR（TASK-68 明記）→ CI → finalization → マージ → マージ後確認。
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+HRE_OVERLAY_YEARS に 1700 を追加し、build-hre パイプラインで data/hre_1700.geojson を生成（1650 と同一 14 領邦・決定的生成確認・手作業改変なし）。known-limitations に 1650 近似の注記を years 1700 限定で追加し静的検証テストを新設。検証エビデンス: TDD 6 テスト red→green（deno test 606 passed）、CDP 実機で 1700 年の色分け・称号付き日本語表記・域内強調（AC #1）、制限パネルの年代連動バッジ（AC #3）、1715 年でのオーバーレイ消失＝二重表示なし（AC #4 はテストでも固定）を確認。PR #78 CI green。decision 判定: 外挿は既存 HRE_RANGE_OVERRIDES ポリシーの適用でありタスク限りのため decision 化なし。
+<!-- SECTION:FINAL_SUMMARY:END -->
