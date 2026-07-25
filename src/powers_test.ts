@@ -293,8 +293,10 @@ Deno.test("createYearSwitcher は連続要求で最後の要求だけを反映�
 
 // ---- TASK-19: HRE（神聖ローマ帝国）領邦オーバーレイ ----
 
-Deno.test("HRE_OVERLAY_YEARS は ETH データのカバー年のみで、全て SNAPSHOT_YEARS に含まれる", () => {
-  assertEquals([...HRE_OVERLAY_YEARS], [1500, 1530, 1600, 1650]);
+Deno.test("HRE_OVERLAY_YEARS は ETH データのカバー年 + 1700 外挿で、全て SNAPSHOT_YEARS に含まれる", () => {
+  // 1700 は Roller データ範囲（〜1650）外だが 1650 境界の外挿として配信する
+  // （TASK-68。1715 以降はベースマップがドイツ諸邦を個別収録するため含めない）
+  assertEquals([...HRE_OVERLAY_YEARS], [1500, 1530, 1600, 1650, 1700]);
   for (const year of HRE_OVERLAY_YEARS) {
     assert(SNAPSHOT_YEARS.includes(year));
   }
@@ -308,8 +310,9 @@ Deno.test("hreDataUrlFor は HRE オーバーレイ GeoJSON のパスを返す",
 Deno.test("hasHreOverlay は対象年のみ true を返す", () => {
   assert(hasHreOverlay(1500, HRE_OVERLAY_YEARS));
   assert(hasHreOverlay(1650, HRE_OVERLAY_YEARS));
+  assert(hasHreOverlay(1700, HRE_OVERLAY_YEARS)); // TASK-68: 1650 境界の外挿
   assert(!hasHreOverlay(1400, HRE_OVERLAY_YEARS));
-  assert(!hasHreOverlay(1700, HRE_OVERLAY_YEARS));
+  assert(!hasHreOverlay(1715, HRE_OVERLAY_YEARS)); // ベースマップ個別収録と二重表示になる年
 });
 
 Deno.test("EMPTY_FEATURE_COLLECTION は feature を持たない FeatureCollection", () => {
