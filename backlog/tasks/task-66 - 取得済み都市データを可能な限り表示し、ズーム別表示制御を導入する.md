@@ -1,11 +1,11 @@
 ---
 id: TASK-66
 title: 取得済み都市データを可能な限り表示し、ズーム別表示制御を導入する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-25 05:53'
-updated_date: '2026-07-25 06:23'
+updated_date: '2026-07-25 07:05'
 labels:
   - 'area:scripts'
   - 'area:data'
@@ -35,12 +35,12 @@ ordinal: 63000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 各スナップショット年について、元データで対応付け可能な候補都市（既知異常の除外・重複統合は現行ルールを維持）が原則全件 data/cities.json に含まれている
-- [ ] #2 ズームレベルに応じて表示都市が段階的に制御される（ズームアウト時は人口上位のみ、ズームインするほど下位の都市も表示される）
-- [ ] #3 最遠ズーム（初期表示）での都市表示密度が現状と同程度に保たれ、TASK-54/TASK-60 のラベル視認性対策が破綻しない
-- [ ] #4 新規追加分を含む全表示都市に日本語表記（data/name-ja.json）が付与され、既存の突合テストが green
-- [ ] #5 データ選定・ズーム表示制御ロジックのテストがあり deno test が green
-- [ ] #6 実機確認（ヘッドレス CDP）でズームイン/アウトに応じた都市表示の増減と、代表年代（例: 1500 年・1880 年）でのドイツ都市の増加が確認できている
+- [x] #1 各スナップショット年について、元データで対応付け可能な候補都市（既知異常の除外・重複統合は現行ルールを維持）が原則全件 data/cities.json に含まれている
+- [x] #2 ズームレベルに応じて表示都市が段階的に制御される（ズームアウト時は人口上位のみ、ズームインするほど下位の都市も表示される）
+- [x] #3 最遠ズーム（初期表示）での都市表示密度が現状と同程度に保たれ、TASK-54/TASK-60 のラベル視認性対策が破綻しない
+- [x] #4 新規追加分を含む全表示都市に日本語表記（data/name-ja.json）が付与され、既存の突合テストが green
+- [x] #5 データ選定・ズーム表示制御ロジックのテストがあり deno test が green
+- [x] #6 実機確認（ヘッドレス CDP）でズームイン/アウトに応じた都市表示の増減と、代表年代（例: 1500 年・1880 年）でのドイツ都市の増加が確認できている
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -51,3 +51,9 @@ ordinal: 63000
 3. 検証: 実機 CDP でズームイン/アウトの表示増減と 1500/1880 年のドイツ都市増加を確認（AC #6）。
 4. deno fmt/lint/test/build green → PR（TASK-66 明記）→ CI → finalization → マージ → マージ後確認。
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+subagent A/B 並列実装（分担表どおり衝突なし）。A: 選定を候補全件採用へ変更（ユニーク都市 108→634、1500 年 157 件・1880 年 609 件。除外・統合・rename 維持 + 誤名称 5 件追加、validateCitiesData 契約 MAX 700 へ改定）、日本語訳 511 件追加（seed 固定 30 件目視 + カタカナ機械検査 + 過不足ゼロ assert。AC #1/#4）。B: visibleCityRankLimit/filterCitiesByZoom 純関数で z4:23（現状密度維持）→ z5:40 → z6:80 → z7:160 → z8+ 全件、整数段変化時のみ再構築・メモ化維持（AC #2/#3）。TDD 両系 red→green・統合 deno test 602+ green（AC #5）。統合 CDP 確認: z4=23/z6=80/z8 全件・1880 年ドイツ 104 件・picking 動作・z6 スクリーンショットでラベル判読性維持（AC #6）。PR #77 CI green。
+<!-- SECTION:FINAL_SUMMARY:END -->
