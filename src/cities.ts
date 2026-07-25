@@ -93,6 +93,73 @@ export function cityEntriesForYear(
 }
 
 /**
+ * 最遠〜初期ズーム（z4 以下）で表示する都市数の上限（TASK-66 AC #3）。
+ *
+ * 設計根拠: 現行データ（scripts/build-cities.ts）は各年
+ * CITIES_PER_YEAR=20 + HRE 域内最低 6 件補充で最大 23 件/年（TASK-61）。
+ * 初期表示 z4 の密度をこの実績値と同じに保つことで、TASK-54/TASK-60 の
+ * ラベル視認性対策（背景パネル・衝突間引き）を破綻させない。
+ */
+export const CITY_RANK_LIMIT_BASE = 23;
+
+/**
+ * ズームレベル別の表示都市数の上限を返す（純粋関数。TASK-66 AC #2/#3）。
+ *
+ * 段階設計の根拠:
+ * - 判定はズームの整数段（Math.floor）で行う。小数ズームの連続変化で
+ *   表示が細かく揺れないようにし、呼び出し側（main.ts）の「整数段が
+ *   変わった時のみレイヤー再構築」という抑制（TASK-50 方針の踏襲）と
+ *   同じ粒度に揃える。
+ * - z4 以下（MIN_ZOOM=4 だが maxBounds クランプ等の防御込み）は
+ *   CITY_RANK_LIMIT_BASE（23 件 = 現行密度）で据え置く。
+ * - ズーム 1 段で画面内の対象面積は約 1/4 になるため、1 段ごとに約 2 倍
+ *   （40 → 80 → 160）解禁しても画面上の密度増加は緩やかに留まる。
+ * - 最大ズーム z8（config.ts MAX_ZOOM）では上限なし（全件）。元データの
+ *   欧州候補プールは最大 679 都市（TASK-66 調査）で、z8 の画面範囲では
+ *   十分に疎になる。
+ * - 非有限値（NaN 等の防御）は最も保守的な基準件数へフォールバックする。
+ */
+export function visibleCityRankLimit(zoom: number): number {
+  if (!Number.isFinite(zoom)) return CITY_RANK_LIMIT_BASE;
+  const step = Math.floor(zoom);
+  if (step <= 4) return CITY_RANK_LIMIT_BASE;
+  if (step === 5) return 40;
+  if (step === 6) return 80;
+  if (step === 7) return 160;
+  return Number.POSITIVE_INFINITY;
+}
+
+/**
+ * ズームレベルに応じて表示都市を人口上位ランクへ絞り込む（純粋関数。
+ * TASK-66 AC #2）。呼び出し側は cityEntriesForYear の結果（単一年の配列）を
+ * 渡す想定で、ランク付けは年内で完結する。
+ *
+ * - ランクは人口降順。population null（不明）は人口 0 よりさらに下位の
+ *   最下位ランク扱い（不明都市を優先して残す理由がないため）。
+ * - 人口同数（ランク同数）は元配列で先のエントリが勝つ（安定ソート）。
+ *   上限の境界で同人口が並んでも結果が決定的になる。
+ * - 出力は元配列の並び順を保つ（deck.gl へ渡すデータ順を年内で安定させ、
+ *   ズーム段の変化時に共通部分の順序が入れ替わらないようにする）。
+ */
+export function filterCitiesByZoom(
+  entries: readonly CityEntry[],
+  zoom: number,
+): CityEntry[] {
+  const limit = visibleCityRankLimit(zoom);
+  if (entries.length <= limit) return [...entries];
+  const ranked = entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      const pa = a.entry.population ?? Number.NEGATIVE_INFINITY;
+      const pb = b.entry.population ?? Number.NEGATIVE_INFINITY;
+      // 人口降順 → 同数は元配列順（index 昇順）で決定的に切る
+      return pb - pa || a.index - b.index;
+    });
+  const keep = new Set(ranked.slice(0, limit).map((r) => r.index));
+  return entries.filter((_, index) => keep.has(index));
+}
+
+/**
  * 人口由来の都市ラベル優先度（純粋関数）。人口が多い都市ほど高優先。
  * 100 * log10 だと人口（1e3〜1e6 人）でバンド幅 300 を食い潰すため、
  * 10 * log10(population) の緩い傾斜でバンド内（150〜220）に収める。
