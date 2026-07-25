@@ -413,6 +413,29 @@ Deno.test("主要国の日本語表記が期待どおり", () => {
   }
 });
 
+Deno.test("TASK-55 で消えた手書き都市訳が復元されている（TASK-61）", () => {
+  // TASK-55 の選定変更で選外となった都市の手書き訳が name-ja.json から
+  // 削除された。訳辞書は採用状況に依存せず保持できるため、削除された
+  // 手書き訳を復元し、以後も保持されることを固定する。
+  const expected: Record<string, string> = {
+    Antwerp: "アントウェルペン",
+    Bruges: "ブリュージュ",
+    Barcelona: "バルセロナ",
+    Bologna: "ボローニャ",
+    Edinburgh: "エディンバラ",
+    Antioch: "アンティオキア",
+    Gdansk: "グダンスク",
+    Almeria: "アルメリア",
+    Amalfi: "アマルフィ",
+    Cartagena: "カルタヘナ",
+    Algiers: "アルジェ",
+    Tunis: "チュニス",
+  };
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+});
+
 /**
  * data/name-ja.json のキーとして期待される名前の全体集合を実データから組み立てる。
  * - 勢力名 + 河川名（data/europe_*.geojson・data/hre_*.geojson・
@@ -443,12 +466,44 @@ Deno.test("全ユニーク NAME / SUBJECTO と renames 正規化後名・都市�
   );
 });
 
-Deno.test("name-ja.json にデータ由来でない孤立キーが存在しない", () => {
+/**
+ * 現在の data/cities.json の選定には含まれないが保持する手書き都市訳（TASK-61）。
+ * 都市選定はパイプライン調整（採用件数・地域下限等）で変動するため、一度
+ * 書いた手書き訳は採用状況に依存せず保持できる。ここに列挙したキーは孤立キー
+ * 検査の対象外とする。選定に復帰したキー（expectedNames に含まれるように
+ * なったもの）は下のテストが検出するので、このリストから外して陳腐化を防ぐ。
+ */
+const RETAINED_CITY_NAME_JA: string[] = [
+  "Antioch",
+  "Bologna",
+  "Cartagena",
+  "Gdansk",
+  "Soltaniyeh",
+  "Targoviste",
+  "Wuppertal",
+];
+
+Deno.test("name-ja.json にデータ由来でない孤立キーが存在しない（保持リストのキーを除く）", () => {
   const expected = expectedNames();
-  const orphans = Object.keys(mapping).filter((key) => !expected.has(key));
+  const retained = new Set(RETAINED_CITY_NAME_JA);
+  const orphans = Object.keys(mapping).filter(
+    (key) => !expected.has(key) && !retained.has(key),
+  );
   assertEquals(
     orphans,
     [],
-    "geojson / renames / cities に存在しないキーがある",
+    "geojson / renames / cities に存在せず保持リストにもないキーがある",
+  );
+});
+
+Deno.test("RETAINED_CITY_NAME_JA のキーは name-ja.json に存在し、かつデータ由来に復帰していない（リスト陳腐化の検出）", () => {
+  const expected = expectedNames();
+  const missing = RETAINED_CITY_NAME_JA.filter((key) => !(key in mapping));
+  assertEquals(missing, [], "保持リストにあるが name-ja.json に訳がないキー");
+  const revived = RETAINED_CITY_NAME_JA.filter((key) => expected.has(key));
+  assertEquals(
+    revived,
+    [],
+    "データ由来に復帰したキーが保持リストに残っている（リストから外す）",
   );
 });
