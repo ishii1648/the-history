@@ -1,7 +1,9 @@
 import { assert, assertEquals } from "@std/assert";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
+import { memoizeLatest } from "./memo.ts";
 import { PICKING_RADIUS_PX } from "./picking.ts";
 import {
+  filterVisibleRiverLabels,
   RIVER_CLICK_TOLERANCE_PX,
   RIVER_HIT_LINE_COLOR,
   RIVER_HIT_LINE_WIDTH_PX,
@@ -12,6 +14,7 @@ import {
   RIVER_SELECTED_LINE_COLOR,
   RIVER_SELECTED_LINE_WIDTH_PX,
   riverLabelAnchors,
+  type RiverLabelDatum,
   riverLineColor,
   riverLineWidth,
   riverNameFor,
@@ -276,6 +279,118 @@ Deno.test("riverLabelAnchors: ja マップで日本語表記になり、未登�
     { Rhine: "ライン川" },
   );
   assertEquals(data.map((d) => d.text), ["ライン川", "Oder"]);
+});
+
+Deno.test("riverLabelAnchors: 突合キーとして元の英語名（name）を保持する（TASK-69）", () => {
+  const data = riverLabelAnchors(
+    fc([
+      riverFeature("Rhine", {
+        type: "LineString",
+        coordinates: [[0, 0], [10, 0]],
+      }),
+    ]),
+    { Rhine: "ライン川" },
+  );
+  assertEquals(data[0].name, "Rhine");
+  assertEquals(data[0].text, "ライン川");
+});
+
+// ---- filterVisibleRiverLabels（TASK-69）----
+
+/** テスト用のアンカー（表示テキストは日本語、突合キーは英語名） */
+function anchor(
+  name: string,
+  priority = 0,
+  position: [number, number] = [0, 0],
+): RiverLabelDatum {
+  return { name, text: `${name}川`, position, priority };
+}
+
+Deno.test("filterVisibleRiverLabels: ホバーも選択も無ければ 1 つも表示しない", () => {
+  const anchors = [anchor("Rhine"), anchor("Danube")];
+  assertEquals(filterVisibleRiverLabels(anchors, null, null), []);
+});
+
+Deno.test("filterVisibleRiverLabels: ホバー中の河川だけを表示する", () => {
+  const anchors = [anchor("Rhine"), anchor("Danube")];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, "Danube", null).map((d) => d.name),
+    ["Danube"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: 選択中の河川だけを表示する（ホバーなしでも残る）", () => {
+  const anchors = [anchor("Rhine"), anchor("Danube")];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, null, "Rhine").map((d) => d.name),
+    ["Rhine"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: 選択中に別の河川をホバーすると両方表示する", () => {
+  const anchors = [anchor("Rhine"), anchor("Danube"), anchor("Elbe")];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, "Elbe", "Rhine").map((d) => d.name),
+    ["Rhine", "Elbe"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: 選択中の河川をホバーしてもラベルは 1 つ", () => {
+  const anchors = [anchor("Rhine"), anchor("Danube")];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, "Rhine", "Rhine").map((d) => d.name),
+    ["Rhine"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: 同名の feature が複数あってもラベルは 1 つ（最長 = 最高 priority を採用）", () => {
+  const anchors = [
+    anchor("Rhine", 10, [1, 1]),
+    anchor("Rhine", 30, [2, 2]),
+    anchor("Rhine", 20, [3, 3]),
+  ];
+  const visible = filterVisibleRiverLabels(anchors, "Rhine", null);
+  assertEquals(visible.length, 1);
+  assertEquals(visible[0].position, [2, 2]);
+});
+
+Deno.test("filterVisibleRiverLabels: 未知の名前は無視する（該当なしなら空）", () => {
+  const anchors = [anchor("Rhine")];
+  assertEquals(filterVisibleRiverLabels(anchors, "Nile", "Amazon"), []);
+});
+
+Deno.test("filterVisibleRiverLabels: 入力配列を破壊せず、同一 datum 参照をそのまま返す（アンカー再計算なし）", () => {
+  const anchors = [anchor("Rhine"), anchor("Danube")];
+  const snapshot = [...anchors];
+  const visible = filterVisibleRiverLabels(anchors, "Rhine", null);
+  assertEquals(anchors, snapshot);
+  assert(visible[0] === anchors[0]);
+});
+
+Deno.test("filterVisibleRiverLabels: ホバー連続移動でもアンカー生成は 1 度きり（TASK-50 非退行）", () => {
+  const collection = fc([
+    riverFeature("Rhine", {
+      type: "LineString",
+      coordinates: [[0, 0], [10, 0]],
+    }),
+    riverFeature("Danube", {
+      type: "LineString",
+      coordinates: [[0, 1], [10, 1]],
+    }),
+  ]);
+  const ja = { Rhine: "ライン川" };
+  let calls = 0;
+  // main.ts の memoizedRiverLabelData と同じ構造（引数は起動時ロード済みの
+  // riversData / nameJa 参照で、hover/selection には依存しない）
+  const memoized = memoizeLatest((f: FeatureCollection, j: typeof ja) => {
+    calls++;
+    return riverLabelAnchors(f, j);
+  });
+  const hovers = ["Rhine", "Danube", null, "Rhine", "Danube", null];
+  for (const hovered of hovers) {
+    filterVisibleRiverLabels(memoized(collection, ja), hovered, "Danube");
+  }
+  assertEquals(calls, 1);
 });
 
 // ---- 定数（basemap.ts からの移設契約） ----
