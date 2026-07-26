@@ -1,9 +1,11 @@
 ---
 id: TASK-72
 title: 地図ラベルの背景パネル（白枠）を撤去し白 halo を実効化する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-26 07:15'
+updated_date: '2026-07-26 08:16'
 labels:
   - 'area:src-labels'
   - 'area:src-main'
@@ -36,3 +38,15 @@ ordinal: 68000
 - [ ] #5 ラベルの配色・サイズ・アウトラインに関する定数とコメントが実際の deck.gl の挙動（outlineWidth は radius 比、px ではない）と整合している
 - [ ] #6 deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. src/labels.ts / src/main.ts labelLayerBaseProps() から背景パネル（background/getBackgroundColor/backgroundPadding、LABEL_BACKGROUND_COLOR/PADDING）を撤去（AC1）
+2. halo を実効化: outlineWidth を radius 比で 5 前後（fontSettings に buffer: 8, smoothing 0.1 を追加）。調査済み上限 5〜6 を守り文字ごとのベタ矩形化を回避（AC3）。TASK-73 の申し送りに従い halo 色は純白でなくクリーム（--parchment #f4ecd7 系）を第一候補に目視判断
+3. 「アウトライン幅（px）」等の誤りコメントを deck.gl の実挙動（outlineWidth は fontSettings.radius 比）に合わせ訂正、TASK-38/54/60/65 の背景パネル前提コメントも更新（AC5）
+4. パネル撤去で衝突箱が縮むため COLLISION_SIZE_SCALE = 2.6 の再調整を目視で詰める（AC4、z4 全体表示で悪化させない）
+5. テスト先行: labels_test 等の期待値を新定数に合わせ red→green。全 TextLayer（国名/HRE/都市/河川）へ一括適用（labelLayerBaseProps 共通化済み）
+6. fmt/lint/test/build green → mainagent がヘッドレス CDP で 1650 年 z6 密集地帯・z4 全体表示を目視確認（AC2〜4、マージ前）
+並列化判定: 見送り（理由: labels.ts と main.ts の共通 base props を軸にした単一の視覚チューニング作業で、halo 幅・衝突スケール・パネル撤去が相互依存するため独立サブ作業に分割できない）
+<!-- SECTION:PLAN:END -->
