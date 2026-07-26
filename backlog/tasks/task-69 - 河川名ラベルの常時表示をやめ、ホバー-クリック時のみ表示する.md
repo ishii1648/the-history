@@ -1,11 +1,11 @@
 ---
 id: TASK-69
 title: 河川名ラベルの常時表示をやめ、ホバー/クリック時のみ表示する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-26 06:59'
-updated_date: '2026-07-26 07:19'
+updated_date: '2026-07-26 07:35'
 labels:
   - 'area:src-main'
 dependencies: []
@@ -20,13 +20,13 @@ ordinal: 66000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 通常状態（ホバーなし・河川未選択）では地図上に河川名ラベルが 1 つも表示されない
-- [ ] #2 河川ラインにホバーすると、その河川の名前（日本語表記、name-ja.json 適用）が表示され、ホバーを外すと消える
-- [ ] #3 河川をクリックして選択している間はその河川の名前が表示され続け、選択解除で消える。既存のライン強調・情報パネルへの河川名表示は従来どおり動作する
-- [ ] #4 国名（勢力）ラベル・都市名ラベルの表示・衝突制御が本変更で退行しない
-- [ ] #5 ホバー/選択状態から表示対象の河川ラベルを決める処理が純粋関数として実装され単体テストがあり、deno test が green
-- [ ] #6 ホバーを連続して動かしてもラベルアンカー（polylabel/中点）の再計算が走らないことがテストまたは計測で確認されている（TASK-50 の非退行）
-- [ ] #7 目視確認: 通常時にラベルが出ないこと、ホバー時・クリック選択時に該当河川名が表示されることをブラウザで確認済み
+- [x] #1 通常状態（ホバーなし・河川未選択）では地図上に河川名ラベルが 1 つも表示されない
+- [x] #2 河川ラインにホバーすると、その河川の名前（日本語表記、name-ja.json 適用）が表示され、ホバーを外すと消える
+- [x] #3 河川をクリックして選択している間はその河川の名前が表示され続け、選択解除で消える。既存のライン強調・情報パネルへの河川名表示は従来どおり動作する
+- [x] #4 国名（勢力）ラベル・都市名ラベルの表示・衝突制御が本変更で退行しない
+- [x] #5 ホバー/選択状態から表示対象の河川ラベルを決める処理が純粋関数として実装され単体テストがあり、deno test が green
+- [x] #6 ホバーを連続して動かしてもラベルアンカー（polylabel/中点）の再計算が走らないことがテストまたは計測で確認されている（TASK-50 の非退行）
+- [x] #7 目視確認: 通常時にラベルが出ないこと、ホバー時・クリック選択時に該当河川名が表示されることをブラウザで確認済み
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -39,3 +39,15 @@ ordinal: 66000
 5. deno fmt --check / lint / test / build green → ヘッドレス CDP で目視確認（通常時ラベル無し・ホバー/選択時のみ表示）
 並列化判定: 見送り（理由: 変更対象が src/main.ts と rivers 関連の単一領域に集中し、ファイル競合なく独立にテスト可能なサブ作業に分割できないため）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス: (AC1-3,7) ヘッドレス CDP チェック（scripts/verify/cdp.ts + 専用チェックスクリプト）で year=1200・ライン川中心の画面にて initial={hovered:null,selected:null,visibleLabels:[]} → クリックで {selected:'Rhine',visibleLabels:['Rhine']}＋情報パネル『ライン川』 → 再クリックで選択解除後はホバー由来のみ表示 → 川から離れると visibleLabels=[] を確認（PASS、スクリーンショット 4 枚取得）。検証用に読み取り専用フック __getRiverLabelDebug を追加（TASK-66 の前例に倣う）。(AC4) 河川ラベルレイヤーの data 以外は無変更（labelLayerBaseProps・CollisionFilterExtension・priority 設計は不変）、スクリーンショットでも都市名・勢力名ラベル表示を確認。(AC5) filterVisibleRiverLabels 純粋関数 + 単体テスト 8 件。(AC6) memoizeLatest 経由の呼び出し回数が hover 連続変更でも 1 回であることをテストで検証。deno test 616 passed。ツールチップ二重表示はツールチップ残置と判断（カーソル直下の即応表示と川中点の注記で役割が異なる。理由は handlePickHover の doc コメントに記録）
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+河川名ラベルの常時表示を廃止し、ホバー中・クリック選択中の河川のみ表示するよう変更。純粋関数 filterVisibleRiverLabels（同名分割 feature は最高 priority の 1 件に集約）を新設し、アンカー生成は従来どおり全河川分 1 回の memo 化を維持（TASK-50 非退行をテストで担保）。ヘッドレス CDP で通常時 0 件・選択/ホバー時のみ表示を実機確認（PASS）。deno fmt/lint/test(616 passed)/build 全 green。PR #79。
+<!-- SECTION:FINAL_SUMMARY:END -->
