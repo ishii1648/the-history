@@ -10,5 +10,25 @@
   },
   "suzerains": {
     "Britany": "France"
-  }
+  },
+  "propertyFixes": [
+    {
+      "years": [1100],
+      "name": "Aragón",
+      "set": { "PARTOF": "Aragón" },
+      "note": "上流の PARTOF が Arag<U+FFFD>n（UTF-8 の復号に失敗した置換文字）。同じ feature の NAME / ABBREVN / SUBJECTO は正しい綴りなので、それに揃える。"
+    },
+    {
+      "years": [1783],
+      "name": "Lombardy",
+      "set": { "SUBJECTO": "Lombardy", "BORDERPRECISION": 3 },
+      "note": "上流の SUBJECTO が \"3\"、BORDERPRECISION が 0 で、値が 1 列ずれ込んだ形になっている（Lombardy は 1650 / 1700 / 1715 / 1800 のいずれでも SUBJECTO=Lombardy・BORDERPRECISION=3）。前後の年代と同じ値に戻すだけに留め、史実に基づく宗主の付け替え（1714 年以降のオーストリア領ロンバルディア）はここでは行わない。それは suzerains の担当で、decision-19 の「歴史的に明白な関係に限る」判断が要る。"
+    },
+    {
+      "years": [1300, 1400],
+      "name": "English territory",
+      "set": { "SUBJECTO": "England", "PARTOF": "England" },
+      "note": "大陸に残るイングランド王の所領（ギュイエンヌ等）。上流は 1279 で SUBJECTO=England なのに 1300 / 1400 では自己参照になっており、colorKeyFor のキーが English territory|England と English territory の間で揺れて年代切替で配色が変わる。実体はイングランド王領なので England 側に揃える。"
+    }
+  ]
 }

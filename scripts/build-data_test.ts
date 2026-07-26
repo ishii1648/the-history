@@ -7,13 +7,16 @@ import type {
   Polygon,
 } from "geojson";
 import { SNAPSHOT_YEARS } from "../src/config.ts";
+import { colorKeyFor } from "../src/powers.ts";
 import {
   applyNameOverrides,
+  applyPropertyFixes,
   BASE_FIEF_SPLITS,
   buildIndex,
   buildSourceUrl,
   clipToBbox,
   EUROPE_BBOX,
+  normalizeSubjectProps,
   resolveName,
   shrinkToLimit,
   SIMPLIFY_TOLERANCES,
@@ -169,6 +172,126 @@ Deno.test("applyNameOverrides は全 feature の NAME を解決して書き換�
   assertEquals(
     result.features[1].properties?.SUBJECTO,
     "Holy Roman Empire",
+  );
+});
+
+Deno.test("applyPropertyFixes は該当年の同名 feature を全て上書きする（TASK-102）", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      multiPolygonFeature(
+        { NAME: "Lombardy", SUBJECTO: "3", BORDERPRECISION: 0 },
+        [[0, 0, 1, 1]],
+      ),
+      multiPolygonFeature(
+        { NAME: "Lombardy", SUBJECTO: "3", BORDERPRECISION: 0 },
+        [[2, 2, 3, 3]],
+      ),
+      multiPolygonFeature({ NAME: "Venice", SUBJECTO: "Venice" }, [[
+        4,
+        4,
+        5,
+        5,
+      ]]),
+    ],
+  };
+  const fixes = [{
+    years: [1783],
+    name: "Lombardy",
+    set: { SUBJECTO: "Lombardy", BORDERPRECISION: 3 },
+  }];
+
+  const result = applyPropertyFixes(fc, 1783, fixes);
+
+  for (const index of [0, 1]) {
+    assertEquals(result.features[index].properties?.SUBJECTO, "Lombardy");
+    assertEquals(result.features[index].properties?.BORDERPRECISION, 3);
+  }
+  // 対象外の feature は素通しする
+  assertEquals(result.features[2].properties?.SUBJECTO, "Venice");
+});
+
+Deno.test("applyPropertyFixes は対象年以外に適用しない（TASK-102）", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      multiPolygonFeature({ NAME: "Lombardy", SUBJECTO: "3" }, [[0, 0, 1, 1]]),
+    ],
+  };
+  const fixes = [{
+    years: [1783],
+    name: "Lombardy",
+    set: { SUBJECTO: "Lombardy" },
+  }];
+
+  assertEquals(
+    applyPropertyFixes(fc, 1800, fixes).features[0].properties?.SUBJECTO,
+    "3",
+  );
+});
+
+Deno.test("applyPropertyFixes は当たらなかった上書きを警告する（TASK-102）", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [multiPolygonFeature({ NAME: "Venice" }, [[0, 0, 1, 1]])],
+  };
+  const warnings: string[] = [];
+
+  applyPropertyFixes(
+    fc,
+    1783,
+    [{ years: [1783], name: "Lombardy", set: { SUBJECTO: "Lombardy" } }],
+    (message) => warnings.push(message),
+  );
+
+  assertEquals(warnings.length, 1);
+  assert(warnings[0].includes("Lombardy"));
+});
+
+Deno.test("normalizeSubjectProps は空の SUBJECTO / PARTOF を NAME で埋める（TASK-102）", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      multiPolygonFeature({ NAME: "Sweden", SUBJECTO: "", PARTOF: null }, [[
+        0,
+        0,
+        1,
+        1,
+      ]]),
+      multiPolygonFeature(
+        { NAME: "Britany", SUBJECTO: "France", PARTOF: "France" },
+        [[2, 2, 3, 3]],
+      ),
+      // NAME が無い feature（上流がどの勢力にも帰属させていない土地）は対象外
+      multiPolygonFeature({ NAME: null, SUBJECTO: null, PARTOF: null }, [[
+        4,
+        4,
+        5,
+        5,
+      ]]),
+    ],
+  };
+
+  const result = normalizeSubjectProps(fc);
+
+  assertEquals(result.features[0].properties?.SUBJECTO, "Sweden");
+  assertEquals(result.features[0].properties?.PARTOF, "Sweden");
+  assertEquals(result.features[1].properties?.SUBJECTO, "France");
+  assertEquals(result.features[2].properties?.SUBJECTO, null);
+  assertEquals(result.features[2].properties?.NAME, null);
+});
+
+Deno.test("normalizeSubjectProps は色キーを変えない（TASK-102）", () => {
+  // 空 → 自己参照は表示上の意味を変えない、が normalizeSubjectProps の前提。
+  const empty = { NAME: "Sweden", SUBJECTO: "", PARTOF: null };
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [multiPolygonFeature(empty, [[0, 0, 1, 1]])],
+  };
+
+  assertEquals(
+    colorKeyFor(normalizeSubjectProps(fc).features[0].properties),
+    colorKeyFor(empty),
   );
 });
 
