@@ -13,6 +13,7 @@
     "build-cities": "deno run --allow-net --allow-read --allow-write scripts/build-cities.ts",
     "build-colors": "deno run --allow-read --allow-write scripts/build-colors.ts",
     "build-hre": "deno run --allow-net --allow-read --allow-write scripts/build-hre.ts",
+    "build-france-fiefs": "deno run --allow-net --allow-read --allow-write scripts/build-france-fiefs.ts",
     "extract-pmtiles": "deno run --allow-net=build-metadata.protomaps.dev --allow-run=pmtiles --allow-read scripts/extract-pmtiles.ts",
     "extract-dem": "deno run --allow-net=s3.amazonaws.com --allow-read --allow-write scripts/extract-dem.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
