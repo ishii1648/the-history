@@ -105,10 +105,12 @@ export const HRE_OVERLAY_YEARS: readonly number[] = [
  * France ポリゴンが実態に一致するので、オーバーレイを重ねると同じ領域が二重に
  * 表示されるだけになる（AC #4）。
  *
- * HRE_OVERLAY_YEARS（1500〜1700）とは互いに素で、現状 2 系統のオーバーレイが
- * 同時に表示される年は無い。機構としては独立レイヤー（france-fiefs / hre-powers）
- * として共存でき、同時表示年が将来生じても描画順・picking 順は
- * PICKING_PRIORITY で一意に決まる（TASK-71）。
+ * HRE_OVERLAY_YEARS（1500〜1700）とは互いに素だが、TASK-86 で追加した
+ * HRE_FIEF_OVERLAY_YEARS（1000〜1492）とは 1000〜1300 が重なり、2 系統の
+ * オーバーレイ（france-fiefs / hre-powers）が同時に表示される。描画順・picking 順は
+ * PICKING_PRIORITY で一意に決まり、領域の重なり（1100 年の County of Bar ⊂
+ * Duchy of Upper Lotharingia）は scripts/build-fief-flat.ts が HRE 側から
+ * 差し引いて二重塗りを防ぐ（TASK-71 / TASK-86）。
  */
 export const FRANCE_FIEF_OVERLAY_YEARS: readonly number[] = [
   1000,
@@ -117,6 +119,58 @@ export const FRANCE_FIEF_OVERLAY_YEARS: readonly number[] = [
   1279,
   1300,
 ];
+
+/**
+ * 中世の神聖ローマ帝国領邦オーバーレイ（hre_fiefs_flat_<year>.geojson）が存在する
+ * 年代（昇順、TASK-85/86）。出典は OpenHistoricalMap（CC0）。
+ *
+ * scripts/build-hre-fiefs.ts の HRE_FIEF_YEARS と同値（src → scripts の import は
+ * 行わない規約のため値を重複定義し、同値性は build-hre-fiefs_test.ts で担保する）。
+ *
+ * 900 は対象外: OHM 側に admin_level 4/5 の領邦が 1 件しか無く面として成立しない
+ * （scripts/build-hre-fiefs.ts HRE_FIEF_EXCLUSIONS.year900）。この年だけは
+ * 従来どおり base の帝国ポリゴンが単一の領域として塗られる
+ * （data/known-limitations.json の hre-territories-pre-1500 が説明する）。
+ *
+ * 1500 以降は Roller 由来の HRE_OVERLAY_YEARS が引き継ぐ。両者は互いに素で、
+ * 1492↔1500 の切替では同じ hre-powers レイヤー・同じラベル色・同じ帝国範囲強調の
+ * ままデータ出典だけが替わる（TASK-86 AC #5）。
+ */
+export const HRE_FIEF_OVERLAY_YEARS: readonly number[] = [
+  1000,
+  1100,
+  1200,
+  1279,
+  1300,
+  1400,
+  1492,
+];
+
+/**
+ * HRE 領邦オーバーレイ（hre-powers レイヤー）が存在する全年代（昇順、TASK-86）。
+ * 中世の OHM 由来（HRE_FIEF_OVERLAY_YEARS）と近世の Roller 由来
+ * （HRE_OVERLAY_YEARS）の和で、両者は互いに素なので単純連結で昇順になる。
+ * ランタイムはこの 1 本の年集合でオーバーレイの有無を判定し、どのファイルを
+ * 引くかは powers.ts hreDataUrlFor が HRE_FIEF_OVERLAY_YEARS で切り分ける。
+ */
+export const HRE_ALL_OVERLAY_YEARS: readonly number[] = [
+  ...HRE_FIEF_OVERLAY_YEARS,
+  ...HRE_OVERLAY_YEARS,
+];
+
+/**
+ * base 境界線オーバーレイ（base_outline_<year>.geojson）が存在する年代
+ * （昇順、TASK-78/86）。諸侯領・領邦オーバーレイのいずれかがある年、すなわち
+ * FRANCE_FIEF_OVERLAY_YEARS ∪ HRE_FIEF_OVERLAY_YEARS。
+ *
+ * この派生データは「base ポリゴンの環のうちオーバーレイ union の外側だけ」を
+ * 持つため、オーバーレイがある年は base の輪郭がオーバーレイの内側を走らなくなる
+ * （= 二重輪郭が消える）。scripts/build-fief-dedupe.ts の FIEF_DEDUPE_YEARS と
+ * 同じ年集合で、fief-dedupe.json（ラベル抑制の被覆率表）も同じ年を持つ。
+ */
+export const BASE_OUTLINE_YEARS: readonly number[] = [
+  ...new Set([...FRANCE_FIEF_OVERLAY_YEARS, ...HRE_FIEF_OVERLAY_YEARS]),
+].sort((a, b) => a - b);
 
 /** 歴史的国境ポリゴンが存在する年代スナップショット一覧（昇順） */
 export const SNAPSHOT_YEARS: readonly number[] = [

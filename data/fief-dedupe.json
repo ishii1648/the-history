@@ -4,23 +4,50 @@
     "inputs": {
       "1000": {
         "base": "data/europe_1000.geojson",
-        "fiefs": "data/france_fiefs_1000.geojson"
+        "fiefs": [
+          "data/france_fiefs_1000.geojson",
+          "data/hre_fiefs_1000.geojson"
+        ]
       },
       "1100": {
         "base": "data/europe_1100.geojson",
-        "fiefs": "data/france_fiefs_1100.geojson"
+        "fiefs": [
+          "data/france_fiefs_1100.geojson",
+          "data/hre_fiefs_1100.geojson"
+        ]
       },
       "1200": {
         "base": "data/europe_1200.geojson",
-        "fiefs": "data/france_fiefs_1200.geojson"
+        "fiefs": [
+          "data/france_fiefs_1200.geojson",
+          "data/hre_fiefs_1200.geojson"
+        ]
       },
       "1279": {
         "base": "data/europe_1279.geojson",
-        "fiefs": "data/france_fiefs_1279.geojson"
+        "fiefs": [
+          "data/france_fiefs_1279.geojson",
+          "data/hre_fiefs_1279.geojson"
+        ]
       },
       "1300": {
         "base": "data/europe_1300.geojson",
-        "fiefs": "data/france_fiefs_1300.geojson"
+        "fiefs": [
+          "data/france_fiefs_1300.geojson",
+          "data/hre_fiefs_1300.geojson"
+        ]
+      },
+      "1400": {
+        "base": "data/europe_1400.geojson",
+        "fiefs": [
+          "data/hre_fiefs_1400.geojson"
+        ]
+      },
+      "1492": {
+        "base": "data/europe_1492.geojson",
+        "fiefs": [
+          "data/hre_fiefs_1492.geojson"
+        ]
       }
     },
     "coveragePrecision": 4,
@@ -29,31 +56,64 @@
   "years": {
     "1000": {
       "Britany": 1,
-      "Kingdom of France": 0.2284
+      "Burgandy": 0.0156,
+      "Croatia": 0.0281,
+      "Denmark-Norway": 0.0043,
+      "Duchy of Swabia": 0.969,
+      "Holy Roman Empire": 0.6355,
+      "Kingdom of France": 0.2512,
+      "Magyars": 0.0025,
+      "Poland": 0.0254,
+      "Pomerania": 0.5523,
+      "Venice": 0.8303
     },
     "1100": {
       "Britany": 1,
-      "Holy Roman Empire": 0.0026,
-      "Kingdom of France": 0.2376
+      "Burgandy": 0.0527,
+      "Denmark": 0.0072,
+      "Holy Roman Empire": 0.6546,
+      "Hungary": 0.0036,
+      "Kingdom of France": 0.2524,
+      "Poland": 0.295,
+      "Prussians": 0.0535,
+      "Venice": 0.5406
     },
     "1200": {
       "Angevin Empire": 0.5126,
       "Britany": 1,
+      "Burgandy": 0.05,
       "Comté de Toulouse": 0.0416,
-      "Holy Roman Empire": 0.0027,
-      "Kingdom of France": 0.41
+      "Holy Roman Empire": 0.1513,
+      "Kingdom of France": 0.41,
+      "Poland": 0.0755
     },
     "1279": {
       "Britany": 1,
+      "Denmark": 0.0019,
       "English territory": 0.0076,
       "France": 0.294,
-      "Holy Roman Empire": 0.0195
+      "Holy Roman Empire": 0.1427,
+      "Poland": 0.0016
     },
     "1300": {
       "Britany": 1,
+      "Denmark": 0.0021,
       "English territory": 0.0076,
-      "France": 0.294,
-      "Holy Roman Empire": 0.0188
+      "France": 0.3303,
+      "Holy Roman Empire": 0.1629
+    },
+    "1400": {
+      "France": 0.0157,
+      "Holy Roman Empire": 0.2408,
+      "Kingdom of Hungary": 0.0029
+    },
+    "1492": {
+      "France": 0.0165,
+      "Holy Roman Empire": 0.2185,
+      "Imperial Hungary": 0.0033,
+      "Poland-Lithuania": 0.003,
+      "Swiss Confederation": 0.0976,
+      "Venice": 0.0186
     }
   }
 }

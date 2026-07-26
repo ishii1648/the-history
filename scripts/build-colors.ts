@@ -15,6 +15,7 @@ import type { FeatureCollection } from "geojson";
 import { SNAPSHOT_YEARS } from "../src/config.ts";
 import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
+import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 
 const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;
@@ -319,7 +320,15 @@ async function loadOverrides(path: string): Promise<NameOverrides> {
  * data/europe_<year>.geojson を全年代ぶんと、存在する data/hre_<year>.geojson
  * （HRE 主要領邦オーバーレイ・`deno task build-hre` で生成）・
  * data/france_fiefs_<year>.geojson（中世フランス諸侯領オーバーレイ・
- * `deno task build-france-fiefs` で生成、TASK-71）を読み込む。
+ * `deno task build-france-fiefs` で生成、TASK-71）・
+ * data/hre_fiefs_<year>.geojson（中世 HRE 領邦オーバーレイ・
+ * `deno task build-hre-fiefs` で生成、TASK-85/86）を読み込む。
+ *
+ * 中世 HRE 領邦は近世の hre_<year> と同じく全 feature が SUBJECTO="Holy Roman
+ * Empire" なので、INDEPENDENT_SUBJECT_SUZERAINS により NAME ベースの独立色に
+ * なる（複合キー "NAME|Holy Roman Empire" のまま色だけ独立プロービング）。
+ * 参照は生データ側で十分: flat（scripts/build-fief-flat.ts）はジオメトリだけを
+ * 変え、NAME / SUBJECTO は生データと同一のため色キーは変わらない。
  *
  * フランス諸侯領は SUBJECTO を持たない（属性は NAME / ADMIN_LEVEL /
  * OHM_RELATION_ID / START_DATE / END_DATE）ため、buildColorMap では NAME キーの
@@ -338,6 +347,7 @@ async function loadCollections(): Promise<FeatureCollection[]> {
     ...FRANCE_FIEF_YEARS.map((year) =>
       `${DATA_DIR}/france_fiefs_${year}.geojson`
     ),
+    ...HRE_FIEF_YEARS.map((year) => `${DATA_DIR}/hre_fiefs_${year}.geojson`),
   ];
   for (const path of optionalPaths) {
     try {

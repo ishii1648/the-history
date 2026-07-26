@@ -292,10 +292,16 @@ Deno.test("buildApproximateBorderData の出力は全 feature が有効な tier 
 
 Deno.test("実データ: 1200 年の指摘箇所が最強段の run に含まれる（AC #3）", () => {
   const data = buildApproximateBorderData(outline1200);
-  // トゥールーズ伯領 北縁（切り出し後 128 km）と Burgandy ↔ HRE（150 km）
+  // トゥールーズ伯領 北縁（切り出し後 128 km）と Burgandy ↔ HRE（アルプス西部、111 km）
+  //
+  // TASK-86: Burgandy ↔ HRE の指摘箇所は元々 [8.41115,47.46217]〜[8.49267,46.11709]
+  // の 150 km 直線だったが、中世 HRE 領邦オーバーレイの追加で北半分が
+  // Duchy of Swabia の内側に入り、base 輪郭からは切り出されるようになった
+  // （その区間の境界は領邦側の輪郭が描く。TASK-78 の二重輪郭解消と同じ扱い）。
+  // 南側に残る 111 km の直線が同じ境界の同じ性質を代表するのでこちらを固定する。
   const targets: [Position, Position][] = [
     [[1.02662, 44.57724], [2.62675, 44.77639]],
-    [[8.41115, 47.46217], [8.49267, 46.11709]],
+    [[8.49267, 46.11709], [7.51443, 45.38341]],
   ];
   for (const [a, b] of targets) {
     const runs = data.features.filter((feature) => {

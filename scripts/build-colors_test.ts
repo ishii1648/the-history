@@ -23,6 +23,7 @@ import {
   shiftLightnessForSubject,
   SUBJECT_LIGHTNESS_SHIFT,
 } from "./build-colors.ts";
+import colorsJson from "../data/colors.json" with { type: "json" };
 
 /** テスト用に単一 feature（ジオメトリは最小の正方形）を組み立てる */
 function feature(properties: Record<string, unknown>) {
@@ -441,4 +442,31 @@ Deno.test("buildColorMap: feature の順序に依存せず同一結果を返す�
       renames: {},
     }),
   );
+});
+
+Deno.test("生成済み colors.json は中世 HRE 領邦（TASK-85 由来）に相異なる色を割り当てている（TASK-86 AC #1）", () => {
+  // HRE 配下は INDEPENDENT_SUBJECT_SUZERAINS により NAME ベースの独立色になる。
+  // 宗主国色の明度シフトだと領邦が全て同色になってしまうため（TASK-19 の方針）、
+  // 中世領邦でも同じ扱いになっていることを実データで固定する。
+  const colors = colorsJson as Record<string, string>;
+  const names = [
+    "Duchy of Austria",
+    "Electorate of Cologne",
+    "Prince-Bishopric of Würzburg",
+    "Princely Abbey of Fulda",
+    "Burgraviate of Nuremberg",
+    "March of Meissen",
+    "County of Holland",
+    "Duchy of Luxembourg",
+  ];
+  const assigned = new Map<string, string>();
+  for (const name of names) {
+    const key = compositeKey(name, "Holy Roman Empire");
+    const hex = colors[key];
+    assert(hex !== undefined, `${key} の色が colors.json に無い`);
+    assert(/^#[0-9a-f]{6}$/.test(hex), `${key} の色が HEX でない: ${hex}`);
+    assigned.set(name, hex);
+  }
+  // 決定的プロービングにより互いに同色にならない
+  assertEquals(new Set(assigned.values()).size, assigned.size);
 });
