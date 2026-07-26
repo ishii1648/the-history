@@ -50,6 +50,17 @@ Deno.test("中世フランス諸侯領の欠落が明記されている（TASK-7
       `text が ${keyword} に言及していない`,
     );
   }
+  // TASK-87 AC#5: 許可リスト拡張後の実態（21 領邦・空白は元データ側の欠落）
+  for (const keyword of ["21", "OpenHistoricalMap"]) {
+    assert(
+      entry.text.includes(keyword),
+      `text が拡張後の実態（${keyword}）を反映していない`,
+    );
+  }
+  assert(
+    !entry.text.includes("14の"),
+    "text が拡張前の 14 領邦のままになっている",
+  );
 });
 
 Deno.test("フランス諸侯領の制限注記は諸侯領オーバーレイの対象年でのみ active（TASK-71 AC #3）", () => {

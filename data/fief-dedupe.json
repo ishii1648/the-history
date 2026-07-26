@@ -61,7 +61,7 @@
       "Denmark-Norway": 0.0043,
       "Duchy of Swabia": 0.969,
       "Holy Roman Empire": 0.6355,
-      "Kingdom of France": 0.2512,
+      "Kingdom of France": 0.2939,
       "Magyars": 0.0025,
       "Poland": 0.0254,
       "Pomerania": 0.5523,
@@ -73,33 +73,33 @@
       "Denmark": 0.0072,
       "Holy Roman Empire": 0.6546,
       "Hungary": 0.0036,
-      "Kingdom of France": 0.2524,
+      "Kingdom of France": 0.3028,
       "Poland": 0.295,
       "Prussians": 0.0535,
       "Venice": 0.5406
     },
     "1200": {
-      "Angevin Empire": 0.5126,
+      "Angevin Empire": 0.5313,
       "Britany": 1,
       "Burgandy": 0.05,
       "Comté de Toulouse": 0.0416,
       "Holy Roman Empire": 0.1513,
-      "Kingdom of France": 0.41,
+      "Kingdom of France": 0.4765,
       "Poland": 0.0755
     },
     "1279": {
       "Britany": 1,
       "Denmark": 0.0019,
-      "English territory": 0.0076,
-      "France": 0.294,
+      "English territory": 0.0322,
+      "France": 0.3133,
       "Holy Roman Empire": 0.1427,
       "Poland": 0.0016
     },
     "1300": {
       "Britany": 1,
       "Denmark": 0.0021,
-      "English territory": 0.0076,
-      "France": 0.3303,
+      "English territory": 0.0322,
+      "France": 0.3496,
       "Holy Roman Empire": 0.1629
     },
     "1400": {
