@@ -4,7 +4,7 @@
     "lib": ["dom", "dom.iterable", "deno.ns"]
   },
   "fmt": {
-    "exclude": ["backlog/", "data/", "vendor/"]
+    "exclude": ["backlog/", "data/", "vendor/", ".outputs/"]
   },
   "tasks": {
     "build": "deno run --allow-read --allow-write --allow-run scripts/build.ts",
@@ -13,6 +13,7 @@
     "build-mountains": "deno run --allow-net --allow-read --allow-write scripts/build-mountains.ts",
     "build-cities": "deno run --allow-net --allow-read --allow-write scripts/build-cities.ts",
     "audit-rivers": "deno run --allow-net --allow-read --allow-write scripts/audit-rivers.ts",
+    "audit-attribution": "deno run --allow-read --allow-write scripts/audit-attribution.ts",
     "build-colors": "deno run --allow-read --allow-write scripts/build-colors.ts",
     "build-hre": "deno run --allow-net --allow-read --allow-write scripts/build-hre.ts",
     "build-france-fiefs": "deno run --allow-net --allow-read --allow-write scripts/build-france-fiefs.ts",
