@@ -1,5 +1,10 @@
 import maplibregl from "maplibre-gl";
-import type { StyleSpecification } from "maplibre-gl";
+import type {
+  GeoJSONSource,
+  GeoJSONSourceSpecification,
+  LayerSpecification,
+  StyleSpecification,
+} from "maplibre-gl";
 import { PMTiles, Protocol } from "pmtiles";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Layer, PickingInfo } from "@deck.gl/core";
@@ -9,16 +14,28 @@ import {
   type CollisionFilterExtensionProps,
 } from "@deck.gl/extensions";
 import type { Feature, FeatureCollection } from "geojson";
-import { buildBasemapStyle } from "./basemap.ts";
+import { buildBasemapStyle, WATER_LAYER_ID } from "./basemap.ts";
 import {
-  BASE_OUTLINE_LAYER_ID,
+  approximateBorderBeforeId,
+  approximateBorderStackIsValid,
   CITY_LABEL_LAYER_ID,
   LABEL_LAYER_ID,
   overlaySplitIsValid,
+  politicalFillGroupId,
   RIVER_LABEL_LAYER_ID,
   underWaterBeforeId,
   waterStackIsValid,
 } from "./layer_stack.ts";
+import {
+  APPROXIMATE_BORDER_LAYER_IDS,
+  APPROXIMATE_BORDER_SOURCE_ID,
+  approximateBorderLayerSpecs,
+  approximateBorderSourceSpec,
+  buildApproximateBorderData,
+  EMPTY_APPROXIMATE_BORDER_DATA,
+  MAX_SEGMENT_KM_PROPERTY,
+  TIER_PROPERTY,
+} from "./approximate_borders.ts";
 import {
   type BasemapErrorEvent,
   createFallbackState,
@@ -256,6 +273,18 @@ map.on("error", (event) => {
   handleBasemapError(event as unknown as BasemapErrorEvent, "タイル取得");
 });
 
+// TASK-80: 概略境界（MapLibre の line レイヤー）はスタイル側の状態なので、
+// スタイルが変わるたびに「存在するか・重ね順が正しいか」を確認して追いつかせる。
+// 具体的には (1) 起動時のスタイル読み込み、(2) OpenFreeMap へのフォールバック
+// （setStyle で source ごと消える）、(3) deck.gl が interleaved のレイヤー
+// グループを追加し直したとき（概略境界が塗りの下へ潜る）を拾う。
+// このハンドラ自身の addSource / addLayer も styledata を再発火させるが、
+// syncApproximateBorders は「すでに正しい」状態では何も変更しないため数回で
+// 収束する（概略境界を無条件に moveLayer で引き上げる実装にすると、deck.gl が
+// styledata でレイヤーグループを再挿入するのと無限に競合する。詳細は
+// layer_stack.ts の underWaterBeforeId）。
+map.on("styledata", syncApproximateBorders);
+
 // ---- 勢力圏ポリゴンレイヤー（TASK-5, docs/app-spec.md §3.3, §4.3）----
 
 // pickable なレイヤーの ID（powers / hre-powers / cities / cities-hit /
@@ -462,10 +491,18 @@ const FIEF_LINE_WIDTH_PX = 1.5;
  * 「起動時にビルドしたスタイル」ではなく常に現在のスタイルに対して行い、
  * OpenFreeMap へのフォールバック後（handleBasemapError）でも実態に追従させる。
  * スタイル未読込・差し替え中は空配列を返し、beforeId なしの従来描画順にする。
+ *
+ * TASK-80: getStyle().layers ではなく getLayersOrder() を使う。getStyle() は
+ * スタイル仕様として直列化できるレイヤーだけを返すため、deck.gl（interleaved）が
+ * 追加する custom レイヤー（powers / france-fiefs / hre-powers …）が現れず、
+ * 「概略境界が政治ポリゴンの塗りより上に居るか」を判定できない
+ * （ヘッドレス確認で powers が getStyle().layers に出ないことを実測）。
+ * getLayersOrder() は custom を含む実際の描画順を返す（maplibre-gl 4.7.1）。
  */
 function currentStyleLayerIds(): string[] {
   try {
-    return map.getStyle()?.layers?.map((layer) => layer.id) ?? [];
+    return map.getLayersOrder?.() ??
+      map.getStyle()?.layers?.map((layer) => layer.id) ?? [];
   } catch {
     return [];
   }
@@ -1052,35 +1089,88 @@ function buildHreExtentLayer(
 }
 
 /**
- * base 勢力の境界線オーバーレイ（GeoJsonLayer / LineString）を生成する
- * （TASK-78 AC #2）。data は諸侯領 union の外側だけに切り出した base 輪郭
- * （data/base_outline_<year>.geojson、生成は scripts/build-fief-dedupe.ts）。
+ * base 勢力の境界線（概略境界）の描画データをメモ化する（TASK-80）。
  *
- * 線の色・太さは powers の stroke（LINE_COLOR / LINE_WIDTH_PX）と同一値にする:
- * この層は powers の stroke を「置き換える」ものなので、諸侯領の外側では
- * 従来と区別が付かない見た目にならなければならない（AC #3 の非退行）。
- * pickable: false で picking には一切関与しない（base のホバー/クリックは
- * powers ポリゴン側が担う）。非対象年は空 FC のため実質非表示になる。
+ * 入力は「諸侯領オーバーレイ対象年（1000〜1300）なら TASK-78 の派生 base 輪郭
+ * （outlines。諸侯領 union の外側だけに切り出した LineString 群）、それ以外の年
+ * なら base 勢力ポリゴンの環」。前者を優先することで TASK-78 の二重輪郭解消
+ * （諸侯領の内側を走る base 境界線を描かない）はそのまま維持される。
+ *
+ * memoizeLatest で包む理由は buildLabelData と同じ: applyRiverHover /
+ * applyHreHighlight / ズーム段の変化は currentView を差し替えずに renderLayers()
+ * を呼ぶため、同じ参照が渡り続けてセグメント分割（1 年あたり 5〜7 千セグメント）
+ * を再計算しない。年代切替でだけ参照が変わって再計算される。
  */
-function buildBaseOutlineLayer(
-  year: number,
-  data: FeatureCollection,
-): GeoJsonLayer {
-  return new GeoJsonLayer({
-    id: BASE_OUTLINE_LAYER_ID,
-    data,
-    // powers と同じ水面下グループへ入れる（別グループになると諸侯領より上に出る）
-    beforeId: underWaterBeforeId(BASE_OUTLINE_LAYER_ID, currentStyleLayerIds()),
-    pickable: false,
-    stroked: false,
-    filled: false,
-    getLineColor: LINE_COLOR,
-    lineWidthUnits: "pixels",
-    getLineWidth: LINE_WIDTH_PX,
-    lineWidthMinPixels: 1,
-    opacity: 1,
-    updateTriggers: { getLineColor: [year] },
-  });
+const memoizedApproximateBorderData = memoizeLatest(
+  (base: FeatureCollection, outlines: FeatureCollection) =>
+    buildApproximateBorderData(
+      outlines.features.length > 0 ? outlines : base,
+    ),
+);
+
+/**
+ * 直近に反映した概略境界の描画データ（TASK-80）。スタイル差し替え
+ * （OpenFreeMap へのフォールバック）で source ごと消えた後の再登録や、
+ * styledata 経由の位置再調整で「今描くべきデータ」を参照するために持つ。
+ */
+let approximateBorderData: FeatureCollection = EMPTY_APPROXIMATE_BORDER_DATA;
+
+/**
+ * 概略境界（MapLibre の line レイヤー 3 枚）をスタイルへ反映する（TASK-80）。
+ *
+ * MapLibre 側に持つ理由: deck.gl の GeoJsonLayer / PathLayer には blur も破線も
+ * 無く、「にじんだ低 alpha の帯」を描けない（詳細は approximate_borders.ts）。
+ *
+ * 位置は海洋の水面（water）の直下。政治ポリゴンの塗りとの前後は deck 側の
+ * beforeId が決める（underWaterBeforeId が概略境界の最下段を指すため、deck は
+ * 自分のグループを概略境界の直下へ入れ直す）。deck レイヤーは構築時の props を
+ * 持ち回るので、概略境界がまだ無い時点で作られた deck レイヤーは beforeId が
+ * water のまま = 塗りが線の上に来る。その場合だけ renderLayers() で deck
+ * レイヤーを作り直させる（順序が既に正しければ何もしないため、styledata の
+ * 再発火は数回で収束する）。
+ *
+ * スタイル未読込・差し替え中は何もしない（styledata / renderLayers から
+ * 何度でも呼ばれるので、次の機会に追いつく）。例外は握りつぶす: 概略境界が
+ * 描けないことは地図全体を落とす理由にならない。
+ */
+let syncingApproximateBorders = false;
+function syncApproximateBorders(): void {
+  // renderLayers → syncApproximateBorders → renderLayers の再入を止める
+  if (syncingApproximateBorders) return;
+  syncingApproximateBorders = true;
+  try {
+    const styleLayerIds = currentStyleLayerIds();
+    if (styleLayerIds.length === 0) return;
+    const source = map.getSource(APPROXIMATE_BORDER_SOURCE_ID);
+    if (source === undefined) {
+      map.addSource(
+        APPROXIMATE_BORDER_SOURCE_ID,
+        approximateBorderSourceSpec(
+          approximateBorderData,
+        ) as GeoJSONSourceSpecification,
+      );
+    } else {
+      (source as GeoJSONSource).setData(approximateBorderData);
+    }
+    const beforeId = approximateBorderBeforeId(styleLayerIds);
+    for (const spec of approximateBorderLayerSpecs()) {
+      if (map.getLayer(spec.id) === undefined) {
+        map.addLayer(spec as unknown as LayerSpecification, beforeId);
+      }
+    }
+    // 追加後の実際の順序を見て、塗りが線の上に来ていたら deck レイヤーを
+    // 作り直す（buildPowerLayer が beforeId を概略境界の直下へ再計算する）
+    if (
+      currentView !== null &&
+      !approximateBorderStackIsValid(currentStyleLayerIds())
+    ) {
+      renderLayers();
+    }
+  } catch (error) {
+    console.warn(`概略境界レイヤーの反映に失敗しました: ${String(error)}`);
+  } finally {
+    syncingApproximateBorders = false;
+  }
 }
 
 /**
@@ -1129,10 +1219,11 @@ function buildBaseOutlineLayer(
 function renderLayers(): void {
   if (currentView === null) return;
   const { year, base, hre, fiefs, outlines } = currentView;
-  // TASK-78: 切り出し済みの base 輪郭がある年（1000〜1300）だけ powers の
-  // stroke を止め、base-outlines 層に境界線を任せる。データが無い年・取得に
-  // 失敗した年は空 FC なので従来どおり powers が境界線を描く。
-  const outlinesActive = outlines.features.length > 0;
+  // TASK-80: base の境界線は全年代とも MapLibre の概略境界レイヤー
+  // （approximate-borders-*、syncApproximateBorders）が描くため、powers の
+  // stroke は常に止める（TASK-78 は諸侯領オーバーレイ対象年だけ止めていた）。
+  // 描画データの入力は「対象年 = 切り出し済みの base 輪郭（outlines）、
+  // それ以外 = base ポリゴンの環」で、TASK-78 の二重輪郭解消は維持される。
   const buildPickableLayer: Record<string, () => Layer> = {
     [POWER_LAYER_ID]: () =>
       buildPowerLayer(
@@ -1141,7 +1232,7 @@ function renderLayers(): void {
         base,
         LINE_COLOR,
         LINE_WIDTH_PX,
-        !outlinesActive,
+        false,
       ),
     [HRE_LAYER_ID]: () => buildPowerLayer(HRE_LAYER_ID, year, hre),
     // TASK-71: 中世フランス諸侯領。base の France ポリゴンの上に重ね、
@@ -1167,12 +1258,6 @@ function renderLayers(): void {
       throw new Error(`PICKING_PRIORITY のレイヤー ${id} に builder が無い`);
     }
     layers.push(build());
-    // TASK-78: base 輪郭は powers の直上・諸侯領の下に挿入する（powers の
-    // stroke と同じ位置を保つ）。pickable: false のため PICKING_PRIORITY 外の
-    // ID で、整合検証では無視される（hre-extent と同じ扱い）。
-    if (id === POWER_LAYER_ID) {
-      layers.push(buildBaseOutlineLayer(year, outlines));
-    }
     // TASK-30: 帝国範囲の強調は powers/hre-powers の上・cities の下に挿入する
     // （領邦の塗りの上に輪郭が乗り、都市マーカー・河川は隠さない）。
     // pickable: false のため PICKING_PRIORITY 外の ID で、整合検証では
@@ -1206,6 +1291,11 @@ function renderLayers(): void {
   }
   overlay.setProps({ layers });
   labelOverlay.setProps({ layers: labelLayers });
+  // TASK-80: base の境界線（概略境界）は MapLibre 側の line レイヤー。deck の
+  // レイヤー反映後に同期することで、deck がグループを追加し直した場合でも
+  // 概略境界が塗りの上に来る位置へ引き上げられる。
+  approximateBorderData = memoizedApproximateBorderData(base, outlines);
+  syncApproximateBorders();
 }
 
 /**
@@ -2100,6 +2190,54 @@ map.on("load", () => {
     overlay: hasFranceFiefOverlay(year, FRANCE_FIEF_OVERLAY_YEARS),
     featureCount: fiefs.features.length,
     labels: buildLabelData(fiefs, nameJa, "fief").map((d) => d.text),
+  };
+};
+
+// TASK-80: ヘッドレス CDP 検証用に概略境界（MapLibre line レイヤー）の状態を
+// 公開する（__getCityDebug と同じ読み取り専用フック）。canvas のピクセルからは
+// 「どの区間がどの段で描かれているか」を数えられないため、段ごとの run 数と
+// スタイル上の重ね順（塗り → 概略境界 → 海洋 water）を直接返す。
+(globalThis as unknown as {
+  __getApproximateBorderDebug?: () => {
+    year: number;
+    sourcePresent: boolean;
+    layers: { id: string; index: number }[];
+    fillGroupIndex: number;
+    waterIndex: number;
+    stackValid: boolean;
+    styleOrder: string[];
+    runsByTier: Record<string, number>;
+    longestRunKm: number;
+  };
+}).__getApproximateBorderDebug = () => {
+  const styleLayerIds = currentStyleLayerIds();
+  const runsByTier: Record<string, number> = {};
+  let longestRunKm = 0;
+  for (const feature of approximateBorderData.features) {
+    const tier = String(feature.properties?.[TIER_PROPERTY]);
+    runsByTier[tier] = (runsByTier[tier] ?? 0) + 1;
+    longestRunKm = Math.max(
+      longestRunKm,
+      Number(feature.properties?.[MAX_SEGMENT_KM_PROPERTY] ?? 0),
+    );
+  }
+  return {
+    year: yearSwitcher.currentYear() ?? INITIAL_YEAR,
+    sourcePresent: map.getSource(APPROXIMATE_BORDER_SOURCE_ID) !== undefined,
+    layers: APPROXIMATE_BORDER_LAYER_IDS.map((id) => ({
+      id,
+      index: styleLayerIds.indexOf(id),
+    })),
+    // 政治ポリゴンの塗りは deck のレイヤーグループ（custom レイヤー）として
+    // 1 枚に束ねられる（"powers" という ID はスタイル上に存在しない）
+    fillGroupIndex: styleLayerIds.indexOf(
+      politicalFillGroupId(styleLayerIds) ?? "",
+    ),
+    waterIndex: styleLayerIds.indexOf(WATER_LAYER_ID),
+    stackValid: approximateBorderStackIsValid(styleLayerIds),
+    styleOrder: styleLayerIds,
+    runsByTier,
+    longestRunKm,
   };
 };
 

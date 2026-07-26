@@ -1,16 +1,23 @@
 import { assert, assertEquals } from "@std/assert";
 import {
-  BASE_OUTLINE_LAYER_ID,
+  approximateBorderBeforeId,
+  approximateBorderStackIsValid,
   CITY_LABEL_LAYER_ID,
+  DECK_LAYER_GROUP_ID_PREFIX,
   LABEL_LAYER_ID,
   OVERLAID_LAYER_IDS,
   overlaySplitIsValid,
+  politicalFillGroupId,
   RIVER_LABEL_LAYER_ID,
   UNDER_WATER_LAYER_IDS,
   underWaterBeforeId,
   WATER_STYLE_LAYER_ID,
   waterStackIsValid,
 } from "./layer_stack.ts";
+import {
+  APPROXIMATE_BORDER_LAYER_IDS,
+  approximateBorderLayerId,
+} from "./approximate_borders.ts";
 import {
   buildBasemapStyle,
   COASTLINE_LAYER_ID,
@@ -51,11 +58,12 @@ Deno.test("WATER_STYLE_LAYER_ID はベースマップスタイルに実在する
   );
 });
 
-Deno.test("水面より下へ回すのは政治ポリゴン 3 枚と base 境界線オーバーレイのみ", () => {
+Deno.test("水面より下へ回すのは政治ポリゴン 3 枚のみ（TASK-80 で base 境界線は deck から外れた）", () => {
+  // TASK-78 の base-outlines（deck の GeoJsonLayer）は TASK-80 で MapLibre の
+  // line レイヤー（approximate-borders-*）へ移した。deck 側に線の層は無い。
   assertEquals(
     [...UNDER_WATER_LAYER_IDS].sort(),
     [
-      BASE_OUTLINE_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       POWER_LAYER_ID,
@@ -63,22 +71,172 @@ Deno.test("水面より下へ回すのは政治ポリゴン 3 枚と base 境界
   );
 });
 
-Deno.test("base 境界線オーバーレイは powers と同じ水面下グループに入る（TASK-78）", () => {
-  // powers の stroke を置き換える層なので、beforeId が powers と一致しなければ
-  // 別グループに分かれて描画順（諸侯領より下）が壊れる
+// --- TASK-80: 概略境界（MapLibre line レイヤー）の挿入位置 ---
+// 境界線は「政治ポリゴンの塗りより上・海洋の水面より下」に入らなければならない。
+// - 塗りより下だと半透明の塗り（powers.ts FILL_ALPHA）越しになり、低 alpha の
+//   概略線が見えなくなる（従来 deck の stroke は塗りの上に描かれていた）
+// - 海洋より上だと、政治ポリゴンが海へはみ出した区間の線が海の上に露出し、
+//   「海の上を走る誤った境界線」になる（TASK-84 で解決した問題の再発）
+
+Deno.test("概略境界レイヤーは海洋 water の直下に挿入する（TASK-80）", () => {
   assertEquals(
-    underWaterBeforeId(BASE_OUTLINE_LAYER_ID, realStyleLayerIds),
-    underWaterBeforeId(POWER_LAYER_ID, realStyleLayerIds),
+    approximateBorderBeforeId(realStyleLayerIds),
+    WATER_STYLE_LAYER_ID,
   );
 });
 
-Deno.test("base 境界線オーバーレイは pickable 層ではない（picking 挙動は不変。TASK-78）", () => {
-  assert(!PICKING_PRIORITY.includes(BASE_OUTLINE_LAYER_ID));
-  // 追加しても既存の picking 順の検証は通る（優先リスト外は無視される）
+Deno.test("水面レイヤーが無いスタイルでは beforeId なしへフォールバックする（TASK-80）", () => {
+  assertEquals(
+    approximateBorderBeforeId(
+      realStyleLayerIds.filter((id) => id !== WATER_STYLE_LAYER_ID),
+    ),
+    undefined,
+  );
+  assertEquals(approximateBorderBeforeId([]), undefined);
+});
+
+/** 政治ポリゴンの塗りが入る deck のレイヤーグループ ID（概略境界が有るとき） */
+const DECK_FILL_GROUP = `${DECK_LAYER_GROUP_ID_PREFIX}before:${
+  APPROXIMATE_BORDER_LAYER_IDS[0]
+}`;
+/** 概略境界が追加される前に作られた deck レイヤーのグループ（beforeId = water） */
+const DECK_STALE_FILL_GROUP =
+  `${DECK_LAYER_GROUP_ID_PREFIX}before:${WATER_LAYER_ID}`;
+/** 最前面グループ（beforeId なし = 河川・都市など、またはフォールバックスタイル） */
+const DECK_LAST_GROUP = `${DECK_LAYER_GROUP_ID_PREFIX}last`;
+
+Deno.test("underWaterBeforeId は概略境界があればその最下段を指す（TASK-80）", () => {
+  // 塗り → 概略境界 → 海洋 の順を作るのは deck 側の beforeId。3 枚が同じ値を
+  // 返すことが必須（別グループへ分かれると相対順が壊れる）。
+  const ids = [
+    WATER_INLAND_LAYER_ID,
+    ...APPROXIMATE_BORDER_LAYER_IDS,
+    WATER_LAYER_ID,
+  ];
+  for (const id of UNDER_WATER_LAYER_IDS) {
+    assertEquals(underWaterBeforeId(id, ids), APPROXIMATE_BORDER_LAYER_IDS[0]);
+  }
+  // 概略境界がまだ無ければ従来どおり水面の直下
+  assertEquals(
+    underWaterBeforeId(POWER_LAYER_ID, [WATER_LAYER_ID]),
+    WATER_LAYER_ID,
+  );
+});
+
+Deno.test("politicalFillGroupId は実在する deck のレイヤーグループ ID を返す（TASK-80）", () => {
+  // deck.gl は interleaved レイヤーを 1 枚ずつではなく beforeId ごとの
+  // グループ（custom レイヤー）としてスタイルへ入れる。塗りとの前後関係は
+  // "powers" ではなくこのグループ ID で判定しなければならない。
+  assertEquals(
+    politicalFillGroupId([
+      ...APPROXIMATE_BORDER_LAYER_IDS,
+      DECK_FILL_GROUP,
+      WATER_LAYER_ID,
+      DECK_LAST_GROUP,
+    ]),
+    DECK_FILL_GROUP,
+  );
+  // beforeId が古い（water を指したまま）グループも塗りのグループとして拾う。
+  // 「今あるべき ID」を組み立てて探すと、まさに直したい状態を見落とす。
+  assertEquals(
+    politicalFillGroupId([
+      DECK_STALE_FILL_GROUP,
+      ...APPROXIMATE_BORDER_LAYER_IDS,
+      WATER_LAYER_ID,
+    ]),
+    DECK_STALE_FILL_GROUP,
+  );
+  // beforeId 付きグループが無い（water を持たないフォールバックスタイル）
+  assertEquals(politicalFillGroupId([DECK_LAST_GROUP]), DECK_LAST_GROUP);
+  // グループがまだ無い（deck 未登録）
+  assertEquals(politicalFillGroupId([WATER_LAYER_ID]), undefined);
+  assertEquals(politicalFillGroupId([]), undefined);
+});
+
+Deno.test("approximateBorderStackIsValid は 塗り → 概略境界 → 海洋 の順を要求する（TASK-80）", () => {
+  // 実測した実際のレイヤー順（ヘッドレス確認）に概略境界を入れた形
+  const valid = [
+    "background",
+    "earth",
+    "landcover",
+    "hillshade",
+    WATER_INLAND_LAYER_ID,
+    DECK_FILL_GROUP,
+    ...APPROXIMATE_BORDER_LAYER_IDS,
+    WATER_LAYER_ID,
+    COASTLINE_LAYER_ID,
+    DECK_LAST_GROUP,
+  ];
+  assert(approximateBorderStackIsValid(valid));
+  // 概略境界が海洋より上 = 海上のはみ出した線が露出する（TASK-84 の退行）
+  assert(
+    !approximateBorderStackIsValid([
+      DECK_FILL_GROUP,
+      WATER_LAYER_ID,
+      ...APPROXIMATE_BORDER_LAYER_IDS,
+      COASTLINE_LAYER_ID,
+    ]),
+  );
+  // 概略境界が塗りのグループより下 = 半透明の塗り越しになって線が沈む。
+  // deck レイヤーの beforeId が古い（water を指したまま）と必ずこうなり、
+  // main.ts が renderLayers() で deck レイヤーを作り直して修復する。
+  assert(
+    !approximateBorderStackIsValid([
+      WATER_INLAND_LAYER_ID,
+      ...APPROXIMATE_BORDER_LAYER_IDS,
+      DECK_STALE_FILL_GROUP,
+      WATER_LAYER_ID,
+    ]),
+  );
+  // 1 枚でも順序を外していれば不正（3 段のうち 1 枚だけ取り残されたケース）
+  assert(
+    !approximateBorderStackIsValid([
+      DECK_FILL_GROUP,
+      approximateBorderLayerId("normal"),
+      approximateBorderLayerId("long"),
+      WATER_LAYER_ID,
+      approximateBorderLayerId("very-long"),
+    ]),
+  );
+});
+
+Deno.test("approximateBorderStackIsValid はレイヤー未追加・フォールバックスタイルを拒否しない（TASK-80）", () => {
+  // スタイル未読込・差し替え直後（概略境界レイヤーがまだ無い）
+  assert(approximateBorderStackIsValid([]));
+  assert(approximateBorderStackIsValid([DECK_FILL_GROUP, WATER_LAYER_ID]));
+  // deck 未登録（グループが無い）なら水面との前後だけを見る
+  assert(
+    approximateBorderStackIsValid([
+      ...APPROXIMATE_BORDER_LAYER_IDS,
+      WATER_LAYER_ID,
+    ]),
+  );
+  // water を持たないフォールバックスタイルでも「塗りより上」だけは要求する
+  // （main.ts は renderLayers() で deck レイヤーを作り直して修復する）
+  assert(
+    approximateBorderStackIsValid([
+      DECK_LAST_GROUP,
+      ...APPROXIMATE_BORDER_LAYER_IDS,
+    ]),
+  );
+  assert(
+    !approximateBorderStackIsValid([
+      ...APPROXIMATE_BORDER_LAYER_IDS,
+      DECK_LAST_GROUP,
+    ]),
+  );
+});
+
+Deno.test("概略境界レイヤーは deck 側の picking / 分配に一切関与しない（AC #6）", () => {
+  for (const id of APPROXIMATE_BORDER_LAYER_IDS) {
+    assert(!PICKING_PRIORITY.includes(id));
+    assert(!UNDER_WATER_LAYER_IDS.includes(id));
+    assert(!OVERLAID_LAYER_IDS.includes(id));
+  }
+  // deck のレイヤー列（概略境界は含まない）は従来どおり picking 順と整合する
   assert(
     layerOrderMatchesPickingPriority([
       POWER_LAYER_ID,
-      BASE_OUTLINE_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
@@ -86,16 +244,21 @@ Deno.test("base 境界線オーバーレイは pickable 層ではない（pickin
       RIVERS_LAYER_ID,
     ]),
   );
-});
-
-Deno.test("base 境界線オーバーレイは overlaid 側に混ぜない（衝突フィルタの分配を壊さない。TASK-78）", () => {
-  assert(!OVERLAID_LAYER_IDS.includes(BASE_OUTLINE_LAYER_ID));
   assert(
     overlaySplitIsValid(
-      [POWER_LAYER_ID, BASE_OUTLINE_LAYER_ID, FRANCE_FIEF_LAYER_ID],
+      [POWER_LAYER_ID, FRANCE_FIEF_LAYER_ID],
       [LABEL_LAYER_ID, RIVER_LABEL_LAYER_ID, CITY_LABEL_LAYER_ID],
     ),
   );
+});
+
+Deno.test("実スタイル（buildBasemapStyle）は概略境界レイヤーを含まない（実行時に追加する）", () => {
+  // ベースマップスタイルに焼き込むと deck の挿入位置（beforeId = water）より
+  // 下に来てしまう。main.ts が deck の登録後に addLayer / moveLayer で
+  // 水面の直下へ入れるため、スタイル定義側には存在しない。
+  for (const id of APPROXIMATE_BORDER_LAYER_IDS) {
+    assert(!realStyleLayerIds.includes(id));
+  }
 });
 
 Deno.test("3 ポリゴンレイヤーには水面レイヤー id が beforeId として付与される", () => {
