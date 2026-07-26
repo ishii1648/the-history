@@ -22,7 +22,7 @@
     "extract-dem": "deno run --allow-net=s3.amazonaws.com --allow-read --allow-write scripts/extract-dem.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
     "next-tasks": "deno run --allow-read scripts/next_tasks.ts",
-    "serve": "deno run --allow-net --allow-read jsr:@std/http@^1/file-server dist --header \"Cache-Control: no-cache\"",
+    "serve": "deno run --allow-net --allow-read --allow-run=lsof,ps scripts/serve.ts",
     "verify:smoke": "deno run -A scripts/verify/cdp.ts scripts/verify/checks/smoke.ts",
     "test": "deno test --allow-read=data",
     "test:watch": "deno test --allow-read=data --watch"
@@ -36,6 +36,7 @@
     "@protomaps/basemaps": "npm:@protomaps/basemaps@^5.7.2",
     "@std/assert": "jsr:@std/assert@^1.0.19",
     "@std/csv": "jsr:@std/csv@^1",
+    "@std/http": "jsr:@std/http@^1",
     "@std/path": "jsr:@std/path@^1",
     "@std/yaml": "jsr:@std/yaml@^1",
     "@turf/area": "npm:@turf/area@^7",
