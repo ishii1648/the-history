@@ -20,6 +20,7 @@ import {
   approximateBorderStackIsValid,
   CITY_LABEL_LAYER_ID,
   LABEL_LAYER_ID,
+  MOUNTAIN_LABEL_LAYER_ID,
   overlaySplitIsValid,
   politicalFillGroupId,
   RIVER_LABEL_LAYER_ID,
@@ -79,6 +80,8 @@ import {
   FIEF_LABEL_COLOR,
   type LabelDatum,
   labelTextStyleProps,
+  MOUNTAIN_LABEL_COLOR,
+  MOUNTAIN_LABEL_SIZE_PX,
   POWER_LABEL_SIZE_PX,
   RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
@@ -93,6 +96,12 @@ import {
   withSuzerainOverrides,
 } from "./suzerain_extent.ts";
 import { memoizeLatest } from "./memo.ts";
+import {
+  filterVisibleMountainLabels,
+  mountainLabelAnchors,
+  type MountainLabelDatum,
+  MOUNTAINS_DATA_URL,
+} from "./mountains.ts";
 import {
   filterVisibleRiverLabels,
   RIVER_HIT_LINE_COLOR,
@@ -429,20 +438,27 @@ let fiefDedupe: FiefDedupeTable = EMPTY_FIEF_DEDUPE_TABLE;
 let riversData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
 
 /**
+ * 主要山脈 GeoJSON（TASK-97。年代非依存なので起動時に 1 度ロード）。
+ * 失敗・未生成時は空のまま山脈ラベルなしで継続する（河川と同じ縮退方針）。
+ */
+let mountainsData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
+
+/**
  * 主要都市データ（TASK-27。起動時に 1 度ロード）。
  * 取得失敗・未生成時は空のまま都市なしで継続する（colors.json 等と同様）。
  */
 let citiesData: CitiesData = { years: {} };
 
 /**
- * 都市のズーム別表示制御に使う現在の整数ズーム段（TASK-66 AC #2）。
+ * ズーム別の表示制御に使う現在の整数ズーム段（TASK-66 AC #2、TASK-97）。
  * renderLayers はズーム変化では呼ばれないため、map の zoom イベントで
  * この値を監視し「整数段が変わった時のみ」レイヤーを再構築する
  * （applyRiverHover と同じ変化検知パターン。小数ズームの連続変化
  * = 毎フレームの再構築を避ける。TASK-50 の無駄な再構築回避方針）。
- * 表示件数の段階は cities.ts の visibleCityRankLimit が決める。
+ * 表示件数の段階は都市が cities.ts の visibleCityRankLimit、山脈名が
+ * mountains.ts の mountainLabelMinZoom で決める（同じ整数段を共有する）。
  */
-let cityZoomStep = Math.floor(initialState.zoom);
+let zoomStep = Math.floor(initialState.zoom);
 
 /** クリックで選択（強調）中の河川名。null は未選択（TASK-24 AC #2） */
 let selectedRiverName: string | null = null;
@@ -1051,6 +1067,63 @@ function buildRiverLabelLayer(): TextLayer<
 }
 
 /**
+ * 山脈名ラベルのデータ + characterSet をメモ化する（TASK-97）。
+ * mountainsData・nameJa は起動時に一度ロードされたあと年代・ズーム・
+ * hover/selection に関わらず不変なので、polylabel によるアンカー生成は
+ * 起動後 1 度だけ走り、以降は同じ参照が返る（TASK-50 のメモ化方針）。
+ */
+const memoizedMountainLabelData = memoizeLatest(
+  (fc: FeatureCollection, ja: Record<string, string>) => {
+    const data = mountainLabelAnchors(fc, ja);
+    return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
+  },
+);
+
+/**
+ * 山脈名ラベルの TextLayer を生成する（TASK-97 AC #1/#2/#3/#4）。
+ *
+ * 常時表示（河川名のようなホバー限定ではない）にするのは、山脈が年代に依らない
+ * 地形で「今どこを見ているか」の手掛かりとして常に有効だから。年代切替では
+ * データも表示条件も一切変わらない（AC #4）。表示するのは現在の整数ズーム段
+ * （zoomStep）で NE の MIN_LABEL 由来のしきい値を満たすものだけ（AC #2）。
+ *
+ * 衝突制御は勢力名・都市名・河川名と同一空間で、priority は都市帯より下の
+ * 固定帯（mountains.ts）。密集地帯では山脈名が先に間引かれ、勢力名・都市名の
+ * 可読性を損なわない（AC #3）。pickable: false でポリゴン・マーカーの picking を
+ * 妨げない（ホバー/クリック対象化は TASK-100）。
+ */
+function buildMountainLabelLayer(): TextLayer<
+  MountainLabelDatum,
+  CollisionFilterExtensionProps<MountainLabelDatum>
+> {
+  const { data: anchors, characterSet } = memoizedMountainLabelData(
+    mountainsData,
+    nameJa,
+  );
+  const data = filterVisibleMountainLabels(anchors, zoomStep);
+  return new TextLayer<
+    MountainLabelDatum,
+    CollisionFilterExtensionProps<MountainLabelDatum>
+  >({
+    // フォント・クリーム halo（陰影の濃い山体の上でも輪郭が効く）・衝突制御は
+    // 共通 base props
+    ...labelLayerBaseProps(),
+    id: MOUNTAIN_LABEL_LAYER_ID,
+    data,
+    pickable: false,
+    getText: (d) => d.text,
+    getPosition: (d) => d.position,
+    getSize: MOUNTAIN_LABEL_SIZE_PX,
+    getColor: MOUNTAIN_LABEL_COLOR,
+    // 日本語名（アルプス山脈 等）のグリフはラベル文字列から自動生成する。
+    // 表示対象が変わってもフォントアトラスを作り直さないよう、characterSet は
+    // 常に全山脈分（メモ化された同一参照）を渡す（河川ラベルと同じ扱い）
+    characterSet,
+    updateTriggers: { getText: [zoomStep], getPosition: [zoomStep] },
+  });
+}
+
+/**
  * 河川の透明ヒットライン層（GeoJsonLayer）を生成する（TASK-43）。
  * rivers と同一データ（riversData）を完全透明・RIVER_HIT_LINE_WIDTH_PX（14px）
  * で描画する判定専用レイヤー。PICKING_PRIORITY 上は cities より劣後（TASK-49）
@@ -1074,7 +1147,7 @@ function buildRiversHitLayer(): GeoJsonLayer {
 /**
  * ズームフィルタ済みの表示都市エントリをメモ化する（TASK-66 AC #2/#3）。
  * 年内の人口降順ランクが visibleCityRankLimit(zoomStep) 内の都市だけを返す。
- * キーは citiesData・year・cityZoomStep（整数ズーム段）で、hover/selection
+ * キーは citiesData・year・zoomStep（整数ズーム段）で、hover/selection
  * だけの renderLayers 呼び出しでは同じ参照が返りフィルタ再計算をスキップする
  * （TASK-50 方針）。返り値の配列参照が安定するため、下流の
  * memoizedCityMarkerData / memoizedCityLabelData のメモ化キーとしても機能する。
@@ -1103,10 +1176,10 @@ const memoizedCityMarkerData = memoizeLatest(
  * マーカー）の picking が rivers-hit に遮蔽されないようにする。年代切替では
  * 同一 ID のまま cityEntriesForYear で該当年のデータへ差し替えるだけにする。
  * TASK-66: data はズームフィルタ済み（人口上位ランクのみ）のエントリに
- * 差し替え、整数ズーム段（cityZoomStep）の変化でも再評価する。
+ * 差し替え、整数ズーム段（zoomStep）の変化でも再評価する。
  */
 function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
-  const entries = memoizedVisibleCityEntries(citiesData, year, cityZoomStep);
+  const entries = memoizedVisibleCityEntries(citiesData, year, zoomStep);
   return new ScatterplotLayer<CityMarkerDatum>({
     id: CITY_LAYER_ID,
     data: memoizedCityMarkerData(entries),
@@ -1121,7 +1194,7 @@ function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
     lineWidthUnits: "pixels",
     getLineWidth: 1,
     getLineColor: [255, 255, 255, 230],
-    updateTriggers: { getPosition: [year, cityZoomStep] },
+    updateTriggers: { getPosition: [year, zoomStep] },
   });
 }
 
@@ -1143,7 +1216,7 @@ function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
  * stroked: false・完全透明なので見た目には一切影響しない。
  */
 function buildCityHitLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
-  const entries = memoizedVisibleCityEntries(citiesData, year, cityZoomStep);
+  const entries = memoizedVisibleCityEntries(citiesData, year, zoomStep);
   return new ScatterplotLayer<CityMarkerDatum>({
     id: CITY_HIT_LAYER_ID,
     data: memoizedCityMarkerData(entries),
@@ -1153,7 +1226,7 @@ function buildCityHitLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
     getRadius: CITY_HIT_RADIUS_PX,
     getFillColor: CITY_HIT_FILL_COLOR,
     stroked: false,
-    updateTriggers: { getPosition: [year, cityZoomStep] },
+    updateTriggers: { getPosition: [year, zoomStep] },
   });
 }
 
@@ -1198,7 +1271,7 @@ function buildCityLabelLayer(
   year: number,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
   const { data, characterSet } = memoizedCityLabelData(
-    memoizedVisibleCityEntries(citiesData, year, cityZoomStep),
+    memoizedVisibleCityEntries(citiesData, year, zoomStep),
     nameJa,
   );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
@@ -1222,8 +1295,8 @@ function buildCityLabelLayer(
     // TASK-66: ズーム段の変化でも accessor を再評価させる（data 参照も
     // memoizedVisibleCityEntries 経由で変わるが、意図を明示して二重に守る）
     updateTriggers: {
-      getText: [year, cityZoomStep],
-      getPosition: [year, cityZoomStep],
+      getText: [year, zoomStep],
+      getPosition: [year, zoomStep],
     },
   });
 }
@@ -1448,9 +1521,11 @@ function renderLayers(): void {
     // 無視される（layerOrderMatchesPickingPriority の既存仕様）。
     if (id === HRE_LAYER_ID) layers.push(buildSuzerainExtentLayer(year, base));
   }
-  // TASK-77: ラベル 3 層は overlaid オーバーレイ（別 canvas）へ載せる。
-  // 順序は従来の描画順（勢力名 → 河川名 → 都市名）をそのまま保つ。
+  // TASK-77: ラベル層は overlaid オーバーレイ（別 canvas）へ載せる。
+  // 順序は描画順（山脈名 → 勢力名 → 河川名 → 都市名）で、TASK-97 の山脈名は
+  // 地形の注記なので最下段に置く（表示の取捨は配列順ではなく priority が決める）。
   const labelLayers: Layer[] = [
+    buildMountainLabelLayer(),
     buildLabelLayer(year, base, hre, fiefs, italyFiefs),
     buildRiverLabelLayer(),
     buildCityLabelLayer(year),
@@ -1959,13 +2034,13 @@ map.on("moveend", syncUrlToState);
 
 // TASK-66 AC #2: ズーム操作に追従して都市のズーム別表示を更新する。
 // zoom イベントはズームアニメーション中に高頻度で発火するため、整数ズーム段
-// （cityZoomStep）が変わった時だけ renderLayers() を呼ぶ（毎フレームの
+// （zoomStep）が変わった時だけ renderLayers() を呼ぶ（毎フレームの
 // レイヤー再構築を避ける）。zoomend ではなく zoom を使うのは、ピンチ/ホイール
 // の途中でも段を跨いだ時点で即座に都市が増減し、操作へ滑らかに追従するため。
 map.on("zoom", () => {
   const step = Math.floor(map.getZoom());
-  if (step === cityZoomStep) return;
-  cityZoomStep = step;
+  if (step === zoomStep) return;
+  zoomStep = step;
   renderLayers();
 });
 
@@ -2260,6 +2335,25 @@ async function loadRivers(): Promise<void> {
 }
 
 /**
+ * mountains.geojson（主要山脈ポリゴン）を取得する（TASK-97）。
+ * 失敗・未生成時は空 FeatureCollection のまま山脈ラベルなしで継続する
+ * （河川と同じ縮退方針）。
+ */
+async function loadMountains(): Promise<void> {
+  try {
+    const res = await fetch(MOUNTAINS_DATA_URL);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    mountainsData = await res.json() as FeatureCollection;
+  } catch (error) {
+    console.warn(
+      `mountains.geojson の取得に失敗しました。山脈ラベルなしで継続します: ${
+        String(error)
+      }`,
+    );
+  }
+}
+
+/**
  * cities.json（年 → 主要都市配列）を取得する（TASK-27）。
  * 失敗・未生成時は空のまま都市なしで継続する（colors.json 等と同様）。
  * 形の検証は表示時の cityEntriesForYear が行うため、ここでは丸ごと保持する。
@@ -2314,6 +2408,8 @@ async function initPowerLayer(): Promise<void> {
       loadOverrides(),
       loadNameJa(),
       loadRivers(),
+      // TASK-97: mountains.geojson も初期描画前に揃え、初回から山脈名を重ねる
+      loadMountains(),
       loadCities(),
       loadNotes(),
       loadKnownLimitations(),
@@ -2358,10 +2454,40 @@ map.on("load", () => {
   const year = yearSwitcher.currentYear() ?? INITIAL_YEAR;
   const entries = cityEntriesForYear(citiesData, year);
   return {
-    zoomStep: cityZoomStep,
-    rankLimit: visibleCityRankLimit(cityZoomStep),
+    zoomStep: zoomStep,
+    rankLimit: visibleCityRankLimit(zoomStep),
     totalCities: entries.length,
-    visibleCities: filterCitiesByZoom(entries, cityZoomStep).length,
+    visibleCities: filterCitiesByZoom(entries, zoomStep).length,
+  };
+};
+
+// TASK-97: ヘッドレス CDP 検証用に山脈ラベルの表示状態を公開する
+// （__getCityDebug と同じ読み取り専用フック）。canvas からは表示中のラベルを
+// 数えられないため、ズーム段・表示中の山脈名・アンカーの画面座標を直接返す。
+// AC #2（ズーム出し分け）は visibleLabels の増減で、AC #8（陰影との位置一致）は
+// screen の座標をスクリーンショットと突き合わせて確認する。
+(globalThis as unknown as {
+  __getMountainLabelDebug?: () => {
+    zoomStep: number;
+    totalMountains: number;
+    visibleLabels: { name: string; text: string; minZoom: number }[];
+    screen: { name: string; x: number; y: number }[];
+  };
+}).__getMountainLabelDebug = () => {
+  const { data } = memoizedMountainLabelData(mountainsData, nameJa);
+  const visible = filterVisibleMountainLabels(data, zoomStep);
+  return {
+    zoomStep,
+    totalMountains: data.length,
+    visibleLabels: visible.map((d) => ({
+      name: d.name,
+      text: d.text,
+      minZoom: d.minZoom,
+    })),
+    screen: visible.map((d) => {
+      const point = map.project(d.position);
+      return { name: d.name, x: point.x, y: point.y };
+    }),
   };
 };
 
@@ -2599,7 +2725,7 @@ map.on("load", () => {
   __getCityScreenPositions?: () => { name: string; x: number; y: number }[];
 }).__getCityScreenPositions = () => {
   const year = yearSwitcher.currentYear() ?? INITIAL_YEAR;
-  const entries = memoizedVisibleCityEntries(citiesData, year, cityZoomStep);
+  const entries = memoizedVisibleCityEntries(citiesData, year, zoomStep);
   return entries.map((entry) => {
     const point = map.project([entry.lon, entry.lat]);
     return { name: entry.name, x: point.x, y: point.y };

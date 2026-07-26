@@ -234,6 +234,9 @@ export const RIVER_LABEL_LAYER_ID = "river-labels";
 /** 都市名ラベル（TextLayer）のレイヤー ID（TASK-27） */
 export const CITY_LABEL_LAYER_ID = "city-labels";
 
+/** 山脈名ラベル（TextLayer）のレイヤー ID（TASK-97） */
+export const MOUNTAIN_LABEL_LAYER_ID = "mountain-labels";
+
 /**
  * interleaved ではなく overlaid オーバーレイ（deck 専用 canvas）に載せる
  * レイヤーの ID（TASK-77）。
@@ -251,7 +254,13 @@ export const CITY_LABEL_LAYER_ID = "city-labels";
  * preRender / _render で確認。ヘッドレス実機でもラベル全滅を再現し、
  * collisionEnabled: false にすると復活することで原因を特定した）。
  *
- * ラベル 3 層は pickable: false で picking に一切関与せず（PICKING_PRIORITY に
+ * TASK-97: 山脈名ラベル（mountain-labels）も同じ理由で overlaid 側に載せる。
+ * 並びの先頭（= 最初に描く）に置くのは、地形の注記が政治・都市の注記より
+ * 下の階層だという意味づけを配列順にも残すため。表示の取捨は配列順ではなく
+ * CollisionFilterExtension の priority（mountains.ts の帯設計）が決めるので、
+ * 位置を変えても見た目は変わらない。
+ *
+ * ラベル 4 層は pickable: false で picking に一切関与せず（PICKING_PRIORITY に
  * 含まれない）、描画順も常に最前面のため、overlaid オーバーレイ（地図 canvas の
  * 上に重ねる deck 専用 canvas。コンテナは pointer-events: none なので地図操作を
  * 妨げない）へ移しても見た目・操作は変わらない。移すことで衝突判定が
@@ -261,6 +270,7 @@ export const CITY_LABEL_LAYER_ID = "city-labels";
  * 従来どおり効く。
  */
 export const OVERLAID_LAYER_IDS: readonly string[] = [
+  MOUNTAIN_LABEL_LAYER_ID,
   LABEL_LAYER_ID,
   RIVER_LABEL_LAYER_ID,
   CITY_LABEL_LAYER_ID,

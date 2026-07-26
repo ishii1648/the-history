@@ -182,6 +182,16 @@ export const CITY_LABEL_COLOR: LabelColor = [121, 62, 22, 255];
 export const RIVER_LABEL_COLOR: LabelColor = [2, 119, 189, 255];
 
 /**
+ * 山脈名ラベルの文字色（深い苔緑 #35543F。TASK-97）。国名の濃グレー
+ * [40,40,40]・HRE 領邦の臙脂・仏諸侯領の藍紫・都市の濃茶・河川の水色の
+ * いずれとも色相が離れており、「地形の注記」だと一見して区別できる。
+ * 緑はこの地図で唯一使われていない色相で、山地・自然物の記号としても素直。
+ * クリーム halo（LABEL_OUTLINE_COLOR）に対するコントラスト比は約 7:1 で、
+ * MIN_HALO_LABEL_CONTRAST と同水準（陰影の濃い山体の上でも輪郭が効く）。
+ */
+export const MOUNTAIN_LABEL_COLOR: LabelColor = [53, 84, 63, 255];
+
+/**
  * 全 TextLayer（国名・HRE 領邦名・都市名・河川名）に共通のフォントスタック
  * （TASK-38 AC #2）。日本語ラベル（name-ja.json、TASK-23）と欧文ラベルの
  * 双方を高い可読性で描画できるよう、主要 OS の高品質な和文/欧文 sans-serif を
@@ -265,6 +275,13 @@ export const RIVER_LABEL_SIZE_PX = 12;
  * 国名ラベル（14px）より小さいままとし、既存の視覚的な階層を保つ。
  */
 export const CITY_LABEL_SIZE_PX = 12;
+
+/**
+ * 山脈名ラベルのサイズ（px）（TASK-97）。国名ラベル（14px）より小さく、
+ * 河川名・都市名（12px）と同じ「注記」の階層に置く。山脈は広い面を持つが、
+ * この地図の主題は勢力・都市なので文字サイズでは主張させない。
+ */
+export const MOUNTAIN_LABEL_SIZE_PX = 12;
 
 /** 全 TextLayer 共通のフォントウェイト（TASK-38 以来の semi-bold） */
 export const LABEL_FONT_WEIGHT = 600;

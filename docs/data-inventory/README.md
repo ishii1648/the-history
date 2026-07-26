@@ -20,6 +20,7 @@
 | 勢力色                     | `data/colors.json`                                                                                                                | `scripts/build-colors.ts` が NAME から決定的に生成（473 キー）                                                                                                                                                                              | —                                                                      | —                                                   |
 | 年代解説                   | `data/notes.json`                                                                                                                 | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                      | —                                                                      | 全 20 年代                                          |
 | 河川                       | `data/rivers.geojson`                                                                                                             | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                    | Public Domain (Natural Earth)                                          | 年代共通                                            |
+| 山脈                       | `data/mountains.geojson`                                                                                                          | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_geography_regions_polys.geojson`（`FEATURECLA = Range/mtn` のみ・山脈名ラベル用・年代非依存、§3.9）                     | Public Domain (Natural Earth)                                          | 年代共通                                            |
 
 > ライセンス上の注意: HRE 領邦データ（CC BY-NC-SA 4.0）は GPL-3.0 派生の
 > `europe_<year>.geojson`
@@ -580,6 +581,56 @@ Republic` だけで、1400 年は §3.7 の `Duchy of Milan`
 が収録している。OHM に無く収録できないその他の主要勢力:
 ヴェネツィア共和国（`admin_level` 2 で base
 側）・ボローニャ・パドヴァ・ウルビーノ公領。
+
+### 3.9 山脈（`mountains.geojson`、TASK-97）
+
+Natural Earth 50m `geography_regions_polys` の `FEATURECLA = Range/mtn`
+を、河川と同じピン留めコミット `ca96624a56bd`（Public Domain）から取得し、
+EUROPE_BBOX でクリップした年代非依存の 1
+ファイル（`scripts/build-mountains.ts`）。
+山脈は全年代で同一の地形なので年代スナップショットとは独立させる。
+
+properties は `name`（NE の `NAME`、英語）/ `scalerank` / `min_label` の 3
+つだけに間引き、日本語表記は他と同じく `data/name-ja.json` で引く。NE 側の
+`NAME_JA` をそのまま使わない例外は `ELBURZ MTS.` の 1 件で、NE
+の「エルブルス山」はコーカサスの Mount Elbrus
+との取り違えなので「アルボルズ山脈」を採る。
+
+**収録した 17 件**（`ADOPTED_MOUNTAIN_NAMES`。`km²`
+はクリップ後の測地面積、`残存` は元ポリゴンに対する比、`z`
+はラベルを出し始めるズーム段 = `ceil(MIN_LABEL)` を `MIN_ZOOM..MAX_ZOOM`
+にクランプした値）:
+
+| SCALERANK | NAME                 | 日本語                 |     km² | 残存 |  z |
+| --------: | -------------------- | ---------------------- | ------: | ---: | -: |
+|         1 | ALPS                 | アルプス山脈           | 176,043 | 100% |  4 |
+|         1 | URAL MOUNTAINS       | ウラル山脈             | 175,566 |  84% |  4 |
+|         1 | CAUCASUS MTS.        | コーカサス山脈         | 156,149 | 100% |  4 |
+|         2 | ATLAS MOUNTAINS      | アトラス山脈           | 334,650 |  49% |  4 |
+|         3 | KJØLEN MOUNTAINS     | スカンディナヴィア山脈 | 214,182 | 100% |  4 |
+|         3 | CARPATHIAN MOUNTAINS | カルパティア山脈       | 220,507 | 100% |  4 |
+|         3 | APPENNINI            | アペニン山脈           |  59,782 | 100% |  4 |
+|         3 | PYRENEES             | ピレネー山脈           |  38,895 | 100% |  4 |
+|         3 | ELBURZ MTS.          | アルボルズ山脈         |  58,457 | 100% |  4 |
+|         3 | ATLAS SAHARIEN       | サハラ・アトラス山脈   |  26,740 |  46% |  5 |
+|         4 | Dinaric Alps         | ディナル・アルプス山脈 | 125,286 | 100% |  6 |
+|         4 | Lesser Caucasus      | 小コーカサス山脈       |  62,892 | 100% |  6 |
+|         4 | PONTIC MOUNTAINS     | ポントス山脈           |  54,860 | 100% |  6 |
+|         4 | Balkan Mts.          | バルカン山脈           |  36,811 | 100% |  6 |
+|         4 | Cord. Cantábrica     | カンタブリア山脈       |  28,013 | 100% |  6 |
+|         4 | S. Nevada            | シエラネバダ山脈       |  22,483 | 100% |  6 |
+|         4 | Sierra Morena        | シエラ・モレナ山脈     |  29,399 | 100% |  6 |
+
+**収録しなかったもの**:
+
+| 対象                                                               | 理由                                                                                                                                             |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ZAGROS MOUNTAINS` 残存 14% / `KUH RUD MOUNTAINS` 残存 10%         | 山体の大半が EUROPE_BBOX の外（ペルシア内陸）。クリップされた断片にアンカーを置くと山脈の代表位置として誤りになる（`MIN_CLIP_AREA_RATIO = 0.4`） |
+| `PENÍNSULA IBÉRICA` / `CENTRAL RUSSIAN UPLAND` / `Ustyurt Plateau` | `FEATURECLA = Plateau` で山脈ではない。とくにイベリア半島は半島全体を覆う巨大ポリゴンで、山脈ラベルとして出すと地域名の注記になってしまう        |
+
+`ATLAS MOUNTAINS`（49%）と `ATLAS SAHARIEN`（46%）を残すのは、マグリブが地図に
+本体ごと映り（都市マーカーのアルジェ・チュニスと同じ範囲）陰影も見えるため。
+`MIN_CLIP_AREA_RATIO = 0.4` はこの 2 件とザグロス（14%）の間に閾値を置いた値。
 
 ## 4. 年代別サマリ
 

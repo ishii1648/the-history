@@ -5,6 +5,7 @@ import {
   CITY_LABEL_LAYER_ID,
   DECK_LAYER_GROUP_ID_PREFIX,
   LABEL_LAYER_ID,
+  MOUNTAIN_LABEL_LAYER_ID,
   OVERLAID_LAYER_IDS,
   overlaySplitIsValid,
   politicalFillGroupId,
@@ -258,7 +259,7 @@ Deno.test("概略境界レイヤーは deck 側の picking / 分配に一切関�
   assert(
     overlaySplitIsValid(
       [POWER_LAYER_ID, FRANCE_FIEF_LAYER_ID],
-      [LABEL_LAYER_ID, RIVER_LABEL_LAYER_ID, CITY_LABEL_LAYER_ID],
+      [...OVERLAID_LAYER_IDS],
     ),
   );
 });
@@ -323,12 +324,22 @@ Deno.test("水面レイヤー id がスタイルに無い場合は beforeId な�
 // オーバーレイ（deck 専用 canvas）へ移して衝突判定を interleaved のグループ
 // 分割から切り離す。
 
-Deno.test("overlaid 側に載せるのはラベル 3 層のみ", () => {
+Deno.test("overlaid 側に載せるのはラベル 4 層のみ（TASK-97 で山脈名を追加）", () => {
   assertEquals(OVERLAID_LAYER_IDS, [
+    MOUNTAIN_LABEL_LAYER_ID,
     LABEL_LAYER_ID,
     RIVER_LABEL_LAYER_ID,
     CITY_LABEL_LAYER_ID,
   ]);
+});
+
+Deno.test("山脈名ラベルは picking に関与せず、水面より上に描かれる（TASK-97）", () => {
+  assert(!PICKING_PRIORITY.includes(MOUNTAIN_LABEL_LAYER_ID));
+  assert(!UNDER_WATER_LAYER_IDS.includes(MOUNTAIN_LABEL_LAYER_ID));
+  assertEquals(
+    underWaterBeforeId(MOUNTAIN_LABEL_LAYER_ID, realStyleLayerIds),
+    undefined,
+  );
 });
 
 Deno.test("overlaid 側のレイヤーは picking 優先順に含まれない（picking は interleaved 側のみ, AC #3）", () => {
@@ -375,7 +386,7 @@ Deno.test("overlaySplitIsValid はラベル層が interleaved 側に混ざった
   assert(
     !overlaySplitIsValid(
       [POWER_LAYER_ID, RIVERS_LAYER_ID, LABEL_LAYER_ID],
-      [RIVER_LABEL_LAYER_ID, CITY_LABEL_LAYER_ID],
+      [MOUNTAIN_LABEL_LAYER_ID, RIVER_LABEL_LAYER_ID, CITY_LABEL_LAYER_ID],
     ),
   );
 });
@@ -385,7 +396,7 @@ Deno.test("overlaySplitIsValid はラベル層の欠落・余分なレイヤー�
   assert(
     !overlaySplitIsValid(
       [POWER_LAYER_ID, RIVERS_LAYER_ID],
-      [LABEL_LAYER_ID, RIVER_LABEL_LAYER_ID],
+      [MOUNTAIN_LABEL_LAYER_ID, LABEL_LAYER_ID, RIVER_LABEL_LAYER_ID],
     ),
   );
   // overlaid 側に picking 対象（河川）が混ざる = picking が壊れる
