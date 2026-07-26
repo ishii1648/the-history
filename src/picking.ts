@@ -17,6 +17,15 @@ export const POWER_LAYER_ID = "powers";
 /** HRE（神聖ローマ帝国）主要領邦オーバーレイのレイヤー ID（TASK-19） */
 export const HRE_LAYER_ID = "hre-powers";
 
+/**
+ * 中世フランス諸侯領（公領・伯領）オーバーレイのレイヤー ID（TASK-71）。
+ * HRE 領邦（hre-powers）と同じ「ベースの勢力ポリゴンの上に重ねる領邦層」で、
+ * 現状は対象年が排他（フランス諸侯 1000〜1300 / HRE 領邦 1500〜1700）だが、
+ * 機構としては独立レイヤーとして共存する。同時表示年が生じた場合の picking は
+ * PICKING_PRIORITY の並び（hre-powers > france-fiefs > powers）で一意に決まる。
+ */
+export const FRANCE_FIEF_LAYER_ID = "france-fiefs";
+
 /** 主要都市マーカー（ScatterplotLayer）のレイヤー ID（TASK-27） */
 export const CITY_LAYER_ID = "cities";
 
@@ -58,9 +67,16 @@ export const RIVERS_HIT_LAYER_ID = "rivers-hit";
 
 /**
  * picking の優先順（先頭が最優先）: 河川 > 都市 > 河川ヒット層 > HRE 領邦 >
- * 勢力（AC #4、TASK-49 で rivers-hit を cities より劣後させ都市 picking の
- * 遮蔽を解消）。pickable なレイヤーだけを含む（ラベル系レイヤーは
+ * 仏諸侯領 > 勢力（AC #4、TASK-49 で rivers-hit を cities より劣後させ都市
+ * picking の遮蔽を解消、TASK-71 で france-fiefs を powers の上に追加）。
+ * pickable なレイヤーだけを含む（ラベル系レイヤーは
  * pickable: false のため picking に関与せず、このリストにも含めない）。
+ *
+ * TASK-71: france-fiefs は powers（ベースの France ポリゴン）の上に置く。
+ * 諸侯領は France ポリゴンの内側に完全に含まれるため、下に置くと常に
+ * powers が勝って諸侯領をホバー/クリックできない。hre-powers との相対順は
+ * 現状意味を持たない（同時表示年が無い）が、後から追加された層を上へ
+ * 積む既定として hre-powers を上位に保つ。
  *
  * rivers-hit を cities の下・hre-powers/powers の上に置くことで:
  * - 可視の河川ライン（3px）直上は常に河川が最優先（従来どおり、decision-7 維持）
@@ -73,6 +89,7 @@ export const PICKING_PRIORITY: readonly string[] = [
   CITY_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
   HRE_LAYER_ID,
+  FRANCE_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 ];
 

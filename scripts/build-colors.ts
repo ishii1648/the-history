@@ -14,6 +14,7 @@
 import type { FeatureCollection } from "geojson";
 import { SNAPSHOT_YEARS } from "../src/config.ts";
 import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
+import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 
 const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;
@@ -308,7 +309,14 @@ async function loadOverrides(path: string): Promise<NameOverrides> {
 
 /**
  * data/europe_<year>.geojson を全年代ぶんと、存在する data/hre_<year>.geojson
- * （HRE 主要領邦オーバーレイ・`deno task build-hre` で生成）を読み込む。
+ * （HRE 主要領邦オーバーレイ・`deno task build-hre` で生成）・
+ * data/france_fiefs_<year>.geojson（中世フランス諸侯領オーバーレイ・
+ * `deno task build-france-fiefs` で生成、TASK-71）を読み込む。
+ *
+ * フランス諸侯領は SUBJECTO を持たない（属性は NAME / ADMIN_LEVEL /
+ * OHM_RELATION_ID / START_DATE / END_DATE）ため、buildColorMap では NAME キーの
+ * 独立勢力として扱われ、決定的プロービングで諸侯ごとに相異なる色が割り当てられる
+ * （HRE 領邦の INDEPENDENT_SUBJECT_SUZERAINS 相当の特別扱いは不要）。
  */
 async function loadCollections(): Promise<FeatureCollection[]> {
   const collections: FeatureCollection[] = [];
@@ -317,14 +325,19 @@ async function loadCollections(): Promise<FeatureCollection[]> {
     const fc = JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
     collections.push(fc);
   }
-  for (const year of HRE_OVERLAY_YEARS) {
-    const path = `${DATA_DIR}/hre_${year}.geojson`;
+  const optionalPaths = [
+    ...HRE_OVERLAY_YEARS.map((year) => `${DATA_DIR}/hre_${year}.geojson`),
+    ...FRANCE_FIEF_YEARS.map((year) =>
+      `${DATA_DIR}/france_fiefs_${year}.geojson`
+    ),
+  ];
+  for (const path of optionalPaths) {
     try {
       const fc = JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
       collections.push(fc);
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) throw error;
-      // 未生成環境（build-hre 前）ではスキップして従来どおり動かす
+      // 未生成環境（build-hre / build-france-fiefs 前）ではスキップして従来どおり動かす
     }
   }
   return collections;

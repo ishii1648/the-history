@@ -92,6 +92,26 @@ export function hasHreOverlay(
 }
 
 /**
+ * 中世フランス諸侯領オーバーレイ GeoJSON の配信 URL を返す（純粋関数、TASK-71）。
+ * 生成は scripts/build-france-fiefs.ts（OpenHistoricalMap / CC0）。
+ */
+export function franceFiefDataUrlFor(year: number): string {
+  return `/data/france_fiefs_${year}.geojson`;
+}
+
+/**
+ * 指定年にフランス諸侯領オーバーレイが存在するか（純粋関数、TASK-71）。
+ * 対象年は config.FRANCE_FIEF_OVERLAY_YEARS。判定規則は hasHreOverlay と同一だが、
+ * 呼び出し側で「どちらのオーバーレイの話か」を取り違えないよう別名で公開する。
+ */
+export function hasFranceFiefOverlay(
+  year: number,
+  overlayYears: readonly number[],
+): boolean {
+  return overlayYears.includes(year);
+}
+
+/**
  * feature を持たない空の FeatureCollection（非対象年の HRE オーバーレイ用）。
  * 同一参照を返し続けることで deck.gl の data 差分判定を最小化する。
  */
@@ -163,30 +183,32 @@ export function createYearDataLoader(
 }
 
 /**
- * HRE 領邦オーバーレイ用のローダを作る。
- * - オーバーレイが無い年（hasHreOverlay が false）は fetch せず空 FC を即返す
- * - 対象年は hre_<year>.geojson をキャッシュ・inflight 共有付きで取得する
+ * 年代限定オーバーレイ（HRE 領邦・フランス諸侯領）共通のローダを作る（TASK-71）。
+ * - オーバーレイが無い年（overlayYears に含まれない）は fetch せず空 FC を即返す
+ * - 対象年は urlFor(year) をキャッシュ・inflight 共有付きで取得する
  * - 取得失敗は reject せず warnFn へ通知して空 FC で解決する。オーバーレイは
  *   base 地図の付加情報であり、その欠落で年代切替全体（base の表示・ローディング
  *   /エラー UI）を失敗扱いにしない方針のため。失敗はキャッシュされず、次の
  *   切替時に再試行される。
  */
-export function createHreOverlayLoader(
+function createOverlayLoader(
   fetchFn: FetchLike,
   overlayYears: readonly number[],
-  warnFn: (message: string) => void = console.warn,
+  urlFor: (year: number) => string,
+  overlayLabel: string,
+  warnFn: (message: string) => void,
 ): YearDataLoader {
-  const inner = createYearDataLoader(fetchFn, hreDataUrlFor);
+  const inner = createYearDataLoader(fetchFn, urlFor);
   return {
     // 非対象年は fetch 自体が不要なので常に「取得済み」扱い（スピナー抑止）
-    has: (year) => !hasHreOverlay(year, overlayYears) || inner.has(year),
+    has: (year) => !overlayYears.includes(year) || inner.has(year),
     load(year) {
-      if (!hasHreOverlay(year, overlayYears)) {
+      if (!overlayYears.includes(year)) {
         return Promise.resolve(EMPTY_FEATURE_COLLECTION);
       }
       return inner.load(year).catch((error: unknown) => {
         warnFn(
-          `HRE オーバーレイの取得に失敗しました。基本地図のみ表示します: ${
+          `${overlayLabel}の取得に失敗しました。基本地図のみ表示します: ${
             String(error)
           }`,
         );
@@ -196,41 +218,92 @@ export function createHreOverlayLoader(
   };
 }
 
-/** 年代切替で同時に反映する base（europe_*）と hre（hre_*）のデータ組 */
+/**
+ * HRE 領邦オーバーレイ用のローダを作る（TASK-19）。
+ * 挙動は createOverlayLoader（非対象年は空 FC・取得失敗は warn + 空 FC）に従う。
+ */
+export function createHreOverlayLoader(
+  fetchFn: FetchLike,
+  overlayYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    overlayYears,
+    hreDataUrlFor,
+    "HRE オーバーレイ",
+    warnFn,
+  );
+}
+
+/**
+ * 中世フランス諸侯領オーバーレイ用のローダを作る（TASK-71）。
+ * HRE 領邦オーバーレイと同じ機構（createOverlayLoader）に載せることで、
+ * 非対象年（近世以降）は fetch せず空 FC を返し、ベースマップの France
+ * ポリゴンと二重表示にならないことを構造的に保証する（AC #4）。
+ */
+export function createFranceFiefOverlayLoader(
+  fetchFn: FetchLike,
+  overlayYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    overlayYears,
+    franceFiefDataUrlFor,
+    "フランス諸侯領オーバーレイ",
+    warnFn,
+  );
+}
+
+/**
+ * 年代切替で同時に反映する base（europe_*）・hre（hre_*）・
+ * fiefs（france_fiefs_*、TASK-71）のデータ組
+ */
 export interface YearLayerData {
   /** 勢力圏 base レイヤーの FeatureCollection */
   base: FeatureCollection;
   /** HRE 領邦オーバーレイの FeatureCollection（非対象年・取得失敗時は空） */
   hre: FeatureCollection;
+  /** 中世フランス諸侯領オーバーレイの FeatureCollection（非対象年・取得失敗時は空） */
+  fiefs: FeatureCollection;
 }
 
-/** base + hre をまとめてロードする複合ローダ */
+/** base + hre + fiefs をまとめてロードする複合ローダ */
 export interface CombinedYearLoader {
-  /** base と hre を並行ロードし、両方揃ってから返す */
+  /** base・hre・fiefs を並行ロードし、全て揃ってから返す */
   load(year: number): Promise<YearLayerData>;
-  /** base と hre の両方が取得済み（fetch 不要）か */
+  /** base・hre・fiefs の全てが取得済み（fetch 不要）か */
   has(year: number): boolean;
 }
 
 /**
- * base ローダと HRE オーバーレイローダを束ねた複合ローダを作る。
- * Promise.all で並行ロードし、両方揃ってから解決するため、applyFn には常に
- * base と hre が同じ年で対になって渡る（片方だけ先に反映されるちらつきが無い）。
- * base の失敗は reject（既存のローディング/エラー UI が処理）、hre の失敗は
- * createHreOverlayLoader 側で空 FC に落ちるため、ここでは特別扱いしない。
+ * base ローダと 2 系統のオーバーレイローダ（HRE 領邦・フランス諸侯領）を束ねた
+ * 複合ローダを作る。Promise.all で並行ロードし、全て揃ってから解決するため、
+ * applyFn には常に同じ年の base / hre / fiefs が対になって渡る（一部だけ先に
+ * 反映されるちらつきが無い）。base の失敗は reject（既存のローディング/エラー
+ * UI が処理）、オーバーレイの失敗は各 createXxxOverlayLoader 側で空 FC に
+ * 落ちるため、ここでは特別扱いしない。
+ *
+ * fiefLoader は任意（TASK-71 以前の 2 引数呼び出しと後方互換）。省略時は
+ * fiefs が常に空 FC になり、従来どおり base + hre だけの挙動になる。
  */
 export function createCombinedYearLoader(
   baseLoader: YearDataLoader,
   hreLoader: YearDataLoader,
+  fiefLoader?: YearDataLoader,
 ): CombinedYearLoader {
   return {
-    has: (year) => baseLoader.has(year) && hreLoader.has(year),
+    has: (year) =>
+      baseLoader.has(year) && hreLoader.has(year) &&
+      (fiefLoader === undefined || fiefLoader.has(year)),
     async load(year) {
-      const [base, hre] = await Promise.all([
+      const [base, hre, fiefs] = await Promise.all([
         baseLoader.load(year),
         hreLoader.load(year),
+        fiefLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
       ]);
-      return { base, hre };
+      return { base, hre, fiefs };
     },
   };
 }

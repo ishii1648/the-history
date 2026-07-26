@@ -3,7 +3,8 @@ import nameJa from "../data/name-ja.json" with { type: "json" };
 import nameOverrides from "../data/name-overrides.json" with { type: "json" };
 import citiesData from "../data/cities.json" with { type: "json" };
 
-// data/europe_*.geojson（全 20 年代）と data/hre_*.geojson（4 年代）の全 feature の
+// data/europe_*.geojson（全 20 年代）・data/hre_*.geojson（5 年代）・
+// data/france_fiefs_*.geojson（5 年代、TASK-71）の全 feature の
 // NAME / SUBJECTO のユニーク値（null 除外）に data/rivers.geojson の全 feature の
 // name のユニーク値（null 除外）を加えたリスト（勢力名 + 河川名）。
 //
@@ -25,7 +26,7 @@ import citiesData from "../data/cities.json" with { type: "json" };
 // データ変更時は下記コマンドで再生成して手動更新する運用とする。
 //
 // 再生成コマンド（リポジトリルートで実行）:
-//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
+//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
 const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "3",
   "Abbasid Caliphate",
@@ -98,6 +99,15 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Chuds",
   "Comté de Toulouse",
   "Corsica",
+  "County of Alençon",
+  "County of Anjou",
+  "County of Artois",
+  "County of Bar",
+  "County of Champagne",
+  "County of Flanders",
+  "County of Maine",
+  "County of Poitou",
+  "County of Ponthieu",
   "Crimean Khanate",
   "Croatia",
   "Croatian kingdom",
@@ -112,7 +122,12 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Denmark-Norway",
   "Derbent",
   "Dnipro",
+  "Duchy of Aquitaine",
   "Duchy of Bavaria",
+  "Duchy of Brittany",
+  "Duchy of Burgundy",
+  "Duchy of Gascony",
+  "Duchy of Normandy",
   "Duchy of Saxony",
   "Duchy of Swabia",
   "Duchy of Württemberg",
@@ -410,6 +425,33 @@ Deno.test("主要国の日本語表記が期待どおり", () => {
   };
   for (const [name, ja] of Object.entries(expected)) {
     assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+});
+
+Deno.test("中世フランス諸侯領 14 件が称号付きの日本語表記で登録されている（TASK-71 AC #2）", () => {
+  const expected: Record<string, string> = {
+    "County of Alençon": "アランソン伯領",
+    "County of Anjou": "アンジュー伯領",
+    "County of Artois": "アルトワ伯領",
+    "County of Bar": "バール伯領",
+    "County of Champagne": "シャンパーニュ伯領",
+    "County of Flanders": "フランドル伯領",
+    "County of Maine": "メーヌ伯領",
+    "County of Poitou": "ポワトゥー伯領",
+    "County of Ponthieu": "ポンチュー伯領",
+    "Duchy of Aquitaine": "アキテーヌ公領",
+    "Duchy of Brittany": "ブルターニュ公領",
+    "Duchy of Burgundy": "ブルゴーニュ公領",
+    "Duchy of Gascony": "ガスコーニュ公領",
+    "Duchy of Normandy": "ノルマンディー公領",
+  };
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+    // 称号（公領 / 伯領）付きで統一されていること
+    assert(
+      ja.endsWith("公領") || ja.endsWith("伯領"),
+      `${name} の訳に称号が無い: ${ja}`,
+    );
   }
 });
 

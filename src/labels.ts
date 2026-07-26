@@ -37,11 +37,12 @@ export const MIN_LABEL_PRIORITY = -1000;
 export const MAX_LABEL_PRIORITY = 1000;
 
 /**
- * 勢力ラベルの由来種別（TASK-30）。
+ * 勢力ラベルの由来種別（TASK-30、TASK-71 で "fief" を追加）。
  * - "base": 独立国など base データ（europe_*）由来
  * - "hre": HRE 領邦オーバーレイ（hre_*）由来
+ * - "fief": 中世フランス諸侯領オーバーレイ（france_fiefs_*）由来
  */
-export type LabelKind = "base" | "hre";
+export type LabelKind = "base" | "hre" | "fief";
 
 /** TextLayer に渡すラベル 1 件分のデータ */
 export interface LabelDatum {
@@ -71,11 +72,24 @@ export const BASE_LABEL_COLOR: LabelColor = [40, 40, 40, 255];
 export const HRE_LABEL_COLOR: LabelColor = [140, 30, 30, 255];
 
 /**
- * ラベルの文字色を由来種別から決める（純粋関数、TASK-30 AC #1）。
- * kind=hre のみ帝国色、それ以外（base・省略）は従来の濃グレー。
+ * 中世フランス諸侯領ラベルの文字色（TASK-71 AC #1）。青紫（藍紫）系の深い色。
+ * 既存のラベル色 — 独立国の濃グレー [40,40,40]・HRE 領邦の臙脂 [140,30,30]・
+ * 都市の茶 [121,62,22]・河川の水色 [2,119,189] — のいずれとも色相・明度が
+ * 離れており、白 halo + 背景パネル上で判読しつつ「フランス王国内の封建諸侯」の
+ * 記号として一目で区別できる。河川の水色とは同じ寒色域だが、彩度を落として
+ * 紫寄りにすることで注記（河川）と領域ラベル（諸侯領）を混同しない。
+ */
+export const FIEF_LABEL_COLOR: LabelColor = [74, 42, 130, 255];
+
+/**
+ * ラベルの文字色を由来種別から決める（純粋関数、TASK-30 AC #1・TASK-71 AC #1）。
+ * kind=hre は帝国色、kind=fief は仏諸侯領色、それ以外（base・省略）は
+ * 従来の濃グレー。
  */
 export function labelColorFor(d: Pick<LabelDatum, "kind">): LabelColor {
-  return d.kind === "hre" ? HRE_LABEL_COLOR : BASE_LABEL_COLOR;
+  if (d.kind === "hre") return HRE_LABEL_COLOR;
+  if (d.kind === "fief") return FIEF_LABEL_COLOR;
+  return BASE_LABEL_COLOR;
 }
 
 /**

@@ -3,6 +3,7 @@ import {
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
   FALLBACK_STYLE_URL,
+  FRANCE_FIEF_OVERLAY_YEARS,
   HRE_OVERLAY_YEARS,
   INITIAL_CENTER,
   INITIAL_YEAR,
@@ -116,4 +117,41 @@ Deno.test("HRE_OVERLAY_YEARS は 1715 以降のスナップショット年を含
     assert(year < 1715, `${year} は 1715 以降（二重表示になる）`);
     assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
   }
+});
+
+Deno.test("FRANCE_FIEF_OVERLAY_YEARS は中世 5 年代である（TASK-71）", () => {
+  assertEquals([...FRANCE_FIEF_OVERLAY_YEARS], [1000, 1100, 1200, 1279, 1300]);
+});
+
+Deno.test("FRANCE_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS の部分集合（TASK-71）", () => {
+  const sorted = [...FRANCE_FIEF_OVERLAY_YEARS].sort((a, b) => a - b);
+  assertEquals([...FRANCE_FIEF_OVERLAY_YEARS], sorted);
+  assertEquals(
+    new Set(FRANCE_FIEF_OVERLAY_YEARS).size,
+    FRANCE_FIEF_OVERLAY_YEARS.length,
+  );
+  for (const year of FRANCE_FIEF_OVERLAY_YEARS) {
+    assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
+});
+
+Deno.test("FRANCE_FIEF_OVERLAY_YEARS は近世以降（1400 年以降）を含まない（ベースマップ勢力表示との二重表示回避。TASK-71 AC #4）", () => {
+  for (const year of FRANCE_FIEF_OVERLAY_YEARS) {
+    assert(year <= 1300, `${year} は中世の対象年ではない（二重表示になる）`);
+  }
+  for (const year of SNAPSHOT_YEARS) {
+    if (year >= 1400) {
+      assert(
+        !FRANCE_FIEF_OVERLAY_YEARS.includes(year),
+        `${year} でフランス諸侯オーバーレイが出てはいけない`,
+      );
+    }
+  }
+});
+
+Deno.test("FRANCE_FIEF_OVERLAY_YEARS と HRE_OVERLAY_YEARS は互いに素（現状 2 系統のオーバーレイは同時表示年を持たない。TASK-71）", () => {
+  const overlap = FRANCE_FIEF_OVERLAY_YEARS.filter((y) =>
+    HRE_OVERLAY_YEARS.includes(y)
+  );
+  assertEquals(overlap, []);
 });

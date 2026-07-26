@@ -44,7 +44,7 @@ Deno.test("getOptionalCopyTargets は distDir を反映する", () => {
 });
 
 Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON を dist/data/ にコピーする対象を返す", () => {
-  const targets = getDataCopyTargets("dist", [900, 1000], [1500, 1530]);
+  const targets = getDataCopyTargets("dist", [900, 1000], [1500, 1530], [1200]);
   assertEquals(targets, [
     { from: "data/index.json", to: "dist/data/index.json" },
     { from: "data/colors.json", to: "dist/data/colors.json" },
@@ -70,11 +70,16 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
     // TASK-19: HRE 主要領邦オーバーレイ用の GeoJSON（deno task build-hre で生成）
     { from: "data/hre_1500.geojson", to: "dist/data/hre_1500.geojson" },
     { from: "data/hre_1530.geojson", to: "dist/data/hre_1530.geojson" },
+    // TASK-71: 中世フランス諸侯領オーバーレイ（deno task build-france-fiefs で生成）
+    {
+      from: "data/france_fiefs_1200.geojson",
+      to: "dist/data/france_fiefs_1200.geojson",
+    },
   ]);
 });
 
 Deno.test("getDataCopyTargets は distDir を反映する", () => {
-  const targets = getDataCopyTargets("out", [1492], [1650]);
+  const targets = getDataCopyTargets("out", [1492], [1650], [1279]);
   assertEquals(targets, [
     { from: "data/index.json", to: "out/data/index.json" },
     { from: "data/colors.json", to: "out/data/colors.json" },
@@ -89,7 +94,19 @@ Deno.test("getDataCopyTargets は distDir を反映する", () => {
     },
     { from: "data/europe_1492.geojson", to: "out/data/europe_1492.geojson" },
     { from: "data/hre_1650.geojson", to: "out/data/hre_1650.geojson" },
+    {
+      from: "data/france_fiefs_1279.geojson",
+      to: "out/data/france_fiefs_1279.geojson",
+    },
   ]);
+});
+
+Deno.test("getDataCopyTargets は fiefYears 省略時に france_fiefs を含めない（後方互換）", () => {
+  const targets = getDataCopyTargets("dist", [900], [1500]);
+  assertEquals(
+    targets.filter((t) => t.from.includes("france_fiefs")),
+    [],
+  );
 });
 
 Deno.test("findNodeImports は node: の静的 import specifier を重複なく列挙する", () => {

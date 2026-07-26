@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "@std/assert";
 import {
   CITY_LAYER_ID,
+  FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   isDirectPickFinal,
   isRiversPickLayerId,
@@ -16,7 +17,7 @@ import {
 
 // ---- PICKING_PRIORITY ----
 
-Deno.test("PICKING_PRIORITY: 河川 > 都市 > 河川ヒット層 > HRE 領邦 > 勢力 の順で並ぶ（TASK-49）", () => {
+Deno.test("PICKING_PRIORITY: 河川 > 都市 > 河川ヒット層 > HRE 領邦 > 仏諸侯領 > 勢力 の順で並ぶ（TASK-49, TASK-71）", () => {
   assertEquals(
     [...PICKING_PRIORITY],
     [
@@ -24,9 +25,28 @@ Deno.test("PICKING_PRIORITY: 河川 > 都市 > 河川ヒット層 > HRE 領邦 >
       CITY_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
       HRE_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ],
   );
+});
+
+Deno.test("PICKING_PRIORITY: france-fiefs は powers より優先される（オーバーレイがベースの上）（TASK-71）", () => {
+  const fiefIndex = PICKING_PRIORITY.indexOf(FRANCE_FIEF_LAYER_ID);
+  const powerIndex = PICKING_PRIORITY.indexOf(POWER_LAYER_ID);
+  assert(fiefIndex !== -1);
+  assert(powerIndex !== -1);
+  assert(fiefIndex < powerIndex);
+});
+
+Deno.test("renderOrderFromPickingPriority: france-fiefs は powers の上・cities の下に描画される（TASK-71）", () => {
+  const order = renderOrderFromPickingPriority(PICKING_PRIORITY);
+  assert(order.indexOf(POWER_LAYER_ID) < order.indexOf(FRANCE_FIEF_LAYER_ID));
+  assert(order.indexOf(FRANCE_FIEF_LAYER_ID) < order.indexOf(CITY_LAYER_ID));
+});
+
+Deno.test("isDirectPickFinal: france-fiefs は直下 pick 確定にしない（河川の近傍再ピックを妨げない）（TASK-71）", () => {
+  assert(!isDirectPickFinal(FRANCE_FIEF_LAYER_ID));
 });
 
 Deno.test("PICKING_PRIORITY: rivers-hit は rivers より劣後する（rivers より後）（TASK-49）", () => {
@@ -196,6 +216,7 @@ Deno.test("renderOrderFromPickingPriority: 描画順（下→上）は優先順�
     renderOrderFromPickingPriority(PICKING_PRIORITY),
     [
       POWER_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
       CITY_LAYER_ID,

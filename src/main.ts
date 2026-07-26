@@ -17,13 +17,16 @@ import {
 } from "./fallback.ts";
 import {
   createCombinedYearLoader,
+  createFranceFiefOverlayLoader,
   createHreOverlayLoader,
   createYearDataLoader,
   createYearSwitcher,
   EMPTY_FEATURE_COLLECTION,
   fillColorFor,
+  hasFranceFiefOverlay,
   LINE_COLOR,
   LINE_WIDTH_PX,
+  type Rgba,
 } from "./powers.ts";
 import { displayLabel } from "./info.ts";
 import {
@@ -32,6 +35,7 @@ import {
   CITY_LABEL_COLOR,
   CITY_LABEL_SIZE_PX,
   COLLISION_SIZE_SCALE,
+  FIEF_LABEL_COLOR,
   LABEL_BACKGROUND_COLOR,
   LABEL_BACKGROUND_PADDING,
   LABEL_FONT_FAMILY,
@@ -85,6 +89,7 @@ import {
   BASEMAP_SOURCE_ID,
   DEM_PMTILES_URL,
   FALLBACK_STYLE_URL,
+  FRANCE_FIEF_OVERLAY_YEARS,
   HRE_OVERLAY_YEARS,
   INITIAL_CENTER,
   INITIAL_YEAR,
@@ -121,6 +126,7 @@ import {
 } from "./known_limitations.ts";
 import {
   CITY_LAYER_ID,
+  FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   isDirectPickFinal,
   isRiversPickLayerId,
@@ -285,13 +291,17 @@ let renames: Record<string, string> = {};
  */
 let nameJa: Record<string, string> = {};
 
-// 年代 GeoJSON のローダ（fetch は本番のもの）。base（europe_*）と HRE 領邦
-// オーバーレイ（hre_*、対象年のみ）を複合ローダで束ね、並行ロードして両方
-// 揃ってから反映する。HRE の取得失敗は powers.ts 側で warn + 空扱いになり、
-// base の表示・ローディング/エラー UI（failLoading）は base 失敗時のみ動く。
+// 年代 GeoJSON のローダ（fetch は本番のもの）。base（europe_*）・HRE 領邦
+// オーバーレイ（hre_*、1500〜1700）・中世フランス諸侯領オーバーレイ
+// （france_fiefs_*、1000〜1300。TASK-71）を複合ローダで束ね、並行ロードして
+// 全て揃ってから反映する。オーバーレイの取得失敗は powers.ts 側で warn +
+// 空扱いになり、base の表示・ローディング/エラー UI（failLoading）は base
+// 失敗時のみ動く。非対象年のオーバーレイは fetch されず空 FC になるため、
+// ベースマップの勢力ポリゴンと二重表示になることはない。
 const dataLoader = createCombinedYearLoader(
   createYearDataLoader((url) => fetch(url)),
   createHreOverlayLoader((url) => fetch(url), HRE_OVERLAY_YEARS),
+  createFranceFiefOverlayLoader((url) => fetch(url), FRANCE_FIEF_OVERLAY_YEARS),
 );
 
 /** 主要河川 GeoJSON（起動時に 1 度ロード。失敗時は空のまま河川なしで継続） */
@@ -330,7 +340,12 @@ let hreHighlighted = false;
 
 /** 直近に反映された年代のデータ。選択変更時のレイヤー再構築で使う */
 let currentView:
-  | { year: number; base: FeatureCollection; hre: FeatureCollection }
+  | {
+    year: number;
+    base: FeatureCollection;
+    hre: FeatureCollection;
+    fiefs: FeatureCollection;
+  }
   | null = null;
 
 // AC #1: MapboxOverlay（interleaved）で deck.gl を MapLibre に統合する。
@@ -367,15 +382,36 @@ const overlay = new MapboxOverlay({
 });
 
 /**
+ * 中世フランス諸侯領オーバーレイの境界線色（TASK-71 AC #1）。ラベル文字色
+ * （labels.ts FIEF_LABEL_COLOR）と同系の藍紫。base 勢力ポリゴンの白境界
+ * （powers.ts LINE_COLOR）と明確に異なる色にすることで、「フランス王国の内側に
+ * 重なった諸侯領の区画」であることが塗り分けとは独立に読み取れる。塗り自体は
+ * base と同じ colors.json 由来（諸侯ごとに決定的な独立色）で、alpha も共通の
+ * FILL_ALPHA のため、下のベースマップ・France ポリゴンが透けて見える。
+ */
+const FIEF_LINE_COLOR: Rgba = [
+  FIEF_LABEL_COLOR[0],
+  FIEF_LABEL_COLOR[1],
+  FIEF_LABEL_COLOR[2],
+  220,
+];
+
+/** 諸侯領境界線の太さ（px）。base の勢力境界（1px）より少し太く、区画を際立たせる */
+const FIEF_LINE_WIDTH_PX = 1.5;
+
+/**
  * 指定年代の FeatureCollection から GeoJsonLayer を 1 枚生成する。
  * data 以外のプロパティは全年代で不変。updateTriggers に year を渡し、
  * 色関数の再評価を促す（colors 読み込み前後でも齟齬が出ないようにする）。
- * powers と hre-powers の 2 枚で共用し、id 以外は同一の挙動にする（TASK-19）。
+ * powers / hre-powers / france-fiefs の 3 枚で共用し、id と境界線の見た目
+ * （lineColor / lineWidth）以外は同一の挙動にする（TASK-19、TASK-71）。
  */
 function buildPowerLayer(
   id: string,
   year: number,
   data: FeatureCollection,
+  lineColor: Rgba = LINE_COLOR,
+  lineWidth: number = LINE_WIDTH_PX,
 ): GeoJsonLayer {
   return new GeoJsonLayer({
     id,
@@ -386,10 +422,10 @@ function buildPowerLayer(
     filled: true,
     // AC #2: 塗り色は colors.json 参照・opacity 0.5 相当（alpha はカラーに内包）
     getFillColor: (f: Feature) => fillColorFor(f.properties, colors),
-    // AC #2: 白系の境界線
-    getLineColor: LINE_COLOR,
+    // AC #2: 白系の境界線（TASK-71: フランス諸侯領のみ藍紫の少し太い線）
+    getLineColor: lineColor,
     lineWidthUnits: "pixels",
-    getLineWidth: LINE_WIDTH_PX,
+    getLineWidth: lineWidth,
     // 塗りの alpha はカラー側で表現するため、レイヤー opacity は等倍にする
     opacity: 1,
     updateTriggers: { getFillColor: [year] },
@@ -430,7 +466,12 @@ function pickedLabel(info: PickingInfo): string | null {
     const name = riverNameFor(feature.properties);
     return name === null ? null : nameJa[name] ?? name;
   }
-  if (layerId === POWER_LAYER_ID || layerId === HRE_LAYER_ID) {
+  if (
+    layerId === POWER_LAYER_ID || layerId === HRE_LAYER_ID ||
+    layerId === FRANCE_FIEF_LAYER_ID
+  ) {
+    // TASK-71: フランス諸侯領は SUBJECTO を持たないため displayLabel は NAME の
+    // 日本語表記（称号付き）をそのまま返す（宗主国込み表記にはならない）
     return displayLabel(feature.properties, renames, nameJa);
   }
   return null;
@@ -490,8 +531,11 @@ function applyHreHighlight(next: boolean): void {
 
 /**
  * pickMultipleObjects で近傍候補を取得する際の最大件数（depth）（TASK-36）。
- * PICKING_PRIORITY は 4 層のみのため小さい値で十分（deck.gl デフォルトの 10
- * より絞り、余分な GPU 読み戻しコストを抑える）。
+ * PICKING_PRIORITY は 6 層のみのため小さい値で十分（deck.gl デフォルトの 10
+ * より絞り、余分な GPU 読み戻しコストを抑える）。TASK-71 で france-fiefs が
+ * 加わり層数と同数になったが、フランス諸侯領と HRE 領邦は同時表示年を持たない
+ * ため実際に同一ピクセルへ重なりうる pickable 層は最大 5（rivers / cities /
+ * rivers-hit / いずれかの領邦オーバーレイ / powers）で、なお余裕がある。
  */
 const CLICK_PICK_DEPTH = 6;
 
@@ -886,8 +930,12 @@ function buildHreExtentLayer(
 
 /**
  * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
- * 反映する。描画順（配列順 = 下から上）: powers → hre-powers → hre-extent →
- * rivers-hit → cities → rivers → power-labels → river-labels → city-labels。
+ * 反映する。描画順（配列順 = 下から上）: powers → france-fiefs → hre-powers →
+ * hre-extent → rivers-hit → cities → rivers → power-labels → river-labels →
+ * city-labels。
+ * TASK-71: france-fiefs は powers の直上（ベースの France ポリゴンの上）に置く。
+ * 塗りは共通の FILL_ALPHA（半透明）なので下の勢力塗りが透け、諸侯領の欠落部
+ * （南仏・パリ周辺など）はベースの France 塗りがそのまま見える。
  * rivers-hit（TASK-43）は rivers と同一データの透明太幅ヒットライン層で、
  * picking 専用に重ねる（見た目には影響しない）。cities の下に描画すること
  * （TASK-49）で、河畔都市マーカーの picking を rivers-hit が遮蔽しないように
@@ -906,10 +954,20 @@ function buildHreExtentLayer(
  */
 function renderLayers(): void {
   if (currentView === null) return;
-  const { year, base, hre } = currentView;
+  const { year, base, hre, fiefs } = currentView;
   const buildPickableLayer: Record<string, () => Layer> = {
     [POWER_LAYER_ID]: () => buildPowerLayer(POWER_LAYER_ID, year, base),
     [HRE_LAYER_ID]: () => buildPowerLayer(HRE_LAYER_ID, year, hre),
+    // TASK-71: 中世フランス諸侯領。base の France ポリゴンの上に重ね、
+    // 藍紫の境界線で区画を示す（非対象年は空 FC なので実質非表示）
+    [FRANCE_FIEF_LAYER_ID]: () =>
+      buildPowerLayer(
+        FRANCE_FIEF_LAYER_ID,
+        year,
+        fiefs,
+        FIEF_LINE_COLOR,
+        FIEF_LINE_WIDTH_PX,
+      ),
     [CITY_LAYER_ID]: () => buildCityMarkerLayer(year),
     [RIVERS_LAYER_ID]: () => buildRiversLineLayer(),
     [RIVERS_HIT_LAYER_ID]: () => buildRiversHitLayer(),
@@ -929,7 +987,7 @@ function renderLayers(): void {
     if (id === HRE_LAYER_ID) layers.push(buildHreExtentLayer(year, base));
   }
   layers.push(
-    buildLabelLayer(year, base, hre),
+    buildLabelLayer(year, base, hre, fiefs),
     buildRiverLabelLayer(),
     buildCityLabelLayer(year),
   );
@@ -959,18 +1017,22 @@ function renderLayers(): void {
  */
 const memoizedPowerLabelData = memoizeLatest(
   (
-    // year 自体は未使用だがメモ化キーの一部として渡す（base/hre と揃えて
+    // year 自体は未使用だがメモ化キーの一部として渡す（base/hre/fiefs と揃えて
     // 明示的に年代依存であることを示す）
     _year: number,
     base: FeatureCollection,
     hre: FeatureCollection,
+    fiefs: FeatureCollection,
     ja: Record<string, string>,
   ) => {
     // TASK-23: ラベルは name-ja.json で日本語化する（未登録 NAME は英語のまま）。
     // TASK-30: kind（base/hre）を付与し、HRE 領邦ラベルだけ帝国色で塗り分ける。
+    // TASK-71: フランス諸侯領は kind=fief で藍紫。オーバーレイ非対象年では
+    // fiefs が空 FC なのでラベルも 0 件になる（二重ラベルにならない）。
     const data = [
       ...buildLabelData(base, ja, "base"),
       ...buildLabelData(hre, ja, "hre"),
+      ...buildLabelData(fiefs, ja, "fief"),
     ];
     return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
   },
@@ -980,12 +1042,14 @@ function buildLabelLayer(
   year: number,
   base: FeatureCollection,
   hre: FeatureCollection,
+  fiefs: FeatureCollection,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
   // TextLayer は 1 枚のまま・衝突制御（共有空間・priority）も従来どおり。
   const { data, characterSet } = memoizedPowerLabelData(
     year,
     base,
     hre,
+    fiefs,
     nameJa,
   );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
@@ -1000,7 +1064,8 @@ function buildLabelLayer(
     getPosition: (d) => d.position,
     // POWER_LABEL_SIZE_PX 固定・濃色文字 + 白 halo（SDF アウトライン）で塗りの上でも判読できる。
     // TASK-30 AC #1: 文字色は kind で塗り分け（独立国 = 濃グレー、HRE 域内の
-    // 領邦 = 臙脂 HRE_LABEL_COLOR）。ラベルだけで域内/域外を区別できる。
+    // 領邦 = 臙脂 HRE_LABEL_COLOR、TASK-71: フランス諸侯領 = 藍紫
+    // FIEF_LABEL_COLOR）。ラベルだけで由来の系統を区別できる。
     getSize: POWER_LABEL_SIZE_PX,
     getColor: (d: LabelDatum) => [...labelColorFor(d)],
     // ü などの非 ASCII 文字（Württemberg 等）もグリフを生成する
@@ -1322,7 +1387,12 @@ const yearSwitcher = createYearSwitcher(
   dataLoader,
   (year, data) => {
     // TASK-24: レイヤー組み立ては renderLayers に集約（河川選択の変更と共用）
-    currentView = { year, base: data.base, hre: data.hre };
+    currentView = {
+      year,
+      base: data.base,
+      hre: data.hre,
+      fiefs: data.fiefs,
+    };
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
     reflectYearToTimeline(year);
@@ -1759,5 +1829,29 @@ map.on("load", () => {
       hoveredRiverName,
       selectedRiverName,
     ).map((d) => d.name),
+  };
+};
+
+// TASK-71: ヘッドレス CDP 検証用に中世フランス諸侯領オーバーレイの表示状態を
+// 公開する（__getCityDebug / __getRiverLabelDebug と同じ「目視/無人確認のための
+// 読み取り専用フック」。deck.gl の canvas からは表示中の諸侯領・ラベルを
+// 数えられないため、現在年のオーバーレイ有無・feature 数・ラベル名一覧を直接返す）。
+// AC #4 の「対象外の年で表示されない」ことは overlay=false / featureCount=0 /
+// labels=[] で確認できる。
+(globalThis as unknown as {
+  __getFranceFiefDebug?: () => {
+    year: number;
+    overlay: boolean;
+    featureCount: number;
+    labels: string[];
+  };
+}).__getFranceFiefDebug = () => {
+  const year = yearSwitcher.currentYear() ?? INITIAL_YEAR;
+  const fiefs = currentView?.fiefs ?? EMPTY_FEATURE_COLLECTION;
+  return {
+    year,
+    overlay: hasFranceFiefOverlay(year, FRANCE_FIEF_OVERLAY_YEARS),
+    featureCount: fiefs.features.length,
+    labels: buildLabelData(fiefs, nameJa, "fief").map((d) => d.text),
   };
 };

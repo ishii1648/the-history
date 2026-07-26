@@ -7,6 +7,7 @@ import {
   CITY_LABEL_COLOR,
   CITY_LABEL_SIZE_PX,
   COLLISION_SIZE_SCALE,
+  FIEF_LABEL_COLOR,
   HRE_LABEL_COLOR,
   LABEL_BACKGROUND_COLOR,
   LABEL_BACKGROUND_PADDING,
@@ -304,6 +305,46 @@ Deno.test("labelColorFor の 2 色は互いに異なる RGBA を返す", () => {
   assert(
     JSON.stringify(HRE_LABEL_COLOR) !== JSON.stringify(BASE_LABEL_COLOR),
   );
+});
+
+Deno.test("labelColorFor は kind=fief で仏諸侯領色を返す（TASK-71 AC #1）", () => {
+  assertEquals(labelColorFor({ kind: "fief" }), FIEF_LABEL_COLOR);
+});
+
+Deno.test("FIEF_LABEL_COLOR は既存の全ラベル色と異なる（TASK-71 AC #1）", () => {
+  // 諸侯領ラベルが独立国（濃グレー）・HRE 領邦（臙脂）・都市（濃茶）・
+  // 河川（水色）のいずれとも文字色だけで区別できること
+  for (
+    const other of [
+      BASE_LABEL_COLOR,
+      HRE_LABEL_COLOR,
+      CITY_LABEL_COLOR,
+      RIVER_LABEL_COLOR,
+    ]
+  ) {
+    assert(
+      JSON.stringify(FIEF_LABEL_COLOR) !== JSON.stringify(other),
+      `FIEF_LABEL_COLOR が ${JSON.stringify(other)} と同じ`,
+    );
+  }
+});
+
+Deno.test("buildLabelData は kind=fief を全 datum に付与する（TASK-71）", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      feature({ type: "Polygon", coordinates: [squareRing(0, 0, 10)] }, {
+        NAME: "Duchy of Normandy",
+      }),
+    ],
+  };
+  const data = buildLabelData(
+    fc,
+    { "Duchy of Normandy": "ノルマンディー公領" },
+    "fief",
+  );
+  assertEquals(data.map((d) => d.kind), ["fief"]);
+  assertEquals(data.map((d) => d.text), ["ノルマンディー公領"]);
 });
 
 // ---- characterSetFrom ----

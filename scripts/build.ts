@@ -6,6 +6,7 @@
 
 import { SNAPSHOT_YEARS } from "../src/config.ts";
 import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
+import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 
 const ENTRY = "src/main.ts";
 const DIST_DIR = "dist";
@@ -41,12 +42,15 @@ export function getOptionalCopyTargets(
 /**
  * 勢力圏レイヤーが参照する data/ 一式を dist/data/ にコピーする対象を返す（純粋関数）。
  * index.json・colors.json と各年代の GeoJSON。europe.pmtiles は別枠（dist 直下・任意）。
- * hreYears には HRE 主要領邦オーバーレイ（deno task build-hre で生成）の年代を渡す。
+ * hreYears には HRE 主要領邦オーバーレイ（deno task build-hre で生成）の年代を、
+ * fiefYears には中世フランス諸侯領オーバーレイ（deno task build-france-fiefs で
+ * 生成、TASK-71）の年代を渡す。fiefYears は省略可（省略時はコピー対象なし）。
  */
 export function getDataCopyTargets(
   distDir: string,
   years: readonly number[],
   hreYears: readonly number[],
+  fiefYears: readonly number[] = [],
 ): Array<{ from: string; to: string }> {
   const targets: Array<{ from: string; to: string }> = [
     { from: "data/index.json", to: `${distDir}/data/index.json` },
@@ -81,6 +85,13 @@ export function getDataCopyTargets(
     targets.push({
       from: `data/hre_${year}.geojson`,
       to: `${distDir}/data/hre_${year}.geojson`,
+    });
+  }
+  // TASK-71: 中世フランス諸侯領オーバーレイ（deno task build-france-fiefs で生成）
+  for (const year of fiefYears) {
+    targets.push({
+      from: `data/france_fiefs_${year}.geojson`,
+      to: `${distDir}/data/france_fiefs_${year}.geojson`,
     });
   }
   return targets;
@@ -243,6 +254,7 @@ async function copyDataFiles(distDir: string): Promise<void> {
       distDir,
       SNAPSHOT_YEARS,
       HRE_OVERLAY_YEARS,
+      FRANCE_FIEF_YEARS,
     )
   ) {
     await Deno.copyFile(from, to);
