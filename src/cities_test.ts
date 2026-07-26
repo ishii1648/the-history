@@ -4,9 +4,13 @@ import {
   buildCityMarkerData,
   CITIES_DATA_URL,
   type CitiesData,
+  CITY_HIT_FILL_COLOR,
+  CITY_HIT_RADIUS_PX,
   CITY_LABEL_PRIORITY_MAX,
   CITY_LABEL_PRIORITY_MIN,
+  CITY_MARKER_RADIUS_PX,
   CITY_NAME_JA_OVERRIDES,
+  CITY_PICK_TOLERANCE_PX,
   CITY_RANK_LIMIT_BASE,
   cityDisplayName,
   cityEntriesForYear,
@@ -15,6 +19,11 @@ import {
   visibleCityRankLimit,
 } from "./cities.ts";
 import { MAX_LABEL_PRIORITY, MIN_LABEL_PRIORITY } from "./labels.ts";
+import {
+  CITY_HIT_LAYER_ID,
+  isNearCursorRepickable,
+  PICKING_RADIUS_PX,
+} from "./picking.ts";
 // data/cities.json は .json 拡張子なので `with { type: "json" }` の静的 import
 // はモジュール解決の一部として扱われ、`deno test`（CI は --allow-read なしで
 // 実行、scripts/name-ja_test.ts と同じ前提）でも読み取り可能。一方
@@ -403,6 +412,50 @@ Deno.test("CITY_RANK_LIMIT_BASE は現行データの採用上限 23 と同値�
   // scripts/build-cities.ts の CITIES_PER_YEAR=20 + HRE 最低 6 件補充で
   // 実データは最大 23 件/年（TASK-61）。最遠ズームはこれと同じ密度を保つ。
   assertEquals(CITY_RANK_LIMIT_BASE, 23);
+});
+
+// ---- 都市 picking の実効判定範囲（TASK-82 AC #4）----
+
+Deno.test("CITY_MARKER_RADIUS_PX: 可視ドットの半径は 3px（従来の見た目を変えない）（TASK-82）", () => {
+  assertEquals(CITY_MARKER_RADIUS_PX, 3);
+});
+
+Deno.test("CITY_HIT_RADIUS_PX: 透明判定円の半径は 9px（AC #1 の目安 8〜10px 内）（TASK-82）", () => {
+  assertEquals(CITY_HIT_RADIUS_PX, 9);
+  assert(CITY_HIT_RADIUS_PX >= 8 && CITY_HIT_RADIUS_PX <= 10);
+});
+
+Deno.test("CITY_HIT_RADIUS_PX: 可視ドットより必ず大きい（判定だけを広げる層）（TASK-82）", () => {
+  assert(CITY_HIT_RADIUS_PX > CITY_MARKER_RADIUS_PX);
+});
+
+Deno.test("CITY_PICK_TOLERANCE_PX: ドット半径と判定円半径の合成（大きい方）= 9px（TASK-82 AC #4）", () => {
+  assertEquals(CITY_PICK_TOLERANCE_PX, 9);
+  assertEquals(
+    CITY_PICK_TOLERANCE_PX,
+    Math.max(CITY_MARKER_RADIUS_PX, CITY_HIT_RADIUS_PX),
+  );
+});
+
+Deno.test("CITY_PICK_TOLERANCE_PX: 近傍再ピック半径（PICKING_RADIUS_PX）は加算されない（ホバー = クリック）（TASK-82 AC #2/#4）", () => {
+  // 河川（RIVER_CLICK_TOLERANCE_PX = 半幅 + PICKING_RADIUS_PX）と異なり、
+  // 都市は cities-hit を近傍再ピックの候補から除外（picking.ts
+  // isNearCursorRepickable）するため、クリックの実効範囲もこの値のまま。
+  assert(!isNearCursorRepickable(CITY_HIT_LAYER_ID));
+  assertEquals(CITY_PICK_TOLERANCE_PX, CITY_HIT_RADIUS_PX);
+  assertEquals(CITY_PICK_TOLERANCE_PX + PICKING_RADIUS_PX, 15);
+  assert(CITY_PICK_TOLERANCE_PX < CITY_PICK_TOLERANCE_PX + PICKING_RADIUS_PX);
+});
+
+Deno.test("CITY_PICK_TOLERANCE_PX: 従来のクリック実効範囲（ドット 3px + 再ピック 6px）と同値（クリック側は広げず、ホバーを揃える）（TASK-82）", () => {
+  assertEquals(
+    CITY_PICK_TOLERANCE_PX,
+    CITY_MARKER_RADIUS_PX + PICKING_RADIUS_PX,
+  );
+});
+
+Deno.test("CITY_HIT_FILL_COLOR: 完全透明（見た目に影響しない判定専用層）（TASK-82）", () => {
+  assertEquals(CITY_HIT_FILL_COLOR[3], 0);
 });
 
 // ---- 契約 ----

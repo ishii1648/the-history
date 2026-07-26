@@ -78,6 +78,9 @@ import {
   buildCityMarkerData,
   CITIES_DATA_URL,
   type CitiesData,
+  CITY_HIT_FILL_COLOR,
+  CITY_HIT_RADIUS_PX,
+  CITY_MARKER_RADIUS_PX,
   cityDisplayName,
   cityEntriesForYear,
   type CityEntry,
@@ -137,9 +140,11 @@ import {
   parseKnownLimitations,
 } from "./known_limitations.ts";
 import {
+  CITY_HIT_LAYER_ID,
   CITY_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  isCityPickLayerId,
   isDirectPickFinal,
   isRiversPickLayerId,
   layerOrderMatchesPickingPriority,
@@ -252,7 +257,8 @@ map.on("error", (event) => {
 
 // ---- 勢力圏ポリゴンレイヤー（TASK-5, docs/app-spec.md §3.3, §4.3）----
 
-// pickable なレイヤーの ID（powers / hre-powers / cities / rivers）は
+// pickable なレイヤーの ID（powers / hre-powers / cities / cities-hit /
+// rivers / rivers-hit）は
 // picking.ts に集約した（TASK-29）。picking の優先順位（PICKING_PRIORITY）と
 // 描画順の対応を 1 箇所で管理するため。各レイヤーとも年代切替・選択変更で
 // 同一 ID を保ち、data 差し替えのみで deck.gl の差分更新に任せる方針は不変。
@@ -395,6 +401,12 @@ let currentView:
 // 単一結果に委ねる（河川優先の picking 補正はクリックに限定する設計判断）。
 // TASK-42: 単一結果が rivers であればその河川名を hoveredRiverName とし、
 // 中間強調（riverLineColor/riverLineWidth の hovered 引数）に反映する。
+//
+// TASK-82: 上の「ホバーは直下 pick のみ」という設計は維持したまま、都市の
+// ホバー判定範囲だけを cities-hit（透明・半径 CITY_HIT_RADIUS_PX の
+// ScatterplotLayer）で広げる。ホバー経路に pickMultipleObjects を足さずに
+// 判定範囲を広げられるため TASK-36 のコスト設計と両立し、クリック側の実効
+// 範囲（cities.ts CITY_PICK_TOLERANCE_PX）とも一致する。
 const overlay = new MapboxOverlay({
   interleaved: true,
   layers: [],
@@ -527,8 +539,10 @@ function buildPowerLayer(
 function pickedLabel(info: PickingInfo): string | null {
   const layerId = info.layer?.id;
   if (info.object === undefined || layerId === undefined) return null;
-  if (layerId === CITY_LAYER_ID) {
+  if (isCityPickLayerId(layerId)) {
     // 都市は cityDisplayName で解決（Venice 等の勢力名衝突キーは都市訳を優先）
+    // TASK-82: cities（可視ドット）と cities-hit（透明判定円）はデータが同一
+    // （CityMarkerDatum）なので、どちらの pick でも同じ経路で表示できる
     return cityDisplayName((info.object as CityMarkerDatum).name, nameJa);
   }
   const feature = info.object as Feature;
@@ -601,11 +615,11 @@ function applyHreHighlight(next: boolean): void {
 
 /**
  * pickMultipleObjects で近傍候補を取得する際の最大件数（depth）（TASK-36）。
- * PICKING_PRIORITY は 6 層のみのため小さい値で十分（deck.gl デフォルトの 10
- * より絞り、余分な GPU 読み戻しコストを抑える）。TASK-71 で france-fiefs が
- * 加わり層数と同数になったが、フランス諸侯領と HRE 領邦は同時表示年を持たない
- * ため実際に同一ピクセルへ重なりうる pickable 層は最大 5（rivers / cities /
- * rivers-hit / いずれかの領邦オーバーレイ / powers）で、なお余裕がある。
+ * PICKING_PRIORITY は 7 層のみのため小さい値で十分（deck.gl デフォルトの 10
+ * より絞り、余分な GPU 読み戻しコストを抑える）。フランス諸侯領と HRE 領邦は
+ * 同時表示年を持たないため、実際に同一ピクセルへ重なりうる pickable 層は
+ * 最大 6（rivers / cities / cities-hit / rivers-hit / いずれかの領邦
+ * オーバーレイ / powers）で、この depth に収まる（TASK-71, TASK-82）。
  */
 const CLICK_PICK_DEPTH = 6;
 
@@ -622,6 +636,12 @@ const CLICK_PICK_DEPTH = 6;
  * TASK-51: この PICKING_RADIUS_PX（picking.ts、near-cursor 再ピック半径）と
  * rivers.ts の透明ヒットライン半幅（RIVER_HIT_LINE_WIDTH_PX / 2）が合成され、
  * 河川クリックの実効許容範囲になる（rivers.ts RIVER_CLICK_TOLERANCE_PX を参照）。
+ *
+ * TASK-82: 都市側は逆に合成させない。cities-hit（透明判定円）は
+ * picking.ts isNearCursorRepickable で再ピック候補から除外されるため、
+ * 都市の実効判定範囲はホバー・クリックとも cities.ts CITY_PICK_TOLERANCE_PX
+ * （= CITY_HIT_RADIUS_PX）で一致する。直下 pick が cities/cities-hit なら
+ * isDirectPickFinal でそのまま確定する（再ピックへ落ちない）。
  */
 function resolveClickInfo(info: PickingInfo): PickingInfo {
   if (isDirectPickFinal(info.layer?.id)) return info;
@@ -887,13 +907,45 @@ function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
     getPosition: (d) => d.position,
     // 3px の固定ドット。国土に対する「点」の記号で、ズームに追従させない
     radiusUnits: "pixels",
-    getRadius: 3,
+    getRadius: CITY_MARKER_RADIUS_PX,
     // ラベルと同系の濃茶 fill + 白 stroke（塗りの上でも沈まない）
     getFillColor: [90, 46, 16, 255],
     stroked: true,
     lineWidthUnits: "pixels",
     getLineWidth: 1,
     getLineColor: [255, 255, 255, 230],
+    updateTriggers: { getPosition: [year, cityZoomStep] },
+  });
+}
+
+/**
+ * 都市マーカーの透明ヒット層（ScatterplotLayer）を生成する（TASK-82）。
+ * cities と同一データ（memoizedCityMarkerData の安定参照）を完全透明・
+ * CITY_HIT_RADIUS_PX（9px）で描画する判定専用レイヤーで、rivers-hit
+ * （TASK-43）と同型の仕組み。
+ *
+ * これにより、ホバーでもクリックでも「カーソル直下 pick」だけで
+ * CITY_PICK_TOLERANCE_PX（cities.ts）の判定範囲が得られる。ホバー側に
+ * pickMultipleObjects を足さない（TASK-36 のコスト設計を維持）まま、
+ * 従来「クリックは近傍再ピックで ~9px / ホバーはドットの 3px のみ」だった
+ * 非対称を解消する（AC #1/#2）。
+ *
+ * レイヤー順は cities の直下・rivers-hit の上（PICKING_PRIORITY 由来）。
+ * 可視ドット（cities）を上に置くことで、判定円同士が重なる密集地域でも
+ * 「ドット直上は必ずその都市」が保証される（AC #6）。
+ * stroked: false・完全透明なので見た目には一切影響しない。
+ */
+function buildCityHitLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
+  const entries = memoizedVisibleCityEntries(citiesData, year, cityZoomStep);
+  return new ScatterplotLayer<CityMarkerDatum>({
+    id: CITY_HIT_LAYER_ID,
+    data: memoizedCityMarkerData(entries),
+    pickable: true,
+    getPosition: (d) => d.position,
+    radiusUnits: "pixels",
+    getRadius: CITY_HIT_RADIUS_PX,
+    getFillColor: CITY_HIT_FILL_COLOR,
+    stroked: false,
     updateTriggers: { getPosition: [year, cityZoomStep] },
   });
 }
@@ -909,6 +961,13 @@ function buildCityMarkerLayer(year: number): ScatterplotLayer<CityMarkerDatum> {
  * （collisionTestProps.sizeScale: 2）に参加させ、人口由来の都市固定バンド
  * priority（cities.ts）で大国ラベルに譲りつつ小勢力ラベルとは競らせる。
  * pickable: false でマーカー・ポリゴンの picking を妨げない。
+ *
+ * TASK-82: 判定範囲を広げるにあたりラベル自体のクリック対象化も検討したが、
+ * 採用しない。ラベルは衝突フィルタで間引かれ（同じ都市でもズーム・年代で
+ * 出たり消えたりする）、かつマーカーからピクセルオフセットして描かれるため、
+ * 当たり判定にすると「表示されている年だけ広く拾える」「ドットから離れた
+ * 文字の上でも拾える」と判定範囲が状態依存で不安定になる。判定の基準は
+ * マーカー中心からの距離（cities.ts CITY_PICK_TOLERANCE_PX）1 本に保つ。
  */
 /**
  * 都市名ラベルのデータ + characterSet をメモ化する（TASK-50）。
@@ -1026,21 +1085,25 @@ function buildBaseOutlineLayer(
 /**
  * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
  * 反映する。描画順（配列順 = 下から上）: powers → france-fiefs → hre-powers →
- * hre-extent → rivers-hit → cities → rivers → power-labels → river-labels →
- * city-labels。
+ * hre-extent → rivers-hit → cities-hit → cities → rivers → power-labels →
+ * river-labels → city-labels。
  * TASK-71: france-fiefs は powers の直上（ベースの France ポリゴンの上）に置く。
  * 塗りは共通の FILL_ALPHA（半透明）なので下の勢力塗りが透け、諸侯領の欠落部
  * （南仏・パリ周辺など）はベースの France 塗りがそのまま見える。
  * rivers-hit（TASK-43）は rivers と同一データの透明太幅ヒットライン層で、
  * picking 専用に重ねる（見た目には影響しない）。cities の下に描画すること
  * （TASK-49）で、河畔都市マーカーの picking を rivers-hit が遮蔽しないように
- * する。
+ * する。cities-hit（TASK-82）は cities と同一データの透明・大半径ヒット層で、
+ * cities の直下・rivers-hit の上に置く。可視ドット（cities）を上に保つことで
+ * 密集地域でも「ドット直上は必ずその都市」が成立し、rivers-hit より上に置く
+ * ことで河畔都市でも中心から CITY_PICK_TOLERANCE_PX 以内が都市になる。
  *
  * TASK-77: 上の描画順は deck レイヤー同士の相対順で、MapLibre スタイルとの
  * 前後関係は各レイヤーの beforeId で決まる。powers / france-fiefs / hre-powers
  * の 3 枚だけがベースマップの水面ポリゴンより下（buildPowerLayer で
- * underWaterBeforeId を付与）、残り（hre-extent・rivers-hit・cities・rivers）は
- * 従来どおり水面より上に描かれる。beforeId は MapLibre 側の挿入位置のみを変え、
+ * underWaterBeforeId を付与）、残り（hre-extent・rivers-hit・cities-hit・
+ * cities・rivers）は従来どおり水面より上に描かれる。beforeId は MapLibre 側の
+ * 挿入位置のみを変え、
  * deck レイヤー配列の順序 = picking 優先順（PICKING_PRIORITY）には影響しない
  * （@deck.gl/mapbox は beforeId ごとにグループを作り、同一グループ内では配列順で
  * 描画する）。
@@ -1091,6 +1154,7 @@ function renderLayers(): void {
         FIEF_LINE_WIDTH_PX,
       ),
     [CITY_LAYER_ID]: () => buildCityMarkerLayer(year),
+    [CITY_HIT_LAYER_ID]: () => buildCityHitLayer(year),
     [RIVERS_LAYER_ID]: () => buildRiversLineLayer(),
     [RIVERS_HIT_LAYER_ID]: () => buildRiversHitLayer(),
   };
@@ -2029,4 +2093,46 @@ map.on("load", () => {
     featureCount: fiefs.features.length,
     labels: buildLabelData(fiefs, nameJa, "fief").map((d) => d.text),
   };
+};
+
+// TASK-82: ヘッドレス CDP 検証用に「画面座標 (x, y) をホバー/クリックしたら
+// 何が拾えるか」を公開する（__getCityDebug と同じ読み取り専用フック）。
+// ホバー側は Deck が onHover で使うのと同じ pickObject（pickingRadius 付き）、
+// クリック側はさらに resolveClickInfo を通した結果で、両者のレイヤー ID と
+// 表示ラベルを返す。都市マーカー中心からのオフセットを変えながら呼べば、
+// 実効判定範囲（cities.ts CITY_PICK_TOLERANCE_PX = 9px）とホバー/クリックの
+// 一致（AC #1/#2）、河畔都市・密集地域での取り違えの有無（AC #3/#6）を
+// canvas のピクセルを見ずに確認できる。
+(globalThis as unknown as {
+  __probePick?: (x: number, y: number) => {
+    hoverLayer: string | null;
+    hoverLabel: string | null;
+    clickLayer: string | null;
+    clickLabel: string | null;
+  };
+}).__probePick = (x, y) => {
+  const raw = overlay.pickObject({ x, y, radius: PICKING_RADIUS_PX }) ??
+    ({ x, y, layer: null, object: undefined } as unknown as PickingInfo);
+  const click = resolveClickInfo(raw);
+  return {
+    hoverLayer: raw.layer?.id ?? null,
+    hoverLabel: pickedLabel(raw),
+    clickLayer: click.layer?.id ?? null,
+    clickLabel: pickedLabel(click),
+  };
+};
+
+// TASK-82: __probePick の呼び出し座標を組み立てるための補助フック。現在表示中の
+// 都市マーカー（ズームフィルタ済み）の画面座標（container px = deck の x/y と
+// 同一系）を返す。密集地域（1500 年 HRE 域）での隣接都市の間隔や、河畔都市
+// （パリ・ルーアン）の中心座標を実行時に取得して probe に渡すために使う。
+(globalThis as unknown as {
+  __getCityScreenPositions?: () => { name: string; x: number; y: number }[];
+}).__getCityScreenPositions = () => {
+  const year = yearSwitcher.currentYear() ?? INITIAL_YEAR;
+  const entries = memoizedVisibleCityEntries(citiesData, year, cityZoomStep);
+  return entries.map((entry) => {
+    const point = map.project([entry.lon, entry.lat]);
+    return { name: entry.name, x: point.x, y: point.y };
+  });
 };
