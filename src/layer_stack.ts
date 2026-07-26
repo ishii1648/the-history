@@ -37,6 +37,7 @@ import {
   HRE_LAYER_ID,
   POWER_LAYER_ID,
 } from "./picking.ts";
+import { APPROXIMATE_BORDER_LAYER_IDS } from "./approximate_borders.ts";
 
 /**
  * 水面より下へ差し込む対象とする MapLibre スタイル側のレイヤー ID。
@@ -45,23 +46,14 @@ import {
 export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
 
 /**
- * base 勢力の境界線オーバーレイ（GeoJsonLayer / LineString）のレイヤー ID
- * （TASK-78）。諸侯領オーバーレイ対象年（1000〜1300）では powers の stroke を
- * 止め、代わりに「諸侯領 union の外側だけに切り出した base 輪郭」
- * （data/base_outline_<year>.geojson）をこの層で描く。これにより諸侯領の内側を
- * 走る base 境界線（二重輪郭）が消え、外側の境界線は従来と同一に見える。
+ * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 3 枚）。
+ * 相対順（powers → france-fiefs → hre-powers）は同一 beforeId のグループ内で
+ * deck レイヤー配列順が保たれるため従来と変わらない。
  *
- * pickable: false のため PICKING_PRIORITY には含めない（picking 非関与。
- * base ポリゴンの塗り・ホバー/クリックは powers 側にそのまま残る）。
- */
-export const BASE_OUTLINE_LAYER_ID = "base-outlines";
-
-/**
- * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 3 枚 + base 輪郭）。
- * 相対順（powers → base-outlines → france-fiefs → hre-powers）は同一 beforeId の
- * グループ内で deck レイヤー配列順が保たれるため従来と変わらない。base-outlines も
- * ここに含めるのが必須で、powers と別グループになると諸侯領より上／水面より上に
- * 描かれて海上へのはみ出しが露出する（TASK-78）。
+ * TASK-78 の base 境界線オーバーレイ（deck の base-outlines）は TASK-80 で
+ * MapLibre の line レイヤー（approximate_borders.ts）へ移したため、ここには
+ * 含まれない。deck 側に境界線の層は無く、この 3 枚は全て塗り
+ * （powers は stroked: false、諸侯領・HRE 領邦は自前の stroke）。
  *
  * hre-extent（帝国範囲の強調輪郭）は含めない: 常時表示ではなくトグルで出す
  * 強調記号であり、水面より下だと海側の輪郭が切れて「どこからどこまでが帝国か」の
@@ -69,7 +61,6 @@ export const BASE_OUTLINE_LAYER_ID = "base-outlines";
  */
 export const UNDER_WATER_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
-  BASE_OUTLINE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
 ];
@@ -80,6 +71,19 @@ export const UNDER_WATER_LAYER_IDS: readonly string[] = [
  * - 対象でも、渡されたスタイルに水面レイヤーが無ければ undefined
  *   （フォールバックスタイルやスタイル未読込でも例外を投げない。AC #4）
  *
+ * TASK-80: スタイルに概略境界レイヤー（approximate_borders.ts）があれば、水面
+ * ではなくその最下段の直下を指す。狙いは「塗り（deck）→ 概略境界（MapLibre）
+ * → 海洋の水面」の順を作ること。
+ *
+ * なぜ deck 側の beforeId で解決するのか: 逆方向（概略境界を addLayer 後に
+ * moveLayer で塗りの上へ引き上げる）を実装して実測したところ、@deck.gl/mapbox が
+ * styledata を購読してレイヤーグループを再挿入するため、moveLayer → styledata →
+ * deck の再挿入 → 順序が再び崩れる、の無限ループになった（ヘッドレス確認で
+ * moveLayer 213 回・順序は最後に deck が勝った状態のまま）。deck が自分で
+ * 「概略境界の直下」へ入るようにすれば、何度再挿入されても同じ位置に落ち着く。
+ *
+ * 3 枚とも同じ値を返すことが必須（別グループへ分かれると相対順が崩れる）。
+ *
  * @param layerId deck レイヤーの ID
  * @param styleLayerIds 現在の MapLibre スタイルのレイヤー ID 列
  */
@@ -88,6 +92,10 @@ export function underWaterBeforeId(
   styleLayerIds: readonly string[],
 ): string | undefined {
   if (!UNDER_WATER_LAYER_IDS.includes(layerId)) return undefined;
+  const lowestBorderLayer = APPROXIMATE_BORDER_LAYER_IDS.find((id) =>
+    styleLayerIds.includes(id)
+  );
+  if (lowestBorderLayer !== undefined) return lowestBorderLayer;
   return styleLayerIds.includes(WATER_STYLE_LAYER_ID)
     ? WATER_STYLE_LAYER_ID
     : undefined;
@@ -114,6 +122,98 @@ export function waterStackIsValid(styleLayerIds: readonly string[]): boolean {
   if (inland >= 0 && marine >= 0 && inland > marine) return false;
   if (coastline >= 0 && marine >= 0 && coastline < marine) return false;
   return true;
+}
+
+/**
+ * 概略境界（MapLibre line レイヤー、approximate_borders.ts）を挿入する
+ * beforeId を返す純粋関数（TASK-80）。
+ *
+ * 海洋の水面（WATER_STYLE_LAYER_ID）の直下へ入れる。狙いは 2 つで、
+ * - 政治ポリゴンの塗り（beforeId が同じ = 水面直下のグループ）より「後から」
+ *   この位置へ入れることで塗りの上に線が来る（低 alpha の概略線が半透明の
+ *   塗り越しに沈まない。従来 deck の stroke は塗りの上だった）
+ * - 海洋の水面より下なので、政治ポリゴンが海へはみ出した区間の線は海に覆われる
+ *   （海上に誤った境界線が出ない = TASK-84 の趣旨を維持）
+ *
+ * 水面レイヤーを持たないスタイル（OpenFreeMap へのフォールバック、スタイル
+ * 未読込）では undefined を返し、呼び出し側は beforeId なし（最前面）で
+ * 追加する。線が海に覆われなくなるだけで例外は起きない。
+ */
+export function approximateBorderBeforeId(
+  styleLayerIds: readonly string[],
+): string | undefined {
+  return styleLayerIds.includes(WATER_STYLE_LAYER_ID)
+    ? WATER_STYLE_LAYER_ID
+    : undefined;
+}
+
+/**
+ * @deck.gl/mapbox が MapLibre スタイルへ挿入する「レイヤーグループ」の ID の
+ * 接頭辞（@deck.gl/mapbox 9.3.7 dist/resolve-layer-groups.js）。
+ *
+ * 重要: deck の interleaved レイヤーは 1 枚ずつ MapLibre のレイヤーになるのでは
+ * なく、beforeId ごとに 1 枚の custom レイヤーへまとめられる。ID は
+ * `deck-layer-group-before:<beforeId>` /  `deck-layer-group-slot:<slot>` /
+ * `deck-layer-group-last` の 3 形。つまりスタイル上に "powers" という ID は
+ * 存在せず、政治ポリゴンの塗りとの前後関係はこのグループ ID で判定する
+ * （ヘッドレス確認で実際の getLayersOrder() が
+ * […, water-inland, deck-layer-group-before:water, water, coastline,
+ * deck-layer-group-last] であることを実測）。
+ */
+export const DECK_LAYER_GROUP_ID_PREFIX = "deck-layer-group-";
+
+/**
+ * 政治ポリゴンの塗り（powers / france-fiefs / hre-powers）が入っている deck の
+ * レイヤーグループ ID を返す純粋関数（TASK-80）。スタイルにそのグループがまだ
+ * 無ければ undefined（deck 未登録・スタイル差し替え直後）。
+ *
+ * 探し方: beforeId 付きのグループ（`…-before:*`）は水面下へ回した政治ポリゴン
+ * 専用で、UNDER_WATER_LAYER_IDS の 3 枚が同じ beforeId を共有するため最大 1 つ。
+ * 「今あるべき beforeId」から ID を組み立てるのではなく実在するものを探すのが
+ * 重要で、そうしないと beforeId が古い（概略境界が追加される前に作られた
+ * deck レイヤーが water を指したまま）状態を検出できない。beforeId 付きの
+ * グループが無い場合は最前面グループ（`…-last`）に全 deck レイヤーが入っている
+ * （water を持たないフォールバックスタイル）。
+ */
+export function politicalFillGroupId(
+  styleLayerIds: readonly string[],
+): string | undefined {
+  const withBeforeId = styleLayerIds.find((id) =>
+    id.startsWith(`${DECK_LAYER_GROUP_ID_PREFIX}before:`)
+  );
+  if (withBeforeId !== undefined) return withBeforeId;
+  const lastGroup = `${DECK_LAYER_GROUP_ID_PREFIX}last`;
+  return styleLayerIds.includes(lastGroup) ? lastGroup : undefined;
+}
+
+/**
+ * 概略境界レイヤーが「政治ポリゴンの塗りより上・海洋の水面より下」に居るかを
+ * 検証する純粋関数（TASK-80）。
+ *
+ * 正しい順序は deck 側の beforeId（underWaterBeforeId が概略境界の最下段を指す）
+ * で作るが、deck レイヤーは構築時の props を持ち回るため、概略境界がまだ無い
+ * 時点で作られた deck レイヤーは beforeId = water のままになり、塗りが概略境界の
+ * 上に来る。main.ts はこの関数で毎回位置を確認し、崩れていれば renderLayers() で
+ * deck レイヤーを作り直して beforeId を再計算させる（概略境界を moveLayer で
+ * 引き上げる方向は deck の再挿入と無限に競合するため採らない）。
+ *
+ * 判定しないケース（true を返す）:
+ * - 概略境界レイヤーがまだ無い（起動直後・スタイル差し替え直後）
+ * - 海洋の水面が無い（フォールバックスタイル）→ 塗りとの前後だけを見る
+ * - deck のグループがまだ無い（deck 未登録）→ 水面との前後だけを見る
+ */
+export function approximateBorderStackIsValid(
+  styleLayerIds: readonly string[],
+): boolean {
+  const marine = styleLayerIds.indexOf(WATER_STYLE_LAYER_ID);
+  const groupId = politicalFillGroupId(styleLayerIds);
+  const fill = groupId === undefined ? -1 : styleLayerIds.indexOf(groupId);
+  return APPROXIMATE_BORDER_LAYER_IDS.every((id) => {
+    const idx = styleLayerIds.indexOf(id);
+    if (idx < 0) return true;
+    if (marine >= 0 && idx > marine) return false;
+    return !(fill >= 0 && idx < fill);
+  });
 }
 
 /**

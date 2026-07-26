@@ -157,6 +157,52 @@ Deno.test("河口未到達の制約は河川オーバーレイと同じく年代
   }
 });
 
+// TASK-80: 元データ（aourednik/historical-basemaps）は全 feature の
+// BORDERPRECISION が 1 = approximate（2 = moderately precise / 3 = 国際法で確定）
+// で、提供者自身が「この年代の全境界は概略」と宣言している。アプリ側は描画で
+// にじみ・低 alpha にして精密線に見せない対策を入れたが、「どこまで信じて
+// よいデータなのか」はテキストでも明示する必要がある。
+Deno.test("全境界が概略（BORDERPRECISION=1）である旨が明記されている（TASK-80 AC #7）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "borders-are-approximate");
+  assert(entry !== undefined, "borders-are-approximate が無い");
+  // 序数の意味（1 = 概略）と、数百 km の直線で近似される実例に言及していること
+  for (
+    const keyword of [
+      "BORDERPRECISION",
+      "概略",
+      "277",
+      "206",
+      "1200",
+      "historical-basemaps",
+    ]
+  ) {
+    assert(
+      entry.text.includes(keyword),
+      `text が ${keyword} に言及していない`,
+    );
+  }
+  assert(
+    /直線/.test(entry.text),
+    "text が直線での近似に言及していない",
+  );
+});
+
+Deno.test("全境界が概略である制約は年代非依存で常時 active（TASK-80 AC #7）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "borders-are-approximate");
+  assert(entry !== undefined);
+  // BORDERPRECISION=1 は全年代・全 feature に付いているため years は付けない
+  assertEquals(entry.years, undefined);
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      true,
+      `${year} 年で active になっていない`,
+    );
+  }
+});
+
 Deno.test("1700 年の制限注記は年代連動で 1700 のみ active になる（TASK-68）", () => {
   const parsed = parseKnownLimitations(knownLimitations);
   const entry = parsed.find((l) => l.id === "hre-boundaries-1700-extrapolated");
