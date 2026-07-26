@@ -9,16 +9,16 @@ import {
   COLLISION_SIZE_SCALE,
   FIEF_LABEL_COLOR,
   HRE_LABEL_COLOR,
-  LABEL_BACKGROUND_COLOR,
-  LABEL_BACKGROUND_PADDING,
   LABEL_FONT_FAMILY,
   LABEL_FONT_SETTINGS,
   LABEL_OUTLINE_COLOR,
   LABEL_OUTLINE_WIDTH,
+  LABEL_SDF_RADIUS,
   labelAnchorFor,
   labelColorFor,
   labelPriorityFor,
   labelTextFor,
+  labelTextStyleProps,
   MAX_LABEL_PRIORITY,
   MIN_LABEL_PRIORITY,
   POWER_LABEL_SIZE_PX,
@@ -377,10 +377,6 @@ Deno.test("LABEL_FONT_SETTINGS は sdf を有効にする（アウトライン�
   assertEquals(LABEL_FONT_SETTINGS.sdf, true);
 });
 
-Deno.test("LABEL_OUTLINE_WIDTH は正の値（縁取りが実際に描かれる）", () => {
-  assert(LABEL_OUTLINE_WIDTH > 0);
-});
-
 Deno.test("LABEL_OUTLINE_COLOR は白系（十分な RGB 輝度）で十分不透明", () => {
   const [r, g, b, a] = LABEL_OUTLINE_COLOR;
   assert(
@@ -388,6 +384,65 @@ Deno.test("LABEL_OUTLINE_COLOR は白系（十分な RGB 輝度）で十分不�
     `outline=${LABEL_OUTLINE_COLOR} は白系のはず`,
   );
   assert(a >= 200, `outline alpha=${a} は十分不透明のはず`);
+});
+
+// ---- TASK-72: 背景パネル撤去 + halo の実効化 ----
+// outlineWidth は「px」ではなく fontSettings.radius 比で正規化される
+// （deck.gl text-layer.js: outlineWidth / (fontSettings.radius || 12)）。
+// 旧値 2（radius 12 比で 0.167）では halo がほぼ描かれていなかった。
+
+Deno.test("LABEL_OUTLINE_WIDTH は radius 比で halo が実際に見える太さ（旧値 2 より大）", () => {
+  const PRE_TASK_72_OUTLINE_WIDTH = 2;
+  assert(
+    LABEL_OUTLINE_WIDTH > PRE_TASK_72_OUTLINE_WIDTH,
+    `outlineWidth=${LABEL_OUTLINE_WIDTH} は旧値 ${PRE_TASK_72_OUTLINE_WIDTH} 超のはず`,
+  );
+  // 太すぎると日本語ラベルが文字ごとの白ベタ矩形になる（実測で 9 は破綻）
+  assert(
+    LABEL_OUTLINE_WIDTH <= 6,
+    `outlineWidth=${LABEL_OUTLINE_WIDTH} は上限 6 以内のはず`,
+  );
+  // radius を超えると outlineBuffer が smoothing で頭打ちになり意味を失う
+  assert(
+    LABEL_OUTLINE_WIDTH < LABEL_SDF_RADIUS,
+    `outlineWidth=${LABEL_OUTLINE_WIDTH} は radius=${LABEL_SDF_RADIUS} 未満のはず`,
+  );
+});
+
+Deno.test("LABEL_FONT_SETTINGS は halo 分のグリフ余白（buffer）と radius を明示する", () => {
+  assertEquals(LABEL_FONT_SETTINGS.radius, LABEL_SDF_RADIUS);
+  // buffer は atlas 上のグリフ余白 = halo 幅の上限。deck.gl 既定の 4 では
+  // 太い halo が atlas の外で切れる
+  assert(
+    LABEL_FONT_SETTINGS.buffer >= LABEL_OUTLINE_WIDTH,
+    `buffer=${LABEL_FONT_SETTINGS.buffer} は outlineWidth=${LABEL_OUTLINE_WIDTH} 以上のはず`,
+  );
+  // smoothing を上げると halo の縁がぼやけて実効的な太さが落ちる
+  assert(
+    LABEL_FONT_SETTINGS.smoothing <= 0.1,
+    `smoothing=${LABEL_FONT_SETTINGS.smoothing} は 0.1 以下のはず`,
+  );
+});
+
+Deno.test("labelTextStyleProps は背景パネルを描かない（background: false・パネル props 無し）", () => {
+  const props = labelTextStyleProps();
+  assertEquals(props.background, false);
+  const keys = Object.keys(props);
+  assert(
+    !keys.includes("getBackgroundColor") && !keys.includes("backgroundPadding"),
+    `背景パネル props が残っている: ${keys.join(", ")}`,
+  );
+});
+
+Deno.test("labelTextStyleProps は halo 設定を共通で持ち、配列を呼び出しごとに複製する", () => {
+  const a = labelTextStyleProps();
+  const b = labelTextStyleProps();
+  assertEquals(a.outlineWidth, LABEL_OUTLINE_WIDTH);
+  assertEquals(a.outlineColor, [...LABEL_OUTLINE_COLOR]);
+  assertEquals(a.fontFamily, LABEL_FONT_FAMILY);
+  // deck.gl にモジュール定数の参照をそのまま渡さない（破壊的変更の防止）
+  assert(a.outlineColor !== b.outlineColor);
+  assert((a.outlineColor as number[]) !== (LABEL_OUTLINE_COLOR as unknown));
 });
 
 Deno.test("LABEL_FONT_FAMILY は sans-serif フォールバックを含む文字列", () => {
@@ -429,37 +484,27 @@ Deno.test("characterSetFrom は日本語ラベルの文字も重複なく集め�
   assertEquals(chars.filter((c) => c === "国").length, 1);
 });
 
-// ---- TASK-54: 密集地域向けのラベル背景パネル（案A）・衝突間引き強化（案B） ----
+// ---- TASK-54 / TASK-72: 密集地域向けの衝突間引き強化 ----
+// TASK-54 の背景パネル（案A）は TASK-72 で撤去し、halo の実効化に置き換えた。
+// 案B（衝突判定領域の拡大）は残し、パネル分の余白喪失を補って引き上げる。
 
-Deno.test("LABEL_BACKGROUND_COLOR は明るい暖色系（羊皮紙トーン）の半透明", () => {
-  const [r, g, b, a] = LABEL_BACKGROUND_COLOR;
-  // basemap の羊皮紙系の地色と調和する明るい暖色（AC #1/#2: 密集地帯や
-  // HRE 外縁の赤境界線の上でも文字とのコントラストを確保する下地）
+Deno.test("TASK-72: ラベル背景パネル定数は撤去されている", async () => {
+  const labels = await import("./labels.ts");
+  const exported = Object.keys(labels);
   assert(
-    r >= 220 && g >= 210 && b >= 180 && r >= g && g >= b,
-    `bg=${LABEL_BACKGROUND_COLOR} は明るい暖色系（羊皮紙トーン）のはず`,
-  );
-  // 完全不透明だと下の勢力塗り・境界線が見えなくなるため半透明に留める。
-  // 一方で薄すぎると赤境界線とのコントラスト補強にならないため下限も設ける
-  assert(a >= 150 && a < 255, `bg alpha=${a} は半透明（150..254）のはず`);
-});
-
-Deno.test("LABEL_BACKGROUND_PADDING は正でかつ控えめな [x, y] px", () => {
-  const [px, py] = LABEL_BACKGROUND_PADDING;
-  assert(px > 0 && py > 0, `padding=${LABEL_BACKGROUND_PADDING} は正のはず`);
-  // 背景パネルが大きすぎると密集地帯でパネル同士が重なり逆効果になる
-  assert(
-    px <= 8 && py <= 8,
-    `padding=${LABEL_BACKGROUND_PADDING} は控えめ（8px 以下）のはず`,
+    !exported.includes("LABEL_BACKGROUND_COLOR") &&
+      !exported.includes("LABEL_BACKGROUND_PADDING"),
+    `背景パネル定数が残っている: ${exported.join(", ")}`,
   );
 });
 
-Deno.test("COLLISION_SIZE_SCALE は従来値 2 より大きく上限 4 以内", () => {
-  // TASK-20 以来の従来値。これより大きくして密集地帯の間引きを強化する（案B）
-  const PRE_TASK_54_COLLISION_SIZE_SCALE = 2;
+Deno.test("COLLISION_SIZE_SCALE は TASK-54 値 2.6 以上・上限 4 以内", () => {
+  // TASK-54 の値。背景パネル（padding [3,2]px）撤去で衝突箱が縮む分を
+  // 補うため、これ以上に保つ（AC #4: z4 の重なりを撤去前より悪化させない）
+  const TASK_54_COLLISION_SIZE_SCALE = 2.6;
   assert(
-    COLLISION_SIZE_SCALE > PRE_TASK_54_COLLISION_SIZE_SCALE,
-    `sizeScale=${COLLISION_SIZE_SCALE} は従来値 ${PRE_TASK_54_COLLISION_SIZE_SCALE} 超のはず`,
+    COLLISION_SIZE_SCALE >= TASK_54_COLLISION_SIZE_SCALE,
+    `sizeScale=${COLLISION_SIZE_SCALE} は TASK-54 値 ${TASK_54_COLLISION_SIZE_SCALE} 以上のはず`,
   );
   // 上げすぎるとズーム 5〜6 の全体観でラベルが消えすぎて情報量が落ちる
   assert(
