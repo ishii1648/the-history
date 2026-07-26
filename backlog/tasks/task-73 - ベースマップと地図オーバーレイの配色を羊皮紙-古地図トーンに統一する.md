@@ -1,10 +1,11 @@
 ---
 id: TASK-73
 title: ベースマップと地図オーバーレイの配色を羊皮紙/古地図トーンに統一する
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-07-26 07:35'
-updated_date: '2026-07-26 07:37'
+updated_date: '2026-07-26 08:14'
 labels:
   - 'area:src-main'
 dependencies: []
@@ -44,11 +45,36 @@ TASK-72（地図ラベルの背景パネル撤去と白 halo 実効化）との�
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 ベースマップの海・陸・背景・氷河・砂地・自然被覆の色が羊皮紙トーンになり、地図外の UI（タイムライン・情報パネル・ツールチップ）と同系統の配色として成立している
-- [ ] #2 ベースマップの色定義が定数として切り出され、buildBasemapStyle() が生成するスタイルに反映されていることが単体テストで検証されている
-- [ ] #3 勢力境界線がインク（焦茶）系の色になり、白線でなくなっている
-- [ ] #4 河川ラインが青灰系になり、通常・ホバー・選択の 3 状態で色が切り替わる挙動が退行していない
-- [ ] #5 新しい下地色の上で、勢力名ラベル・都市名ラベル・河川名ラベル・都市マーカーの視認性が保たれている
-- [ ] #6 deno test が green
-- [ ] #7 目視確認: 1000 / 1200 / 1500 / 1815 年のスクリーンショットで、地図と UI が同一のデザイン言語に見えることを確認済み
+- [x] #1 ベースマップの海・陸・背景・氷河・砂地・自然被覆の色が羊皮紙トーンになり、地図外の UI（タイムライン・情報パネル・ツールチップ）と同系統の配色として成立している
+- [x] #2 ベースマップの色定義が定数として切り出され、buildBasemapStyle() が生成するスタイルに反映されていることが単体テストで検証されている
+- [x] #3 勢力境界線がインク（焦茶）系の色になり、白線でなくなっている
+- [x] #4 河川ラインが青灰系になり、通常・ホバー・選択の 3 状態で色が切り替わる挙動が退行していない
+- [x] #5 新しい下地色の上で、勢力名ラベル・都市名ラベル・河川名ラベル・都市マーカーの視認性が保たれている
+- [x] #6 deno test が green
+- [x] #7 目視確認: 1000 / 1200 / 1500 / 1815 年のスクリーンショットで、地図と UI が同一のデザイン言語に見えることを確認済み
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. src/basemap.ts の buildBasemapStyle() に羊皮紙トーンの flavor オーバーライド定数（water/earth/background/glacier/sand/landcover 等）を切り出し、テスト先行（red→green）で単体テストを追加（AC2）
+2. 提案配色（タスク Description、ユーザー承認済み・目視微調整可）を適用: water #c7d2d0 / earth #f0e6cd / background #e7d9b2 / glacier #f4efe2 / sand #e8dcc0 / landcover くすんだオリーブ
+3. src/powers.ts LINE_COLOR を白 → インク茶 [92,61,34,190]（--frame）に変更（AC3）。仏諸侯領の藍紫境界（TASK-71）との識別が保たれるか目視確認
+4. src/rivers.ts の通常/ホバー/選択 3 状態を青灰系（通常 [122,148,158]、選択は --wax 系赤茶 [122,46,34] を検討）へ変更し、切替挙動の非退行をテストで担保（AC4、TASK-36 の回帰に注意）
+5. hillshade のセピア寄せは目視で判断（TASK-34 の暖色グレーから必要なら微調整）
+6. ラベル・都市マーカーの視認性を新下地で確認（AC5）。TASK-72 が前提とする白 halo のクリーム寄せ要否を判断し Implementation Notes に記録
+7. deno fmt --check / lint / test / build 全 green → mainagent がヘッドレス CDP で 1000/1200/1500/1815 年のスクリーンショット確認（AC7、マージ前）
+並列化判定: 見送り（理由: 変更対象が basemap/powers/rivers の配色定数群で相互の見た目調整が必要な単一デザイン作業であり、ファイル競合なく独立検証可能なサブ作業に分割できないため）
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス: (AC1,5,7) ヘッドレス CDP で 1000/1200/1500/1815 年のスクリーンショットを取得し、羊皮紙トーン（water #c7d2d0・earth #f0e6cd 等）が UI と同一デザイン言語に見えること、海岸線の可読性、勢力・都市・河川ラベルと都市マーカーの視認性を mainagent が確認（PASS）。(AC2) PARCHMENT_FLAVOR_OVERRIDES / PARCHMENT_LANDCOVER_COLORS / parchmentFlavor() を export し basemap_test.ts で生成スタイルへの反映を検証。(AC3) LINE_COLOR = [92,61,34,190]（--frame）へ変更し powers_test 更新。(AC4) 通常/ホバー/選択 = 青灰/暗青灰/朱（--wax）で rivers_test 更新、1500 年でライン川クリック → 朱の強調と情報パネル表示を実機確認。線幅 3 段は不変。(AC6) deno test 679 passed, 0 failed。fmt/lint/build green。TASK-72 への申し送り: 羊皮紙下地では halo は純白よりクリーム（--parchment #f4ecd7）寄せを推奨。河川ラベル色 [2,119,189] が唯一の高彩度青として残っており、TASK-72 で halo 調整時に青灰〜濃紺へ落とす検討余地あり（labels_test が値固定のため本タスクではスコープ外）。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+protomaps light flavor を parchmentFlavor()（羊皮紙トーンの定数上書き）に置き換え、勢力境界をインク茶、河川を青灰/暗青灰/朱の 3 状態に変更して地図と UI の配色を統一。色反映は単体テストで検証し、4 年代のスクリーンショットで目視確認（PASS）。deno test 679 passed。PR #82。
+<!-- SECTION:FINAL_SUMMARY:END -->

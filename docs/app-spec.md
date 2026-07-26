@@ -125,7 +125,8 @@ R2）に配置する。
   スタイルから地形・水域レイヤーのみ採用
 - 勢力圏は `MapboxOverlay`（interleaved）上の `GeoJsonLayer` 1 枚で描画:
   - `getFillColor`: 勢力名から安定色を引く（§4.3）、opacity 0.5 程度
-  - `getLineColor`: 白系の境界線
+  - `getLineColor`:
+    インク（焦茶）系の境界線（TASK-73。羊皮紙トーンのベースマップに合わせ、旧・白系から変更）
   - `pickable: true` でホバー/クリックを有効化
 - 年代切替時は `GeoJsonLayer` の `data`
   を差し替えるだけ（ベースマップは不変。`map-rendering-research.md` §4

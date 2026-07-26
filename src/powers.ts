@@ -20,8 +20,20 @@ export const FILL_ALPHA = 128;
 /** キー欠落（NAME null 等）時のニュートラルなデフォルト塗り色（グレー系・同 opacity） */
 export const DEFAULT_FILL_COLOR: Rgba = [136, 136, 136, FILL_ALPHA];
 
-/** 境界線の色（白系・やや不透明） */
-export const LINE_COLOR: Rgba = [255, 255, 255, 200];
+/**
+ * 境界線の色（インク＝焦茶系・やや不透明。TASK-73）。
+ *
+ * 従来の白 [255,255,255,200] は現代的な light ベースマップ前提の色で、羊皮紙
+ * トーンの下地（basemap.ts PARCHMENT_FLAVOR_OVERRIDES）の上では白抜きの線が
+ * 浮き、地図外 UI（app.css の --frame #5c3d22 / --ink #3a2712）とも乖離して
+ * いた。古地図の「ペンで引いた境界」に合わせて --frame と同値の焦茶にする。
+ * alpha は従来どおり 190 前後に留め、下の塗り分けが線に潰されないようにする。
+ *
+ * 他の境界線との識別: HRE 外縁の臙脂 [140,30,30]（main.ts
+ * HRE_EXTENT_LINE_COLOR、3px）、仏諸侯領の藍紫 [74,42,130]（同 FIEF_LINE_COLOR、
+ * 1.5px）とは色相・太さの双方で区別できる（本色は最も細い 1px の茶）。
+ */
+export const LINE_COLOR: Rgba = [92, 61, 34, 190];
 
 /** 境界線の幅（ピクセル） */
 export const LINE_WIDTH_PX = 1;
