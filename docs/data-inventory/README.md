@@ -390,6 +390,12 @@ GPL-3.0 を引き継ぐ。クリップに使う `france_fiefs_<year>`（CC0
 
 ## 9. 既知の制約（data/known-limitations.json）
 
+河川ラインについては、全 30 河川の端点・連続性を横断検査した結果（成分分断 0 件
+/ 出口欠如 0 件 / 生成パイプライン起因 0 件 / EUROPE_BBOX クリップ 3 件）と、
+河口部を海として扱う Natural Earth 側の仕様を
+[rivers-continuity-audit.md](rivers-continuity-audit.md) にまとめている（TASK-76
+調査）。
+
 - **hre-territories-pre-1500**（900〜1492 年）:
   1500年より前（900〜1492年）の年代では、神聖ローマ帝国内部の領邦データが存在せず、帝国全体が単一の領域として表示されます。採用しているデータセット（ETH
   Zürich,
