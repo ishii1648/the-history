@@ -105,10 +105,17 @@ export function hasHreOverlay(
 
 /**
  * 中世フランス諸侯領オーバーレイ GeoJSON の配信 URL を返す（純粋関数、TASK-71）。
- * 生成は scripts/build-france-fiefs.ts（OpenHistoricalMap / CC0）。
+ *
+ * TASK-79: 参照先は OHM 由来の生データ（france_fiefs_<year>、生成は
+ * scripts/build-france-fiefs.ts / CC0）ではなく、諸侯領同士の重なりを排他化した
+ * 派生データ france_fiefs_flat_<year>（生成は scripts/build-fief-flat.ts）。
+ * 親公領に内包される伯領（Alençon ⊂ Normandy）や OHM の境界不一致による微小
+ * 重なりを、半透明（FILL_ALPHA）の塗りが二重に重なる前に幾何的に取り除いた
+ * ものが flat 側で、feature の並び・properties・子側のジオメトリは生データと
+ * 同一のため、ラベル・picking・色の解決規則はこれまでと変わらない。
  */
 export function franceFiefDataUrlFor(year: number): string {
-  return `/data/france_fiefs_${year}.geojson`;
+  return `/data/france_fiefs_flat_${year}.geojson`;
 }
 
 /**
