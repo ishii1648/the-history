@@ -1,9 +1,11 @@
 ---
 id: TASK-71
 title: 中世フランスの諸侯領を地図にオーバーレイ表示し、欠落を既知の制限に明示する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-26 07:15'
+updated_date: '2026-07-26 07:42'
 labels:
   - 'area:src-main'
   - 'area:data'
@@ -35,3 +37,16 @@ TASK-70 で生成した中世フランス諸侯領データ（OpenHistoricalMap,
 - [ ] #7 deno test が green
 - [ ] #8 目視確認: 1000 / 1200 / 1300 年で諸侯領のオーバーレイと日本語ラベル、および欠落を示す制限表示をブラウザで確認済み
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 既存 HRE オーバーレイ機構（src/config.ts の HRE_OVERLAY_YEARS・data/hre_<year>.geojson ロード・色分け・ラベル・称号付き日本語表記）を調査し、フランス諸侯オーバーレイを同じ機構パターンで実装する（FRANCE_FIEF_OVERLAY_YEARS = 1000/1100/1200/1279/1300、data/france_fiefs_<year>.geojson）
+2. テスト先行（red→green）: 対象年判定・レイヤー生成・ラベル表記の純粋ロジックに単体テストを追加。オーバーレイ対象外の年（近世以降）で表示されないことをテストで保証（AC4）
+3. data/name-ja.json に 14 諸侯領の称号付き日本語表記（例: ノルマンディー公領・シャンパーニュ伯領）を追加（データは英語のまま維持、decision-6）
+4. data/known-limitations.json に欠落（Toulouse・王領・Provence 1487 以前・Flanders 1237 以前・Aquitaine/Gascony 1214 以降）を年代連動で追加（AC3）
+5. attribution/フッターに OpenHistoricalMap（CC0）の出典表示を追加（AC5）
+6. 色割当は decision-5 の既存機構（build-colors.ts / colors.json）に倣い決定的に生成
+7. deno fmt --check / lint / test / build 全 green → mainagent がヘッドレス CDP で 1000/1200/1300 年の目視確認（AC8、マージ前）
+並列化判定: 見送り（理由: オーバーレイ表示・日本語表記・制限表示・出典表示は同一機構への統合で相互依存し（ラベル表示は name-ja 追加に、対象年テストは config 追加に依存）、ファイル競合なく独立にテスト可能なサブ作業へ分割できないため）
+<!-- SECTION:PLAN:END -->
