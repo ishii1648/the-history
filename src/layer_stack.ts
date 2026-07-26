@@ -27,7 +27,11 @@
  * undefined（= 従来どおり最前面グループ）へフォールバックする。
  */
 
-import { WATER_LAYER_ID } from "./basemap.ts";
+import {
+  COASTLINE_LAYER_ID,
+  WATER_INLAND_LAYER_ID,
+  WATER_LAYER_ID,
+} from "./basemap.ts";
 import {
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -87,6 +91,29 @@ export function underWaterBeforeId(
   return styleLayerIds.includes(WATER_STYLE_LAYER_ID)
     ? WATER_STYLE_LAYER_ID
     : undefined;
+}
+
+/**
+ * ベースマップ側の水面 3 層（内水面 → 海洋 → 海岸線）が想定の重ね順かを検証する
+ * 純粋関数（TASK-84）。政治ポリゴンは beforeId = 海洋 water の直下に入るため、
+ * この順序がそのまま「内水面 → 政治ポリゴン → 海洋 → 海岸線」を意味する:
+ * - 内水面が海洋より上だと、湖・川が政治ポリゴンの塗りを虫食い状に抜く
+ * - 海岸線が海洋より下だと、海岸線が海に覆われて沿岸の線が消える（TASK-84 の退行）
+ *
+ * 対象レイヤーを持たないスタイル（OpenFreeMap へのフォールバック、スタイル
+ * 未読込）では順序を要求しない: その場合 underWaterBeforeId も beforeId を
+ * 付けず従来の描画順になるため、不整合ではない。
+ *
+ * @param styleLayerIds 現在の MapLibre スタイルのレイヤー ID 列
+ */
+export function waterStackIsValid(styleLayerIds: readonly string[]): boolean {
+  const idx = (id: string) => styleLayerIds.indexOf(id);
+  const inland = idx(WATER_INLAND_LAYER_ID);
+  const marine = idx(WATER_STYLE_LAYER_ID);
+  const coastline = idx(COASTLINE_LAYER_ID);
+  if (inland >= 0 && marine >= 0 && inland > marine) return false;
+  if (coastline >= 0 && marine >= 0 && coastline < marine) return false;
+  return true;
 }
 
 /**

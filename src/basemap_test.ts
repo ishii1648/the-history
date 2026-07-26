@@ -3,11 +3,17 @@ import { layers, namedFlavor } from "@protomaps/basemaps";
 import {
   BASEMAP_LAYER_IDS,
   buildBasemapStyle,
+  COASTLINE_COLOR,
+  COASTLINE_LAYER_ID,
   filterBasemapLayers,
   HILLSHADE_LAYER_ID,
+  INLAND_WATER_KINDS,
   PARCHMENT_FLAVOR_OVERRIDES,
   PARCHMENT_LANDCOVER_COLORS,
   parchmentFlavor,
+  WATER_INLAND_LAYER_ID,
+  WATER_LAYER_ID,
+  waterKindIsMarine,
 } from "./basemap.ts";
 import {
   BASEMAP_PMTILES_URL,
@@ -91,9 +97,11 @@ Deno.test("buildBasemapStyle のソースに OSM/Protomaps の attribution が�
   assert(attribution.includes("openstreetmap.org"));
 });
 
-Deno.test("buildBasemapStyle のレイヤーは採用レイヤー + hillshade で構成される", () => {
+Deno.test("buildBasemapStyle のレイヤーは採用レイヤー + hillshade + 水面分割 + coastline で構成される", () => {
   const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
   // TASK-34: hillshade は landcover の後・water の前に挿入する
+  // TASK-84: water は内水面（water-inland）と海洋（water）に分かれ、その上に
+  // 海岸線（coastline）が乗る
   assertEquals(
     style.layers.map((l) => l.id),
     [
@@ -101,7 +109,9 @@ Deno.test("buildBasemapStyle のレイヤーは採用レイヤー + hillshade �
       "earth",
       "landcover",
       HILLSHADE_LAYER_ID,
+      WATER_INLAND_LAYER_ID,
       "water",
+      COASTLINE_LAYER_ID,
     ],
   );
 });
@@ -166,12 +176,17 @@ Deno.test("hillshade は landcover の後・water の前に挿入される", () 
   assert(hillshadeIdx < waterIdx, "hillshade は water より下");
 });
 
-Deno.test("hillshade 追加後もベースマップレイヤーの相対順序は不変", () => {
+Deno.test("hillshade・水面分割・coastline の追加後もベースマップ採用レイヤーの相対順序は不変", () => {
   const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
-  const idsWithoutHillshade = style.layers
+  const added: readonly string[] = [
+    HILLSHADE_LAYER_ID,
+    WATER_INLAND_LAYER_ID,
+    COASTLINE_LAYER_ID,
+  ];
+  const idsWithoutAdded = style.layers
     .map((l) => l.id)
-    .filter((id) => id !== HILLSHADE_LAYER_ID);
-  assertEquals(idsWithoutHillshade, [...BASEMAP_LAYER_IDS]);
+    .filter((id) => !added.includes(id));
+  assertEquals(idsWithoutAdded, [...BASEMAP_LAYER_IDS]);
 });
 
 // --- TASK-44: ベースマップ河川ラインのデコイ化を解消 ---
@@ -339,4 +354,89 @@ Deno.test("buildBasemapStyle に light flavor の現代的な色（シアンの�
   for (const legacy of ["#80deea", "#e2dfda", "#cccccc", "#e7e7e7"]) {
     assert(!serialized.includes(legacy), `${legacy} は残らないこと`);
   }
+});
+
+// --- TASK-84: 沿岸の輪郭線の回復と内水面の重ね順 ---
+// TASK-77 で政治ポリゴンを水面（water）の下へ回した副作用として、(1) 陸の輪郭に
+// 沿った線が一切描かれなくなり沿岸が読めない、(2) 湖・川など内水面のポリゴンが
+// 政治ポリゴンの塗りを虫食い状に抜く、という 2 つの退行が出た。ベースマップ側で
+// 海岸線（coastline）を描き、水面を海洋側（water）と内水面側（water-inland）に
+// 分割して、内水面だけを政治ポリゴンより下へ下げることで両方を解消する。
+
+Deno.test("buildBasemapStyle は water を内水面（water-inland）と海洋（water）に分け、その上に coastline を置く", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  assertEquals(
+    style.layers.map((l) => l.id),
+    [
+      "background",
+      "earth",
+      "landcover",
+      HILLSHADE_LAYER_ID,
+      WATER_INLAND_LAYER_ID,
+      WATER_LAYER_ID,
+      COASTLINE_LAYER_ID,
+    ],
+  );
+});
+
+Deno.test("water-inland は政治ポリゴンの挿入位置（beforeId = water）より下・coastline は上", () => {
+  const ids = buildBasemapStyle(BASEMAP_PMTILES_URL).layers.map((l) => l.id);
+  // 政治ポリゴンは water の直下へ入るため、water-inland < water < coastline の
+  // 順序がそのまま「内水面 → 政治ポリゴン → 海洋 → 海岸線」の重ね順になる
+  assert(ids.indexOf(WATER_INLAND_LAYER_ID) < ids.indexOf(WATER_LAYER_ID));
+  assert(ids.indexOf(WATER_LAYER_ID) < ids.indexOf(COASTLINE_LAYER_ID));
+});
+
+Deno.test("water（海洋側）は内水面の kind を除外し、water-inland は内水面の kind だけを通す", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  const marine = style.layers.find((l) => l.id === WATER_LAYER_ID);
+  const inland = style.layers.find((l) => l.id === WATER_INLAND_LAYER_ID);
+  assert(marine !== undefined && inland !== undefined);
+  for (const kind of INLAND_WATER_KINDS) {
+    assert(!waterKindIsMarine(kind), `${kind} は内水面のはず`);
+  }
+  // 海洋・不明な kind は従来どおり海洋側（政治ポリゴンより上）に残す
+  for (const kind of ["ocean", "sea", "bay", "strait", "fjord", "dock", ""]) {
+    assert(waterKindIsMarine(kind), `${kind} は海洋側に残すはず`);
+  }
+  // filter は同じ定数から組み立てられていること（片側だけ変わる事故を防ぐ）
+  const serialized = JSON.stringify([marine.filter, inland.filter]);
+  for (const kind of INLAND_WATER_KINDS) {
+    assert(serialized.includes(`"${kind}"`), `filter に ${kind} が現れること`);
+  }
+});
+
+Deno.test("water-inland は water と同じ塗り色（分割で見た目が変わらない）", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  const marine = style.layers.find((l) => l.id === WATER_LAYER_ID);
+  const inland = style.layers.find((l) => l.id === WATER_INLAND_LAYER_ID);
+  assert(marine !== undefined && inland !== undefined);
+  assertEquals(inland.type, marine.type);
+  assertEquals(inland.source, marine.source);
+  assertEquals(inland["source-layer"], marine["source-layer"]);
+  assertEquals(
+    (inland.paint as Record<string, unknown>)["fill-color"],
+    (marine.paint as Record<string, unknown>)["fill-color"],
+  );
+});
+
+Deno.test("coastline は earth ポリゴンの輪郭を描く line レイヤー", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  const coastline = style.layers.find((l) => l.id === COASTLINE_LAYER_ID);
+  assert(coastline !== undefined);
+  assertEquals(coastline.type, "line");
+  assertEquals(coastline.source, BASEMAP_SOURCE_ID);
+  assertEquals(coastline["source-layer"], "earth");
+  // earth には島名の Point も入るため、ポリゴンだけに絞る
+  assert(
+    JSON.stringify(coastline.filter).includes("geometry-type"),
+    "geometry-type でポリゴンに絞ること",
+  );
+});
+
+Deno.test("coastline の色は羊皮紙のインク系（暖色の焦茶）で、海より暗い", () => {
+  const [r, g, b] = rgba(COASTLINE_COLOR);
+  assert(r >= g && g >= b, `${COASTLINE_COLOR} は暖色のはず`);
+  const [wr, wg, wb] = hex(PARCHMENT_FLAVOR_OVERRIDES.water);
+  assert(r + g + b < wr + wg + wb, "海の色より暗いこと（線として読めること）");
 });

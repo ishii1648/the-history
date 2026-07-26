@@ -9,8 +9,14 @@ import {
   UNDER_WATER_LAYER_IDS,
   underWaterBeforeId,
   WATER_STYLE_LAYER_ID,
+  waterStackIsValid,
 } from "./layer_stack.ts";
-import { buildBasemapStyle, WATER_LAYER_ID } from "./basemap.ts";
+import {
+  buildBasemapStyle,
+  COASTLINE_LAYER_ID,
+  WATER_INLAND_LAYER_ID,
+  WATER_LAYER_ID,
+} from "./basemap.ts";
 import { BASEMAP_PMTILES_URL } from "./config.ts";
 import {
   CITY_HIT_LAYER_ID,
@@ -230,4 +236,63 @@ Deno.test("beforeId の付与は picking 優先順（PICKING_PRIORITY）に影�
     FRANCE_FIEF_LAYER_ID,
     POWER_LAYER_ID,
   ]);
+});
+
+// --- TASK-84: 水面分割後の重ね順の不変条件 ---
+// 政治ポリゴンは「内水面より上・海洋より下・海岸線より下」に入らなければならない。
+// beforeId は海洋側（water）を指し続ける（water-inland を指すと海上のはみ出しが
+// 露出する = TASK-77 の退行、coastline を指すと内水面が塗りを抜く = TASK-84 の退行）。
+
+Deno.test("underWaterBeforeId は海洋側の water を返す（water-inland は指さない）", () => {
+  const ids = [
+    "background",
+    "earth",
+    WATER_INLAND_LAYER_ID,
+    WATER_LAYER_ID,
+    COASTLINE_LAYER_ID,
+  ];
+  for (const layerId of UNDER_WATER_LAYER_IDS) {
+    assertEquals(underWaterBeforeId(layerId, ids), WATER_LAYER_ID);
+  }
+  assertEquals(WATER_STYLE_LAYER_ID, WATER_LAYER_ID);
+});
+
+Deno.test("waterStackIsValid は 内水面 → 海洋 → 海岸線 の順を要求する", () => {
+  assert(
+    waterStackIsValid([
+      "earth",
+      WATER_INLAND_LAYER_ID,
+      WATER_LAYER_ID,
+      COASTLINE_LAYER_ID,
+    ]),
+  );
+  // 内水面が海洋より上 = 内水面が政治ポリゴンの塗りを抜く
+  assert(
+    !waterStackIsValid([
+      WATER_LAYER_ID,
+      WATER_INLAND_LAYER_ID,
+      COASTLINE_LAYER_ID,
+    ]),
+  );
+  // 海岸線が海洋より下 = 海岸線が海に覆われて消える
+  assert(
+    !waterStackIsValid([
+      WATER_INLAND_LAYER_ID,
+      COASTLINE_LAYER_ID,
+      WATER_LAYER_ID,
+    ]),
+  );
+});
+
+Deno.test("waterStackIsValid は該当レイヤーを持たないスタイル（フォールバック）を拒否しない", () => {
+  // OpenFreeMap 等のフォールバックスタイルには water-inland / coastline が無い。
+  // その場合 beforeId 自体が付かない（従来描画順）ので、不整合とはしない。
+  assert(waterStackIsValid([]));
+  assert(waterStackIsValid(["background", "water", "roads"]));
+  assert(waterStackIsValid(["background", "landuse"]));
+});
+
+Deno.test("実スタイル（buildBasemapStyle）は waterStackIsValid を満たす", () => {
+  const ids = buildBasemapStyle(BASEMAP_PMTILES_URL).layers.map((l) => l.id);
+  assert(waterStackIsValid(ids));
 });

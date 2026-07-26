@@ -17,6 +17,7 @@ import {
   overlaySplitIsValid,
   RIVER_LABEL_LAYER_ID,
   underWaterBeforeId,
+  waterStackIsValid,
 } from "./layer_stack.ts";
 import {
   type BasemapErrorEvent,
@@ -1195,6 +1196,13 @@ function renderLayers(): void {
     )
   ) {
     throw new Error("interleaved / overlaid のレイヤー分配が不正");
+  }
+  // TASK-84: 政治ポリゴンの挿入位置（beforeId = 海洋 water）が「内水面より上・
+  // 海洋と海岸線より下」であることを、実際のスタイル順に対して毎回確認する。
+  // ベースマップ側のレイヤー順を変えて沿岸の線や塗りが壊れたらここで気付ける
+  // （対象レイヤーを持たないフォールバックスタイルでは常に true）。
+  if (!waterStackIsValid(currentStyleLayerIds())) {
+    throw new Error("ベースマップの水面・海岸線の重ね順が不正");
   }
   overlay.setProps({ layers });
   labelOverlay.setProps({ layers: labelLayers });
