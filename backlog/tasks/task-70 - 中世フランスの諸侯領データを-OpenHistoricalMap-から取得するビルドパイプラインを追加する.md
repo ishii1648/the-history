@@ -1,11 +1,11 @@
 ---
 id: TASK-70
 title: 中世フランスの諸侯領データを OpenHistoricalMap から取得するビルドパイプラインを追加する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-26 07:14'
-updated_date: '2026-07-26 07:20'
+updated_date: '2026-07-26 07:37'
 labels:
   - 'area:scripts'
   - 'area:data'
@@ -36,12 +36,12 @@ ordinal: 67000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 scripts/ に OHM から中世フランス諸侯領を取得するビルドスクリプトが追加され、既存の build-hre.ts と同様に data/ 配下へ年代別 GeoJSON を決定的に生成できる（手作業でのデータ改変がない）
-- [ ] #2 生成される GeoJSON の対象年は既存スナップショット年のうち OHM に有効データが存在する中世年代であり、各 feature が領邦名・admin_level・OHM リレーション ID・有効期間（start_date/end_date）を属性として持つ
-- [ ] #3 年代フィルタが start_date/end_date の解釈（年のみ表記・年月日表記・end_date 欠損＝無期限）を含めて純粋関数として実装され、境界年（start_date と同じ年・end_date と同じ年）を含む単体テストがある
-- [ ] #4 ジオメトリを取得できないメンバー way があるリレーションでも生成が失敗せず、欠損が検出可能な形で記録される
-- [ ] #5 docs/data-inventory の README にデータソースとして OpenHistoricalMap（CC0）が追記され、年代別ファイルに取得できた諸侯領の一覧と、Toulouse・王領・Provence などの欠落が明記されている
-- [ ] #6 deno test が green
+- [x] #1 scripts/ に OHM から中世フランス諸侯領を取得するビルドスクリプトが追加され、既存の build-hre.ts と同様に data/ 配下へ年代別 GeoJSON を決定的に生成できる（手作業でのデータ改変がない）
+- [x] #2 生成される GeoJSON の対象年は既存スナップショット年のうち OHM に有効データが存在する中世年代であり、各 feature が領邦名・admin_level・OHM リレーション ID・有効期間（start_date/end_date）を属性として持つ
+- [x] #3 年代フィルタが start_date/end_date の解釈（年のみ表記・年月日表記・end_date 欠損＝無期限）を含めて純粋関数として実装され、境界年（start_date と同じ年・end_date と同じ年）を含む単体テストがある
+- [x] #4 ジオメトリを取得できないメンバー way があるリレーションでも生成が失敗せず、欠損が検出可能な形で記録される
+- [x] #5 docs/data-inventory の README にデータソースとして OpenHistoricalMap（CC0）が追記され、年代別ファイルに取得できた諸侯領の一覧と、Toulouse・王領・Provence などの欠落が明記されている
+- [x] #6 deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -55,3 +55,15 @@ ordinal: 67000
 6. deno fmt --check / lint / test / build green
 並列化判定: 見送り（理由: docs のインベントリ更新は生成データの実結果に依存し、フィルタ関数とビルドスクリプトは同一モジュール群で密結合のため、ファイル競合なく独立検証可能なサブ作業に分割できない）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス: (AC1) scripts/build-france-fiefs.ts が deno task build-france-fiefs で data/france_fiefs_<year>.geojson を生成。決定性は 2 回実行のバイト一致で確認（実装 subagent 報告）。(AC2) 対象年 1000/1100/1200/1279/1300（900 は 2 件のみ、1400 は admin_level 2 移行のため対象外と実データで確定）。1200 年生成物を検分し 12 feature・NAME/ADMIN_LEVEL/OHM_RELATION_ID/START_DATE/END_DATE 属性を確認。(AC3) parseOhmYear / isActiveAtYear が純粋関数で、境界年テスト（1137-04-09〜1214-09-28 の 1137/1214 を含み 1136/1215 を含まない等）を含む。(AC4) 欠損 way・非閉リング・孤立内環でも生成継続し GeoJSON foreign member metadata に記録、合成データでテスト済み（現行 15 リレーションでは実欠損 0 件。タスク記載の Bar/Burgundy の『欠損 way』は実際は subarea/label メンバーだったことが判明）。(AC5) docs/data-inventory/README.md に OHM（CC0）出典表・収録一覧・欠落表（Toulouse・王領・Provence 1487 以降のみ等）を確認。(AC6) deno test 630 passed（うち本タスク 24 件、ネットワーク非依存）。mainagent レビューでスクリプト全文・生成物・README を検分済み。decision-13（OHM 採用と欠落明示の方針）を記録。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+OHM Overpass API から中世フランス諸侯領を 2 段階取得（tags 全件→対象 15 リレーションの geom）し、年代閉区間の純粋関数フィルタと name:en 許可リスト + admin_level 3〜5 の選定で data/france_fiefs_{1000,1100,1200,1279,1300}.geojson を決定的に生成するパイプラインを追加。欠損は生成物 metadata に記録し生成は失敗させない。docs/data-inventory に出典（CC0）と欠落（Toulouse・王領・Provence 等）を明記。テスト 24 件（境界年含む）を先行で追加し deno test 630 passed。decision-13 を記録。PR #80。
+<!-- SECTION:FINAL_SUMMARY:END -->
