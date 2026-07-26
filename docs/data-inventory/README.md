@@ -869,6 +869,13 @@ properties は `name`（NE の `NAME`、英語）/ `scalerank` / `min_label` の
 [rivers-continuity-audit.md](rivers-continuity-audit.md) にまとめている（TASK-76
 調査）。
 
+base 勢力の帰属（名称・宗主・存続期間）については、全 20 年代を横断監査した結果
+（明確な誤り 15 件 / 解釈の余地あり 7 件 / 妥当 11 件）と是正方針を
+[base-attribution-audit.md](base-attribution-audit.md) にまとめている（TASK-103
+調査）。上流データの粒度に由来し上書きでは直せないもの（滅亡済み勢力名の残存・
+代表名による広域の一括塗り・年代間のポリゴン使い回し・名目的宗主権の揺れ）は、
+同ドキュメント §6 に `known-limitations.json` への記載候補として整理してある。
+
 - **hre-territories-pre-1500**（900〜1492 年）:
   1500年より前（900〜1492年）の年代では、神聖ローマ帝国内部の領邦データが存在せず、帝国全体が単一の領域として表示されます。採用しているデータセット（ETH
   Zürich,
