@@ -13,6 +13,7 @@ import {
 import { buildBasemapStyle, WATER_LAYER_ID } from "./basemap.ts";
 import { BASEMAP_PMTILES_URL } from "./config.ts";
 import {
+  CITY_HIT_LAYER_ID,
   CITY_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -101,11 +102,12 @@ Deno.test("3 ポリゴンレイヤーには水面レイヤー id が beforeId �
   }
 });
 
-Deno.test("河川・河川ヒット層・都市・ラベル系レイヤーには beforeId を付与しない（水面より上を維持, AC #2）", () => {
+Deno.test("河川・河川ヒット層・都市・都市ヒット層・ラベル系レイヤーには beforeId を付与しない（水面より上を維持, AC #2）", () => {
   const aboveWater = [
     RIVERS_LAYER_ID,
     RIVERS_HIT_LAYER_ID,
     CITY_LAYER_ID,
+    CITY_HIT_LAYER_ID,
     ...OVERLAID_LAYER_IDS,
     // HRE 帝国範囲の強調（main.ts のレイヤー ID）
     "hre-extent",
@@ -166,11 +168,27 @@ Deno.test("overlaySplitIsValid は正しい分配を受理する", () => {
       HRE_LAYER_ID,
       "hre-extent",
       RIVERS_HIT_LAYER_ID,
+      CITY_HIT_LAYER_ID,
       CITY_LAYER_ID,
       RIVERS_LAYER_ID,
     ],
     [...OVERLAID_LAYER_IDS],
   ));
+});
+
+// --- TASK-82: 都市の透明判定層（cities-hit）の分配 ---
+
+Deno.test("cities-hit は水面より下へ回さない（判定専用だが cities と同じ水面上グループ）（TASK-82）", () => {
+  assert(!UNDER_WATER_LAYER_IDS.includes(CITY_HIT_LAYER_ID));
+  assertEquals(
+    underWaterBeforeId(CITY_HIT_LAYER_ID, realStyleLayerIds),
+    undefined,
+  );
+});
+
+Deno.test("cities-hit は overlaid 側に載せない（picking は interleaved 側のみ）（TASK-82）", () => {
+  assert(!OVERLAID_LAYER_IDS.includes(CITY_HIT_LAYER_ID));
+  assert(PICKING_PRIORITY.includes(CITY_HIT_LAYER_ID));
 });
 
 Deno.test("overlaySplitIsValid はラベル層が interleaved 側に混ざった分配を拒否する", () => {
@@ -206,6 +224,7 @@ Deno.test("beforeId の付与は picking 優先順（PICKING_PRIORITY）に影�
   assertEquals(PICKING_PRIORITY, [
     RIVERS_LAYER_ID,
     CITY_LAYER_ID,
+    CITY_HIT_LAYER_ID,
     RIVERS_HIT_LAYER_ID,
     HRE_LAYER_ID,
     FRANCE_FIEF_LAYER_ID,
