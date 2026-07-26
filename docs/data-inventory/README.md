@@ -155,6 +155,71 @@ way）・`unclosedRings`（端点が繋がらず強制的に閉じたリング�
 年のフランス王国域は、収録できた諸侯領を重ねてもなお南部（トゥールーズ・オーヴェルニュ）と王領が空白になる。この空白は許可リストの狭さではなく
 OHM 側の実データの欠落による（TASK-87 で実測確認済み）。
 
+#### 県ポリゴン合成で空白を埋める案の検討と却下（TASK-88 / decision-18）
+
+上記の空白（トゥールーズ伯領・王領・Foix / Armagnac / Auvergne / Bourbon /
+Nevers）を、現代の県（département）ポリゴンの union
+で合成して埋める案を実測のうえ却下した。決定は decision-18、実測は次のとおり。
+
+**ソース候補**:
+[gregoiredavid/france-geojson](https://github.com/gregoiredavid/france-geojson)
+の `departements.geojson`（96 features、IGN Admin Express COG 2018 + INSEE COG
+2018 由来、mapshaper で 5 桁 ≈ 1.11 m 丸め + Visvalingam weighted 25% 簡略化）。
+ライセンスは README の 1 行（Admin Express の Licence
+Ouverte）のみでリポジトリに LICENSE ファイルが無く（`raw.../LICENSE` は
+404・GitHub API の `license` も `null`）、master HEAD は
+`5d34ee6d0140c29f785fdb047d9329f1aab58833`（2018-10-16、 最終 push
+2022-12-02）。attribution-only なので再配布自体は可能だが、
+DOI・コミット固定・ライセンス明記で揃えてきた他ソースより出典管理の水準が低い。
+
+**却下の根拠（1200 年で実測）**:
+
+| 指標                                                                           | 実測値                                                                                                                      |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| 合成 A（核心 6 県 31 / 81 / 82 / 46 / 12 / 47）の面積                          | 35,185 km²。base の `Comté de Toulouse`（90,755 km²）との IoU = **28.5%**                                                   |
+| 合成 B（A + 48 / 30 / 07）                                                     | 51,767 km²、IoU = **30.2%**                                                                                                 |
+| 合成 C（B + 34 / 09 / 84）                                                     | 66,460 km²、IoU = **41.6%**                                                                                                 |
+| 逆算した最良の県セット（base が 50% 以上覆う 13 県）                           | 74,598 km²、IoU = 72.9%。ただし Bouches-du-Rhône / Var / Alpes 系まで含み、base 側が実質「ラングドック + プロヴァンス」の塊 |
+| 1200 年の空白（`europe_1200` の France ∪ Toulouse − `france_fiefs_flat_1200`） | 208,326 km²（対象域の 64.6%）                                                                                               |
+| 合成が埋める空白                                                               | A = 26,533 km²（**12.7%**）／ C = 57,638 km²（**27.7%**）／最良でも 33.8%                                                   |
+| 出典のある既存 fief との重なり（合成 A）                                       | Duchy of Aquitaine 3,737 km²（同 fief の 5.7%）+ Duchy of Gascony 2,569 km²（10.2%）= 合成 A の **17.9%**                   |
+| 頂点密度                                                                       | 6 県の生頂点 12,365 に対し、1200 年の OHM 由来 19 fief 全体で 2,801 頂点（合成領だけが 4 倍以上シャープに描かれる）         |
+
+同じ通説から出発した合成が base と 28〜42%
+しか一致しない時点で、形状の大半は「どの県を選ぶか」という編集判断の産物であり、
+座標の出所（IGN）が追跡できても「1200
+年の境界」としての出典はゼロである。加えて空白の 13〜28%
+しか埋まらず、出典のある Aquitaine / Gascony と 6,300 km²
+の重なりを新たに作り、`base_outline_<year>`（§3.5、GPL-3.0 派生の線データ）まで
+合成ポリゴンで切ることになる。全境界を「概略」として描く方針（§9・TASK-80）とも
+矛盾するため、合成は行わず空白のまま既知の制限で説明する（decision-14 の
+「出典を持たない座標合成はしない」を維持）。
+
+**出典のある代替の再確認**: `FRANCE_BBOX` 全域の `boundary=administrative`
+リレーション **4,923 件**を再取得し、
+`toulouse|foix|auvergne|bourbon|nevers|armagnac|royal|domaine|languedoc|rouergue|quercy`
+等で名称を横断検索した結果、該当リレーションは **0 件**（Provence は
+`rel 2892604` の 1487–1791 のみ、Dauphiné は対象域外）。TASK-70 / TASK-87
+の結論を再現した。
+
+**再現手順**:
+
+```sh
+# 1. 県ポリゴンを取得（96 features）
+curl -sL -o /tmp/departements.geojson \
+  https://raw.githubusercontent.com/gregoiredavid/france-geojson/5d34ee6d0140c29f785fdb047d9329f1aab58833/departements.geojson
+
+# 2. 合成・面積・IoU・空白充填率を測る（@turf/union・@turf/intersect・
+#    @turf/difference・@turf/area は本リポジトリの import map にある）
+#    入力: /tmp/departements.geojson・data/europe_1200.geojson・
+#          data/france_fiefs_flat_1200.geojson
+
+# 3. OHM 側にリレーションが無いことを再確認する
+printf '[out:json][timeout:180];rel["boundary"="administrative"](40.0,-6.5,52.5,10.5);out tags;' > /tmp/q.txt
+curl -s --data-urlencode "data@/tmp/q.txt" \
+  https://overpass-api.openhistoricalmap.org/api/interpreter -o /tmp/ohm.json
+```
+
 #### 収録を見送った候補と根拠（TASK-87）
 
 `FRANCE_BBOX` 内の `boundary=administrative`（4,917 件）から `admin_level` 3〜5

@@ -63,6 +63,51 @@ Deno.test("中世フランス諸侯領の欠落が明記されている（TASK-7
   );
 });
 
+// TASK-88 / decision-18: OHM に無い諸侯領（トゥールーズ・王領など）を現代の県
+// （département）ポリゴンの union で自作する案を実測のうえ却下した。ユーザから
+// 見れば「空白が埋まらない」ことに変わりはないので、なぜ埋めないのか（= 出典を
+// たどれない形状は混ぜない）と、その判断の根拠になった実測値を同じエントリに
+// 集約して説明する。新規 id を作らないのは、空白の理由と埋めない理由が同じ
+// 制限の表裏であり、分けると年代フィルタも同一のまま 2 件が並んで冗長になるため。
+Deno.test("県ポリゴン合成による諸侯領の自作を見送った旨と実測値が明記されている（TASK-88 AC #5）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "france-fiefs-missing-territories");
+  assert(entry !== undefined, "france-fiefs-missing-territories が無い");
+  // 検討して採らなかったこと（= 単なる未実装ではない）が読み取れること
+  for (const keyword of ["県", "1790", "合成"]) {
+    assert(
+      entry.text.includes(keyword),
+      `text が県ポリゴン合成の検討（${keyword}）に言及していない`,
+    );
+  }
+  // 却下の根拠になった実測値（TASK-88 フェーズ 1）。
+  // 一致度 IoU: 核心 6 県 28.5% 〜 12 県 41.6%
+  // 1200 年の空白（208,326 km²）の充填率: 12.7% 〜 27.7%
+  for (const keyword of ["28.5", "41.6", "12.7", "27.7"]) {
+    assert(
+      entry.text.includes(keyword),
+      `text が実測値 ${keyword} に言及していない`,
+    );
+  }
+  // 方針（出典をたどれない形状は史実データに混ぜない）に言及していること
+  assert(
+    /出典/.test(entry.text),
+    "text が出典をたどれない形状を混ぜない方針に言及していない",
+  );
+});
+
+Deno.test("県ポリゴン合成の見送りは新規 id を作らず既存 1 件に集約されている（TASK-88 AC #5）", () => {
+  const ids = knownLimitations.limitations.map((entry) => entry.id);
+  const added = ids.filter((id) =>
+    /synth|departement|department|fief-synthesis/i.test(id)
+  );
+  assertEquals(
+    added,
+    [],
+    `合成見送り用の新規 id が追加されている: ${added.join(", ")}`,
+  );
+});
+
 Deno.test("フランス諸侯領の制限注記は諸侯領オーバーレイの対象年でのみ active（TASK-71 AC #3）", () => {
   const parsed = parseKnownLimitations(knownLimitations);
   const entry = parsed.find((l) => l.id === "france-fiefs-missing-territories");
