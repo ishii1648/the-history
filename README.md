@@ -24,9 +24,35 @@ deno task test:watch
 # 本番用に dist/ をビルドする（index.html / app.css / app.js を生成）
 deno task build
 
-# dist/ をローカル配信する
+# dist/ をローカル配信する（既定 http://localhost:8000/）
 deno task serve
+
+# ポート指定 / 使用中なら空きポートへフォールバック
+deno task serve --port 8011
+deno task serve --auto-port
 ```
+
+### dev サーバの後始末（ポート衝突時）
+
+`deno task serve` は既定ポート（`scripts/serve.ts` の `DEFAULT_PORT`）が
+使用中の場合、黙って別ポートへ逃げずに占有プロセスと対処を表示して終了します
+（TASK-89）。残存 dev サーバは**旧ビルドを配信し続けて動作確認を誤判定させる**
+ため、まず後始末するのが原則です。
+
+```bash
+# 誰が占有しているか調べる（PID と実行コマンド）
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+ps -o pid=,command= -p <PID>
+
+# 不要なら停止する
+kill <PID>          # 落ちなければ kill -9 <PID>
+```
+
+占有しているのが同じ `dist/` を配信中のサーバなら、停止せずに
+`http://localhost:8000/` をそのまま使って構いません。並行して別ビルドを
+確認したい場合のみ `--port` / `--auto-port` を使い、**確認後は必ず停止**して
+ください（残存サーバの検知手順は
+[`docs/agent-loop-recovery.md`](docs/agent-loop-recovery.md) も参照）。
 
 > [!NOTE]
 > 動作確認は必ず**前面（アクティブ）タブ**で行ってください。背景タブやブラウザ

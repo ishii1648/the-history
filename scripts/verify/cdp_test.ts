@@ -1,13 +1,19 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { DEFAULT_PORT } from "../serve.ts";
 import {
   buildWaitForExpr,
   createCdpSession,
+  DEFAULT_APP_URL,
   parseCliArgs,
   parseEvaluateResult,
   pickPageTargetUrl,
   resolveCheckScriptUrl,
   resolveKeyCode,
 } from "./cdp.ts";
+
+Deno.test("DEFAULT_APP_URL は dev サーバの既定ポート（scripts/serve.ts の DEFAULT_PORT）に追従する", () => {
+  assertEquals(DEFAULT_APP_URL, `http://localhost:${DEFAULT_PORT}/`);
+});
 
 Deno.test("pickPageTargetUrl は type=page かつ webSocketDebuggerUrl を持つ最初のターゲットの URL を返す", () => {
   const targets = [

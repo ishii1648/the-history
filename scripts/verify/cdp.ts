@@ -7,9 +7,9 @@
  * が動作し、任意 JS 評価・座標指定クリック・キー入力・スクリーンショットを行える。
  *
  * 使い方（ライブラリとして）:
- *   import { launch } from "./cdp.ts";
+ *   import { DEFAULT_APP_URL, launch } from "./cdp.ts";
  *   const api = await launch();
- *   await api.navigate("http://localhost:8011/");
+ *   await api.navigate(DEFAULT_APP_URL);  // dev サーバの既定ポートに追従する
  *   await api.waitForAppReady();
  *   ...
  *   await api.close();
@@ -33,6 +33,14 @@
  */
 
 import { isAbsolute, join, toFileUrl } from "@std/path";
+import { DEFAULT_PORT } from "../serve.ts";
+
+/**
+ * `deno task serve` が既定で配信する URL。ポート番号の定義元は
+ * scripts/serve.ts の {@linkcode DEFAULT_PORT} 1 箇所とし、ここでは
+ * リテラルを書かない（かつて 8011 と書かれてドリフトしていた: TASK-89）。
+ */
+export const DEFAULT_APP_URL = `http://localhost:${DEFAULT_PORT}/`;
 
 const DEFAULT_CHROME_BIN =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";

@@ -172,9 +172,14 @@ dev サーバが `Cache-Control` を返さずブラウザのヒューリステ�
 
 - `no-cache` は「キャッシュ禁止」ではなく「使用前に必ずオリジンへ再検証」。
   変更が無ければ 304 で転送量を抑え、変更があれば必ず新版が返る
-- dev サーバ: `deno task serve`（`jsr:@std/http/file-server`）に
-  `--header "Cache-Control: no-cache"` を指定。file-server は ETag /
-  `Last-Modified` を返すため条件付きリクエストで 304 になる
+- dev サーバ: `deno task serve`（`scripts/serve.ts` が `@std/http` の `serveDir`
+  で `dist/` を配信）が全レスポンスに `Cache-Control: no-cache` を付与する。
+  `serveDir` は ETag / `Last-Modified` を返すため条件付きリクエストで 304
+  になる。 既定ポートは `scripts/serve.ts` の
+  `DEFAULT_PORT`（単一定義元。検証ハーネス `scripts/verify/cdp.ts` の
+  `DEFAULT_APP_URL` もこれを参照する）。ポートが
+  使用中の場合は占有プロセスと対処を表示して終了し、`--auto-port` を明示した
+  ときだけ空きポートへフォールバックする（後始末手順は README 参照, TASK-89）
 - 本番（Cloudflare Pages / R2）: CDN エッジが再検証を吸収するため、
   オリジン負荷・レイテンシへの影響は小さい
   - Cloudflare Pages: プロジェクト直下の `_headers` ファイルで `/*` に
