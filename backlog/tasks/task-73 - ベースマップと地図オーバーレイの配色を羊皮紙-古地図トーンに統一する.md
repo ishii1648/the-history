@@ -1,10 +1,11 @@
 ---
 id: TASK-73
 title: ベースマップと地図オーバーレイの配色を羊皮紙/古地図トーンに統一する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-26 07:35'
-updated_date: '2026-07-26 07:37'
+updated_date: '2026-07-26 08:03'
 labels:
   - 'area:src-main'
 dependencies: []
@@ -52,3 +53,16 @@ TASK-72（地図ラベルの背景パネル撤去と白 halo 実効化）との�
 - [ ] #6 deno test が green
 - [ ] #7 目視確認: 1000 / 1200 / 1500 / 1815 年のスクリーンショットで、地図と UI が同一のデザイン言語に見えることを確認済み
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. src/basemap.ts の buildBasemapStyle() に羊皮紙トーンの flavor オーバーライド定数（water/earth/background/glacier/sand/landcover 等）を切り出し、テスト先行（red→green）で単体テストを追加（AC2）
+2. 提案配色（タスク Description、ユーザー承認済み・目視微調整可）を適用: water #c7d2d0 / earth #f0e6cd / background #e7d9b2 / glacier #f4efe2 / sand #e8dcc0 / landcover くすんだオリーブ
+3. src/powers.ts LINE_COLOR を白 → インク茶 [92,61,34,190]（--frame）に変更（AC3）。仏諸侯領の藍紫境界（TASK-71）との識別が保たれるか目視確認
+4. src/rivers.ts の通常/ホバー/選択 3 状態を青灰系（通常 [122,148,158]、選択は --wax 系赤茶 [122,46,34] を検討）へ変更し、切替挙動の非退行をテストで担保（AC4、TASK-36 の回帰に注意）
+5. hillshade のセピア寄せは目視で判断（TASK-34 の暖色グレーから必要なら微調整）
+6. ラベル・都市マーカーの視認性を新下地で確認（AC5）。TASK-72 が前提とする白 halo のクリーム寄せ要否を判断し Implementation Notes に記録
+7. deno fmt --check / lint / test / build 全 green → mainagent がヘッドレス CDP で 1000/1200/1500/1815 年のスクリーンショット確認（AC7、マージ前）
+並列化判定: 見送り（理由: 変更対象が basemap/powers/rivers の配色定数群で相互の見た目調整が必要な単一デザイン作業であり、ファイル競合なく独立検証可能なサブ作業に分割できないため）
+<!-- SECTION:PLAN:END -->
