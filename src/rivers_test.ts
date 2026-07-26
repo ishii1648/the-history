@@ -138,13 +138,21 @@ Deno.test("riverLineColor: hovered が null なら通常色（回帰）", () => 
   assertEquals(riverLineColor("Rhine", null, null), RIVER_LINE_COLOR);
 });
 
-Deno.test("riverLineColor: 中間強調色は通常色と選択強調色のどちらとも異なる", () => {
-  // 参照比較ではなく値比較で 3 状態の識別を担保する（TASK-73）
+Deno.test("riverLineColor: 強調色（ホバー / 選択）は通常色と異なる", () => {
+  // 参照比較ではなく値比較で「強調されているか」を担保する（TASK-73 / TASK-91）
   const key = (c: readonly number[]) => c.join(",");
   assert(
     key(RIVER_HOVERED_LINE_COLOR) !== key(RIVER_LINE_COLOR) &&
-      key(RIVER_HOVERED_LINE_COLOR) !== key(RIVER_SELECTED_LINE_COLOR) &&
-      key(RIVER_LINE_COLOR) !== key(RIVER_SELECTED_LINE_COLOR),
+      key(RIVER_SELECTED_LINE_COLOR) !== key(RIVER_LINE_COLOR),
+  );
+});
+
+Deno.test("riverLineColor: 選択時の色はホバー時と同一（TASK-91）", () => {
+  // クリック（選択）で色相が変わらないこと。段階差は線幅のみが担う。
+  assertEquals(RIVER_SELECTED_LINE_COLOR, RIVER_HOVERED_LINE_COLOR);
+  assertEquals(
+    riverLineColor("Rhine", "Rhine"),
+    riverLineColor("Rhine", null, "Rhine"),
   );
 });
 
@@ -452,12 +460,16 @@ Deno.test("RIVER_HOVERED_LINE_COLOR は通常色と同系の青灰で、より�
   assertEquals(RIVER_HOVERED_LINE_COLOR[3], 255);
 });
 
-Deno.test("RIVER_SELECTED_LINE_COLOR は --wax 系の赤茶（古地図の朱）で他 2 状態と色相が異なる", () => {
-  // app.css の --wax #7a2e22
-  assertEquals(RIVER_SELECTED_LINE_COLOR, [122, 46, 34, 255]);
+Deno.test("RIVER_SELECTED_LINE_COLOR はホバー色と同一の濃い青灰（TASK-91）", () => {
+  // #4a6a7a。クリックによる色相変化は廃止し、選択の区別は線幅が担う
+  assertEquals(RIVER_SELECTED_LINE_COLOR, [74, 106, 122, 255]);
   assert(
-    RIVER_SELECTED_LINE_COLOR[0] > RIVER_SELECTED_LINE_COLOR[2],
-    "選択色は赤が青より強い（暖色）= 青灰の通常/ホバーと色相で区別できる",
+    RIVER_SELECTED_LINE_COLOR[2] > RIVER_SELECTED_LINE_COLOR[0],
+    "選択色も寒色寄り（通常/ホバーと同系の青灰）",
+  );
+  assert(
+    luminance(RIVER_SELECTED_LINE_COLOR) < luminance(RIVER_LINE_COLOR),
+    "選択色は通常色より暗く、下地の羊皮紙上で明確に強調される",
   );
   assertEquals(RIVER_SELECTED_LINE_COLOR[3], 255);
 });
