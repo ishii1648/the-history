@@ -33,6 +33,23 @@ export const RIVERS_SOURCE_COMMIT = "ca96624a56bd078437bca8184e78163e5039ad19";
 export const RIVERS_SOURCE_LICENSE = "Public Domain (Natural Earth)";
 
 /**
+ * TASK-75: エルベ川が河口（北海）まで描かれず、ハンブルク西のヴェーデル付近
+ * （東経 9.784034 / 北緯 53.554638 = 50m データの Elbe feature の西端）で
+ * 途切れる。これはパイプライン側（EUROPE_BBOX クリップ・MAX_SCALERANK・名寄せ・
+ * simplify）ではなく元データの制約で、Natural Earth は下流の幅の広い河口部を
+ * 河川ではなく海としてモデル化している（同コミットの ne_10m_coastline は両岸を
+ * 東経約 9.83 度まで遡って囲む）。
+ *
+ * 補完ソースを 3 つ実測して却下済み（数値と再現手順は
+ * docs/data-inventory/README.md §10）:
+ * - ne_10m_rivers_lake_centerlines: Elbe の西端は東経 9.819021 で 50m より手前
+ * - ne_10m_rivers_europe: 河口部に feature が存在しない（Elbe は上流のみ）
+ * よって 10m 版からの区間マージでは解決しないため、ユーザ向けの既知の制約
+ * （data/known-limitations.json の rivers-elbe-estuary-missing）として明示する
+ * 方針を採る。ソースコミットを更新する際はこの前提を再確認する。
+ */
+
+/**
  * 主要河川とみなす scalerank の上限（値が小さいほど主要）。
  * 50m データでは Danube=2, Volga=3, Rhine=4, Seine=4, Elbe=5 のため、
  * 5 まで含めることで欧州史の主要河川を網羅する（6 は細かすぎるため除外）。
