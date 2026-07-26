@@ -107,11 +107,19 @@ export function parchmentFlavor(): Flavor {
  * - ラベル系（places_* / *_label* / pois / roads_shields 等）はそもそも
  *   layers() を lang なしで呼ぶことで生成しない（labels_layers() を使わない）
  */
+/**
+ * 海洋・湖沼ポリゴンのレイヤー ID（@protomaps/basemaps の base_layers.ts 由来）。
+ * TASK-77: 勢力・諸侯領ポリゴンをこのレイヤーより下へ差し込む（deck.gl の
+ * beforeId）ため、id を定数として公開する。スタイル側の実在は
+ * basemap_test.ts / underwater_test.ts が実レイヤー定義に対して検証する。
+ */
+export const WATER_LAYER_ID = "water";
+
 export const BASEMAP_LAYER_IDS: readonly string[] = [
   "background",
   "earth",
   "landcover",
-  "water",
+  WATER_LAYER_ID,
 ];
 
 const KEEP_IDS: ReadonlySet<string> = new Set(BASEMAP_LAYER_IDS);

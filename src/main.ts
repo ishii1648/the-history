@@ -11,6 +11,13 @@ import {
 import type { Feature, FeatureCollection } from "geojson";
 import { buildBasemapStyle } from "./basemap.ts";
 import {
+  CITY_LABEL_LAYER_ID,
+  LABEL_LAYER_ID,
+  overlaySplitIsValid,
+  RIVER_LABEL_LAYER_ID,
+  underWaterBeforeId,
+} from "./layer_stack.ts";
+import {
   type BasemapErrorEvent,
   createFallbackState,
   decideFallback,
@@ -212,6 +219,11 @@ function handleBasemapError(event: BasemapErrorEvent, context: string): void {
       }。OpenFreeMap にフォールバックします`,
     );
     map.setStyle(FALLBACK_STYLE_URL);
+    // TASK-77: 新スタイルの水面レイヤー有無で beforeId が変わるため、読み込み
+    // 完了後に一度だけレイヤーを組み直す（水面が無いスタイルでも beforeId なし
+    // の従来描画順で描かれるようにする）。styledata の常時購読はレイヤー追加で
+    // 自身が再発火するため、フォールバック時の once に限定する。
+    map.once("styledata", () => renderLayers());
   }
 }
 
@@ -235,17 +247,10 @@ map.on("error", (event) => {
 // 描画順の対応を 1 箇所で管理するため。各レイヤーとも年代切替・選択変更で
 // 同一 ID を保ち、data 差し替えのみで deck.gl の差分更新に任せる方針は不変。
 
-/**
- * 勢力名ラベル（TextLayer）のレイヤー ID（TASK-20）。
- * powers / hre-powers の上に重ね、年代切替では data のみ差し替える。
- */
-const LABEL_LAYER_ID = "power-labels";
-
-/** 河川名ラベル（TextLayer）のレイヤー ID（TASK-24） */
-const RIVER_LABEL_LAYER_ID = "river-labels";
-
-/** 都市名ラベル（TextLayer）のレイヤー ID（TASK-27） */
-const CITY_LABEL_LAYER_ID = "city-labels";
+// ラベル 3 層（power-labels / river-labels / city-labels）の ID は TASK-77 で
+// layer_stack.ts へ移した。beforeId によるレイヤーグループ分割と衝突フィルタの
+// 両立のため、この 3 層だけを overlaid オーバーレイに載せる分配ルールと同じ
+// 場所で管理する。
 
 /**
  * HRE 帝国範囲の強調オーバーレイ（GeoJsonLayer）のレイヤー ID（TASK-30）。
@@ -377,6 +382,25 @@ const overlay = new MapboxOverlay({
 });
 
 /**
+ * ラベル専用のオーバーレイ（TASK-77）。地図 canvas の上に重ねる deck 専用
+ * canvas（overlaid モード）で、コンテナは pointer-events: none のため地図の
+ * ドラッグ・ズーム操作を妨げない。
+ *
+ * interleaved にしない理由: 勢力ポリゴンを水面より下へ回す beforeId により
+ * interleaved のレイヤーグループが 2 つに分かれると、先に描画されるグループの
+ * パスが CollisionFilterExtension の衝突マップをラベル抜きで描き直し、ラベルが
+ * 全滅する（詳細と検証結果は layer_stack.ts の OVERLAID_LAYER_IDS）。
+ *
+ * picking・イベント処理はこのオーバーレイに一切持たせない（ラベル 3 層は
+ * pickable: false で PICKING_PRIORITY にも含まれないため、ホバー/クリックの
+ * 挙動は overlay 側だけで従来どおり完結する）。
+ */
+const labelOverlay = new MapboxOverlay({
+  interleaved: false,
+  layers: [],
+});
+
+/**
  * 中世フランス諸侯領オーバーレイの境界線色（TASK-71 AC #1）。ラベル文字色
  * （labels.ts FIEF_LABEL_COLOR）と同系の藍紫。base 勢力ポリゴンの白境界
  * （powers.ts LINE_COLOR）と明確に異なる色にすることで、「フランス王国の内側に
@@ -395,11 +419,34 @@ const FIEF_LINE_COLOR: Rgba = [
 const FIEF_LINE_WIDTH_PX = 1.5;
 
 /**
+ * 現在の MapLibre スタイルのレイヤー ID 列を返す（TASK-77）。
+ *
+ * beforeId は実在するレイヤー ID でなければならない（存在しない ID を渡すと
+ * MapLibre は例外ではなく error イベントを出してレイヤー追加を諦め、対象の
+ * deck レイヤーが無言で描画されなくなる。詳細は layer_stack.ts）。判定は
+ * 「起動時にビルドしたスタイル」ではなく常に現在のスタイルに対して行い、
+ * OpenFreeMap へのフォールバック後（handleBasemapError）でも実態に追従させる。
+ * スタイル未読込・差し替え中は空配列を返し、beforeId なしの従来描画順にする。
+ */
+function currentStyleLayerIds(): string[] {
+  try {
+    return map.getStyle()?.layers?.map((layer) => layer.id) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * 指定年代の FeatureCollection から GeoJsonLayer を 1 枚生成する。
  * data 以外のプロパティは全年代で不変。updateTriggers に year を渡し、
  * 色関数の再評価を促す（colors 読み込み前後でも齟齬が出ないようにする）。
  * powers / hre-powers / france-fiefs の 3 枚で共用し、id と境界線の見た目
  * （lineColor / lineWidth）以外は同一の挙動にする（TASK-19、TASK-71）。
+ *
+ * TASK-77: 3 枚とも beforeId（underWaterBeforeId）でベースマップの水面
+ * ポリゴンの下へ差し込み、海岸線の解像度差による海上へのはみ出しを水面に
+ * 覆わせて隠す。水面より上に残す河川・都市・ラベルはこの builder を通らない
+ * ため、対象は構造的に政治ポリゴンの 3 枚だけになる。
  */
 function buildPowerLayer(
   id: string,
@@ -411,6 +458,9 @@ function buildPowerLayer(
   return new GeoJsonLayer({
     id,
     data,
+    // TASK-77: 水面ポリゴンの直下へ差し込む（interleaved 前提。水面レイヤーが
+    // 無いスタイルでは undefined = 従来どおり最前面グループへフォールバック）
+    beforeId: underWaterBeforeId(id, currentStyleLayerIds()),
     // AC #3: ホバー/クリックを有効化（ツールチップ UI は TASK-7）
     pickable: true,
     stroked: true,
@@ -929,6 +979,21 @@ function buildHreExtentLayer(
  * （TASK-49）で、河畔都市マーカーの picking を rivers-hit が遮蔽しないように
  * する。
  *
+ * TASK-77: 上の描画順は deck レイヤー同士の相対順で、MapLibre スタイルとの
+ * 前後関係は各レイヤーの beforeId で決まる。powers / france-fiefs / hre-powers
+ * の 3 枚だけがベースマップの水面ポリゴンより下（buildPowerLayer で
+ * underWaterBeforeId を付与）、残り（hre-extent・rivers-hit・cities・rivers）は
+ * 従来どおり水面より上に描かれる。beforeId は MapLibre 側の挿入位置のみを変え、
+ * deck レイヤー配列の順序 = picking 優先順（PICKING_PRIORITY）には影響しない
+ * （@deck.gl/mapbox は beforeId ごとにグループを作り、同一グループ内では配列順で
+ * 描画する）。
+ *
+ * TASK-77: ラベル 3 層だけは overlaid の labelOverlay（別 canvas）へ分ける。
+ * interleaved のグループ分割が CollisionFilterExtension の衝突マップを壊し
+ * ラベルが全滅するため（理由と検証は layer_stack.ts の OVERLAID_LAYER_IDS）。
+ * 分配の不変条件は overlaySplitIsValid で毎回検証する。ラベルは元々
+ * pickable: false・最前面のため、見た目・picking・イベント処理は変わらない。
+ *
  * TASK-29: pickable レイヤーの並びは picking.ts の PICKING_PRIORITY
  * （河川 > 都市 > 河川ヒット層 > HRE 領邦 > 勢力。先頭が最優先。TASK-49 で
  * cities を rivers-hit より優先に変更）から導出する。deck.gl の picking は
@@ -974,15 +1039,26 @@ function renderLayers(): void {
     // 無視される（layerOrderMatchesPickingPriority の既存仕様）。
     if (id === HRE_LAYER_ID) layers.push(buildHreExtentLayer(year, base));
   }
-  layers.push(
+  // TASK-77: ラベル 3 層は overlaid オーバーレイ（別 canvas）へ載せる。
+  // 順序は従来の描画順（勢力名 → 河川名 → 都市名）をそのまま保つ。
+  const labelLayers: Layer[] = [
     buildLabelLayer(year, base, hre, fiefs),
     buildRiverLabelLayer(),
     buildCityLabelLayer(year),
-  );
+  ];
   if (!layerOrderMatchesPickingPriority(layers.map((l) => l.id))) {
     throw new Error("レイヤー順が PICKING_PRIORITY と整合していない");
   }
+  if (
+    !overlaySplitIsValid(
+      layers.map((l) => l.id),
+      labelLayers.map((l) => l.id),
+    )
+  ) {
+    throw new Error("interleaved / overlaid のレイヤー分配が不正");
+  }
   overlay.setProps({ layers });
+  labelOverlay.setProps({ layers: labelLayers });
 }
 
 /**
@@ -1766,6 +1842,9 @@ async function initPowerLayer(): Promise<void> {
 // スタイル読み込み完了後に overlay を統合し、初期年代を描画する。
 map.on("load", () => {
   map.addControl(overlay);
+  // TASK-77: ラベル専用の overlaid オーバーレイ。interleaved の overlay より
+  // 後に追加し、地図 canvas の上（= 全レイヤーの最前面）にラベルを重ねる。
+  map.addControl(labelOverlay);
   void initPowerLayer();
 });
 
