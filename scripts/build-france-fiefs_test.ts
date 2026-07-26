@@ -7,8 +7,11 @@ import {
   buildYearCollection,
   FRANCE_BBOX,
   FRANCE_FIEF_ADMIN_LEVELS,
+  FRANCE_FIEF_EXCLUDED_NAMES,
+  FRANCE_FIEF_EXCLUSIONS,
   FRANCE_FIEF_NAMES,
   FRANCE_FIEF_YEARS,
+  franceFiefExclusionReason,
   isActiveAtYear,
   OHM_SOURCE_LICENSE,
   OHM_SOURCE_URL,
@@ -38,6 +41,38 @@ function rel(
   if (end !== undefined) tags["end_date"] = end;
   return { type: "relation", id, tags };
 }
+
+/**
+ * TASK-70 で確定した 14 領邦。許可リストを拡張しても落ちていないことを
+ * テスト側で独立に固定する（TASK-87 AC#2）。
+ */
+const TASK70_FRANCE_FIEF_NAMES = [
+  "County of Alençon",
+  "County of Anjou",
+  "County of Artois",
+  "County of Bar",
+  "County of Champagne",
+  "County of Flanders",
+  "County of Maine",
+  "County of Poitou",
+  "County of Ponthieu",
+  "Duchy of Aquitaine",
+  "Duchy of Brittany",
+  "Duchy of Burgundy",
+  "Duchy of Gascony",
+  "Duchy of Normandy",
+] as const;
+
+/** TASK-87 で追加したフランス王国内の 7 伯領（OHM の name:en 表記そのまま） */
+const TASK87_ADDED_FIEF_NAMES = [
+  "Counts of Saint-Pol",
+  "County of Angoulême",
+  "County of La Marche",
+  "County of Nantes",
+  "County of Perche",
+  "County of Tours",
+  "County of Vendôme",
+] as const;
 
 /** [lon, lat] の列を Overpass の member geometry 形式に変換する */
 function geom(points: Array<[number, number]>) {
@@ -160,8 +195,8 @@ Deno.test("selectFiefsForYear: 並び順は英語名の昇順で決定的", () =
 });
 
 Deno.test("FRANCE_FIEF_NAMES / FRANCE_FIEF_ADMIN_LEVELS の内容", () => {
-  // 調査で 1000〜1300 年に有効と確認できた 14 領邦
-  assertEquals(FRANCE_FIEF_NAMES.length, 14);
+  // TASK-70 で確定した 14 領邦 + TASK-87 で追加したフランス王国内の 7 伯領
+  assertEquals(FRANCE_FIEF_NAMES.length, 21);
   assert(FRANCE_FIEF_NAMES.includes("Duchy of Brittany"));
   assert(FRANCE_FIEF_NAMES.includes("County of Ponthieu"));
   // 昇順ソート済み（重複なし）
@@ -169,6 +204,103 @@ Deno.test("FRANCE_FIEF_NAMES / FRANCE_FIEF_ADMIN_LEVELS の内容", () => {
   assertEquals(new Set(FRANCE_FIEF_NAMES).size, FRANCE_FIEF_NAMES.length);
   // Ponthieu は admin_level 5 なので 3〜5 を採る
   assertEquals([...FRANCE_FIEF_ADMIN_LEVELS], [3, 4, 5]);
+});
+
+Deno.test("TASK-70 の 14 領邦は許可リスト拡張後も維持されている（TASK-87 AC#2）", () => {
+  for (const name of TASK70_FRANCE_FIEF_NAMES) {
+    assert(FRANCE_FIEF_NAMES.includes(name), `${name} が許可リストから消えた`);
+  }
+});
+
+Deno.test("TASK-87 で追加した 7 伯領が許可リストに入っている（AC#1）", () => {
+  for (const name of TASK87_ADDED_FIEF_NAMES) {
+    assert(FRANCE_FIEF_NAMES.includes(name), `${name} が許可リストに無い`);
+  }
+  // OHM の name:en は "County of ..." に揃っておらず Saint-Pol だけ変則表記
+  assert(FRANCE_FIEF_NAMES.includes("Counts of Saint-Pol"));
+});
+
+Deno.test("追加した伯領が実データの有効年で選ばれる（TASK-87 AC#2）", () => {
+  // start_date / end_date は OHM 実データの値（2026-07-26 取得）をそのまま使う
+  const elements: OhmRelation[] = [
+    rel(2893945, "County of Angoulême", "4", "0839", "1515-01-01"),
+    rel(2892568, "County of La Marche", "4", "0958", "1527"),
+    rel(2893054, "County of Vendôme", "4", "0930", "1514"),
+    rel(2893763, "Counts of Saint-Pol", "4", "1031", "1787"),
+    rel(2893051, "County of Nantes", "4", "0938", "1203"),
+    rel(2892569, "County of Tours", "4", "0500", "1204"),
+    rel(2893053, "County of Perche", "4", "1090", "1226-02"),
+  ];
+  const namesAt = (year: number) =>
+    selectFiefsForYear(elements, year).map((e) => e.tags["name:en"]);
+  // Saint-Pol は 1031 開始・Perche は 1090 開始なので 1000 年には現れない
+  assertEquals(namesAt(1000), [
+    "County of Angoulême",
+    "County of La Marche",
+    "County of Nantes",
+    "County of Tours",
+    "County of Vendôme",
+  ]);
+  assertEquals(namesAt(1100).length, 7);
+  assertEquals(namesAt(1200).length, 7);
+  // Nantes（1203）・Tours（1204）・Perche（1226）は 1279 年までに終わる
+  assertEquals(namesAt(1279), [
+    "Counts of Saint-Pol",
+    "County of Angoulême",
+    "County of La Marche",
+    "County of Vendôme",
+  ]);
+  assertEquals(namesAt(1300), namesAt(1279));
+});
+
+Deno.test("不採用にした候補の根拠が分類ごとに記録されている（TASK-87 AC#1）", () => {
+  for (const [name, key] of Object.entries(FRANCE_FIEF_EXCLUDED_NAMES)) {
+    assert(
+      key in FRANCE_FIEF_EXCLUSIONS,
+      `${name} の分類 ${key} に対応する根拠が無い`,
+    );
+    assert(
+      !FRANCE_FIEF_NAMES.includes(name),
+      `${name} は不採用なのに許可リストに入っている`,
+    );
+  }
+  for (const [key, reason] of Object.entries(FRANCE_FIEF_EXCLUSIONS)) {
+    assert(reason.length >= 10, `${key} の根拠が短すぎる: ${reason}`);
+  }
+  // 実測で挙がった候補のうち採らなかったものは全て理由つきで残す
+  for (
+    const name of [
+      "Cambrésis",
+      "County of Clermont-en-Argonne",
+      "County of Roussillon",
+      "County of Namur",
+      "County of Zeeland",
+      "County of Holland",
+      "Dauphiné of Viennois",
+      "County of Montbéliard",
+      "County/Principality of Neuchâtel",
+      "Principality of Orange",
+    ]
+  ) {
+    assert(
+      name in FRANCE_FIEF_EXCLUDED_NAMES,
+      `${name} の採否が記録されていない`,
+    );
+  }
+});
+
+Deno.test("除外規則は許可リストと独立に効く（TASK-87 AC#1 の二重の防波堤）", () => {
+  // 将来の許可リスト編集で帝国側の領邦が紛れ込んでも生成物に入らない
+  const imperial: OhmRelation[] = [
+    rel(2831144, "Cambrésis", "4", "0948", "1678-09-16"),
+    rel(2812125, "County of Namur", "4", "0981", "1797-10-17"),
+  ];
+  assertEquals(
+    selectFiefsForYear(imperial, 1200, ["Cambrésis", "County of Namur"]),
+    [],
+  );
+  assertEquals(franceFiefExclusionReason("County of Anjou"), null);
+  assert(franceFiefExclusionReason("Cambrésis") !== null);
 });
 
 Deno.test("buildTagsQuery / buildGeometryQuery: 決定的な Overpass QL を返す", () => {

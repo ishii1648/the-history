@@ -51,10 +51,12 @@ export const FRANCE_BBOX: readonly [number, number, number, number] = [
 
 /**
  * 生成対象年。SNAPSHOT_YEARS のうち OHM に諸侯領データが十分にある中世年代。
- * 実データで確定した根拠（許可リスト内で有効な領邦の件数）:
- * 900 = 2 件（Anjou / Maine のみで面として成立しない）、1000 = 7、1100 = 9、
- * 1200 = 12、1279 = 11、1300 = 11、1400 = 6（百年戦争期に多くの伯領が消滅し、
- * 王領への併合で OHM 側の収録も admin_level 2 に移るため対象外）。
+ * 実データで確定した根拠（許可リスト内で有効な領邦の件数。TASK-87 の許可リスト
+ * 拡張後の実測。括弧内は拡張前の 14 件時点）:
+ * 900 = 2 件（Anjou / Maine のみで面として成立しない）、1000 = 12（7）、
+ * 1100 = 16（9）、1200 = 19（12）、1279 = 15（11）、1300 = 15（11）、
+ * 1400 = 6（百年戦争期に多くの伯領が消滅し、王領への併合で OHM 側の収録も
+ * admin_level 2 に移るため対象外）。
  */
 export const FRANCE_FIEF_YEARS: readonly number[] = [
   1000,
@@ -73,10 +75,109 @@ export const FRANCE_FIEF_YEARS: readonly number[] = [
 export const FRANCE_FIEF_ADMIN_LEVELS: readonly number[] = [3, 4, 5];
 
 /**
- * 採用する諸侯領の英語名（name:en）許可リスト（昇順）。
+ * 収録を見送った候補の分類と根拠（TASK-87 AC#1）。
+ * bbox 内の boundary=administrative（4,897 件）から admin_level 3〜5 かつ
+ * FRANCE_FIEF_YEARS のいずれかで有効なものを洗い出すと、許可リスト外に 113 件が
+ * 残る。その内訳をここに分類し、フランス王国の封建諸侯領だけを採る。
+ */
+export const FRANCE_FIEF_EXCLUSIONS: Record<string, string> = {
+  imperialTerritories:
+    "神聖ローマ帝国側の領邦。Cambrésis は 1007 年にハインリヒ 2 世が伯権を" +
+    "カンブレー司教へ移した帝国司教領で、フランスへの併合は 1678 年" +
+    "（ナイメーヘン条約）。County of Clermont-en-Argonne は 10 世紀半ばに" +
+    "ヴェルダン司教の城代封として成立した帝国封で、バール伯の支配下に入った後も" +
+    "帝国側にとどまり、フランスへの割譲は 1641 年（パリ条約）。" +
+    "Principality of Orange はアルル王国（帝国）内の侯領で、フランスに帰属する" +
+    "のは 1713 年（ユトレヒト条約）。いずれも対象年 1000〜1300 の全期間で" +
+    "フランス王国の封建諸侯領ではない。なお同じバロワ地方でも County of Bar は" +
+    "1301 年にフィリップ 4 世へ臣従した「動くバロワ」を持つため採用している。",
+  lowCountriesAndBurgundianKingdom:
+    "低地地方・アルル王国側の帝国領邦（County of Namur / County of Zeeland / " +
+    "County of Holland / Dauphiné of Viennois / County of Montbéliard / " +
+    "County/Principality of Neuchâtel）。bbox の北端・東端に掛かるが" +
+    "フランス王国の封建諸侯領ではないので仏諸侯領オーバーレイの対象外とする。" +
+    "うち Holland / Montbéliard / Neuchâtel / Viennois は " +
+    "hre_fiefs_<year>.geojson（TASK-85）の許可リストで収録済みで、Namur / " +
+    "Zeeland は HRE_FIEF_BBOX（西端 5.5 度）の外にあるため両系統とも未収録" +
+    "（docs/data-inventory/README.md の欠落一覧に記載）。",
+  catalanCounties:
+    "カタルーニャ諸伯領（County of Roussillon / Barcelona / Besalú / Girona / " +
+    "Osona / Empúries / Conflent / Pallars / Ribagorza / Sobrarbe 等）と " +
+    "Principality of Catalonia。bbox がピレネー以南を含むために入ってくる。" +
+    "Roussillon は 1172 年にアラゴン王アルフォンソ 2 世へ、1276 年には" +
+    "マヨルカ王国へ渡っており、対象年で有効な 2 リレーション（0897〜1150 と " +
+    "1276〜1344）はそれぞれスペイン辺境領期とアラゴン連合王国期に当たる。" +
+    "フランスへの割譲は 1659 年（ピレネー条約）。隣接する Conflent と同じ" +
+    "カタルーニャ系伯領なので同じ扱いにする。",
+  iberianAndItalianPolities:
+    "イベリア・イタリアの勢力（County of Castile / Portugal (0868-1138) / " +
+    "Kingdom of Valencia / Republic of Genoa / Republic of Lucca / " +
+    "Republic of Pisa / Lordship of Milan / Marquisate of Saluzzo / " +
+    "Genoese Corsica / March of Tuscany 等）。bbox の南端・南東端に掛かるが" +
+    "フランス諸侯領ではない。europe_<year>.geojson の base 勢力が担う。",
+  imperialCitiesAndAbbeys:
+    "帝国都市・帝国自由都市・帝国修道院領・司教領（Free Imperial City of * や " +
+    "Imperial Abbey of * / Prince-Bishopric of * の 40 件超）。アルザス・" +
+    "ブルグント方面で bbox に掛かるが帝国等族であり仏諸侯領ではない。",
+  imperialDuchiesAndTribalRegions:
+    "帝国の部族大公領と部族地域（Duchy of Bavaria / Franconia / Saxony / " +
+    "Swabia / Thuringia / Lower Lotharingia / Upper Lotharingia、Angria / " +
+    "Eastphalia / Westphalia、Kingdom of Burgundy、March of Verona 等）。" +
+    "bbox 東端の帝国中核域で、hre_fiefs_<year>.geojson（TASK-85）の担当。",
+  englishLordships:
+    "イングランド王国側の領主領（Lordship of Gower。ウェールズ南部）。" +
+    "bbox の北西端に掛かるがフランス諸侯領ではない。",
+};
+
+/**
+ * 名前で明示的に落とす対象（name:en → FRANCE_FIEF_EXCLUSIONS のキー）。
+ * 実測で挙がった候補のうち、パターンで落とせない個別事例をここに置く
+ * （TASK-87 AC#1: 採否の根拠をコード内に残す）。
+ */
+export const FRANCE_FIEF_EXCLUDED_NAMES: Record<string, string> = {
+  "Cambrésis": "imperialTerritories",
+  "County of Clermont-en-Argonne": "imperialTerritories",
+  "County of Holland": "lowCountriesAndBurgundianKingdom",
+  "County of Montbéliard": "lowCountriesAndBurgundianKingdom",
+  "County of Namur": "lowCountriesAndBurgundianKingdom",
+  "County of Roussillon": "catalanCounties",
+  "County of Zeeland": "lowCountriesAndBurgundianKingdom",
+  "County/Principality of Neuchâtel": "lowCountriesAndBurgundianKingdom",
+  "Dauphiné of Viennois": "lowCountriesAndBurgundianKingdom",
+  "Principality of Orange": "imperialTerritories",
+};
+
+/**
+ * 仏諸侯領として収録しない対象なら、その根拠を返す（純粋関数）。収録するなら null。
+ * 許可リスト FRANCE_FIEF_NAMES とは独立に適用する二重の防波堤で、将来の許可リスト
+ * 編集で帝国側の領邦やカタルーニャ諸伯領が紛れ込んでも生成物に入らないように
+ * する（scripts/build-hre-fiefs.ts の hreFiefExclusionReason と同じ方針）。
+ */
+export function franceFiefExclusionReason(nameEn: string): string | null {
+  const explicit = FRANCE_FIEF_EXCLUDED_NAMES[nameEn];
+  return explicit === undefined ? null : FRANCE_FIEF_EXCLUSIONS[explicit];
+}
+
+/**
+ * 採用する諸侯領の英語名（name:en）許可リスト（昇順・21 件）。
  * bbox には神聖ローマ帝国側の領邦（Grafschaft Leiningen 等）・イベリア諸伯領・
  * イタリア都市国家も大量に含まれるため、フランス王国の封建諸侯領のみを名前で
  * 明示的に選ぶ（scripts/build-hre.ts の HRE_TERRITORIES と同じ方針）。
+ * 見送った候補の分類と根拠は FRANCE_FIEF_EXCLUSIONS を参照。
+ *
+ * TASK-87 で追加した 7 伯領（いずれも対象年でフランス王国の封建諸侯領）:
+ * - County of Angoulême（0839〜1515）: アキテーヌ内の伯領
+ * - County of La Marche（0958〜1527）: リムーザン北部の伯領
+ * - County of Vendôme（0930〜1514）: ロワール中流の伯領
+ * - Counts of Saint-Pol（1031〜1787）: アルトワ・ピカルディ境界のテルーアンヌ地方。
+ *   フランドル伯の封臣で、帝国（ハプスブルク）側に移るのは 1493 年以降なので
+ *   対象年では王国内。OHM の name:en が "County of ..." でない唯一の例
+ * - County of Nantes（0938〜1203）: ブルターニュ公領内の伯領
+ * - County of Tours（0500〜1204）: トゥーレーヌ。1204 年に王領へ併合
+ * - County of Perche（1090〜1226）: 1226 年に王領へ併合
+ * Saint-Pol / Nantes / Tours は上位の諸侯領（Artois / Brittany / Anjou）と
+ * 領域が重なるが、包含関係の二重塗りは france_fiefs_flat_<year>.geojson
+ * （TASK-79）で排他化されるため許可リスト側では落とさない。
  *
  * OHM に存在せず収録できない諸侯領: Comté de Toulouse・王領（domaine royal）・
  * Foix・Armagnac・Auvergne・Bourbon・Nevers。Provence は 1487 年以降のみ、
@@ -84,15 +185,22 @@ export const FRANCE_FIEF_ADMIN_LEVELS: readonly number[] = [3, 4, 5];
  * 詳細は docs/data-inventory/README.md を参照。
  */
 export const FRANCE_FIEF_NAMES: readonly string[] = [
+  "Counts of Saint-Pol",
   "County of Alençon",
+  "County of Angoulême",
   "County of Anjou",
   "County of Artois",
   "County of Bar",
   "County of Champagne",
   "County of Flanders",
+  "County of La Marche",
   "County of Maine",
+  "County of Nantes",
+  "County of Perche",
   "County of Poitou",
   "County of Ponthieu",
+  "County of Tours",
+  "County of Vendôme",
   "Duchy of Aquitaine",
   "Duchy of Brittany",
   "Duchy of Burgundy",
@@ -188,7 +296,8 @@ export function buildGeometryQuery(ids: readonly number[]): string {
 
 /**
  * year 時点で有効なフランス諸侯領のリレーションを選ぶ（純粋関数）。
- * 許可リスト（name:en）と admin_level で絞り、同名が複数ある場合は
+ * 許可リスト（name:en）・admin_level・除外規則（franceFiefExclusionReason）で
+ * 絞り、同名が複数ある場合は
  * admin_level 昇順 → ID 昇順で最初の 1 件のみ残す（Duchy of Burgundy は
  * admin_level 3 / 4 の 2 リレーションが同一期間で並存する）。
  * 返り値は英語名の昇順で、入力順に依存しない。
@@ -204,6 +313,7 @@ export function selectFiefsForYear(
   const candidates = elements.filter((element) => {
     const tags = element.tags ?? {};
     if (!allowed.has(tags["name:en"])) return false;
+    if (franceFiefExclusionReason(tags["name:en"]) !== null) return false;
     const level = Number.parseInt(tags["admin_level"] ?? "", 10);
     if (!Number.isInteger(level) || !levels.has(level)) return false;
     return isActiveAtYear(tags["start_date"], tags["end_date"], year);
