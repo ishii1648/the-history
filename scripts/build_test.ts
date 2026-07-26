@@ -82,6 +82,11 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
       from: "data/base_outline_1200.geojson",
       to: "dist/data/base_outline_1200.geojson",
     },
+    // TASK-92: 諸侯領の下地になる base 塗りを差し引いた派生 base
+    {
+      from: "data/europe_flat_1200.geojson",
+      to: "dist/data/europe_flat_1200.geojson",
+    },
   ]);
 });
 
@@ -119,6 +124,11 @@ Deno.test("getDataCopyTargets は distDir を反映する", () => {
     {
       from: "data/base_outline_1279.geojson",
       to: "out/data/base_outline_1279.geojson",
+    },
+    // TASK-92: 諸侯領の下地になる base 塗りを差し引いた派生 base
+    {
+      from: "data/europe_flat_1279.geojson",
+      to: "out/data/europe_flat_1279.geojson",
     },
   ]);
 });
@@ -290,4 +300,32 @@ Deno.test("buildBundleArgs は src/main.ts を dist/app.js にバンドルする
     "-o",
     "dist/app.js",
   ]);
+});
+
+Deno.test("getDataCopyTargets は europe_flat をオーバーレイ年の和集合で出す（TASK-92）", () => {
+  const targets = getDataCopyTargets(
+    "dist",
+    [1300, 1492],
+    [1500],
+    [1300],
+    [1300, 1492],
+  );
+  assertEquals(
+    targets.filter((t) => t.from.includes("europe_flat")),
+    [
+      {
+        from: "data/europe_flat_1300.geojson",
+        to: "dist/data/europe_flat_1300.geojson",
+      },
+      {
+        from: "data/europe_flat_1492.geojson",
+        to: "dist/data/europe_flat_1492.geojson",
+      },
+    ],
+  );
+});
+
+Deno.test("getDataCopyTargets は fiefYears 省略時に europe_flat を含めない（TASK-92）", () => {
+  const targets = getDataCopyTargets("dist", [900], [1500]);
+  assertEquals(targets.filter((t) => t.from.includes("europe_flat")), []);
 });

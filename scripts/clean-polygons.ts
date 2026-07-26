@@ -34,6 +34,7 @@
  */
 
 import area from "@turf/area";
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { featureCollection, polygon as turfPolygon } from "@turf/helpers";
 import kinks from "@turf/kinks";
 import truncate from "@turf/truncate";
@@ -173,6 +174,173 @@ export function normalizeSelfIntersections(
   return unrounded ?? current;
 }
 
+/**
+ * リング同士が 1 点で接している箇所を、接触点をグリッド 1 目盛り分ずらして
+ * 引き離したジオメトリを返す（純粋関数、TASK-92）。修復できなければ null。
+ *
+ * ## なぜ union（自己 union）では消せないのか
+ * @turf/difference（polyclip-ts）で他のポリゴンを差し引くと、差し引いた面が
+ * 「外環に 1 点で接する穴」や「互いに 1 点で接する 2 つの穴」として残ることが
+ * ある（元データが点で接している、あるいは接する位置に頂点が来るため）。
+ * これは polygon clipping の出力として正当なので unionSelf を何度掛けても
+ * 同じ形が返り、normalizeSelfIntersections では解消できない。しかし
+ * @turf/kinks は接触点を自己交差として報告し、実際 earcut の三角形分割でも
+ * 穴の橋渡しが縮退する。ジオメトリ自体を僅かに変えるしかない。
+ *
+ * ## 方式
+ * 接触点を含むリングのうち面積が最大のもの（＝外環や本体側）はそのままにし、
+ * 残りのリングの当該頂点だけを「そのリングの内側」へ 10^-precision 単位で
+ * 動かす。穴なら穴が僅かに縮む方向で、隣の環から離れる。移動量は 1〜3 目盛り
+ * （COORD_PRECISION=5 なら 1〜3 m）で、座標はグリッド上に留まるため丸めの
+ * 不変条件も崩れない。
+ *
+ * 修復後に自己交差が 1 つでも残る場合は null を返す（呼び出し側は元の
+ * ジオメトリを保ち、従来どおり unresolved として報告する）。頂点でない位置での
+ * 交差（simplify 由来の本物のクロス）は動かす頂点が決まらないため null になる。
+ */
+export function separateTouchingRings(
+  geometry: PolygonalGeometry,
+  precision: number = DEFAULT_COORD_PRECISION,
+): PolygonalGeometry | null {
+  const step = 10 ** -precision;
+  const parts = polygonParts(geometry).map((part) => [...part]);
+  let repaired = false;
+  for (const part of parts) {
+    for (const point of dedupePositions(touchPointsOf(part))) {
+      const ringIndexes = ringsWithVertex(part, point);
+      if (ringIndexes.length === 0) return null;
+      // 接触点を頂点に持つリングが複数あるときは、面積が最大のもの
+      // （外環・本体側）を動かさず他を内側へ逃がす。1 つだけのとき
+      // （相手側は辺の途中で接している）はそのリングを動かす。
+      const areas = ringIndexes.map((index) => ringArea(part[index]));
+      const keep = ringIndexes.length === 1
+        ? -1
+        : ringIndexes[areas.indexOf(Math.max(...areas))];
+      for (const index of ringIndexes) {
+        if (index === keep) continue;
+        const moved = nudgeVertexInward(part[index], point, step);
+        if (moved === null) return null;
+        part[index] = moved;
+        repaired = true;
+      }
+    }
+  }
+  if (!repaired) return null;
+  const result = fromParts(parts);
+  if (result === null) return null;
+  return selfIntersectionPoints(result).length === 0 ? result : null;
+}
+
+/** パート（リング配列）1 つ分の自己交差点 */
+function touchPointsOf(part: Position[][]): Position[] {
+  try {
+    return kinks(turfPolygon(part)).features.map((f) => f.geometry.coordinates);
+  } catch {
+    return [];
+  }
+}
+
+/** 同一座標を 1 件に畳む（kinks は同じ接触点を複数回報告する） */
+function dedupePositions(points: readonly Position[]): Position[] {
+  const seen = new Set<string>();
+  const unique: Position[] = [];
+  for (const point of points) {
+    const key = `${point[0]},${point[1]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(point);
+  }
+  return unique;
+}
+
+/** その座標を頂点として持つリングの index 一覧 */
+function ringsWithVertex(
+  part: readonly Position[][],
+  point: Position,
+): number[] {
+  const indexes: number[] = [];
+  for (const [index, ring] of part.entries()) {
+    if (ring.some(([x, y]) => x === point[0] && y === point[1])) {
+      indexes.push(index);
+    }
+  }
+  return indexes;
+}
+
+/**
+ * リング上の指定頂点を、そのリングの内側へ step の 1〜3 倍だけ動かした
+ * リングを返す。動かす向きが決まらない・内側に入らない場合は null。
+ * 閉じたリングの先頭頂点は末尾と同一なので両方を差し替える。
+ */
+function nudgeVertexInward(
+  ring: readonly Position[],
+  point: Position,
+  step: number,
+): Position[] | null {
+  const index = ring.findIndex(([x, y]) => x === point[0] && y === point[1]);
+  if (index < 0) return null;
+  const last = ring.length - 1;
+  // 閉じたリングの末尾は先頭の複製なので、隣接頂点は循環で取る
+  const prev = ring[(index - 1 + last) % last];
+  const next = ring[(index + 1) % last];
+  const bisector = normalizedSum(
+    unitVector(point, prev),
+    unitVector(point, next),
+  );
+  if (bisector === null) return null;
+  let polygon: Feature<Polygon>;
+  try {
+    polygon = turfPolygon([[...ring]]);
+  } catch {
+    return null;
+  }
+  // 角の二等分方向へ「グリッド k 目盛り分」進めた点をグリッドへ丸める。
+  // 座標軸方向（符号だけ）で動かすと鋭角な頂点では簡単に外へ出るため、
+  // 移動量ではなく向きを二等分線に合わせるのが要点。
+  const scale = Math.max(Math.abs(bisector[0]), Math.abs(bisector[1]));
+  for (const sign of [1, -1]) {
+    for (let k = 1; k <= 3; k++) {
+      const distance = sign * k * step / scale;
+      const candidate: Position = [
+        roundTo(point[0] + distance * bisector[0], step),
+        roundTo(point[1] + distance * bisector[1], step),
+      ];
+      if (candidate[0] === point[0] && candidate[1] === point[1]) continue;
+      if (!booleanPointInPolygon(candidate, polygon)) continue;
+      const moved = [...ring];
+      moved[index] = candidate;
+      if (index === 0) moved[last] = candidate;
+      if (index === last) moved[0] = candidate;
+      return moved;
+    }
+  }
+  return null;
+}
+
+/** 座標をグリッド（step 刻み）へ丸める。浮動小数の桁伸びを持ち込まない */
+function roundTo(value: number, step: number): number {
+  return Number((Math.round(value / step) * step).toFixed(12));
+}
+
+/** from → to の単位ベクトル。長さ 0 なら null */
+function unitVector(from: Position, to: Position): [number, number] | null {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const length = Math.hypot(dx, dy);
+  return length === 0 ? null : [dx / length, dy / length];
+}
+
+/** 2 つの単位ベクトルの和を正規化する（角の二等分方向）。決まらなければ null */
+function normalizedSum(
+  a: [number, number] | null,
+  b: [number, number] | null,
+): [number, number] | null {
+  if (a === null || b === null) return null;
+  const sum: [number, number] = [a[0] + b[0], a[1] + b[1]];
+  const length = Math.hypot(sum[0], sum[1]);
+  return length === 0 ? null : [sum[0] / length, sum[1] / length];
+}
+
 /** dropTinyRings の結果 */
 export interface DroppedRings {
   /** 残ったジオメトリ。パートが全て閾値未満なら null */
@@ -254,6 +422,12 @@ export function cleanGeometry(
       };
     }
     normalized = fixed;
+    // TASK-92: union で消えない「1 点で接するリング」だけは頂点をずらして離す。
+    // 修復できなければ従来どおり交差が残ったまま進み unresolved に記録される。
+    if (selfIntersectionPoints(normalized).length > 0) {
+      const separated = separateTouchingRings(normalized, precision);
+      if (separated !== null) normalized = separated;
+    }
   }
   const dropped = dropTinyRings(normalized, minPartAreaM2, minHoleAreaM2);
   return {

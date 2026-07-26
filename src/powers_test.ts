@@ -1,8 +1,10 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import type { FeatureCollection } from "geojson";
 import {
+  baseFillDataUrlFor,
   baseOutlineDataUrlFor,
   colorKeyFor,
+  createBaseFillLoader,
   createBaseOutlineLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
@@ -21,6 +23,7 @@ import {
   hexToRgb,
   hreDataUrlFor,
   LINE_COLOR,
+  powerFillDataFor,
   type Rgba,
   type YearLayerData,
 } from "./powers.ts";
@@ -660,12 +663,14 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     hre: fakeCollection("A"),
     fiefs: EMPTY_FEATURE_COLLECTION,
     outlines: EMPTY_FEATURE_COLLECTION,
+    baseFill: EMPTY_FEATURE_COLLECTION,
   });
   d1400.resolve({
     base: fakeCollection("F"),
     hre: EMPTY_FEATURE_COLLECTION,
     fiefs: EMPTY_FEATURE_COLLECTION,
     outlines: EMPTY_FEATURE_COLLECTION,
+    baseFill: EMPTY_FEATURE_COLLECTION,
   });
   await Promise.all([p1, p2]);
   assertEquals(applied, [{ year: 1500, hreCount: 1 }]);
@@ -957,4 +962,116 @@ Deno.test("createCombinedYearLoader は outlines ローダ省略時に空 FC を
   );
   const data = await loader.load(1200);
   assertEquals(data.outlines, EMPTY_FEATURE_COLLECTION);
+});
+
+// ---------------------------------------------------------------------------
+// TASK-92: 諸侯領の下地になる base 塗りを取り除いた派生 base（europe_flat_*）
+// ---------------------------------------------------------------------------
+
+Deno.test("baseFillDataUrlFor は data/europe_flat_<year>.geojson を指す（TASK-92）", () => {
+  assertEquals(baseFillDataUrlFor(1200), "/data/europe_flat_1200.geojson");
+});
+
+Deno.test("createBaseFillLoader は非対象年を fetch せず空 FC を返す（TASK-92）", async () => {
+  const calls: string[] = [];
+  const loader = createBaseFillLoader(
+    (url) => {
+      calls.push(url);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(EMPTY_FEATURE_COLLECTION),
+      });
+    },
+    FRANCE_FIEF_OVERLAY_YEARS,
+  );
+  assertEquals(await loader.load(1600), EMPTY_FEATURE_COLLECTION);
+  assertEquals(calls, []);
+});
+
+Deno.test("createBaseFillLoader は取得失敗を warn して空 FC に落とす（TASK-92）", async () => {
+  const warnings: string[] = [];
+  const loader = createBaseFillLoader(
+    () =>
+      Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      }),
+    FRANCE_FIEF_OVERLAY_YEARS,
+    (message) => warnings.push(message),
+  );
+  assertEquals(await loader.load(1200), EMPTY_FEATURE_COLLECTION);
+  assertEquals(warnings.length, 1);
+  assert(warnings[0].includes("base 塗り"));
+});
+
+Deno.test("createCombinedYearLoader は baseFill ローダを渡すと 5 系統を並行ロードする（TASK-92）", async () => {
+  const calls: string[] = [];
+  const fetchFn = (url: string) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            properties: { NAME: url },
+            geometry: { type: "Point", coordinates: [0, 0] },
+          }],
+        } as FeatureCollection),
+    });
+  };
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+    createBaseOutlineLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+    createBaseFillLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(
+    data.baseFill.features[0].properties?.NAME,
+    "/data/europe_flat_1200.geojson",
+  );
+  assert(calls.includes("/data/europe_flat_1200.geojson"));
+});
+
+Deno.test("createCombinedYearLoader は baseFill ローダ省略時に空 FC を返す（後方互換。TASK-92）", async () => {
+  const fetchFn = () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(EMPTY_FEATURE_COLLECTION),
+    });
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.baseFill, EMPTY_FEATURE_COLLECTION);
+});
+
+Deno.test("powerFillDataFor は派生 base があればそれを、無ければ base を返す（TASK-92）", () => {
+  const base: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [{
+      type: "Feature",
+      properties: { NAME: "Kingdom of France" },
+      geometry: { type: "Point", coordinates: [0, 0] },
+    }],
+  };
+  const flat: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [{
+      type: "Feature",
+      properties: { NAME: "Kingdom of France (flat)" },
+      geometry: { type: "Point", coordinates: [0, 0] },
+    }],
+  };
+  assertEquals(powerFillDataFor(base, flat), flat);
+  // 非対象年・取得失敗（空 FC）は従来どおり base を塗る
+  assertEquals(powerFillDataFor(base, EMPTY_FEATURE_COLLECTION), base);
 });
