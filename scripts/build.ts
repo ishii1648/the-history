@@ -8,6 +8,7 @@ import { SNAPSHOT_YEARS } from "../src/config.ts";
 import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
+import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
 
 const ENTRY = "src/main.ts";
 const DIST_DIR = "dist";
@@ -46,8 +47,10 @@ export function getOptionalCopyTargets(
  * hreYears には HRE 主要領邦オーバーレイ（deno task build-hre で生成）の年代を、
  * fiefYears には中世フランス諸侯領オーバーレイ（deno task build-france-fiefs で
  * 生成、TASK-71）の年代を、hreFiefYears には中世 HRE 領邦オーバーレイ
- * （deno task build-hre-fiefs で生成、TASK-85/86）の年代を渡す。
- * fiefYears / hreFiefYears は省略可（省略時はコピー対象なし）。
+ * （deno task build-hre-fiefs で生成、TASK-85/86）の年代を、italyFiefYears には
+ * 中世イタリア諸侯領オーバーレイ（deno task build-italy-fiefs で生成、
+ * TASK-95/96）の年代を渡す。
+ * fiefYears / hreFiefYears / italyFiefYears は省略可（省略時はコピー対象なし）。
  */
 export function getDataCopyTargets(
   distDir: string,
@@ -55,6 +58,7 @@ export function getDataCopyTargets(
   hreYears: readonly number[],
   fiefYears: readonly number[] = [],
   hreFiefYears: readonly number[] = [],
+  italyFiefYears: readonly number[] = [],
 ): Array<{ from: string; to: string }> {
   const targets: Array<{ from: string; to: string }> = [
     { from: "data/index.json", to: `${distDir}/data/index.json` },
@@ -113,11 +117,22 @@ export function getDataCopyTargets(
       to: `${distDir}/data/hre_fiefs_flat_${year}.geojson`,
     });
   }
-  // TASK-78/86: オーバーレイとの二重輪郭・二重ラベルを解消する派生データ
+  // TASK-96: 中世イタリア諸侯領オーバーレイ（deno task build-italy-fiefs で生成）。
+  // 他の 2 系統と同じく、配信するのは重なりを排他化した派生データ
+  // （italy_fiefs_flat_<year>）で、ランタイムの参照先（powers.ts
+  // italyFiefDataUrlFor）と一致させる。
+  for (const year of italyFiefYears) {
+    targets.push({
+      from: `data/italy_fiefs_flat_${year}.geojson`,
+      to: `${distDir}/data/italy_fiefs_flat_${year}.geojson`,
+    });
+  }
+  // TASK-78/86/96: オーバーレイとの二重輪郭・二重ラベルを解消する派生データ
   // （deno task build-fief-dedupe で生成）。オーバーレイがある年にしか存在しない
   // ため、いずれの年集合も空なら 1 件も含めない（対象外年の描画は従来のまま）。
-  const outlineYears = [...new Set([...fiefYears, ...hreFiefYears])]
-    .sort((a, b) => a - b);
+  const outlineYears = [
+    ...new Set([...fiefYears, ...hreFiefYears, ...italyFiefYears]),
+  ].sort((a, b) => a - b);
   if (outlineYears.length > 0) {
     targets.push({
       from: "data/fief-dedupe.json",
@@ -299,6 +314,7 @@ async function copyDataFiles(distDir: string): Promise<void> {
       HRE_OVERLAY_YEARS,
       FRANCE_FIEF_YEARS,
       HRE_FIEF_YEARS,
+      ITALY_FIEF_YEARS,
     )
   ) {
     await Deno.copyFile(from, to);

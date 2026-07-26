@@ -15,6 +15,7 @@ import {
   CITY_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
   RIVERS_LAYER_ID,
 } from "./picking.ts";
@@ -197,12 +198,24 @@ Deno.test("suzerainExtentKey は単独勢力で自分自身のキーを返す", 
   );
 });
 
-Deno.test("suzerainExtentKey は仏諸侯領・都市・河川・picking なしで null", () => {
+Deno.test("suzerainExtentKey は仏諸侯領・伊諸侯領・都市・河川・picking なしで null", () => {
   // 仏諸侯領は宗主プロパティを持たず、外枠の入力にもしない（TASK-94 の範囲仕様）
   assertEquals(
     suzerainExtentKey(
       FRANCE_FIEF_LAYER_ID,
       { NAME: "Normandy" },
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    null,
+  );
+  // 伊諸侯領も同様（properties は NAME / ADMIN_LEVEL / OHM_RELATION_ID /
+  // START_DATE / END_DATE / OHM_NAME で SUBJECTO を持たない。TASK-95/96）。
+  // 帝国範囲の外枠は base（europe_<year>）の Holy Roman Empire から描かれ、
+  // 伊諸侯領をホバーしても帝国全体が囲まれることはない。
+  assertEquals(
+    suzerainExtentKey(
+      ITALY_FIEF_LAYER_ID,
+      { NAME: "Republic of Florence" },
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     null,

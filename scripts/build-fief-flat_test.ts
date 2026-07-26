@@ -12,6 +12,9 @@ import {
   HRE_FIEF_FLAT_YEARS,
   hreFlatPathFor,
   hreRawPathFor,
+  ITALY_FIEF_FLAT_YEARS,
+  italyFlatPathFor,
+  italyRawPathFor,
   MIN_OVERLAP_AREA_M2,
   overlapsOf,
   rawPathFor,
@@ -21,6 +24,7 @@ import {
 } from "./build-fief-flat.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
+import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
 
 /** 経度・緯度の矩形ポリゴン feature を作る（反時計回り） */
 function rect(
@@ -433,6 +437,123 @@ Deno.test("hre_fiefs_flat と france_fiefs_flat は同時表示年（1000〜1300
             (overlap / 1e6).toFixed(3)
           } km² 残っている`,
         );
+      }
+    }
+  }
+});
+
+// ---- 中世イタリア諸侯領（TASK-96）----
+
+Deno.test("ITALY_FIEF_FLAT_YEARS は build-italy-fiefs の対象年と一致する（TASK-96）", () => {
+  assertEquals([...ITALY_FIEF_FLAT_YEARS], [...ITALY_FIEF_YEARS]);
+});
+
+Deno.test("イタリア諸侯領のパス関数は data/ 配下の入出力を指す（TASK-96）", () => {
+  assertEquals(italyRawPathFor(1200), "data/italy_fiefs_1200.geojson");
+  assertEquals(italyFlatPathFor(1200), "data/italy_fiefs_flat_1200.geojson");
+});
+
+Deno.test("生成済みの italy_fiefs_flat_<year> は raw と同じ feature 構成で諸侯領同士の重なりが解消されている（TASK-96 AC #5）", async () => {
+  for (const year of ITALY_FIEF_FLAT_YEARS) {
+    const raw = JSON.parse(
+      await Deno.readTextFile(italyRawPathFor(year)),
+    ) as FeatureCollection;
+    const flat = JSON.parse(
+      await Deno.readTextFile(italyFlatPathFor(year)),
+    ) as FeatureCollection;
+    assertEquals(
+      flat.features.map((f) => f.properties?.NAME),
+      raw.features.map((f) => f.properties?.NAME),
+      `${year}: feature の並び・件数が raw と異なる`,
+    );
+    for (const [i, f] of flat.features.entries()) {
+      assertEquals(
+        f.properties,
+        raw.features[i].properties,
+        `${year}: properties が raw と異なる`,
+      );
+    }
+    const fs = flat.features;
+    for (let i = 0; i < fs.length; i++) {
+      for (let j = i + 1; j < fs.length; j++) {
+        // deno-lint-ignore no-explicit-any
+        const ov = intersect(featureCollection([fs[i] as any, fs[j] as any]));
+        const overlap = ov === null ? 0 : area(ov);
+        assert(
+          overlap < 1e6,
+          `${year}: ${fs[i].properties?.NAME} × ${
+            fs[j].properties?.NAME
+          } の重なりが ${(overlap / 1e6).toFixed(3)} km² 残っている`,
+        );
+      }
+    }
+  }
+});
+
+Deno.test('イタリア諸侯領は "keep-smaller" で削るため、内包される小領邦が形を丸ごと保つ（TASK-96 AC #5）', async () => {
+  // 1400 年の County of Santa Fiora（186 km²）は Republic of Siena に 99.7%
+  // 内包され、County of Sovana（299 km²）も 99.8% 内包される。小さい側の形が
+  // 残らないと、地図から消えてしまう。
+  const flat = JSON.parse(
+    await Deno.readTextFile(italyFlatPathFor(1400)),
+  ) as FeatureCollection;
+  const raw = JSON.parse(
+    await Deno.readTextFile(italyRawPathFor(1400)),
+  ) as FeatureCollection;
+  const areaOf = (fc: FeatureCollection, name: string) =>
+    area(fc.features.find((f) => f.properties?.NAME === name)! as Feature);
+
+  // 相手より常に小さい側は形が丸ごと残る（座標は COORD_PRECISION へ丸め直される
+  // ため完全一致では比較せず、相対誤差 0.1% で「丸めだけ」を確かめる）。
+  // 削られていれば 99% 超を失うので、この許容幅で十分に区別できる。
+  for (const name of ["County of Santa Fiora", "County of Pitigliano"]) {
+    assertAlmostEquals(
+      areaOf(flat, name),
+      areaOf(raw, name),
+      areaOf(raw, name) * 1e-3,
+      `${name} のジオメトリが削られている`,
+    );
+  }
+  // 削られるのは常に大きい側。シエナ共和国は内包する 2 伯領の分
+  // （185 + 298 km²）を失い、ソヴァーナ伯領も自分より小さいピティリアーノ
+  // 伯領との重なり分だけを失う。
+  assert(areaOf(flat, "Republic of Siena") < areaOf(raw, "Republic of Siena"));
+  assert(areaOf(flat, "County of Sovana") < areaOf(raw, "County of Sovana"));
+});
+
+Deno.test("italy_fiefs_flat は同時表示年で hre_fiefs_flat / france_fiefs_flat と重ならない（TASK-96 AC #5）", async () => {
+  for (const year of ITALY_FIEF_FLAT_YEARS) {
+    const italy = JSON.parse(
+      await Deno.readTextFile(italyFlatPathFor(year)),
+    ) as FeatureCollection;
+    const others: FeatureCollection[] = [];
+    if (HRE_FIEF_FLAT_YEARS.includes(year)) {
+      others.push(
+        JSON.parse(
+          await Deno.readTextFile(hreFlatPathFor(year)),
+        ) as FeatureCollection,
+      );
+    }
+    if (FIEF_FLAT_YEARS.includes(year)) {
+      others.push(
+        JSON.parse(
+          await Deno.readTextFile(flatPathFor(year)),
+        ) as FeatureCollection,
+      );
+    }
+    for (const other of others) {
+      for (const i of italy.features) {
+        for (const o of other.features) {
+          // deno-lint-ignore no-explicit-any
+          const ov = intersect(featureCollection([i as any, o as any]));
+          const overlap = ov === null ? 0 : area(ov);
+          assert(
+            overlap < 1e6,
+            `${year}: ${i.properties?.NAME} × ${o.properties?.NAME} の重なりが ${
+              (overlap / 1e6).toFixed(3)
+            } km² 残っている`,
+          );
+        }
       }
     }
   }

@@ -48,11 +48,13 @@ import {
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
   createHreOverlayLoader,
+  createItalyFiefOverlayLoader,
   createYearDataLoader,
   createYearSwitcher,
   EMPTY_FEATURE_COLLECTION,
   hasFranceFiefOverlay,
   hasHreOverlay,
+  hasItalyFiefOverlay,
   LINE_COLOR,
   LINE_WIDTH_PX,
   powerFillDataFor,
@@ -140,6 +142,7 @@ import {
   INITIAL_CENTER,
   INITIAL_YEAR,
   INITIAL_ZOOM,
+  ITALY_FIEF_OVERLAY_YEARS,
   MAP_MAX_BOUNDS,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -178,6 +181,7 @@ import {
   isCityPickLayerId,
   isDirectPickFinal,
   isRiversPickLayerId,
+  ITALY_FIEF_LAYER_ID,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
   PICKING_RADIUS_PX,
@@ -408,6 +412,11 @@ const dataLoader = createCombinedYearLoader(
   // TASK-92: 諸侯領の下地になる base 塗りを差し引いた派生 base。輪郭
   // （base_outline_*）と同じ union から作られるので、年集合も同一。
   withOverrides(createBaseFillLoader((url) => fetch(url), BASE_OUTLINE_YEARS)),
+  // TASK-96: 中世イタリア諸侯領（italy_fiefs_flat_*、1000〜1492）。仏諸侯領・
+  // HRE 領邦と同じ機構に載せ、非対象年は fetch せず空 FC になる。
+  withOverrides(
+    createItalyFiefOverlayLoader((url) => fetch(url), ITALY_FIEF_OVERLAY_YEARS),
+  ),
 );
 
 /**
@@ -513,6 +522,8 @@ let currentView:
      * 入力は base のまま。
      */
     baseFill: FeatureCollection;
+    /** TASK-96: 中世イタリア諸侯領（非対象年・取得失敗時は空 FC） */
+    italyFiefs: FeatureCollection;
   }
   | null = null;
 
@@ -719,10 +730,11 @@ function pickedLabel(info: PickingInfo): string | null {
   }
   if (
     layerId === POWER_LAYER_ID || layerId === HRE_LAYER_ID ||
-    layerId === FRANCE_FIEF_LAYER_ID
+    layerId === FRANCE_FIEF_LAYER_ID || layerId === ITALY_FIEF_LAYER_ID
   ) {
-    // TASK-71: フランス諸侯領は SUBJECTO を持たないため displayLabel は NAME の
-    // 日本語表記（称号付き）をそのまま返す（宗主国込み表記にはならない）
+    // TASK-71/96: フランス諸侯領・イタリア諸侯領は SUBJECTO を持たないため
+    // displayLabel は NAME の日本語表記（称号付き）をそのまま返す
+    // （宗主国込み表記にはならない）
     return displayLabel(feature.properties, overrides.renames, nameJa);
   }
   return null;
@@ -803,13 +815,16 @@ function applyExtentKey(next: string | null): void {
 
 /**
  * pickMultipleObjects で近傍候補を取得する際の最大件数（depth）（TASK-36）。
- * PICKING_PRIORITY は 7 層のみのため小さい値で十分（deck.gl デフォルトの 10
- * より絞り、余分な GPU 読み戻しコストを抑える）。フランス諸侯領と HRE 領邦は
- * 同時表示年を持たないため、実際に同一ピクセルへ重なりうる pickable 層は
- * 最大 6（rivers / cities / cities-hit / rivers-hit / いずれかの領邦
- * オーバーレイ / powers）で、この depth に収まる（TASK-71, TASK-82）。
+ * deck.gl デフォルトの 10 より絞り、余分な GPU 読み戻しコストを抑える。
+ *
+ * TASK-96: pickable 層の数（PICKING_PRIORITY.length）そのものを使う。
+ * 3 系統の領邦オーバーレイ（hre-powers / france-fiefs / italy-fiefs）は
+ * scripts/build-fief-flat.ts が幾何的に排他化するため、同一ピクセルへ実際に
+ * 重なるのは高々 6 層だが、この定数を層数から導いておけば層を足すたびに
+ * 「上限に収まっているか」を数え直さずに済む（TASK-71 以来この見積もりは
+ * 2 度陳腐化した）。
  */
-const CLICK_PICK_DEPTH = 6;
+const CLICK_PICK_DEPTH = PICKING_PRIORITY.length;
 
 /**
  * Deck レベルの単一 picking 結果を、必要な場合のみ半径内の複数候補で選び
@@ -1372,7 +1387,8 @@ function syncApproximateBorders(): void {
  */
 function renderLayers(): void {
   if (currentView === null) return;
-  const { year, base, hre, fiefs, outlines, baseFill } = currentView;
+  const { year, base, hre, fiefs, outlines, baseFill, italyFiefs } =
+    currentView;
   // TASK-80: base の境界線は全年代とも MapLibre の概略境界レイヤー
   // （approximate-borders-*、syncApproximateBorders）が描くため、powers の
   // stroke は常に止める（TASK-78 は諸侯領オーバーレイ対象年だけ止めていた）。
@@ -1402,6 +1418,17 @@ function renderLayers(): void {
         FIEF_LINE_COLOR,
         FIEF_LINE_WIDTH_PX,
       ),
+    // TASK-96: 中世イタリア諸侯領。仏諸侯領と同じ藍紫の境界線・同じ塗り規則で
+    // 「諸侯領の区画」という記号を共有する（帝国系の臙脂とは色相で区別する）。
+    // 非対象年は空 FC なので実質非表示。
+    [ITALY_FIEF_LAYER_ID]: () =>
+      buildPowerLayer(
+        ITALY_FIEF_LAYER_ID,
+        year,
+        italyFiefs,
+        FIEF_LINE_COLOR,
+        FIEF_LINE_WIDTH_PX,
+      ),
     [CITY_LAYER_ID]: () => buildCityMarkerLayer(year),
     [CITY_HIT_LAYER_ID]: () => buildCityHitLayer(year),
     [RIVERS_LAYER_ID]: () => buildRiversLineLayer(),
@@ -1424,7 +1451,7 @@ function renderLayers(): void {
   // TASK-77: ラベル 3 層は overlaid オーバーレイ（別 canvas）へ載せる。
   // 順序は従来の描画順（勢力名 → 河川名 → 都市名）をそのまま保つ。
   const labelLayers: Layer[] = [
-    buildLabelLayer(year, base, hre, fiefs),
+    buildLabelLayer(year, base, hre, fiefs, italyFiefs),
     buildRiverLabelLayer(),
     buildCityLabelLayer(year),
   ];
@@ -1481,6 +1508,7 @@ const memoizedPowerLabelData = memoizeLatest(
     base: FeatureCollection,
     hre: FeatureCollection,
     fiefs: FeatureCollection,
+    italyFiefs: FeatureCollection,
     ja: Record<string, string>,
     dedupe: FiefDedupeTable,
   ) => {
@@ -1500,6 +1528,10 @@ const memoizedPowerLabelData = memoizeLatest(
       ...buildLabelData(labeledBase, ja, "base"),
       ...buildLabelData(hre, ja, "hre"),
       ...buildLabelData(fiefs, ja, "fief"),
+      // TASK-96: 伊諸侯領も kind=fief（藍紫）。base 側の教皇領・帝国との
+      // 二重ラベルは fief-dedupe.json の被覆率が抑制する（1100 年以降の
+      // Corsica は被覆率 0.9983 で抑制側に入る）。
+      ...buildLabelData(italyFiefs, ja, "fief"),
     ];
     return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
   },
@@ -1510,6 +1542,7 @@ function buildLabelLayer(
   base: FeatureCollection,
   hre: FeatureCollection,
   fiefs: FeatureCollection,
+  italyFiefs: FeatureCollection,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
   // TextLayer は 1 枚のまま・衝突制御（共有空間・priority）も従来どおり。
   const { data, characterSet } = memoizedPowerLabelData(
@@ -1517,6 +1550,7 @@ function buildLabelLayer(
     base,
     hre,
     fiefs,
+    italyFiefs,
     nameJa,
     fiefDedupe,
   );
@@ -1885,6 +1919,7 @@ const yearSwitcher = createYearSwitcher(
       fiefs: data.fiefs,
       outlines: data.outlines,
       baseFill: data.baseFill,
+      italyFiefs: data.italyFiefs,
     };
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
@@ -2405,6 +2440,28 @@ map.on("load", () => {
   };
 };
 
+// TASK-96: ヘッドレス CDP 検証用に中世イタリア諸侯領オーバーレイの表示状態を
+// 公開する（__getFranceFiefDebug / __getHreFiefDebug と同型の読み取り専用フック）。
+// AC #1（1200 年のフィレンツェ・ジェノヴァ・ピサ・シエナ・ルッカ・スポレート）・
+// AC #2（1100 年のトスカーナ辺境伯領）は labels の内容で確認できる。
+(globalThis as unknown as {
+  __getItalyFiefDebug?: () => {
+    year: number;
+    overlay: boolean;
+    featureCount: number;
+    labels: string[];
+  };
+}).__getItalyFiefDebug = () => {
+  const year = yearSwitcher.currentYear() ?? INITIAL_YEAR;
+  const italyFiefs = currentView?.italyFiefs ?? EMPTY_FEATURE_COLLECTION;
+  return {
+    year,
+    overlay: hasItalyFiefOverlay(year, ITALY_FIEF_OVERLAY_YEARS),
+    featureCount: italyFiefs.features.length,
+    labels: buildLabelData(italyFiefs, nameJa, "fief").map((d) => d.text),
+  };
+};
+
 // TASK-80: ヘッドレス CDP 検証用に概略境界（MapLibre line レイヤー）の状態を
 // 公開する（__getCityDebug と同じ読み取り専用フック）。canvas のピクセルからは
 // 「どの区間がどの段で描かれているか」を数えられないため、段ごとの run 数と
@@ -2517,6 +2574,9 @@ map.on("load", () => {
       [HRE_LAYER_ID]: countActive(currentView?.hre ?? EMPTY_FEATURE_COLLECTION),
       [FRANCE_FIEF_LAYER_ID]: countActive(
         currentView?.fiefs ?? EMPTY_FEATURE_COLLECTION,
+      ),
+      [ITALY_FIEF_LAYER_ID]: countActive(
+        currentView?.italyFiefs ?? EMPTY_FEATURE_COLLECTION,
       ),
     },
     // TASK-94: 外枠の対象（宗主キー）と、その外枠に含まれる base feature の

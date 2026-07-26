@@ -28,9 +28,8 @@ import citiesData from "../data/cities.json" with { type: "json" };
 // データ変更時は下記コマンドで再生成して手動更新する運用とする。
 //
 // 再生成コマンド（リポジトリルートで実行）:
-//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
+//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')+glob.glob('data/italy_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
 const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
-  "3",
   "Abbasid Caliphate",
   "Abdelouadides",
   "Afghanistan",
@@ -109,6 +108,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "County of Angoulême",
   "County of Anjou",
   "County of Artois",
+  "County of Asti",
   "County of Bar",
   "County of Bentheim",
   "County of Castell",
@@ -117,6 +117,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "County of East Frisia",
   "County of Falkenstein",
   "County of Flanders",
+  "County of Guastalla",
   "County of Henneberg-Schleusingen",
   "County of Hohenlohe",
   "County of Hohnstein",
@@ -132,12 +133,15 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "County of Montbéliard",
   "County of Nantes",
   "County of Perche",
+  "County of Pitigliano",
   "County of Poitou",
   "County of Ponthieu",
   "County of Ravensberg",
   "County of Rietberg",
+  "County of Santa Fiora",
   "County of Schaumburg",
   "County of Schaunberg",
+  "County of Sovana",
   "County of Spiegelberg",
   "County of Sponheim",
   "County of Tecklenburg",
@@ -172,13 +176,18 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Duchy of Carniola",
   "Duchy of Cleves",
   "Duchy of Crossen",
+  "Duchy of Ferrara",
+  "Duchy of Florence",
   "Duchy of Franconia",
   "Duchy of Gascony",
   "Duchy of Guelders",
   "Duchy of Lorraine",
   "Duchy of Lower Lotharingia",
   "Duchy of Luxembourg",
+  "Duchy of Massa and Carrara",
   "Duchy of Milan",
+  "Duchy of Mirandola",
+  "Duchy of Modena and Reggio",
   "Duchy of Normandy",
   "Duchy of Pless",
   "Duchy of Pomerania",
@@ -186,6 +195,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Duchy of Saxe-Wittenberg",
   "Duchy of Saxony",
   "Duchy of Siewierz",
+  "Duchy of Spoleto",
   "Duchy of Swabia",
   "Duchy of Thuringia",
   "Duchy of Upper Lotharingia",
@@ -300,6 +310,10 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Lombard duchies",
   "Lombardy",
   "Lordship of Cottbus",
+  "Lordship of Lucca",
+  "Lordship of Oneglia",
+  "Lordship of Piombino",
+  "Lordship of Rimini",
   "Lordship of Ruppin",
   "Lordship of Verona",
   "Lucca",
@@ -310,7 +324,11 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Mamluke Sultanate",
   "March of Cham",
   "March of Meissen",
+  "March of Montferrat",
+  "March of Tuscany",
   "March of Verona",
+  "Margraviate of Mantua",
+  "Marquisate of Saluzzo",
   "Maskat",
   "Massa",
   "Mecklenburg-Schwerin",
@@ -385,6 +403,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Principality of Galicia-Volhynia",
   "Principality of Kyiv",
   "Principality of Novgorod",
+  "Principality of Oneglia",
   "Principality of Polotsk",
   "Principality of Vladimir-Suzdal",
   "Principality of Wallachia",
@@ -393,7 +412,14 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Pskov",
   "Quazaq Khanate",
   "Raška",
+  "Republic of Ancona",
+  "Republic of Florence",
+  "Republic of Genoa",
   "Republic of Kraków",
+  "Republic of Lucca",
+  "Republic of Massa",
+  "Republic of Pisa",
+  "Republic of Siena",
   "Republic of the Seven Zenden",
   "Rhine",
   "Romania",
@@ -587,6 +613,75 @@ Deno.test("中世 HRE 領邦が TASK-32 の称号規約に沿った日本語表�
   };
   for (const [name, ja] of Object.entries(expected)) {
     assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+});
+
+Deno.test("中世イタリア諸侯領 27 件が TASK-32 の称号規約に沿った日本語表記で登録されている（TASK-96 AC #4）", () => {
+  // 規約は HRE 領邦・仏諸侯領と同一: Duchy → 公領 / County → 伯領 /
+  // March・Margraviate・Marquisate → 辺境伯領 / Lordship → 領主領 /
+  // Principality → 侯領。Republic は主権を持つ都市共和国なので「〜共和国」。
+  //
+  // Duchy を「公国」ではなく「公領」に揃えるのは、既存の
+  // "Duchy of Milan" → "ミラノ公領"（hre_fiefs 由来）と同じ地域・同じ地図上で
+  // 表記が割れないようにするため。Marquisate of Saluzzo と March of Montferrat は
+  // どちらもイタリアの marchesato で、OHM 側の英語表記が揺れているだけなので
+  // 日本語では同じ「辺境伯領」に寄せる。
+  const expected: Record<string, string> = {
+    "County of Asti": "アスティ伯領",
+    "County of Guastalla": "グアスタッラ伯領",
+    "County of Pitigliano": "ピティリアーノ伯領",
+    "County of Santa Fiora": "サンタ・フィオーラ伯領",
+    "County of Sovana": "ソヴァーナ伯領",
+    "Duchy of Ferrara": "フェラーラ公領",
+    "Duchy of Florence": "フィレンツェ公領",
+    "Duchy of Massa and Carrara": "マッサ＝カッラーラ公領",
+    "Duchy of Mirandola": "ミランドラ公領",
+    "Duchy of Modena and Reggio": "モデナ＝レッジョ公領",
+    "Duchy of Spoleto": "スポレート公領",
+    "Lordship of Lucca": "ルッカ領主領",
+    "Lordship of Oneglia": "オネーリア領主領",
+    "Lordship of Piombino": "ピオンビーノ領主領",
+    "Lordship of Rimini": "リミニ領主領",
+    "March of Montferrat": "モンフェッラート辺境伯領",
+    "March of Tuscany": "トスカーナ辺境伯領",
+    "Margraviate of Mantua": "マントヴァ辺境伯領",
+    "Marquisate of Saluzzo": "サルッツォ辺境伯領",
+    "Principality of Oneglia": "オネーリア侯領",
+    "Republic of Ancona": "アンコーナ共和国",
+    "Republic of Florence": "フィレンツェ共和国",
+    "Republic of Genoa": "ジェノヴァ共和国",
+    "Republic of Lucca": "ルッカ共和国",
+    "Republic of Massa": "マッサ共和国",
+    "Republic of Pisa": "ピサ共和国",
+    "Republic of Siena": "シエナ共和国",
+  };
+  assertEquals(Object.keys(expected).length, 27);
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+    // 称号（〜領 / 〜共和国）付きで統一されていること
+    assert(
+      ja.endsWith("領") || ja.endsWith("共和国"),
+      `${name} の訳に称号が無い: ${ja}`,
+    );
+  }
+});
+
+Deno.test("AC #1/#2 の対象諸侯（1200 年の 6 勢力・1100 年のトスカーナ）が日本語表記を持つ（TASK-96 AC #1/#2/#4）", () => {
+  for (
+    const name of [
+      "Republic of Florence",
+      "Republic of Genoa",
+      "Republic of Pisa",
+      "Republic of Siena",
+      "Republic of Lucca",
+      "Duchy of Spoleto",
+      "March of Tuscany",
+    ]
+  ) {
+    assert(
+      typeof mapping[name] === "string" && mapping[name] !== "",
+      `${name} の日本語表記が無い（地図ラベルが英語のままになる）`,
+    );
   }
 });
 

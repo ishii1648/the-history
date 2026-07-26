@@ -76,14 +76,18 @@ Deno.test("FIEF_DEDUPE_YEARS は base 境界線オーバーレイの対象年（
   assert(FIEF_DEDUPE_YEARS.includes(1492));
 });
 
-Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力を全て返す（TASK-86）", () => {
-  // 同時表示年は仏諸侯領と HRE 領邦の両方
+Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力を全て返す（TASK-86/96）", () => {
+  // 同時表示年は仏諸侯領・HRE 領邦・伊諸侯領の 3 系統
   assertEquals(fiefsPathsFor(1200), [
     "data/france_fiefs_1200.geojson",
     "data/hre_fiefs_1200.geojson",
+    "data/italy_fiefs_1200.geojson",
   ]);
-  // 1400 以降は HRE 領邦のみ
-  assertEquals(fiefsPathsFor(1492), ["data/hre_fiefs_1492.geojson"]);
+  // 1400 以降は HRE 領邦と伊諸侯領（仏諸侯領は 1300 まで）
+  assertEquals(fiefsPathsFor(1492), [
+    "data/hre_fiefs_1492.geojson",
+    "data/italy_fiefs_1492.geojson",
+  ]);
   // 対象外年は 1 件も無い
   assertEquals(fiefsPathsFor(900), []);
 });

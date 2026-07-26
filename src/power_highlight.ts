@@ -20,11 +20,12 @@ import { type LabelColor, labelColorFor, type LabelDatum } from "./labels.ts";
 import {
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 } from "./picking.ts";
 
 /**
- * アクティブ強調の対象になるレイヤー（政治ポリゴンの 3 層）。
+ * アクティブ強調の対象になるレイヤー（政治ポリゴンの 4 層）。
  * 河川・都市・判定専用層・ラベル層は対象外（それぞれ固有の強調表現を持つか、
  * そもそも「国土の広がり」を持たない）。
  */
@@ -32,6 +33,7 @@ export const POWER_HIGHLIGHT_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
   HRE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
 ];
 
 /**

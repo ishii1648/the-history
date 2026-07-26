@@ -5,6 +5,7 @@
  * 入力は既存の生成物のみ（ネットワーク不要）:
  * - data/france_fiefs_<year>.geojson（scripts/build-france-fiefs.ts）
  * - data/hre_fiefs_<year>.geojson（scripts/build-hre-fiefs.ts、TASK-85）
+ * - data/italy_fiefs_<year>.geojson（scripts/build-italy-fiefs.ts、TASK-95）
  *
  * 出力:
  * - data/france_fiefs_flat_<year>.geojson（year ∈ FIEF_FLAT_YEARS）… 重なりを
@@ -14,8 +15,11 @@
  * - data/hre_fiefs_flat_<year>.geojson（year ∈ HRE_FIEF_FLAT_YEARS）… 同じ扱いの
  *   中世 HRE 領邦（src/powers.ts hreDataUrlFor が中世年代で参照する）。
  *   削り方針だけ OverlapCutPolicy = "keep-smaller" で異なる（理由は同型の解説）。
- *   1000〜1300 は仏諸侯領と同時に表示されるため、subtractOverlay でレイヤーを
- *   またぐ重なりも取り除く。
+ *   1000〜1492 は仏諸侯領・伊諸侯領と同時に表示されるため、subtractOverlay で
+ *   レイヤーをまたぐ重なりも取り除く。
+ * - data/italy_fiefs_flat_<year>.geojson（year ∈ ITALY_FIEF_FLAT_YEARS、TASK-96）…
+ *   同じ扱いの中世イタリア諸侯領（src/powers.ts italyFiefDataUrlFor が参照する）。
+ *   削り方針は HRE 領邦と同じ "keep-smaller"。
  *
  * ## なぜ必要か
  * 諸侯領は 1 枚のレイヤーに半透明（src/powers.ts FILL_ALPHA=128）で描かれる。
@@ -73,6 +77,7 @@ import { COORD_PRECISION } from "./build-data.ts";
 import { cleanFeatureCollection, formatCleanStats } from "./clean-polygons.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
+import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
 
 /** 生成対象年。諸侯領オーバーレイが存在する年と同一 */
 export const FIEF_FLAT_YEARS: readonly number[] = FRANCE_FIEF_YEARS;
@@ -83,13 +88,19 @@ export const FIEF_FLAT_YEARS: readonly number[] = FRANCE_FIEF_YEARS;
 export const HRE_FIEF_FLAT_YEARS: readonly number[] = HRE_FIEF_YEARS;
 
 /**
+ * イタリア諸侯領（OHM 由来・TASK-95）の生成対象年。build-italy-fiefs.ts の
+ * 対象年と同一。
+ */
+export const ITALY_FIEF_FLAT_YEARS: readonly number[] = ITALY_FIEF_YEARS;
+
+/**
  * 重なりを解消するとき「どちら側のジオメトリを削るか」の方針（TASK-86）。
  *
  * - "containment-aware"（既定・中世フランス諸侯領 / TASK-79）: 内包は親（大きい側）
  *   を削り、スリバーは小さい側を削る。仏諸侯領の重なりは 1.0000（親子）と 0.0541
  *   以下（境界不一致）に二分され、中間が無いためこの 2 分岐で足りる。
- * - "keep-smaller"（HRE 領邦 / TASK-86）: 内包かスリバーかに関わらず常に大きい側を
- *   削り、小さい側の形を丸ごと残す。
+ * - "keep-smaller"（HRE 領邦 / TASK-86、イタリア諸侯領 / TASK-96）: 内包かスリバーかに
+ *   関わらず常に大きい側を削り、小さい側の形を丸ごと残す。
  *
  * なぜ HRE では方針を変えるのか（1000〜1492 の全ペアを実測した結果）:
  * 帝国は部族大公領（Franconia・Saxony・Lower Lotharingia 等）の中に司教領・
@@ -105,6 +116,23 @@ export const HRE_FIEF_FLAT_YEARS: readonly number[] = HRE_FIEF_YEARS;
  * - 大きい大公領は面積のごく一部を失うだけで、輪郭の外形は変わらない
  * となり、実データの入れ子構造をそのまま「大公領の中に個別領邦が抜けている」
  * 絵として描ける。
+ *
+ * イタリア諸侯領でも同じ方針を採る（TASK-96。1000〜1492 の全ペアを実測）:
+ * 被覆率は 0.9955〜0.9982 の内包群（Santa Fiora / Sovana ⊂ シエナ共和国、
+ * ミランドラ公国 ⊂ モデナ＝レッジョ公領）と 0.27 以下の群に分かれ、閾値 0.9 でも
+ * 判定自体は成立する。それでも "keep-smaller" を採るのは、閾値未満の側に
+ * 「境界不一致ではない実在の入れ子」が混ざるため:
+ * - 1100 年 Republic of Pisa × March of Tuscany = 4,356 km²（ピサの 27%）。
+ *   ピサのコンタード（周辺農村）はトスカーナ辺境伯領の内側にあり、
+ *   "containment-aware" だと小さい側のピサから 27% を削ってしまう。
+ * - 1300/1400 Lordship of Oneglia × Republic of Genoa = 28 km²（オネーリアの 10%）。
+ *   270 km² の小領主領から 10% を削ると形が痩せる。
+ * 常に大きい側を削れば、都市共和国・小伯領という「より個別性の高い情報」が
+ * 形・色・ラベル・picking を完全に保ち、辺境伯領・大共和国は面積の数 % を失う
+ * だけで外形が変わらない。なお 4,356 km² の重なりは SLIVER_AREA_LIMIT_M2 を
+ * 超えるため方針に関わらず警告が出るが、これは「境界不一致では説明できない
+ * 規模」を人へ知らせる設計どおりの挙動で、実データを確認した結果
+ * （ピサ ⊂ トスカーナの実在の入れ子）として受け入れる。
  */
 export type OverlapCutPolicy = "containment-aware" | "keep-smaller";
 
@@ -457,6 +485,16 @@ export function hreFlatPathFor(year: number): string {
   return `data/hre_fiefs_flat_${year}.geojson`;
 }
 
+/** 入力（build-italy-fiefs.ts の生成物）のパス（TASK-96） */
+export function italyRawPathFor(year: number): string {
+  return `data/italy_fiefs_${year}.geojson`;
+}
+
+/** 出力（イタリア諸侯領・重なり解消済み）のパス（TASK-96） */
+export function italyFlatPathFor(year: number): string {
+  return `data/italy_fiefs_flat_${year}.geojson`;
+}
+
 /** *_flat_<year>.geojson に埋め込むメタデータ */
 export interface FiefFlatMetadata {
   generatedBy: string;
@@ -470,10 +508,16 @@ export interface FiefFlatMetadata {
   sliverAreaLimitM2: number;
   /** 解消した重なりの一覧（削る側 → 相手の feature 並び順で決定的） */
   resolutions: OverlapResolution[];
-  /** 別レイヤー（仏諸侯領）と重なるため差し引いた一覧（TASK-86。無ければ省略） */
+  /**
+   * 別レイヤー（仏諸侯領・伊諸侯領）と重なるため差し引いた一覧
+   * （TASK-86 / TASK-96。無ければ省略）
+   */
   externalRemovals?: ExternalRemoval[];
-  /** externalRemovals の入力ファイル（TASK-86。無ければ省略） */
-  externalInput?: string;
+  /**
+   * externalRemovals の入力ファイル（TASK-86。TASK-96 で複数系統を差し引ける
+   * ようにしたため配列。無ければ省略）
+   */
+  externalInputs?: string[];
 }
 
 async function readCollection(path: string): Promise<FeatureCollection> {
@@ -542,23 +586,67 @@ async function buildFranceFiefFlat(): Promise<void> {
 }
 
 /**
- * 中世 HRE 領邦の flat 化（TASK-86）。仏諸侯領より後に実行する:
- * 同時表示年（1000〜1300）では、実際に描かれる france_fiefs_flat_<year> を
- * 差し引き元として使うため。
+ * 中世イタリア諸侯領の flat 化（TASK-96）。
+ *
+ * 削り方針は "keep-smaller"（OverlapCutPolicy の解説を参照）。別レイヤーの
+ * 差し引き（subtractOverlay）は行わない: 実測で仏諸侯領との重なりは全年ゼロ、
+ * HRE 領邦との重なりは 3 件（最大 280 km²）だけで、いずれも伊側の方が局所的
+ * （March of Montferrat 3,380 km² ⊂ Duchy of Milan 46,551 km² 等）なため、
+ * より広域な HRE 側から差し引く（buildHreFiefFlat が伊 flat を入力に取る）。
+ * 同じ重なりを両側から削ると土地が誰にも塗られない隙間になる。
+ */
+async function buildItalyFiefFlat(): Promise<void> {
+  for (const year of ITALY_FIEF_FLAT_YEARS) {
+    const raw = await readCollection(italyRawPathFor(year));
+    const { fc, resolutions } = resolveOverlaps(
+      raw,
+      console.warn,
+      "keep-smaller",
+    );
+    const metadata: FiefFlatMetadata = {
+      generatedBy: "scripts/build-fief-flat.ts",
+      input: italyRawPathFor(year),
+      year,
+      cutPolicy: "keep-smaller",
+      containmentCoverageThreshold: CONTAINMENT_COVERAGE_THRESHOLD,
+      minOverlapAreaM2: MIN_OVERLAP_AREA_M2,
+      sliverAreaLimitM2: SLIVER_AREA_LIMIT_M2,
+      resolutions,
+    };
+    const outPath = italyFlatPathFor(year);
+    const json = JSON.stringify({ ...cleanFlat(fc, outPath), metadata });
+    await Deno.writeTextFile(outPath, json);
+    console.log(
+      `${outPath}: ${json.length} bytes, features=${fc.features.length}, 解消=${resolutions.length} 件`,
+    );
+    logResolutions(resolutions);
+  }
+}
+
+/**
+ * 中世 HRE 領邦の flat 化（TASK-86 / TASK-96）。仏諸侯領・伊諸侯領より後に
+ * 実行する: 同時表示年では、実際に描かれる france_fiefs_flat_<year> /
+ * italy_fiefs_flat_<year> を差し引き元として使うため。
+ *
+ * 帝国側から差し引くのは、レイヤーをまたぐ重なりが常に「広域な帝国の公領 ⊃
+ * 局所的な諸侯領」の入れ子だから（1100 年 Duchy of Upper Lotharingia ×
+ * County of Bar、1400 年 Duchy of Milan × March of Montferrat）。
  */
 async function buildHreFiefFlat(): Promise<void> {
   for (const year of HRE_FIEF_FLAT_YEARS) {
     const raw = await readCollection(hreRawPathFor(year));
     const resolved = resolveOverlaps(raw, console.warn, "keep-smaller");
-    const externalPath = FIEF_FLAT_YEARS.includes(year)
-      ? flatPathFor(year)
-      : null;
-    const external = externalPath === null
-      ? null
-      : await readCollection(externalPath);
-    const subtracted = external === null
+    const externalPaths = [
+      ...(FIEF_FLAT_YEARS.includes(year) ? [flatPathFor(year)] : []),
+      ...(ITALY_FIEF_FLAT_YEARS.includes(year) ? [italyFlatPathFor(year)] : []),
+    ];
+    const externals = await Promise.all(externalPaths.map(readCollection));
+    const subtracted = externals.length === 0
       ? { fc: resolved.fc, removals: [] as ExternalRemoval[] }
-      : subtractOverlay(resolved.fc, external.features);
+      : subtractOverlay(
+        resolved.fc,
+        externals.flatMap((c) => c.features),
+      );
     const metadata: FiefFlatMetadata = {
       generatedBy: "scripts/build-fief-flat.ts",
       input: hreRawPathFor(year),
@@ -568,8 +656,8 @@ async function buildHreFiefFlat(): Promise<void> {
       minOverlapAreaM2: MIN_OVERLAP_AREA_M2,
       sliverAreaLimitM2: SLIVER_AREA_LIMIT_M2,
       resolutions: resolved.resolutions,
-      ...(externalPath === null ? {} : {
-        externalInput: externalPath,
+      ...(externalPaths.length === 0 ? {} : {
+        externalInputs: externalPaths,
         externalRemovals: subtracted.removals,
       }),
     };
@@ -585,7 +673,7 @@ async function buildHreFiefFlat(): Promise<void> {
     logResolutions(resolved.resolutions);
     for (const r of subtracted.removals) {
       console.log(
-        `  仏諸侯領  ${r.cutName} -= ${r.externalName} (${r.overlapKm2} km²)`,
+        `  他オーバーレイ  ${r.cutName} -= ${r.externalName} (${r.overlapKm2} km²)`,
       );
     }
   }
@@ -593,6 +681,7 @@ async function buildHreFiefFlat(): Promise<void> {
 
 async function main(): Promise<void> {
   await buildFranceFiefFlat();
+  await buildItalyFiefFlat();
   await buildHreFiefFlat();
 }
 

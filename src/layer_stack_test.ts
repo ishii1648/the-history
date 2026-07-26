@@ -30,6 +30,7 @@ import {
   CITY_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
   POWER_LAYER_ID,
@@ -58,7 +59,7 @@ Deno.test("WATER_STYLE_LAYER_ID はベースマップスタイルに実在する
   );
 });
 
-Deno.test("水面より下へ回すのは政治ポリゴン 3 枚のみ（TASK-80 で base 境界線は deck から外れた）", () => {
+Deno.test("水面より下へ回すのは政治ポリゴン 4 枚のみ（TASK-80 で base 境界線は deck から外れた、TASK-96 で伊諸侯領を追加）", () => {
   // TASK-78 の base-outlines（deck の GeoJsonLayer）は TASK-80 で MapLibre の
   // line レイヤー（approximate-borders-*）へ移した。deck 側に線の層は無い。
   assertEquals(
@@ -66,9 +67,19 @@ Deno.test("水面より下へ回すのは政治ポリゴン 3 枚のみ（TASK-8
     [
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ].sort(),
   );
+});
+
+Deno.test("伊諸侯領の塗りも他の政治ポリゴンと同じ beforeId を得る（グループが分かれず相対順が保たれる。TASK-96）", () => {
+  // 政治ポリゴンは全て同一 beforeId でなければならない（別グループへ分かれると
+  // deck レイヤー配列順による相対順が崩れる）
+  const ids = [WATER_INLAND_LAYER_ID, WATER_LAYER_ID];
+  const expected = underWaterBeforeId(POWER_LAYER_ID, ids);
+  assertEquals(underWaterBeforeId(ITALY_FIEF_LAYER_ID, ids), expected);
+  assertEquals(expected, WATER_LAYER_ID);
 });
 
 // --- TASK-80: 概略境界（MapLibre line レイヤー）の挿入位置 ---
@@ -397,6 +408,7 @@ Deno.test("beforeId の付与は picking 優先順（PICKING_PRIORITY）に影�
     RIVERS_HIT_LAYER_ID,
     HRE_LAYER_ID,
     FRANCE_FIEF_LAYER_ID,
+    ITALY_FIEF_LAYER_ID,
     POWER_LAYER_ID,
   ]);
 });

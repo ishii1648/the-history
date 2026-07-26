@@ -152,6 +152,33 @@ export function hasFranceFiefOverlay(
 }
 
 /**
+ * 中世イタリア諸侯領オーバーレイ GeoJSON の配信 URL を返す（純粋関数、TASK-96）。
+ *
+ * 参照先は OHM 由来の生データ（italy_fiefs_<year>、生成は
+ * scripts/build-italy-fiefs.ts / CC0）ではなく、諸侯領同士の重なりを排他化した
+ * 派生データ italy_fiefs_flat_<year>（生成は scripts/build-fief-flat.ts）。
+ * 理由は franceFiefDataUrlFor / hreDataUrlFor と同じで、半透明（FILL_ALPHA）の
+ * 塗りが二重に重ならないようにするため。1400 年の County of Santa Fiora ⊂
+ * Republic of Siena のような内包関係が実データにある。
+ */
+export function italyFiefDataUrlFor(year: number): string {
+  return `/data/italy_fiefs_flat_${year}.geojson`;
+}
+
+/**
+ * 指定年にイタリア諸侯領オーバーレイが存在するか（純粋関数、TASK-96）。
+ * 対象年は config.ITALY_FIEF_OVERLAY_YEARS。判定規則は hasHreOverlay /
+ * hasFranceFiefOverlay と同一だが、呼び出し側で「どのオーバーレイの話か」を
+ * 取り違えないよう別名で公開する。
+ */
+export function hasItalyFiefOverlay(
+  year: number,
+  overlayYears: readonly number[],
+): boolean {
+  return overlayYears.includes(year);
+}
+
+/**
  * base 境界線オーバーレイ GeoJSON の配信 URL を返す（純粋関数、TASK-78）。
  * 中身は base 勢力ポリゴンの環を諸侯領 union の外側だけに切り出した LineString
  * 群（生成は scripts/build-fief-dedupe.ts）。諸侯領オーバーレイ対象年に限り、
@@ -356,6 +383,27 @@ export function createFranceFiefOverlayLoader(
 }
 
 /**
+ * 中世イタリア諸侯領オーバーレイ用のローダを作る（TASK-96）。
+ * HRE 領邦・仏諸侯領オーバーレイと同じ機構（createOverlayLoader）に載せることで、
+ * 非対象年（900・1500 以降）は fetch せず空 FC を返し、ベースマップの
+ * ヴェネツィア共和国・教皇領・ミラノ公国と二重表示にならないことを構造的に
+ * 保証する。
+ */
+export function createItalyFiefOverlayLoader(
+  fetchFn: FetchLike,
+  overlayYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    overlayYears,
+    italyFiefDataUrlFor,
+    "イタリア諸侯領オーバーレイ",
+    warnFn,
+  );
+}
+
+/**
  * base 境界線オーバーレイ用のローダを作る（TASK-78）。
  * HRE 領邦・諸侯領オーバーレイと同じ機構（createOverlayLoader）に載せるため、
  * 非対象年は fetch せず空 FC、取得失敗は warn + 空 FC になる。空 FC のときは
@@ -419,6 +467,11 @@ export interface YearLayerData {
    * FeatureCollection（非対象年・取得失敗時は空 = base をそのまま塗る）
    */
   baseFill: FeatureCollection;
+  /**
+   * 中世イタリア諸侯領オーバーレイ（italy_fiefs_flat_*、1000〜1492。TASK-96）の
+   * FeatureCollection（非対象年・取得失敗時は空）
+   */
+  italyFiefs: FeatureCollection;
 }
 
 /** base + hre + fiefs をまとめてロードする複合ローダ */
@@ -437,8 +490,9 @@ export interface CombinedYearLoader {
  * UI が処理）、オーバーレイの失敗は各 createXxxOverlayLoader 側で空 FC に
  * 落ちるため、ここでは特別扱いしない。
  *
- * fiefLoader（TASK-71）・outlineLoader（TASK-78）は任意（それ以前の呼び出しと
- * 後方互換）。省略時はそれぞれ常に空 FC になり、従来どおりの挙動になる。
+ * fiefLoader（TASK-71）・outlineLoader（TASK-78）・baseFillLoader（TASK-92）・
+ * italyFiefLoader（TASK-96）は任意（それ以前の呼び出しと後方互換）。省略時は
+ * それぞれ常に空 FC になり、従来どおりの挙動になる。
  */
 export function createCombinedYearLoader(
   baseLoader: YearDataLoader,
@@ -446,22 +500,29 @@ export function createCombinedYearLoader(
   fiefLoader?: YearDataLoader,
   outlineLoader?: YearDataLoader,
   baseFillLoader?: YearDataLoader,
+  italyFiefLoader?: YearDataLoader,
 ): CombinedYearLoader {
   return {
     has: (year) =>
       baseLoader.has(year) && hreLoader.has(year) &&
       (fiefLoader === undefined || fiefLoader.has(year)) &&
       (outlineLoader === undefined || outlineLoader.has(year)) &&
-      (baseFillLoader === undefined || baseFillLoader.has(year)),
+      (baseFillLoader === undefined || baseFillLoader.has(year)) &&
+      (italyFiefLoader === undefined || italyFiefLoader.has(year)),
     async load(year) {
-      const [base, hre, fiefs, outlines, baseFill] = await Promise.all([
-        baseLoader.load(year),
-        hreLoader.load(year),
-        fiefLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
-        outlineLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
-        baseFillLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
-      ]);
-      return { base, hre, fiefs, outlines, baseFill };
+      const [base, hre, fiefs, outlines, baseFill, italyFiefs] = await Promise
+        .all([
+          baseLoader.load(year),
+          hreLoader.load(year),
+          fiefLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
+          outlineLoader?.load(year) ??
+            Promise.resolve(EMPTY_FEATURE_COLLECTION),
+          baseFillLoader?.load(year) ??
+            Promise.resolve(EMPTY_FEATURE_COLLECTION),
+          italyFiefLoader?.load(year) ??
+            Promise.resolve(EMPTY_FEATURE_COLLECTION),
+        ]);
+      return { base, hre, fiefs, outlines, baseFill, italyFiefs };
     },
   };
 }

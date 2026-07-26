@@ -35,6 +35,7 @@ import {
 import {
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 } from "./picking.ts";
 import { APPROXIMATE_BORDER_LAYER_IDS } from "./approximate_borders.ts";
@@ -46,14 +47,18 @@ import { APPROXIMATE_BORDER_LAYER_IDS } from "./approximate_borders.ts";
 export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
 
 /**
- * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 3 枚）。
- * 相対順（powers → france-fiefs → hre-powers）は同一 beforeId のグループ内で
- * deck レイヤー配列順が保たれるため従来と変わらない。
+ * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 4 枚）。
+ * 相対順（powers → italy-fiefs → france-fiefs → hre-powers）は同一 beforeId の
+ * グループ内で deck レイヤー配列順が保たれるため従来と変わらない。
  *
  * TASK-78 の base 境界線オーバーレイ（deck の base-outlines）は TASK-80 で
  * MapLibre の line レイヤー（approximate_borders.ts）へ移したため、ここには
- * 含まれない。deck 側に境界線の層は無く、この 3 枚は全て塗り
+ * 含まれない。deck 側に境界線の層は無く、この 4 枚は全て塗り
  * （powers は stroked: false、諸侯領・HRE 領邦は自前の stroke）。
+ *
+ * TASK-96: 伊諸侯領も他の政治ポリゴンと同じくベースマップの水面より下へ回す。
+ * ジェノヴァ共和国・ピサ共和国は海岸線に沿った細長い領域で、base ポリゴンと
+ * 同じくリグーリア海・ティレニア海へはみ出すため、外すと海上に塗りが露出する。
  *
  * hre-extent（帝国範囲の強調輪郭）は含めない: 常時表示ではなくトグルで出す
  * 強調記号であり、水面より下だと海側の輪郭が切れて「どこからどこまでが帝国か」の
@@ -61,6 +66,7 @@ export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
  */
 export const UNDER_WATER_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
 ];

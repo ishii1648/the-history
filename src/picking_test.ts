@@ -8,6 +8,7 @@ import {
   isDirectPickFinal,
   isNearCursorRepickable,
   isRiversPickLayerId,
+  ITALY_FIEF_LAYER_ID,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
   POWER_LAYER_ID,
@@ -20,7 +21,7 @@ import {
 
 // ---- PICKING_PRIORITY ----
 
-Deno.test("PICKING_PRIORITY: 河川 > 都市 > 都市ヒット層 > 河川ヒット層 > HRE 領邦 > 仏諸侯領 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82）", () => {
+Deno.test("PICKING_PRIORITY: 河川 > 都市 > 都市ヒット層 > 河川ヒット層 > HRE 領邦 > 仏諸侯領 > 伊諸侯領 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82, TASK-96）", () => {
   assertEquals(
     [...PICKING_PRIORITY],
     [
@@ -30,8 +31,61 @@ Deno.test("PICKING_PRIORITY: 河川 > 都市 > 都市ヒット層 > 河川ヒッ
       RIVERS_HIT_LAYER_ID,
       HRE_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ],
+  );
+});
+
+Deno.test("PICKING_PRIORITY: italy-fiefs は powers より優先される（オーバーレイがベースの上）（TASK-96 AC #3）", () => {
+  const italyIndex = PICKING_PRIORITY.indexOf(ITALY_FIEF_LAYER_ID);
+  const powerIndex = PICKING_PRIORITY.indexOf(POWER_LAYER_ID);
+  assert(italyIndex !== -1);
+  assert(italyIndex < powerIndex);
+});
+
+Deno.test("PICKING_PRIORITY: 3 系統のオーバーレイ（HRE 領邦・仏諸侯領・伊諸侯領）は既存の相対順を保ったまま powers の上に並ぶ（TASK-96）", () => {
+  const overlays = [HRE_LAYER_ID, FRANCE_FIEF_LAYER_ID, ITALY_FIEF_LAYER_ID];
+  const indices = overlays.map((id) => PICKING_PRIORITY.indexOf(id));
+  // 既存 2 層の相対順（hre-powers > france-fiefs）は TASK-71 のまま変えない
+  assert(indices[0] < indices[1]);
+  // 追加した伊諸侯領は既存 2 層の下・powers の上（既存の順序に影響しない位置）
+  assert(indices[1] < indices[2]);
+  assert(indices[2] < PICKING_PRIORITY.indexOf(POWER_LAYER_ID));
+});
+
+Deno.test("renderOrderFromPickingPriority: italy-fiefs は powers の上・france-fiefs の下に描画される（TASK-96）", () => {
+  const order = renderOrderFromPickingPriority(PICKING_PRIORITY);
+  assert(order.indexOf(POWER_LAYER_ID) < order.indexOf(ITALY_FIEF_LAYER_ID));
+  assert(
+    order.indexOf(ITALY_FIEF_LAYER_ID) < order.indexOf(FRANCE_FIEF_LAYER_ID),
+  );
+});
+
+Deno.test("layerOrderMatchesPickingPriority: 3 系統のオーバーレイを含む実際の描画順が整合する（TASK-96 AC #6）", () => {
+  assert(
+    layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
+      HRE_LAYER_ID,
+      // hre-extent（pickable: false）は優先リスト外なので無視される
+      "hre-extent",
+      RIVERS_HIT_LAYER_ID,
+      CITY_HIT_LAYER_ID,
+      CITY_LAYER_ID,
+      RIVERS_LAYER_ID,
+      "power-labels",
+    ]),
+  );
+  // 伊諸侯領を仏諸侯領の上へ入れ替えると不整合として検出される
+  assert(
+    !layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
+      HRE_LAYER_ID,
+    ]),
   );
 });
 
@@ -281,6 +335,7 @@ Deno.test("renderOrderFromPickingPriority: 描画順（下→上）は優先順�
     renderOrderFromPickingPriority(PICKING_PRIORITY),
     [
       POWER_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
