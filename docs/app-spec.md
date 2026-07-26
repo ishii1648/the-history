@@ -213,8 +213,10 @@ Deno
 ② クリップ ヨーロッパ bbox（N34–72°, W25°–E60°）で切り出し（@turf/bbox-clip）
 ③ 簡略化  @turf/simplify で座標を間引き（目標: 1ファイル 300 KB 以下、ズーム6相当で破綻しない精度）
 ④ 正規化  NAME の表記ゆれ・null を補正するマッピングテーブル（data/name-overrides.json）を適用
-⑤ 封土切出 上流が王国領に一括で含めている半独立の封土を独立 feature にする（§4.4）
-⑥ 出力    data/europe_<year>.geojson と data/index.json（年一覧・feature数・色割当）を生成
+⑤ 異常是正 上流 properties の異常を data/name-overrides.json の propertyFixes で上書き（§4.5）
+⑥ 封土切出 上流が王国領に一括で含めている半独立の封土を独立 feature にする（§4.4）
+⑦ 空値正規化 空の SUBJECTO / PARTOF を NAME（＝独立勢力）に寄せる（§4.5）
+⑧ 出力    data/europe_<year>.geojson と data/index.json（年一覧・feature数・色割当）を生成
 ```
 
 ### 4.1 出典固定
@@ -279,6 +281,38 @@ Deno
 世、1087〜1106）で England
 配下に付け替えるのも不正確なこと。公はフランス王へ臣従礼を行う立場ではあったが名目に
 留まるため、`suzerains` による宗主補正（`Britany` → `France`）とは扱いを分ける。
+
+### 4.5 上流 properties の異常是正（TASK-102）
+
+上流の properties には、文字化け・列ずれと思われる異常値・年代間で揺れる
+`SUBJECTO` が混ざる。生成物を直接直すと再生成で失われるため、
+`data/name-overrides.json` の `propertyFixes`（`renames` / `suzerains` と同じ
+ファイル）に年代付きで宣言し、`scripts/build-data.ts` の `applyPropertyFixes`
+が当てる。対象 feature はリネーム適用後の `NAME` で指定する。
+
+| 年代        | NAME                | 上書き                         | 根拠                                                                                                                                        |
+| ----------- | ------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1100        | `Aragón`            | `PARTOF`                       | 置換文字（U+FFFD）への文字化け。同 feature の `NAME` / `ABBREVN` / `SUBJECTO` は正しい綴り                                                  |
+| 1783        | `Lombardy`          | `SUBJECTO` / `BORDERPRECISION` | `SUBJECTO="3"` / `BORDERPRECISION=0` の列ずれ。1650〜1800 の他年代は `SUBJECTO=Lombardy` / `BORDERPRECISION=3`                              |
+| 1300 / 1400 | `English territory` | `SUBJECTO` / `PARTOF`          | 大陸に残るイングランド王の所領。1279 は `England` 配下なのに 1300 / 1400 は自己参照で、`colorKeyFor` のキーが年代で揺れて配色が変わっていた |
+
+上書きは「上流の入力ミスを直す」範囲に留め、史実に基づく宗主の付け替え（例: 1714
+年以降のオーストリア領ロンバルディア）はここでは行わない。それは `suzerains`
+の担当で、decision-19 の「歴史的に明白な関係に限る」判断が要るため。
+
+空の `SUBJECTO` / `PARTOF`（上流は独立勢力をこれと自己参照の 2
+通りで持っている）は、切り出しの後に `normalizeSubjectProps` が `NAME`
+で埋めて自己参照側へ揃える。空も自己参照も色キー・宗主キー・表示ラベルは
+同じ結果になるので表示は変わらず、「空か自己参照か」で分岐する読み手を無くすための
+正規化である。
+
+`NAME` が空の feature（各年代 16〜40 件・描画面積の 0.1〜3.8%）は、`NAME` /
+`ABBREVN` / `SUBJECTO` / `PARTOF`
+のいずれも空＝上流がどの勢力にも帰属させていない土地なので、名称を与えず隣接勢力にも
+帰属させず、無名・中立色（`DEFAULT_FILL_COLOR`）で描く。島の地理名を勢力名として
+入れると凡例・ラベル上で国家に見え、面積閾値で隣国へ吸収させると出典の無い帰属を
+作ることになるため。ユーザ向けの説明は `data/known-limitations.json` の
+`base-unattributed-areas`、退行検出は `scripts/base-properties_test.ts`。
 
 ## 5. UI/UX 仕様
 

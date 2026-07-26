@@ -3,6 +3,9 @@
  * - historical-basemaps の world_<year>.geojson × 20 年代を取得（コミット固定）
  * - ヨーロッパ bbox でクリップし、空ジオメトリになった feature を除去
  * - NAME の表記ゆれ・null を name-overrides.json で補正
+ * - 上流 properties の異常（文字化け・列ずれの異常値・年代間で揺れる SUBJECTO）を
+ *   name-overrides.json の propertyFixes で上書きし、空の SUBJECTO / PARTOF を
+ *   NAME（＝独立勢力）に寄せて正規化する（TASK-102）
  * - 上流が王国領に一括で含めている半独立の封土を、諸侯領オーバーレイの区画で
  *   切り出して独立 feature にする（BASE_FIEF_SPLITS、TASK-101）
  * - simplify + 座標丸め + ポリゴンのクリーンアップ（自己交差の解消・微小破片の除去、
@@ -66,9 +69,38 @@ const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;
 const INDEX_PATH = `${DATA_DIR}/index.json`;
 
-/** name-overrides.json の構造（表記ゆれ・別名のリネームマップ） */
+/**
+ * 年代を限定した properties の上書き（TASK-102）。
+ *
+ * 上流の properties には、文字化け・列ずれと思われる異常値・年代間で揺れる
+ * SUBJECTO が混ざっている。生成物を直接直すと再生成で失われるため、
+ * data/name-overrides.json 側に宣言してパイプラインで当てる。
+ * 対象 feature は「その年代の、リネーム適用後の NAME」で指定する
+ * （renames / suzerains と同じく正規化後の名前をキーにする）。
+ */
+export interface PropertyFix {
+  /** 適用対象の年 */
+  years: number[];
+  /** 対象 feature の NAME（applyNameOverrides 適用後の値） */
+  name: string;
+  /** 上書きする properties */
+  set: Record<string, string | number | null>;
+  /** 上書きの根拠（人間向けの注記。パイプラインは参照しない） */
+  note?: string;
+}
+
+/**
+ * name-overrides.json の構造。
+ * - renames: 表記ゆれ・別名のリネームマップ
+ * - propertyFixes: 年代付きの properties 上書き（TASK-102）
+ *
+ * suzerains（宗主補正・TASK-94）は同じファイルに同居するが、ランタイム側
+ * （src/suzerain_extent.ts）と色割当（scripts/build-colors.ts）が読むもので、
+ * base の生成には関与しないためここでは解釈しない。
+ */
 export interface NameOverrides {
   renames: Record<string, string>;
+  propertyFixes?: PropertyFix[];
 }
 
 /** index.json の source フィールド */
@@ -176,6 +208,80 @@ export function applyNameOverrides(
     const props = feature.properties ?? {};
     const name = resolveName(props as Record<string, unknown>, overrides);
     return { ...feature, properties: { ...props, NAME: name } };
+  });
+  return { type: "FeatureCollection", features };
+}
+
+/**
+ * 指定年に該当する propertyFixes を全 feature へ適用する（純粋関数、TASK-102）。
+ *
+ * 対象は「NAME が fix.name と一致する feature」。同名 feature が複数あれば全てに
+ * 当てる（上流は 1 勢力を複数 feature に分けて持つことがあり、片方だけ直すと
+ * 同じ勢力の中で色キーが分かれてしまう）。
+ *
+ * 該当 feature が 1 件も無い fix は警告する。上流データが更新されて対象が消えた
+ * ことに気付かず、直したつもりの異常が復活するのを防ぐ（生成は止めない）。
+ */
+export function applyPropertyFixes(
+  fc: FeatureCollection,
+  year: number,
+  fixes: readonly PropertyFix[],
+  warnFn: (message: string) => void = console.warn,
+): FeatureCollection {
+  const applicable = fixes.filter((fix) => fix.years.includes(year));
+  if (applicable.length === 0) return fc;
+
+  const hits = new Map<PropertyFix, number>(applicable.map((fix) => [fix, 0]));
+  const features = fc.features.map((feature) => {
+    const props = feature.properties ?? {};
+    let patched = props;
+    for (const fix of applicable) {
+      if (props.NAME !== fix.name) continue;
+      hits.set(fix, hits.get(fix)! + 1);
+      patched = { ...patched, ...fix.set };
+    }
+    return patched === props ? feature : { ...feature, properties: patched };
+  });
+  for (const [fix, count] of hits) {
+    if (count === 0) {
+      warnFn(
+        `${year}: propertyFixes の対象 ${fix.name} が base に無く、上書きが当たりませんでした`,
+      );
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
+/**
+ * 空の SUBJECTO / PARTOF を NAME で埋める（純粋関数、TASK-102）。
+ *
+ * 上流は独立勢力の SUBJECTO / PARTOF を、自己参照（Sweden.SUBJECTO = Sweden）に
+ * する feature と、null / 空文字にする feature の両方で持っている。空は「宗主が
+ * 不明」ではなく「上位の勢力が無い＝独立」を意味するので、自己参照の側に寄せて
+ * 表記を 1 つにする。
+ *
+ * 表示上の意味は変わらない。空も自己参照も、色キー（powers.ts colorKeyFor）は
+ * NAME 単独、宗主キー（suzerain_extent.ts resolveSuzerainKey）は NAME、表示ラベル
+ * （info.ts displayLabel）は NAME のみになる。揃えるのは「空か自己参照か」で
+ * 分岐する読み手（人・テスト・将来の派生スクリプト）を無くすため。
+ *
+ * NAME 自体が空の feature（上流がどの勢力にも帰属させていない土地）は対象外。
+ * 埋める値が無いうえ、無名のまま中立色で描くのが正しい扱いのため。
+ */
+export function normalizeSubjectProps(
+  fc: FeatureCollection,
+): FeatureCollection {
+  const features = fc.features.map((feature) => {
+    const props = feature.properties ?? {};
+    const name = firstNonEmptyString(props.NAME);
+    if (name === null) return feature;
+    let patched = props;
+    for (const key of ["SUBJECTO", "PARTOF"] as const) {
+      if (firstNonEmptyString(props[key]) === null) {
+        patched = { ...patched, [key]: name };
+      }
+    }
+    return patched === props ? feature : { ...feature, properties: patched };
   });
   return { type: "FeatureCollection", features };
 }
@@ -432,9 +538,13 @@ async function loadOverrides(path: string): Promise<NameOverrides> {
         typeof data.renames === "object"
       ? data.renames as Record<string, string>
       : {};
-    return { renames };
+    const propertyFixes =
+      data && typeof data === "object" && Array.isArray(data.propertyFixes)
+        ? data.propertyFixes as PropertyFix[]
+        : [];
+    return { renames, propertyFixes };
   } catch {
-    return { renames: {} };
+    return { renames: {}, propertyFixes: [] };
   }
 }
 
@@ -482,11 +592,23 @@ async function main(): Promise<void> {
     const raw = await fetchFeatureCollection(year);
     const clipped = clipToBbox(raw, EUROPE_BBOX);
     const named = applyNameOverrides(clipped, overrides);
+    // TASK-102: 個別の異常（文字化け・列ずれ・年代間で揺れる SUBJECTO）を先に
+    // 当ててから、残った空の SUBJECTO / PARTOF を一律で NAME に寄せる
+    // （normalizeSubjectProps、下の切り出しの後）。順序を逆にすると、直すべき
+    // 空値が正規化で先に埋まって上書きが素通りする。
+    const fixed = applyPropertyFixes(
+      named,
+      year,
+      overrides.propertyFixes ?? [],
+    );
     // 切り出しは simplify の前に行い、王国側の残余と封土が同じ座標列から
     // 同じトレランスで簡略化されるようにする
-    const split = await applyBaseFiefSplits(named, year);
+    const split = await applyBaseFiefSplits(fixed, year);
+    // 正規化は切り出しの後。TASK-101 が立てる封土 feature も通し、
+    // 「SUBJECTO / PARTOF が空の feature は出力に残らない」を段の位置で保証する
+    const normalized = normalizeSubjectProps(split);
     const { fc, tolerance, size, cleanStats } = shrinkToLimit(
-      split,
+      normalized,
       SIZE_LIMIT_BYTES,
     );
     const outPath = `${DATA_DIR}/europe_${year}.geojson`;
