@@ -81,6 +81,14 @@ Protomaps 配布の既成 PMTiles を使用する（`map-rendering-research.md` 
   から作る常時表示のラベル層、TASK-97）で補う。年代に依らない地形なので
   年代スナップショットとは独立の 1 ファイルにし、表示するズーム段は Natural
   Earth の `MIN_LABEL` から決める
+- 陰影の強さ（`HILLSHADE_LAYER` の paint、TASK-98）は「勢力ポリゴン（alpha
+  128）の塗り越しでアルプス・ピレネー・カルパティアの骨格が読める」ことを
+  基準に決める。`hillshade-exaggeration` はズーム補間
+  （`HILLSHADE_EXAGGERATION_STOPS`: z4 で 1.0 → z11 で 0.55）とし、広域は
+  強く・拡大側は DEM の粒状ノイズが目立つので弱める。影・ハイライト・
+  アクセントはいずれも半透明を保ち（不透明にすると勢力色が黒潰れする）、
+  ラベル判読はクリーム halo（TASK-72）が局所背景を作るので陰影の強さに
+  依存しない
 - 配信: Cloudflare R2 に PMTiles を配置し HTTP Range Request
   で取得。フォールバックとして OpenFreeMap を設定
 - MVP ではヨーロッパ域のみを抽出した PMTiles

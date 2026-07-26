@@ -248,28 +248,53 @@ export interface BasemapStyle {
 export const HILLSHADE_LAYER_ID = "hillshade";
 
 /**
+ * hillshade-exaggeration のズーム停止点（TASK-98）。`[zoom, exaggeration]`。
+ *
+ * 広域（z4 前後）は勢力ポリゴンの塗り越しに山脈の骨格を読ませたいので強く、
+ * 拡大側は DEM（terrarium・256px）の粒状ノイズが平野でも目立つので弱める。
+ * 実機比較（アルプス z5/z7・ジロンド z8・アルプス z11）でこの傾斜に決めた。
+ */
+export const HILLSHADE_EXAGGERATION_STOPS: ReadonlyArray<
+  readonly [number, number]
+> = [
+  [4, 1],
+  [8, 0.85],
+  [11, 0.55],
+];
+
+/**
  * hillshade レイヤー定義（TASK-34）。
  *
- * paint 値の根拠:
- * - hillshade-exaggeration 0.4: 既定 0.5 よりやや控えめ。アルプス・カルパチア
- *   等の起伏は視認できるが、勢力ポリゴン（alpha 0.5 相当の塗り）やラベルの
- *   判読を妨げない強さにする。
- * - shadow-color: 半透明の暖色グレー。不透明黒（既定 #000）だと z4 の広域表示で
- *   山岳が黒潰れし、上に重なる勢力塗りの色が沈むため alpha 0.35 に抑える。
- * - highlight-color: 半透明白。light flavor の淡い下地では強い白ハイライトは
- *   ほぼ見えない一方、塗り越しでは白浮きするため alpha 0.25 に抑える。
- * - accent-color: 影と同系の弱い暖色グレー。急斜面の輪郭をわずかに締めるだけに
- *   する（強くすると等高線状のノイズに見える）。
+ * paint 値の根拠（TASK-98 で TASK-34 の控えめな値から引き上げた）:
+ * - exaggeration: {@linkcode HILLSHADE_EXAGGERATION_STOPS} の zoom 補間。
+ *   TASK-34 は一律 0.4 だったが、hillshade の上に勢力ポリゴン（alpha 128）が
+ *   重なるため塗りの下では起伏がほぼ読めなかった。広域を 1.0 まで上げ、
+ *   拡大側は 0.55 まで落とす。
+ * - shadow-color: 半透明の暖色グレー alpha 0.65。不透明黒（既定 #000）だと
+ *   山岳が黒潰れして勢力色が沈むため、半透明は維持する。
+ * - highlight-color: 半透明白 alpha 0.45。稜線の向きを読ませる側の手掛かり。
+ * - accent-color: 影と同系の暖色グレー alpha 0.3。急斜面の輪郭を締める。
+ *
+ * 政治ポリゴンの色分け（AC #2）とラベル判読（AC #3）が保たれる根拠:
+ * 塗りも陰影もいずれも半透明で、陰影は同じ勢力の面全体を一様に暗くするのでは
+ * なく斜面ごとに明暗を付けるため、面の色相は保たれる。ラベルはクリーム halo
+ * （TASK-72）が文字の周囲に局所背景を作るので、下地の陰影に影響されない
+ * （実測: 陰影を強めても文字 vs halo のコントラスト比は不変）。
  */
 const HILLSHADE_LAYER: BasemapStyle["layers"][number] = {
   id: HILLSHADE_LAYER_ID,
   type: "hillshade",
   source: DEM_SOURCE_ID,
   paint: {
-    "hillshade-exaggeration": 0.4,
-    "hillshade-shadow-color": "rgba(80, 70, 60, 0.35)",
-    "hillshade-highlight-color": "rgba(255, 255, 255, 0.25)",
-    "hillshade-accent-color": "rgba(80, 70, 60, 0.15)",
+    "hillshade-exaggeration": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      ...HILLSHADE_EXAGGERATION_STOPS.flat(),
+    ],
+    "hillshade-shadow-color": "rgba(60, 50, 40, 0.65)",
+    "hillshade-highlight-color": "rgba(255, 255, 255, 0.45)",
+    "hillshade-accent-color": "rgba(60, 50, 40, 0.3)",
   },
 };
 
