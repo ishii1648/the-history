@@ -124,6 +124,29 @@ export function hasFranceFiefOverlay(
 }
 
 /**
+ * base 境界線オーバーレイ GeoJSON の配信 URL を返す（純粋関数、TASK-78）。
+ * 中身は base 勢力ポリゴンの環を諸侯領 union の外側だけに切り出した LineString
+ * 群（生成は scripts/build-fief-dedupe.ts）。諸侯領オーバーレイ対象年に限り、
+ * powers レイヤーの stroke を止めてこの層で境界線を描くことで、諸侯領の内側を
+ * 走る base 境界線（= 二重輪郭）だけを消す。
+ */
+export function baseOutlineDataUrlFor(year: number): string {
+  return `/data/base_outline_${year}.geojson`;
+}
+
+/**
+ * 指定年に base 境界線オーバーレイが存在するか（純粋関数、TASK-78）。
+ * 諸侯領オーバーレイと同じ年集合（config.FRANCE_FIEF_OVERLAY_YEARS）を渡す：
+ * 派生データは諸侯領がある年にしか生成されない。
+ */
+export function hasBaseOutline(
+  year: number,
+  overlayYears: readonly number[],
+): boolean {
+  return overlayYears.includes(year);
+}
+
+/**
  * feature を持たない空の FeatureCollection（非対象年の HRE オーバーレイ用）。
  * 同一参照を返し続けることで deck.gl の data 差分判定を最小化する。
  */
@@ -269,8 +292,30 @@ export function createFranceFiefOverlayLoader(
 }
 
 /**
+ * base 境界線オーバーレイ用のローダを作る（TASK-78）。
+ * HRE 領邦・諸侯領オーバーレイと同じ機構（createOverlayLoader）に載せるため、
+ * 非対象年は fetch せず空 FC、取得失敗は warn + 空 FC になる。空 FC のときは
+ * main.ts が powers レイヤーの stroke を従来どおり残すので、この派生データが
+ * 欠けても見た目は TASK-78 以前と同じになる（縮退しても壊れない）。
+ */
+export function createBaseOutlineLoader(
+  fetchFn: FetchLike,
+  overlayYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    overlayYears,
+    baseOutlineDataUrlFor,
+    "base 境界線オーバーレイ",
+    warnFn,
+  );
+}
+
+/**
  * 年代切替で同時に反映する base（europe_*）・hre（hre_*）・
- * fiefs（france_fiefs_*、TASK-71）のデータ組
+ * fiefs（france_fiefs_*、TASK-71）・outlines（base_outline_*、TASK-78）の
+ * データ組
  */
 export interface YearLayerData {
   /** 勢力圏 base レイヤーの FeatureCollection */
@@ -279,6 +324,11 @@ export interface YearLayerData {
   hre: FeatureCollection;
   /** 中世フランス諸侯領オーバーレイの FeatureCollection（非対象年・取得失敗時は空） */
   fiefs: FeatureCollection;
+  /**
+   * base 境界線オーバーレイ（諸侯領の内側を除いた base 輪郭）の
+   * FeatureCollection（非対象年・取得失敗時は空 = powers の stroke で描く）
+   */
+  outlines: FeatureCollection;
 }
 
 /** base + hre + fiefs をまとめてロードする複合ローダ */
@@ -297,25 +347,28 @@ export interface CombinedYearLoader {
  * UI が処理）、オーバーレイの失敗は各 createXxxOverlayLoader 側で空 FC に
  * 落ちるため、ここでは特別扱いしない。
  *
- * fiefLoader は任意（TASK-71 以前の 2 引数呼び出しと後方互換）。省略時は
- * fiefs が常に空 FC になり、従来どおり base + hre だけの挙動になる。
+ * fiefLoader（TASK-71）・outlineLoader（TASK-78）は任意（それ以前の呼び出しと
+ * 後方互換）。省略時はそれぞれ常に空 FC になり、従来どおりの挙動になる。
  */
 export function createCombinedYearLoader(
   baseLoader: YearDataLoader,
   hreLoader: YearDataLoader,
   fiefLoader?: YearDataLoader,
+  outlineLoader?: YearDataLoader,
 ): CombinedYearLoader {
   return {
     has: (year) =>
       baseLoader.has(year) && hreLoader.has(year) &&
-      (fiefLoader === undefined || fiefLoader.has(year)),
+      (fiefLoader === undefined || fiefLoader.has(year)) &&
+      (outlineLoader === undefined || outlineLoader.has(year)),
     async load(year) {
-      const [base, hre, fiefs] = await Promise.all([
+      const [base, hre, fiefs, outlines] = await Promise.all([
         baseLoader.load(year),
         hreLoader.load(year),
         fiefLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
+        outlineLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
       ]);
-      return { base, hre, fiefs };
+      return { base, hre, fiefs, outlines };
     },
   };
 }

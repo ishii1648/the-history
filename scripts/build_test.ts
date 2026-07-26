@@ -75,7 +75,24 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
       from: "data/france_fiefs_1200.geojson",
       to: "dist/data/france_fiefs_1200.geojson",
     },
+    // TASK-78: 諸侯領との二重輪郭・二重ラベルを解消する派生データ
+    // （deno task build-fief-dedupe で生成）
+    { from: "data/fief-dedupe.json", to: "dist/data/fief-dedupe.json" },
+    {
+      from: "data/base_outline_1200.geojson",
+      to: "dist/data/base_outline_1200.geojson",
+    },
   ]);
+});
+
+Deno.test("getDataCopyTargets は fiefYears 省略時に fief-dedupe と base_outline を含めない（TASK-78 AC #3）", () => {
+  const targets = getDataCopyTargets("dist", [900], [1500]);
+  assertEquals(
+    targets.filter((t) =>
+      t.from.includes("fief-dedupe") || t.from.includes("base_outline")
+    ),
+    [],
+  );
 });
 
 Deno.test("getDataCopyTargets は distDir を反映する", () => {
@@ -97,6 +114,11 @@ Deno.test("getDataCopyTargets は distDir を反映する", () => {
     {
       from: "data/france_fiefs_1279.geojson",
       to: "out/data/france_fiefs_1279.geojson",
+    },
+    { from: "data/fief-dedupe.json", to: "out/data/fief-dedupe.json" },
+    {
+      from: "data/base_outline_1279.geojson",
+      to: "out/data/base_outline_1279.geojson",
     },
   ]);
 });

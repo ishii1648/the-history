@@ -6,16 +6,17 @@
 
 ## 1. データソース一覧
 
-| 対象                 | ファイル                               | 出典                                                                                                                                                                                                                                        | ライセンス                                                             | カバー年代                            |
-| -------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------- |
-| 国・勢力ポリゴン     | `data/europe_<year>.geojson` × 20      | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) @ `62d8f1a03a71`                                                                                                                                          | GPL-3.0                                                                | 全 20 年代                            |
-| 都市                 | `data/cities.json`                     | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得 | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                            |
-| 諸侯領土（HRE 領邦） | `data/hre_<year>.geojson` × 5          | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                       | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ |
-| 諸侯領土（仏諸侯領） | `data/france_fiefs_<year>.geojson` × 5 | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ |
-| 日本語表記           | `data/name-ja.json`                    | 本リポジトリで手当て（勢力名・都市名・領邦名の対訳 951 件）                                                                                                                                                                                 | —                                                                      | —                                     |
-| 勢力色               | `data/colors.json`                     | `scripts/build-colors.ts` が NAME から決定的に生成（332 キー）                                                                                                                                                                              | —                                                                      | —                                     |
-| 年代解説             | `data/notes.json`                      | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                      | —                                                                      | 全 20 年代                            |
-| 河川                 | `data/rivers.geojson`                  | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                    | Public Domain (Natural Earth)                                          | 年代共通                              |
+| 対象                   | ファイル                                                        | 出典                                                                                                                                                                                                                                        | ライセンス                                                             | カバー年代                            |
+| ---------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------- |
+| 国・勢力ポリゴン       | `data/europe_<year>.geojson` × 20                               | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) @ `62d8f1a03a71`                                                                                                                                          | GPL-3.0                                                                | 全 20 年代                            |
+| 都市                   | `data/cities.json`                                              | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得 | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                            |
+| 諸侯領土（HRE 領邦）   | `data/hre_<year>.geojson` × 5                                   | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                       | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ |
+| 諸侯領土（仏諸侯領）   | `data/france_fiefs_<year>.geojson` × 5                          | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ |
+| 二重表示の解消（派生） | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 5 | `scripts/build-fief-dedupe.ts` が `europe_<year>` と `france_fiefs_<year>` から生成（§3.5）                                                                                                                                                 | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 のみ |
+| 日本語表記             | `data/name-ja.json`                                             | 本リポジトリで手当て（勢力名・都市名・領邦名の対訳 951 件）                                                                                                                                                                                 | —                                                                      | —                                     |
+| 勢力色                 | `data/colors.json`                                              | `scripts/build-colors.ts` が NAME から決定的に生成（332 キー）                                                                                                                                                                              | —                                                                      | —                                     |
+| 年代解説               | `data/notes.json`                                               | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                      | —                                                                      | 全 20 年代                            |
+| 河川                   | `data/rivers.geojson`                                           | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                    | Public Domain (Natural Earth)                                          | 年代共通                              |
 
 > ライセンス上の注意: HRE 領邦データ（CC BY-NC-SA 4.0）は GPL-3.0 派生の
 > `europe_<year>.geojson`
@@ -135,6 +136,34 @@ way）・`unclosedRings`（端点が繋がらず強制的に閉じたリング�
 
 そのため 1000〜1300
 年のフランス王国域は、収録できた諸侯領を重ねてもなお南部（トゥールーズ・オーヴェルニュ）と王領が空白になる。
+
+### 3.5 二重表示の解消データ（`fief-dedupe.json` / `base_outline_<year>.geojson`）
+
+諸侯領オーバーレイのある 5 年代では、同じ土地に base
+勢力（`europe_<year>`）と諸侯領（`france_fiefs_<year>`）の輪郭・ラベルが二重に
+描かれる。`deno task build-fief-dedupe`（`scripts/build-fief-dedupe.ts`、
+ネットワーク不要）が既存の生成物 2 つから派生データを作り、これを解消する。
+
+| 生成物                             | 内容                                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `data/fief-dedupe.json`            | `years.<year>.<NAME>` = その base 勢力の面積のうち諸侯領 union に覆われた割合（0..1、0.001 未満は非記録）    |
+| `data/base_outline_<year>.geojson` | base 各ポリゴンの環を諸侯領 union の外側だけに切り出した `LineString` 群（`properties` は元の feature 由来） |
+
+被覆率の分布は二極化しており、完全内包は 5 年代とも `Britany`（1.0000）のみ、
+部分重複の最大は 1200 年の `Angevin Empire` 0.5126 で、0.52〜1.00
+の間は空白。アプリは閾値 0.9（`src/fief_dedupe.ts` の
+`FIEF_COVERAGE_SUPPRESS_THRESHOLD`）以上の勢力の base
+ラベルだけを抑制する（1000〜1300 の `Britany`）。境界線側は部分重複の勢力に
+由来する分が多数（1200 年で諸侯領内部を走る base 境界線 4,167 km のうち
+`Britany` は 794 km）で、feature 単位の判定では消せないため線を幾何的に
+切り出す。切り出し後、諸侯領内部に残る base 境界線は 1000/1100/1200 年で 0
+km、1279/1300 年で 21 km（元 3,102 km）。
+
+ライセンス: `base_outline_<year>.geojson` は
+`europe_<year>.geojson`（GPL-3.0）の 座標をそのまま切り出した派生物なので
+GPL-3.0 を引き継ぐ。クリップに使う `france_fiefs_<year>`（CC0
+1.0）はパブリックドメインで混合制約が無いため、この 派生は許される。CC BY-NC-SA
+4.0 の HRE 領邦データを同様に混ぜてはならない。
 
 ## 4. 年代別サマリ
 

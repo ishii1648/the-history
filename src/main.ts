@@ -11,6 +11,7 @@ import {
 import type { Feature, FeatureCollection } from "geojson";
 import { buildBasemapStyle } from "./basemap.ts";
 import {
+  BASE_OUTLINE_LAYER_ID,
   CITY_LABEL_LAYER_ID,
   LABEL_LAYER_ID,
   overlaySplitIsValid,
@@ -23,6 +24,7 @@ import {
   decideFallback,
 } from "./fallback.ts";
 import {
+  createBaseOutlineLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
   createHreOverlayLoader,
@@ -36,6 +38,14 @@ import {
   type Rgba,
 } from "./powers.ts";
 import { displayLabel } from "./info.ts";
+import {
+  EMPTY_FIEF_DEDUPE_TABLE,
+  excludeSuppressedFeatures,
+  FIEF_DEDUPE_DATA_URL,
+  type FiefDedupeTable,
+  parseFiefDedupeTable,
+  suppressedPowerNames,
+} from "./fief_dedupe.ts";
 import {
   buildLabelData,
   characterSetFrom,
@@ -298,11 +308,21 @@ let nameJa: Record<string, string> = {};
 // 空扱いになり、base の表示・ローディング/エラー UI（failLoading）は base
 // 失敗時のみ動く。非対象年のオーバーレイは fetch されず空 FC になるため、
 // ベースマップの勢力ポリゴンと二重表示になることはない。
+// TASK-78: base 境界線オーバーレイ（base_outline_*、1000〜1300）も同じ複合
+// ローダに載せる。諸侯領と同じ年集合の派生データで、揃ってから同時に反映しないと
+// 「stroke を止めたのに輪郭層がまだ来ていない」1 フレームが出るため。
 const dataLoader = createCombinedYearLoader(
   createYearDataLoader((url) => fetch(url)),
   createHreOverlayLoader((url) => fetch(url), HRE_OVERLAY_YEARS),
   createFranceFiefOverlayLoader((url) => fetch(url), FRANCE_FIEF_OVERLAY_YEARS),
+  createBaseOutlineLoader((url) => fetch(url), FRANCE_FIEF_OVERLAY_YEARS),
 );
+
+/**
+ * 諸侯領による base 勢力の被覆率表（/data/fief-dedupe.json、TASK-78）。
+ * 取得失敗・未生成時は空表のままで、ラベル抑制が起きず従来表示になる。
+ */
+let fiefDedupe: FiefDedupeTable = EMPTY_FIEF_DEDUPE_TABLE;
 
 /** 主要河川 GeoJSON（起動時に 1 度ロード。失敗時は空のまま河川なしで継続） */
 let riversData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
@@ -345,6 +365,8 @@ let currentView:
     base: FeatureCollection;
     hre: FeatureCollection;
     fiefs: FeatureCollection;
+    /** TASK-78: 諸侯領の内側を除いた base 輪郭（空なら powers の stroke で描く） */
+    outlines: FeatureCollection;
   }
   | null = null;
 
@@ -454,6 +476,7 @@ function buildPowerLayer(
   data: FeatureCollection,
   lineColor: Rgba = LINE_COLOR,
   lineWidth: number = LINE_WIDTH_PX,
+  stroked: boolean = true,
 ): GeoJsonLayer {
   return new GeoJsonLayer({
     id,
@@ -463,7 +486,9 @@ function buildPowerLayer(
     beforeId: underWaterBeforeId(id, currentStyleLayerIds()),
     // AC #3: ホバー/クリックを有効化（ツールチップ UI は TASK-7）
     pickable: true,
-    stroked: true,
+    // TASK-78: powers は諸侯領オーバーレイ対象年のみ stroke を止め、境界線を
+    // base-outlines 層（諸侯領の内側を除いた輪郭）に委ねる。塗り・picking は不変。
+    stroked,
     filled: true,
     // AC #2: 塗り色は colors.json 参照・opacity 0.5 相当（alpha はカラーに内包）
     getFillColor: (f: Feature) => fillColorFor(f.properties, colors),
@@ -967,6 +992,38 @@ function buildHreExtentLayer(
 }
 
 /**
+ * base 勢力の境界線オーバーレイ（GeoJsonLayer / LineString）を生成する
+ * （TASK-78 AC #2）。data は諸侯領 union の外側だけに切り出した base 輪郭
+ * （data/base_outline_<year>.geojson、生成は scripts/build-fief-dedupe.ts）。
+ *
+ * 線の色・太さは powers の stroke（LINE_COLOR / LINE_WIDTH_PX）と同一値にする:
+ * この層は powers の stroke を「置き換える」ものなので、諸侯領の外側では
+ * 従来と区別が付かない見た目にならなければならない（AC #3 の非退行）。
+ * pickable: false で picking には一切関与しない（base のホバー/クリックは
+ * powers ポリゴン側が担う）。非対象年は空 FC のため実質非表示になる。
+ */
+function buildBaseOutlineLayer(
+  year: number,
+  data: FeatureCollection,
+): GeoJsonLayer {
+  return new GeoJsonLayer({
+    id: BASE_OUTLINE_LAYER_ID,
+    data,
+    // powers と同じ水面下グループへ入れる（別グループになると諸侯領より上に出る）
+    beforeId: underWaterBeforeId(BASE_OUTLINE_LAYER_ID, currentStyleLayerIds()),
+    pickable: false,
+    stroked: false,
+    filled: false,
+    getLineColor: LINE_COLOR,
+    lineWidthUnits: "pixels",
+    getLineWidth: LINE_WIDTH_PX,
+    lineWidthMinPixels: 1,
+    opacity: 1,
+    updateTriggers: { getLineColor: [year] },
+  });
+}
+
+/**
  * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
  * 反映する。描画順（配列順 = 下から上）: powers → france-fiefs → hre-powers →
  * hre-extent → rivers-hit → cities → rivers → power-labels → river-labels →
@@ -1007,9 +1064,21 @@ function buildHreExtentLayer(
  */
 function renderLayers(): void {
   if (currentView === null) return;
-  const { year, base, hre, fiefs } = currentView;
+  const { year, base, hre, fiefs, outlines } = currentView;
+  // TASK-78: 切り出し済みの base 輪郭がある年（1000〜1300）だけ powers の
+  // stroke を止め、base-outlines 層に境界線を任せる。データが無い年・取得に
+  // 失敗した年は空 FC なので従来どおり powers が境界線を描く。
+  const outlinesActive = outlines.features.length > 0;
   const buildPickableLayer: Record<string, () => Layer> = {
-    [POWER_LAYER_ID]: () => buildPowerLayer(POWER_LAYER_ID, year, base),
+    [POWER_LAYER_ID]: () =>
+      buildPowerLayer(
+        POWER_LAYER_ID,
+        year,
+        base,
+        LINE_COLOR,
+        LINE_WIDTH_PX,
+        !outlinesActive,
+      ),
     [HRE_LAYER_ID]: () => buildPowerLayer(HRE_LAYER_ID, year, hre),
     // TASK-71: 中世フランス諸侯領。base の France ポリゴンの上に重ね、
     // 藍紫の境界線で区画を示す（非対象年は空 FC なので実質非表示）
@@ -1033,6 +1102,12 @@ function renderLayers(): void {
       throw new Error(`PICKING_PRIORITY のレイヤー ${id} に builder が無い`);
     }
     layers.push(build());
+    // TASK-78: base 輪郭は powers の直上・諸侯領の下に挿入する（powers の
+    // stroke と同じ位置を保つ）。pickable: false のため PICKING_PRIORITY 外の
+    // ID で、整合検証では無視される（hre-extent と同じ扱い）。
+    if (id === POWER_LAYER_ID) {
+      layers.push(buildBaseOutlineLayer(year, outlines));
+    }
     // TASK-30: 帝国範囲の強調は powers/hre-powers の上・cities の下に挿入する
     // （領邦の塗りの上に輪郭が乗り、都市マーカー・河川は隠さない）。
     // pickable: false のため PICKING_PRIORITY 外の ID で、整合検証では
@@ -1081,20 +1156,29 @@ function renderLayers(): void {
  */
 const memoizedPowerLabelData = memoizeLatest(
   (
-    // year 自体は未使用だがメモ化キーの一部として渡す（base/hre/fiefs と揃えて
-    // 明示的に年代依存であることを示す）
-    _year: number,
+    // year は抑制対象の解決（suppressedPowerNames）に使い、同時にメモ化キーの
+    // 一部にもなる（base/hre/fiefs と揃えて明示的に年代依存であることを示す）
+    year: number,
     base: FeatureCollection,
     hre: FeatureCollection,
     fiefs: FeatureCollection,
     ja: Record<string, string>,
+    dedupe: FiefDedupeTable,
   ) => {
     // TASK-23: ラベルは name-ja.json で日本語化する（未登録 NAME は英語のまま）。
     // TASK-30: kind（base/hre）を付与し、HRE 領邦ラベルだけ帝国色で塗り分ける。
     // TASK-71: フランス諸侯領は kind=fief で藍紫。オーバーレイ非対象年では
     // fiefs が空 FC なのでラベルも 0 件になる（二重ラベルにならない）。
+    // TASK-78 AC #1: 諸侯領にほぼ完全内包される base 勢力（1000〜1300 の
+    // Britany）は、同じ土地の諸侯領ラベル（ブルターニュ公領）と二重表示に
+    // なるため base 側のラベルだけ落とす。抑制対象が無い年（900・1400 以降や
+    // 対応表の取得失敗時）は同一参照が返り、polylabel のメモ化も効き続ける。
+    const labeledBase = excludeSuppressedFeatures(
+      base,
+      suppressedPowerNames(dedupe, year),
+    );
     const data = [
-      ...buildLabelData(base, ja, "base"),
+      ...buildLabelData(labeledBase, ja, "base"),
       ...buildLabelData(hre, ja, "hre"),
       ...buildLabelData(fiefs, ja, "fief"),
     ];
@@ -1115,6 +1199,7 @@ function buildLabelLayer(
     hre,
     fiefs,
     nameJa,
+    fiefDedupe,
   );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
     // フォント・クリーム halo（TASK-72: ケルン大司教領・ザクセン選帝侯領/
@@ -1456,6 +1541,7 @@ const yearSwitcher = createYearSwitcher(
       base: data.base,
       hre: data.hre,
       fiefs: data.fiefs,
+      outlines: data.outlines,
     };
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
@@ -1757,6 +1843,25 @@ async function loadNameJa(): Promise<void> {
 }
 
 /**
+ * fief-dedupe.json（諸侯領による base 勢力の被覆率表）を取得する（TASK-78）。
+ * 失敗・未生成・不正形のときは空表のままにし、base ラベルの抑制を一切行わない
+ * （= TASK-78 以前の表示。colors.json 等と同じ縮退方針）。
+ */
+async function loadFiefDedupe(): Promise<void> {
+  try {
+    const res = await fetch(FIEF_DEDUPE_DATA_URL);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    fiefDedupe = parseFiefDedupeTable(await res.json());
+  } catch (error) {
+    console.warn(
+      `fief-dedupe.json の取得に失敗しました。諸侯領と base の二重ラベルを抑制せず継続します: ${
+        String(error)
+      }`,
+    );
+  }
+}
+
+/**
  * rivers.geojson（主要河川ライン）を取得する（TASK-24）。
  * 失敗時は空 FeatureCollection のまま河川なしで継続する（colors.json 等と同様）。
  */
@@ -1832,6 +1937,9 @@ async function initPowerLayer(): Promise<void> {
       loadCities(),
       loadNotes(),
       loadKnownLimitations(),
+      // TASK-78: 初期年（1000）が諸侯領オーバーレイ対象年なので、初期描画前に
+      // 被覆率表を揃えて 1 フレーム目から二重ラベルを出さないようにする
+      loadFiefDedupe(),
     ]);
     await switchYear(initialYear);
   } catch (error) {
