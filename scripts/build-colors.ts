@@ -16,6 +16,7 @@ import { SNAPSHOT_YEARS } from "../src/config.ts";
 import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
+import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
 
 const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;
@@ -362,6 +363,12 @@ async function loadOverrides(path: string): Promise<NameOverrides> {
  * OHM_RELATION_ID / START_DATE / END_DATE）ため、buildColorMap では NAME キーの
  * 独立勢力として扱われ、決定的プロービングで諸侯ごとに相異なる色が割り当てられる
  * （HRE 領邦の INDEPENDENT_SUBJECT_SUZERAINS 相当の特別扱いは不要）。
+ *
+ * イタリア諸侯領（data/italy_fiefs_<year>.geojson、`deno task build-italy-fiefs`
+ * で生成、TASK-95/96）も同じく SUBJECTO を持たないため、フランス諸侯領と同じ
+ * 扱いになる。名目上は帝国内のコムーネも含むが、SUBJECTO を持たせない選択
+ * （TASK-95）がここでもそのまま「独立色を割り当てる」意味になり、hre_fiefs の
+ * 複合キー（"NAME|Holy Roman Empire"）とは衝突しない。
  */
 async function loadCollections(): Promise<FeatureCollection[]> {
   const collections: FeatureCollection[] = [];
@@ -376,6 +383,9 @@ async function loadCollections(): Promise<FeatureCollection[]> {
       `${DATA_DIR}/france_fiefs_${year}.geojson`
     ),
     ...HRE_FIEF_YEARS.map((year) => `${DATA_DIR}/hre_fiefs_${year}.geojson`),
+    ...ITALY_FIEF_YEARS.map((year) =>
+      `${DATA_DIR}/italy_fiefs_${year}.geojson`
+    ),
   ];
   for (const path of optionalPaths) {
     try {

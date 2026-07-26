@@ -9,6 +9,7 @@ import {
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
   createHreOverlayLoader,
+  createItalyFiefOverlayLoader,
   createYearDataLoader,
   createYearSwitcher,
   dataUrlFor,
@@ -20,8 +21,10 @@ import {
   hasBaseOutline,
   hasFranceFiefOverlay,
   hasHreOverlay,
+  hasItalyFiefOverlay,
   hexToRgb,
   hreDataUrlFor,
+  italyFiefDataUrlFor,
   LINE_COLOR,
   powerFillDataFor,
   type Rgba,
@@ -32,6 +35,7 @@ import {
   HRE_ALL_OVERLAY_YEARS,
   HRE_FIEF_OVERLAY_YEARS,
   HRE_OVERLAY_YEARS,
+  ITALY_FIEF_OVERLAY_YEARS,
   SNAPSHOT_YEARS,
 } from "./config.ts";
 
@@ -664,6 +668,7 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     fiefs: EMPTY_FEATURE_COLLECTION,
     outlines: EMPTY_FEATURE_COLLECTION,
     baseFill: EMPTY_FEATURE_COLLECTION,
+    italyFiefs: EMPTY_FEATURE_COLLECTION,
   });
   d1400.resolve({
     base: fakeCollection("F"),
@@ -671,6 +676,7 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     fiefs: EMPTY_FEATURE_COLLECTION,
     outlines: EMPTY_FEATURE_COLLECTION,
     baseFill: EMPTY_FEATURE_COLLECTION,
+    italyFiefs: EMPTY_FEATURE_COLLECTION,
   });
   await Promise.all([p1, p2]);
   assertEquals(applied, [{ year: 1500, hreCount: 1 }]);
@@ -1074,4 +1080,144 @@ Deno.test("powerFillDataFor は派生 base があればそれを、無ければ 
   assertEquals(powerFillDataFor(base, flat), flat);
   // 非対象年・取得失敗（空 FC）は従来どおり base を塗る
   assertEquals(powerFillDataFor(base, EMPTY_FEATURE_COLLECTION), base);
+});
+
+// ---- 中世イタリア諸侯領オーバーレイ（TASK-96）----
+
+Deno.test("italyFiefDataUrlFor はイタリア諸侯領オーバーレイ GeoJSON のパスを返す（TASK-96）", () => {
+  // 参照するのは flat（諸侯領同士の重なりを排他化した派生データ）。
+  // 生データ italy_fiefs_<year> は派生データの入力で、配信もしない。
+  assertEquals(
+    italyFiefDataUrlFor(1200),
+    "/data/italy_fiefs_flat_1200.geojson",
+  );
+  assertEquals(
+    italyFiefDataUrlFor(1492),
+    "/data/italy_fiefs_flat_1492.geojson",
+  );
+});
+
+Deno.test("hasItalyFiefOverlay は対象年（1000〜1492）のみ true を返す（TASK-96）", () => {
+  for (const year of ITALY_FIEF_OVERLAY_YEARS) {
+    assert(hasItalyFiefOverlay(year, ITALY_FIEF_OVERLAY_YEARS));
+  }
+  // 900 は OHM に面が無く、1500 以降は base が主権国家として個別収録する
+  for (const year of [900, 1500, 1650, 1914]) {
+    assert(!hasItalyFiefOverlay(year, ITALY_FIEF_OVERLAY_YEARS));
+  }
+});
+
+Deno.test("createItalyFiefOverlayLoader は非対象年で fetch せず空 FC を返す（二重表示回避。TASK-96）", async () => {
+  const calls: string[] = [];
+  const loader = createItalyFiefOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Republic of Florence")),
+    });
+  }, ITALY_FIEF_OVERLAY_YEARS);
+  assertEquals(await loader.load(900), EMPTY_FEATURE_COLLECTION);
+  assertEquals(await loader.load(1500), EMPTY_FEATURE_COLLECTION);
+  assertEquals(calls, []);
+  // 非対象年は fetch 不要なので「取得済み」扱い（スピナーを出さない）
+  assert(loader.has(1500));
+});
+
+Deno.test("createItalyFiefOverlayLoader は対象年で italy_fiefs_flat を fetch して返す（キャッシュあり）（TASK-96 AC #1）", async () => {
+  const calls: string[] = [];
+  const loader = createItalyFiefOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Republic of Florence")),
+    });
+  }, ITALY_FIEF_OVERLAY_YEARS);
+  assert(!loader.has(1200));
+  const fc = await loader.load(1200);
+  assertEquals(fc.features[0].properties?.NAME, "Republic of Florence");
+  assertEquals(calls, ["/data/italy_fiefs_flat_1200.geojson"]);
+  await loader.load(1200);
+  assertEquals(calls, ["/data/italy_fiefs_flat_1200.geojson"]);
+  assert(loader.has(1200));
+});
+
+Deno.test("createItalyFiefOverlayLoader は取得失敗時に warn して空 FC を返す（base の表示は壊さない）（TASK-96）", async () => {
+  let count = 0;
+  const warns: string[] = [];
+  const loader = createItalyFiefOverlayLoader(
+    (_url) => {
+      count++;
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      });
+    },
+    ITALY_FIEF_OVERLAY_YEARS,
+    (msg) => warns.push(msg),
+  );
+  assertEquals(await loader.load(1200), EMPTY_FEATURE_COLLECTION);
+  assertEquals(warns.length, 1);
+  assert(!loader.has(1200));
+  // 失敗はキャッシュされず、次のロードで再試行される
+  await loader.load(1200);
+  assertEquals(count, 2);
+});
+
+Deno.test("createCombinedYearLoader は 3 系統のオーバーレイ（HRE 領邦・仏諸侯領・伊諸侯領）を同時に返す（TASK-96 AC #5）", async () => {
+  const calls: string[] = [];
+  const fetchFn = (url: string) => {
+    calls.push(url);
+    const name = url.includes("italy_fiefs")
+      ? "Republic of Florence"
+      : url.includes("france_fiefs")
+      ? "Normandy"
+      : url.includes("hre_fiefs")
+      ? "Duchy of Bavaria"
+      : "Kingdom of France";
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(name)),
+    });
+  };
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(
+      fetchFn,
+      HRE_ALL_OVERLAY_YEARS,
+      () => {},
+      HRE_FIEF_OVERLAY_YEARS,
+    ),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+    undefined,
+    undefined,
+    createItalyFiefOverlayLoader(fetchFn, ITALY_FIEF_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.base.features[0].properties?.NAME, "Kingdom of France");
+  assertEquals(data.hre.features[0].properties?.NAME, "Duchy of Bavaria");
+  assertEquals(data.fiefs.features[0].properties?.NAME, "Normandy");
+  assertEquals(
+    data.italyFiefs.features[0].properties?.NAME,
+    "Republic of Florence",
+  );
+  assert(calls.includes("/data/italy_fiefs_flat_1200.geojson"));
+});
+
+Deno.test("createCombinedYearLoader は伊諸侯領ローダを省略しても従来どおり動く（後方互換。TASK-96）", async () => {
+  const fetchFn = (url: string) =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(url)),
+    });
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.italyFiefs, EMPTY_FEATURE_COLLECTION);
 });

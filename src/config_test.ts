@@ -11,6 +11,7 @@ import {
   INITIAL_CENTER,
   INITIAL_YEAR,
   INITIAL_ZOOM,
+  ITALY_FIEF_OVERLAY_YEARS,
   MAP_MAX_BOUNDS,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -209,9 +210,49 @@ Deno.test("HRE_ALL_OVERLAY_YEARS は 1492 と 1500 を連続して含む（1492�
   assert(HRE_ALL_OVERLAY_YEARS.includes(1500));
 });
 
-Deno.test("BASE_OUTLINE_YEARS は仏諸侯領年代と HRE 領邦年代の和集合で昇順・重複なし（TASK-86）", () => {
+Deno.test("ITALY_FIEF_OVERLAY_YEARS は中世〜近世初頭の 7 年代である（TASK-95/96）", () => {
+  assertEquals([...ITALY_FIEF_OVERLAY_YEARS], [
+    1000,
+    1100,
+    1200,
+    1279,
+    1300,
+    1400,
+    1492,
+  ]);
+});
+
+Deno.test("ITALY_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS の部分集合（TASK-96）", () => {
+  const sorted = [...ITALY_FIEF_OVERLAY_YEARS].sort((a, b) => a - b);
+  assertEquals([...ITALY_FIEF_OVERLAY_YEARS], sorted);
+  assertEquals(
+    new Set(ITALY_FIEF_OVERLAY_YEARS).size,
+    ITALY_FIEF_OVERLAY_YEARS.length,
+  );
+  for (const year of ITALY_FIEF_OVERLAY_YEARS) {
+    assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
+});
+
+Deno.test("ITALY_FIEF_OVERLAY_YEARS は 900 と近世（1500 以降）を含まない（TASK-96）", () => {
+  assert(!ITALY_FIEF_OVERLAY_YEARS.includes(900));
+  for (const year of ITALY_FIEF_OVERLAY_YEARS) {
+    assert(year < 1500, `${year} は近世（base が担う年代）`);
+  }
+});
+
+Deno.test("ITALY_FIEF_OVERLAY_YEARS は AC #1/#2 の対象年（1100・1200）を含む（TASK-96）", () => {
+  assert(ITALY_FIEF_OVERLAY_YEARS.includes(1100));
+  assert(ITALY_FIEF_OVERLAY_YEARS.includes(1200));
+});
+
+Deno.test("BASE_OUTLINE_YEARS は 3 系統のオーバーレイ年代の和集合で昇順・重複なし（TASK-86/96）", () => {
   const expected = [
-    ...new Set([...FRANCE_FIEF_OVERLAY_YEARS, ...HRE_FIEF_OVERLAY_YEARS]),
+    ...new Set([
+      ...FRANCE_FIEF_OVERLAY_YEARS,
+      ...HRE_FIEF_OVERLAY_YEARS,
+      ...ITALY_FIEF_OVERLAY_YEARS,
+    ]),
   ].sort((a, b) => a - b);
   assertEquals([...BASE_OUTLINE_YEARS], expected);
   for (const year of BASE_OUTLINE_YEARS) {

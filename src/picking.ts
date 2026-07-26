@@ -26,6 +26,32 @@ export const HRE_LAYER_ID = "hre-powers";
  */
 export const FRANCE_FIEF_LAYER_ID = "france-fiefs";
 
+/**
+ * 中世イタリア諸侯領（都市共和国・公領・辺境伯領）オーバーレイのレイヤー ID
+ * （TASK-96）。出典は OpenHistoricalMap（CC0、生成は
+ * scripts/build-italy-fiefs.ts → scripts/build-fief-flat.ts）。
+ *
+ * なぜ既存レイヤーへ合流させず独立レイヤーにするのか:
+ * - hre-powers への合流は帰属の記述が壊れる。hre_fiefs_<year> は全 feature が
+ *   SUBJECTO/PARTOF = Holy Roman Empire を持つ前提で、フィレンツェ・ジェノヴァ
+ *   （名目は帝国内だが実質独立）やスポレート公国・アンコーナ共和国（教皇領側）を
+ *   そこへ混ぜると、色キー（powers.ts colorKeyFor）も情報パネル（info.ts
+ *   displayLabel）も誤った宗主を主張してしまう。
+ * - france-fiefs への合流は年集合が食い違う。仏諸侯領は 1000〜1300、伊諸侯領は
+ *   1000〜1492 なので、1400 / 1492 では "france-fiefs" レイヤーがイタリアの
+ *   ポリゴンだけを載せることになり、レイヤー ID が実態を偽る。
+ * - 独立レイヤーの追加コストは PICKING_PRIORITY / UNDER_WATER_LAYER_IDS /
+ *   POWER_HIGHLIGHT_LAYER_IDS への各 1 行で、整合はいずれも既存の汎用テスト
+ *   （layerOrderMatchesPickingPriority 等）がそのまま検証する。
+ *
+ * PICKING_PRIORITY 上の位置は powers の直上（既存 2 系統の下）。3 系統は
+ * scripts/build-fief-flat.ts が幾何的に排他化するため同一ピクセルを 2 枚が
+ * 覆うことは無く、オーバーレイ同士の相対順は表示・picking のどちらにも影響
+ * しない。ならば既存の相対順（hre-powers > france-fiefs）を動かさない位置に
+ * 置くのが最も影響が小さい。
+ */
+export const ITALY_FIEF_LAYER_ID = "italy-fiefs";
+
 /** 主要都市マーカー（ScatterplotLayer）のレイヤー ID（TASK-27） */
 export const CITY_LAYER_ID = "cities";
 
@@ -85,9 +111,10 @@ export const RIVERS_HIT_LAYER_ID = "rivers-hit";
 
 /**
  * picking の優先順（先頭が最優先）: 河川 > 都市 > 都市ヒット層 > 河川ヒット層 >
- * HRE 領邦 > 仏諸侯領 > 勢力（AC #4、TASK-49 で rivers-hit を cities より
- * 劣後させ都市 picking の遮蔽を解消、TASK-71 で france-fiefs を powers の上に
- * 追加、TASK-82 で cities-hit を cities と rivers-hit の間に追加）。
+ * HRE 領邦 > 仏諸侯領 > 伊諸侯領 > 勢力（AC #4、TASK-49 で rivers-hit を cities
+ * より劣後させ都市 picking の遮蔽を解消、TASK-71 で france-fiefs を powers の上に
+ * 追加、TASK-82 で cities-hit を cities と rivers-hit の間に追加、TASK-96 で
+ * italy-fiefs を powers の直上に追加）。
  * pickable なレイヤーだけを含む（ラベル系レイヤーは
  * pickable: false のため picking に関与せず、このリストにも含めない）。
  *
@@ -110,6 +137,7 @@ export const PICKING_PRIORITY: readonly string[] = [
   RIVERS_HIT_LAYER_ID,
   HRE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 ];
 

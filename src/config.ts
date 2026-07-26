@@ -106,11 +106,13 @@ export const HRE_OVERLAY_YEARS: readonly number[] = [
  * 表示されるだけになる（AC #4）。
  *
  * HRE_OVERLAY_YEARS（1500〜1700）とは互いに素だが、TASK-86 で追加した
- * HRE_FIEF_OVERLAY_YEARS（1000〜1492）とは 1000〜1300 が重なり、2 系統の
- * オーバーレイ（france-fiefs / hre-powers）が同時に表示される。描画順・picking 順は
- * PICKING_PRIORITY で一意に決まり、領域の重なり（1100 年の County of Bar ⊂
- * Duchy of Upper Lotharingia）は scripts/build-fief-flat.ts が HRE 側から
- * 差し引いて二重塗りを防ぐ（TASK-71 / TASK-86）。
+ * HRE_FIEF_OVERLAY_YEARS（1000〜1492）・TASK-96 で追加した
+ * ITALY_FIEF_OVERLAY_YEARS（1000〜1492）とは 1000〜1300 が重なり、3 系統の
+ * オーバーレイ（france-fiefs / hre-powers / italy-fiefs）が同時に表示される。
+ * 描画順・picking 順は PICKING_PRIORITY で一意に決まり、領域の重なり（1100 年の
+ * County of Bar ⊂ Duchy of Upper Lotharingia、1400 年の March of Montferrat ⊂
+ * Duchy of Milan）は scripts/build-fief-flat.ts が HRE 側から差し引いて
+ * 二重塗りを防ぐ（TASK-71 / TASK-86 / TASK-96）。
  */
 export const FRANCE_FIEF_OVERLAY_YEARS: readonly number[] = [
   1000,
@@ -159,9 +161,41 @@ export const HRE_ALL_OVERLAY_YEARS: readonly number[] = [
 ];
 
 /**
+ * 中世イタリア諸侯領オーバーレイ（italy_fiefs_flat_<year>.geojson）が存在する
+ * 年代（昇順、TASK-95/96）。出典は OpenHistoricalMap（CC0）。
+ *
+ * scripts/build-italy-fiefs.ts の ITALY_FIEF_YEARS と同値（src → scripts の
+ * import は行わない規約のため値を重複定義し、同値性は build-italy-fiefs_test.ts
+ * で担保する）。
+ *
+ * 900 は対象外: OHM 側に admin_level 3/4/6 の面が 1 件も無い。1000 は 3 件
+ * （トスカーナ辺境伯領・スポレート公国・モンフェッラート辺境伯領）と少ないが、
+ * 前 2 者だけで中部イタリアの大半を覆うため面として成立する。
+ *
+ * 1500 以降を持たないのは仏諸侯領（1400 以降を落とした理由）と同じで、
+ * base（europe_<year>）側がヴェネツィア共和国・教皇領・ミラノ公国などを
+ * 主権国家として個別収録するようになり、オーバーレイは二重表示にしかならない
+ * ため。HRE_FIEF_OVERLAY_YEARS（1000〜1492）とは全年が重なり、
+ * FRANCE_FIEF_OVERLAY_YEARS（1000〜1300）とは 1000〜1300 が重なるので、
+ * 最大 3 系統のオーバーレイが同時に表示される。描画順・picking 順は
+ * PICKING_PRIORITY で一意に決まり、領域の重なり（1400 年の
+ * March of Montferrat × Duchy of Milan 等）は scripts/build-fief-flat.ts が
+ * HRE 側から差し引いて二重塗りを防ぐ（TASK-96）。
+ */
+export const ITALY_FIEF_OVERLAY_YEARS: readonly number[] = [
+  1000,
+  1100,
+  1200,
+  1279,
+  1300,
+  1400,
+  1492,
+];
+
+/**
  * base 境界線オーバーレイ（base_outline_<year>.geojson）が存在する年代
- * （昇順、TASK-78/86）。諸侯領・領邦オーバーレイのいずれかがある年、すなわち
- * FRANCE_FIEF_OVERLAY_YEARS ∪ HRE_FIEF_OVERLAY_YEARS。
+ * （昇順、TASK-78/86/96）。諸侯領・領邦オーバーレイのいずれかがある年、すなわち
+ * FRANCE_FIEF_OVERLAY_YEARS ∪ HRE_FIEF_OVERLAY_YEARS ∪ ITALY_FIEF_OVERLAY_YEARS。
  *
  * この派生データは「base ポリゴンの環のうちオーバーレイ union の外側だけ」を
  * 持つため、オーバーレイがある年は base の輪郭がオーバーレイの内側を走らなくなる
@@ -169,7 +203,11 @@ export const HRE_ALL_OVERLAY_YEARS: readonly number[] = [
  * 同じ年集合で、fief-dedupe.json（ラベル抑制の被覆率表）も同じ年を持つ。
  */
 export const BASE_OUTLINE_YEARS: readonly number[] = [
-  ...new Set([...FRANCE_FIEF_OVERLAY_YEARS, ...HRE_FIEF_OVERLAY_YEARS]),
+  ...new Set([
+    ...FRANCE_FIEF_OVERLAY_YEARS,
+    ...HRE_FIEF_OVERLAY_YEARS,
+    ...ITALY_FIEF_OVERLAY_YEARS,
+  ]),
 ].sort((a, b) => a - b);
 
 /** 歴史的国境ポリゴンが存在する年代スナップショット一覧（昇順） */

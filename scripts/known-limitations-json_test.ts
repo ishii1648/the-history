@@ -9,6 +9,7 @@ import {
 import {
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_FIEF_OVERLAY_YEARS,
+  ITALY_FIEF_OVERLAY_YEARS,
   SNAPSHOT_YEARS,
 } from "../src/config.ts";
 
@@ -310,4 +311,50 @@ Deno.test("中世 HRE 領邦の表示対象年に 900 が含まれない（制�
       `${year} は領邦を表示しているのに制限が active になっている`,
     );
   }
+});
+
+Deno.test("中世イタリア諸侯領の欠落が明記されている（TASK-96 AC #7）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "italy-fiefs-missing-territories");
+  assert(entry !== undefined, "italy-fiefs-missing-territories が無い");
+  // 収録できなかった主要勢力と、その理由（OHM 側の欠落）に言及していること
+  for (
+    const keyword of [
+      "ミラノ",
+      "ヴェネツィア",
+      "ボローニャ",
+      "ウルビーノ",
+      "OpenHistoricalMap",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // 収録件数が薄い年代（1000 年は 3 件）を明示していること
+  assert(
+    entry.text.includes("1000年"),
+    "text が 1000 年の収録状況に触れていない",
+  );
+});
+
+Deno.test("イタリア諸侯領の制限注記はオーバーレイの対象年でのみ active（TASK-96 AC #7）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "italy-fiefs-missing-territories");
+  assert(entry !== undefined);
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      ITALY_FIEF_OVERLAY_YEARS.includes(year),
+      `${year} 年の active 判定が期待と異なる`,
+    );
+  }
+});
+
+Deno.test("コルシカ島の帰属が諸侯領オーバーレイ側へ移ることが明記されている（TASK-96）", () => {
+  // base の「コルシカ」は 1100 年以降ピサ／ジェノヴァ共和国のポリゴンに
+  // 99.8% 覆われ、fief-dedupe の被覆率でラベルが抑制される。島名のラベルが
+  // 消えることは表示側の不具合ではないので、その旨を残す。
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "italy-fiefs-missing-territories");
+  assert(entry !== undefined);
+  assert(entry.text.includes("コルシカ"), "text がコルシカ島に触れていない");
 });

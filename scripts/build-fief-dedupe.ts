@@ -5,6 +5,8 @@
  * 入力はどちらも既存の生成物（ネットワーク不要）:
  * - data/europe_<year>.geojson（scripts/build-data.ts）
  * - data/france_fiefs_<year>.geojson（scripts/build-france-fiefs.ts）
+ * - data/hre_fiefs_<year>.geojson（scripts/build-hre-fiefs.ts）
+ * - data/italy_fiefs_<year>.geojson（scripts/build-italy-fiefs.ts）
  *
  * 出力（year ∈ FIEF_DEDUPE_YEARS）:
  * 1. data/fief-dedupe.json … 諸侯領 union による base 勢力の被覆率表
@@ -59,6 +61,7 @@ import {
   BASE_OUTLINE_YEARS,
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_FIEF_OVERLAY_YEARS,
+  ITALY_FIEF_OVERLAY_YEARS,
 } from "../src/config.ts";
 import { COORD_PRECISION } from "./build-data.ts";
 import { cleanFeatureCollection, formatCleanStats } from "./clean-polygons.ts";
@@ -71,6 +74,9 @@ import { cleanFeatureCollection, formatCleanStats } from "./clean-polygons.ts";
  *
  * TASK-86: HRE 領邦（1000〜1492）を加えたことで 1400 / 1492 が対象に増え、
  * 1000〜1300 は 2 系統のオーバーレイの union に対して被覆率・輪郭を計算する。
+ * TASK-96: イタリア諸侯領（1000〜1492）を加えた。年集合は変わらない（HRE 領邦が
+ * 既に全年を覆う）が、union に北・中部イタリアが加わるため被覆率・輪郭・
+ * 派生 base が変わる。
  */
 export const FIEF_DEDUPE_YEARS: readonly number[] = BASE_OUTLINE_YEARS;
 
@@ -388,10 +394,15 @@ export function hreFiefsPathFor(year: number): string {
   return `data/hre_fiefs_${year}.geojson`;
 }
 
+/** イタリア諸侯領（OHM 由来・TASK-95）の入力パス */
+export function italyFiefsPathFor(year: number): string {
+  return `data/italy_fiefs_${year}.geojson`;
+}
+
 /**
- * その年に存在するオーバーレイの入力パスを全て返す（純粋関数、TASK-86）。
+ * その年に存在するオーバーレイの入力パスを全て返す（純粋関数、TASK-86/96）。
  * 被覆率も境界線の切り出しも「その年に描かれるオーバーレイ全体」に対する判定
- * なので、仏諸侯領と HRE 領邦の両方がある年は 2 件を返す。
+ * なので、仏諸侯領・HRE 領邦・伊諸侯領が揃う年（1000〜1300）は 3 件を返す。
  *
  * 参照するのは flat（重なり解消済み）ではなく OHM 由来の生データ: union を取る
  * 以上どちらでも結果は同じで、生データの方が入力として素直なため
@@ -401,6 +412,9 @@ export function fiefsPathsFor(year: number): string[] {
   const paths: string[] = [];
   if (FRANCE_FIEF_OVERLAY_YEARS.includes(year)) paths.push(fiefsPathFor(year));
   if (HRE_FIEF_OVERLAY_YEARS.includes(year)) paths.push(hreFiefsPathFor(year));
+  if (ITALY_FIEF_OVERLAY_YEARS.includes(year)) {
+    paths.push(italyFiefsPathFor(year));
+  }
   return paths;
 }
 

@@ -15,6 +15,7 @@ import {
   CITY_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
@@ -66,14 +67,27 @@ Deno.test("powerHighlightKey: NAME を持たない feature は null", () => {
   assertEquals(powerHighlightKey(POWER_LAYER_ID, {}), null);
 });
 
-Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 3 層のみ", () => {
+Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 4 層のみ（TASK-96 で伊諸侯領を追加）", () => {
   assertEquals(
     [...POWER_HIGHLIGHT_LAYER_IDS].sort(),
     [
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ].sort(),
+  );
+});
+
+Deno.test("powerHighlightKey: 伊諸侯領は NAME で強調され、親（base の教皇領・帝国）とは別キーになる（TASK-96 AC #3）", () => {
+  assertEquals(
+    powerHighlightKey(ITALY_FIEF_LAYER_ID, { NAME: "Republic of Florence" }),
+    "Republic of Florence",
+  );
+  // 伊諸侯領は SUBJECTO を持たないため、base 側の帝国・教皇領とキーが衝突しない
+  assertEquals(
+    powerHighlightKey(ITALY_FIEF_LAYER_ID, { NAME: "Duchy of Spoleto" }),
+    "Duchy of Spoleto",
   );
 });
 

@@ -329,3 +329,64 @@ Deno.test("getDataCopyTargets は fiefYears 省略時に europe_flat を含め�
   const targets = getDataCopyTargets("dist", [900], [1500]);
   assertEquals(targets.filter((t) => t.from.includes("europe_flat")), []);
 });
+
+Deno.test("getDataCopyTargets は italyFiefYears の italy_fiefs_flat をコピー対象に含める（TASK-96 AC #1）", () => {
+  const targets = getDataCopyTargets(
+    "dist",
+    [1200],
+    [1500],
+    [],
+    [],
+    [1200, 1492],
+  );
+  assertEquals(
+    targets.filter((t) => t.from.includes("italy_fiefs_flat")),
+    [
+      {
+        from: "data/italy_fiefs_flat_1200.geojson",
+        to: "dist/data/italy_fiefs_flat_1200.geojson",
+      },
+      {
+        from: "data/italy_fiefs_flat_1492.geojson",
+        to: "dist/data/italy_fiefs_flat_1492.geojson",
+      },
+    ],
+  );
+  // OHM 由来の生データ（italy_fiefs_<year>）は派生データの入力なので dist に含めない
+  assertEquals(
+    targets.filter((t) => /italy_fiefs_\d/.test(t.from)),
+    [],
+  );
+});
+
+Deno.test("getDataCopyTargets は italyFiefYears 省略時に italy_fiefs を含めない（後方互換。TASK-96）", () => {
+  const targets = getDataCopyTargets("dist", [900], [1500]);
+  assertEquals(targets.filter((t) => t.from.includes("italy_fiefs")), []);
+});
+
+Deno.test("getDataCopyTargets は base_outline / europe_flat を 3 系統の年集合の和で出す（TASK-96 AC #5）", () => {
+  const targets = getDataCopyTargets(
+    "dist",
+    [1300],
+    [1500],
+    [1300],
+    [1400],
+    [1492],
+  );
+  assertEquals(
+    targets.filter((t) => t.from.includes("base_outline")).map((t) => t.from),
+    [
+      "data/base_outline_1300.geojson",
+      "data/base_outline_1400.geojson",
+      "data/base_outline_1492.geojson",
+    ],
+  );
+  assertEquals(
+    targets.filter((t) => t.from.includes("europe_flat")).map((t) => t.from),
+    [
+      "data/europe_flat_1300.geojson",
+      "data/europe_flat_1400.geojson",
+      "data/europe_flat_1492.geojson",
+    ],
+  );
+});
