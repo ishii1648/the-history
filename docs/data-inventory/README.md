@@ -15,7 +15,7 @@
 | 日本語表記           | `data/name-ja.json`                    | 本リポジトリで手当て（勢力名・都市名・領邦名の対訳 951 件）                                                                                                                                                                                 | —                                                                      | —                                     |
 | 勢力色               | `data/colors.json`                     | `scripts/build-colors.ts` が NAME から決定的に生成（332 キー）                                                                                                                                                                              | —                                                                      | —                                     |
 | 年代解説             | `data/notes.json`                      | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                      | —                                                                      | 全 20 年代                            |
-| 河川                 | `data/rivers.geojson`                  | 主要河川オーバーレイ（年代非依存）                                                                                                                                                                                                          | —                                                                      | 年代共通                              |
+| 河川                 | `data/rivers.geojson`                  | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                    | Public Domain (Natural Earth)                                          | 年代共通                              |
 
 > ライセンス上の注意: HRE 領邦データ（CC BY-NC-SA 4.0）は GPL-3.0 派生の
 > `europe_<year>.geojson`
@@ -372,6 +372,11 @@ way）・`unclosedRings`（端点が繋がらず強制的に閉じたリング�
 - **hre-boundaries-1700-extrapolated**（1700〜1700 年）:
   1700年の神聖ローマ帝国内の領邦境界は、採用データセット（ETH Zürich,
   Roller）の最終スナップショットである1650年時点の形状をそのまま外挿した近似です。1650年以降の領土変化（1653年のブランデンブルクによるヒンターポンメルン獲得、1680年のマクデブルク獲得など）は反映されていません（TASK-68）。
+- **rivers-elbe-estuary-missing**（全年代）:
+  エルベ川のラインは北海の河口（クックスハーフェン付近）まで届かず、ハンブルク西のヴェーデル付近（東経約9.78度）で途切れます。採用している河川データ（Natural
+  Earth 50m
+  rivers_lake_centerlines）では、これより下流の幅の広い河口部が河川ではなく海として扱われており、センターラインが元データに存在しないためです。より詳細な10m版（西端は東経約9.82度でさらに手前）およびヨーロッパ詳細版でも同区間は収録されていないため、補完できる代替データは現状ありません（TASK-75
+  調査）。検証手順は §10 を参照。
 
 ## 10. 注記
 
@@ -399,6 +404,22 @@ way）・`unclosedRings`（端点が繋がらず強制的に閉じたリング�
   収録できない諸侯領は §3.4 を参照。
 - 都市の人口は Chandler 系列の推計値であり、年代の対応付けにも
   ±数十年のずれを含む。
+- 河川オーバーレイ（`data/rivers.geojson`）でエルベ川が河口に届かないのは、元
+  データがその区間を持たないため（§9
+  `rivers-elbe-estuary-missing`）。ピン留めコミット
+  `ca96624a56bd078437bca8184e78163e5039ad19` の 3 データセットを実測した結果:
+  | データセット                                       | エルベ川 feature の西端            | 河口部（東経 8.0〜9.95 / 北緯 53.4〜54.3）のライン |
+  | -------------------------------------------------- | ---------------------------------- | -------------------------------------------------- |
+  | `ne_50m_rivers_lake_centerlines.geojson`（採用中） | 東経 9.784034 / 北緯 53.554638     | 無し（西端で終端）                                 |
+  | `ne_10m_rivers_lake_centerlines.geojson`           | 東経 9.819021                      | 無し（50m より手前で終端）                         |
+  | `ne_10m_rivers_europe.geojson`                     | 東経 15.829763（上流の別区間のみ） | 該当 feature 無し                                  |
+
+  同区間は `ne_10m_coastline.geojson`
+  が両岸を東経約9.83度まで遡って囲んでおり、Natural Earth
+  が下流のエルベを海として扱っていることが裏付けられる。再現は各 GeoJSON を
+  `https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/<file>`
+  から取得し、`name == "Elbe"` の feature の全頂点の最小経度と、上記 bbox
+  に入る頂点の有無を数えれば確認できる。
 - 生成スクリプトは `.outputs/claude/data-inventory/_gen/`（`europe-mask.ts` = §2
   の境界定義、`gen-inventory.ts` =
   集計・出力）に置いてある。`deno run -A gen-inventory.ts <出力先>`
