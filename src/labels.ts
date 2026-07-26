@@ -66,7 +66,7 @@ export const BASE_LABEL_COLOR: LabelColor = [40, 40, 40, 255];
  * HRE 域内領邦ラベルの文字色（TASK-30 AC #1）。
  * 臙脂（えんじ）系の深い赤。既存のラベル色 — 国名の濃グレー [40,40,40]・
  * 都市の茶 [121,62,22]・河川の水色 [2,119,189] — のいずれとも色相が離れて
- * おり、白 halo 上で判読しつつ「帝国系」の記号として一目で区別できる。
+ * おり、クリーム halo（TASK-72）上で判読しつつ「帝国系」の記号として一目で区別できる。
  * 帝国範囲の強調レイヤー（main.ts hre-extent）と同系色で揃える。
  */
 export const HRE_LABEL_COLOR: LabelColor = [140, 30, 30, 255];
@@ -75,7 +75,7 @@ export const HRE_LABEL_COLOR: LabelColor = [140, 30, 30, 255];
  * 中世フランス諸侯領ラベルの文字色（TASK-71 AC #1）。青紫（藍紫）系の深い色。
  * 既存のラベル色 — 独立国の濃グレー [40,40,40]・HRE 領邦の臙脂 [140,30,30]・
  * 都市の茶 [121,62,22]・河川の水色 [2,119,189] — のいずれとも色相・明度が
- * 離れており、白 halo + 背景パネル上で判読しつつ「フランス王国内の封建諸侯」の
+ * 離れており、クリーム halo（TASK-72）上で判読しつつ「フランス王国内の封建諸侯」の
  * 記号として一目で区別できる。河川の水色とは同じ寒色域だが、彩度を落として
  * 紫寄りにすることで注記（河川）と領域ラベル（諸侯領）を混同しない。
  */
@@ -94,7 +94,7 @@ export function labelColorFor(d: Pick<LabelDatum, "kind">): LabelColor {
 
 /**
  * 都市名ラベルの文字色（濃茶。TASK-27 から不変）。国名の濃グレー・
- * HRE 領邦の臙脂・河川の水色のいずれとも色相が離れており、白 halo 上で
+ * HRE 領邦の臙脂・河川の水色のいずれとも色相が離れており、クリーム halo 上で
  * 都市だと一見して区別できる。
  */
 export const CITY_LABEL_COLOR: LabelColor = [121, 62, 22, 255];
@@ -118,21 +118,58 @@ export const LABEL_FONT_FAMILY =
   '"Noto Sans JP", "Segoe UI", "Helvetica Neue", Arial, sans-serif';
 
 /**
- * 全 TextLayer 共通の fontSettings（TASK-38 AC #1）。sdf: true は
- * outlineWidth/outlineColor（白 halo）の前提であり、既存の日本語グリフ対応
- * （characterSet をラベル文字列から動的に導出する運用、TASK-23）とも両立する
- * （sdf は生成された characterSet 内のグリフに対して機能するため、
- * characterSet を明示的に絞り込んでいる既存実装への影響はない）。
- * smoothing はやや低め（デフォルト 0.1 よりわずかに強調）にして輪郭を
- * くっきりさせ、白 halo との境界を判別しやすくする。
+ * SDF フォントアトラスの radius（deck.gl fontSettings.radius。既定値と同じ 12 を
+ * 明示する。TASK-72）。outlineWidth はこの値との比で正規化されるため、
+ * 「outlineWidth の意味」を読み解くのに必須の値として定数化しておく。
  */
-export const LABEL_FONT_SETTINGS = { sdf: true, smoothing: 0.15 } as const;
+export const LABEL_SDF_RADIUS = 12;
 
-/** 全 TextLayer 共通のアウトライン（白 halo）色。十分に白く・不透明（TASK-38 AC #1） */
-export const LABEL_OUTLINE_COLOR: LabelColor = [255, 255, 255, 235];
+/**
+ * 全 TextLayer 共通の fontSettings（TASK-38 AC #1、TASK-72 で改訂）。
+ * - sdf: true は outlineWidth/outlineColor（halo）の前提であり、既存の日本語
+ *   グリフ対応（characterSet をラベル文字列から動的に導出する運用、TASK-23）
+ *   とも両立する。
+ * - buffer はフォントアトラス上のグリフ周囲の余白（px）で、halo が描ける幅の
+ *   上限になる。deck.gl 既定の 4 では LABEL_OUTLINE_WIDTH 相当の halo が
+ *   アトラスの外で切れるため 8 に広げる。字送り（グリフの配置間隔）には
+ *   影響しない。
+ * - smoothing は SDF のアンチエイリアス幅（gamma）であり、同時に
+ *   outlineBuffer の下限でもある（max(smoothing, 0.75 * (1 - 正規化
+ *   outlineWidth))）。TASK-38 で 0.15 にしていたが、これは halo を細らせる
+ *   方向にしか効かないため既定の 0.1 に戻す。
+ * - radius は既定値 12 の明示（LABEL_SDF_RADIUS）。
+ */
+export const LABEL_FONT_SETTINGS = {
+  sdf: true,
+  smoothing: 0.1,
+  buffer: 8,
+  radius: LABEL_SDF_RADIUS,
+} as const;
 
-/** 全 TextLayer 共通のアウトライン幅（px）。0 より大きく、視認性補強に十分な太さ（TASK-38 AC #1） */
-export const LABEL_OUTLINE_WIDTH = 2;
+/**
+ * 全 TextLayer 共通のアウトライン（halo）色（TASK-38 AC #1、TASK-72 で改訂）。
+ * 純白ではなく羊皮紙トーンのクリーム（app.css --parchment #f4ecd7 と同値）。
+ * TASK-73 で地図の下地を羊皮紙（earth #f0e6cd）に寄せたため、純白 halo は
+ * 地色から浮いて「白い縁取り」として目立ってしまう。クリームなら下地と
+ * 連続して見えつつ、濃グレー/臙脂/茶/藍紫の文字色に対しては十分な明度差を
+ * 保てる。背景パネル（TASK-54、TASK-72 で撤去）に代わる唯一のコントラスト
+ * 確保手段になったため alpha は完全不透明にする。
+ */
+export const LABEL_OUTLINE_COLOR: LabelColor = [244, 236, 215, 255];
+
+/**
+ * 全 TextLayer 共通のアウトライン幅（TASK-38 AC #1、TASK-72 で改訂）。
+ * **単位は px ではない**: deck.gl は outlineWidth を fontSettings.radius
+ * （= LABEL_SDF_RADIUS）で割って正規化し、SDF の
+ * outlineBuffer = max(smoothing, 0.75 * (1 - outlineWidth / radius)) として
+ * 使う（@deck.gl/layers text-layer.js / multi-icon-layer.js）。
+ * TASK-38 の値 2 は 14px 表示で halo 幅 0.3 CSS px 相当にしかならず、
+ * 事実上描かれていなかった（TASK-72 の調査で判明。旧コメントの「px」は誤り）。
+ * 5 は実測（ヘッドレス CDP スクリーンショット）で HRE 密集地帯でも背景パネル
+ * 無しに判読できた値。9 まで上げると日本語ラベルが文字ごとの白ベタ矩形に
+ * 潰れるため 5〜6 が実用上限（AC #3）。
+ */
+export const LABEL_OUTLINE_WIDTH = 5;
 
 /**
  * 国名・HRE 領邦名ラベルのサイズ（px）。従来 13px から 14px へ（TASK-38 AC #2）。
@@ -153,39 +190,57 @@ export const RIVER_LABEL_SIZE_PX = 12;
  */
 export const CITY_LABEL_SIZE_PX = 12;
 
-/**
- * 全 TextLayer（国名・HRE 領邦名・河川名・都市名）共通のラベル背景パネル色
- * （TASK-54 AC #1/#2。案A: TextLayer の background/getBackgroundColor）。
- * 密集地域（ケルン大司教領周辺・ザクセン選帝侯領/公領周辺）で下の勢力塗りや
- * HRE 外縁の赤境界線（main.ts hre-extent、3px 不透明）と文字が重なっても
- * コントラストを保てるよう、basemap の羊皮紙系の地色と調和する明るい暖色を
- * 半透明で敷く。alpha 200（約 78%）は「白 halo + 背景で文字は確実に読めるが、
- * 下の地物の塗り・境界線の存在も透けて分かる」バランスで、完全不透明にして
- * 領域把握を妨げることを避けた値。
- */
-export const LABEL_BACKGROUND_COLOR: LabelColor = [244, 236, 215, 200];
+/** 全 TextLayer 共通のフォントウェイト（TASK-38 以来の semi-bold） */
+export const LABEL_FONT_WEIGHT = 600;
 
 /**
- * ラベル背景パネルの余白（[padding_x, padding_y] px。TASK-54 AC #1）。
- * 文字の際まで背景だと下地の効果が縁の 1px に届かず可読性向上が薄い一方、
- * 大きすぎるとパネル同士が密集地帯で重なって逆効果になるため、
- * 「縁取り（LABEL_OUTLINE_WIDTH = 2px）の外側にわずかな下地が見える」
- * 最小限の値に留める。
+ * 全 TextLayer（国名・HRE 領邦名・仏諸侯領名・都市名・河川名）で共通の
+ * 描画スタイル props（TASK-72）。deck.gl 非依存な純粋関数で、main.ts の
+ * labelLayerBaseProps がこれを展開して TextLayer に渡す。
+ *
+ * background: false が要点（AC #1）。TASK-54 で導入した半透明の背景パネル
+ * （白枠に見えていたもの）は撤去し、可読性の確保は halo
+ * （LABEL_OUTLINE_WIDTH / LABEL_OUTLINE_COLOR）に一本化する。deck.gl の
+ * background は既定で false だが、「意図して持たない」ことをテストで固定
+ * できるよう明示的に false を返す。
+ *
+ * 配列（outlineColor）は呼び出しごとに複製して返し、deck.gl にモジュール
+ * 定数の参照をそのまま渡さない。
  */
-export const LABEL_BACKGROUND_PADDING: readonly [number, number] = [3, 2];
+export function labelTextStyleProps(): {
+  fontFamily: string;
+  fontWeight: number;
+  fontSettings: typeof LABEL_FONT_SETTINGS;
+  outlineWidth: number;
+  outlineColor: number[];
+  background: false;
+} {
+  return {
+    fontFamily: LABEL_FONT_FAMILY,
+    fontWeight: LABEL_FONT_WEIGHT,
+    fontSettings: LABEL_FONT_SETTINGS,
+    outlineWidth: LABEL_OUTLINE_WIDTH,
+    outlineColor: [...LABEL_OUTLINE_COLOR],
+    background: false,
+  };
+}
 
 /**
- * CollisionFilterExtension の collisionTestProps.sizeScale（TASK-54 案B）。
- * 従来値 2（TASK-20 以来）から 2.6 へ引き上げ、衝突判定領域を実表示より
- * 広く取ることで、ケルン大司教領・ザクセン選帝侯領/公領のような密集地帯で
- * 下位優先のラベルをより積極的に間引く。3 以上にするとズーム 5〜6 の
- * 全体観で中小勢力ラベルが消えすぎるため、密集 3 箇所の判読性とラベル
- * 残存数のバランスを実測（ヘッドレス CDP スクリーンショット）で確認して
- * 決めた値。国名/HRE 領邦・河川・都市の全 3 TextLayer が共有する衝突空間で
+ * CollisionFilterExtension の collisionTestProps.sizeScale（TASK-54 案B、
+ * TASK-72 で再調整）。衝突判定領域を実表示より広く取ることで、ケルン
+ * 大司教領・ザクセン選帝侯領/公領のような密集地帯で下位優先のラベルを
+ * より積極的に間引く。
+ *
+ * TASK-54 では 2（TASK-20 以来）→ 2.6 へ引き上げたうえで、背景パネルの
+ * padding（[3, 2]px、sizeScale で拡大されない実 px）も衝突箱に加算されて
+ * いた。TASK-72 でパネルを撤去した分だけ箱が縮むため 2.8 に引き上げて補う
+ * （14px・6 文字程度のラベルで、旧「2.6 倍 + padding」の箱とほぼ等価）。
+ * 3 以上にするとズーム 5〜6 の全体観で中小勢力ラベルが消えすぎる。
+ * 国名/HRE 領邦・仏諸侯領・河川・都市の全 TextLayer が共有する衝突空間で
  * 共通に使う（priority 設計は不変: 国名の面積 > 都市の人口バンド > 河川の
  * ライン長）。
  */
-export const COLLISION_SIZE_SCALE = 2.6;
+export const COLLISION_SIZE_SCALE = 2.8;
 
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */
 function stringProp(props: GeoJsonProperties, key: string): string | null {

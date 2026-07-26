@@ -36,14 +36,9 @@ import {
   CITY_LABEL_SIZE_PX,
   COLLISION_SIZE_SCALE,
   FIEF_LABEL_COLOR,
-  LABEL_BACKGROUND_COLOR,
-  LABEL_BACKGROUND_PADDING,
-  LABEL_FONT_FAMILY,
-  LABEL_FONT_SETTINGS,
-  LABEL_OUTLINE_COLOR,
-  LABEL_OUTLINE_WIDTH,
   labelColorFor,
   type LabelDatum,
+  labelTextStyleProps,
   POWER_LABEL_SIZE_PX,
   RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
@@ -666,19 +661,18 @@ function buildRiversLineLayer(): GeoJsonLayer {
 }
 
 /**
- * 国名（勢力）・都市名・河川名の 3 つのラベル TextLayer で共通の base props
- * （TASK-65）。フォント・白 halo（SDF アウトライン）・半透明背景パネル・
- * 衝突制御を 1 箇所に集約し、3 builder での値ドリフト（TASK-54 の中間版/
- * 最終版の混在で実際に発生）を防ぐ。
- * - 背景パネル（TASK-54 AC #1/#2）: ケルン大司教領周辺などの密集地帯や
- *   HRE 外縁の赤境界線とラベルが重なっても判読できるよう半透明の下地を敷く。
- *   getBackgroundColor は deck.gl に渡す配列を呼び出しごとに複製する
- *   （モジュール定数 LABEL_BACKGROUND_COLOR を共有参照させない）。
- * - 衝突制御: 3 層とも CollisionFilterExtension の同一衝突空間に参加させ、
+ * 国名（勢力）・都市名・河川名のラベル TextLayer で共通の base props
+ * （TASK-65、TASK-72 で改訂）。フォント・halo（SDF アウトライン）・衝突制御を
+ * 1 箇所に集約し、builder 間での値ドリフト（TASK-54 の中間版/最終版の混在で
+ * 実際に発生）を防ぐ。
+ * - 描画スタイル（labels.ts labelTextStyleProps）: フォント + クリーム halo。
+ *   TASK-54 の半透明背景パネルは TASK-72 で撤去した（背景の白枠が地図の
+ *   情報を隠すため）。可読性は halo（LABEL_OUTLINE_WIDTH / _COLOR）に一本化。
+ * - 衝突制御: 全層とも CollisionFilterExtension の同一衝突空間に参加させ、
  *   判定時はラベルを COLLISION_SIZE_SCALE 倍サイズとして扱う（実表示より
  *   広い余白を確保し、初期ズーム z4 や密集地帯での判読不能な重なりを防ぐ。
- *   TASK-54 で 2 → COLLISION_SIZE_SCALE に引き上げ、下位優先ラベルをより
- *   積極的に間引く）。表示優先は各層のデータが持つ priority に従う。
+ *   TASK-54 で 2 → 2.6、TASK-72 で背景パネル padding の喪失を補って 2.8）。
+ *   表示優先は各層のデータが持つ priority に従う。
  * 層固有の props（id・data・getText/getPosition・サイズ・文字色・
  * characterSet・getPixelOffset・updateTriggers・pickable 等）は各 builder に
  * 残す。
@@ -686,14 +680,7 @@ function buildRiversLineLayer(): GeoJsonLayer {
 function labelLayerBaseProps() {
   return {
     sizeUnits: "pixels" as const,
-    fontFamily: LABEL_FONT_FAMILY,
-    fontWeight: 600,
-    fontSettings: LABEL_FONT_SETTINGS,
-    outlineWidth: LABEL_OUTLINE_WIDTH,
-    outlineColor: LABEL_OUTLINE_COLOR,
-    background: true,
-    getBackgroundColor: [...LABEL_BACKGROUND_COLOR],
-    backgroundPadding: LABEL_BACKGROUND_PADDING,
+    ...labelTextStyleProps(),
     extensions: [new CollisionFilterExtension()],
     collisionTestProps: { sizeScale: COLLISION_SIZE_SCALE },
     getCollisionPriority: (d: LabelDatum) => d.priority,
@@ -744,8 +731,9 @@ function buildRiverLabelLayer(): TextLayer<
     selectedRiverName,
   );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
-    // フォント・背景パネル（TASK-54 AC #1/#2: ライン/ワール/レク川合流部の
-    // 密集や HRE 外縁の赤境界線との重なり対策）・衝突制御は共通 base props
+    // フォント・クリーム halo（TASK-72: ライン/ワール/レク川合流部の密集や
+    // HRE 外縁の赤境界線との重なり対策。背景パネルは撤去済み）・衝突制御は
+    // 共通 base props
     ...labelLayerBaseProps(),
     id: RIVER_LABEL_LAYER_ID,
     data,
@@ -873,7 +861,7 @@ function buildCityLabelLayer(
     nameJa,
   );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
-    // フォント・背景パネル（TASK-54 AC #1: ケルン大司教領周辺など都市名の
+    // フォント・クリーム halo（TASK-72: ケルン大司教領周辺など都市名の
     // 密集箇所対策。国名・河川ラベルと共通）・衝突制御は共通 base props
     ...labelLayerBaseProps(),
     id: CITY_LABEL_LAYER_ID,
@@ -1053,9 +1041,9 @@ function buildLabelLayer(
     nameJa,
   );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
-    // フォント・背景パネル（TASK-54 AC #1/#2: ケルン大司教領・ザクセン選帝侯領/
-    // 公領周辺の密集や HRE 外縁の赤境界線との重なり対策）・衝突制御
-    // （COLLISION_SIZE_SCALE 倍判定）は共通 base props
+    // フォント・クリーム halo（TASK-72: ケルン大司教領・ザクセン選帝侯領/
+    // 公領周辺の密集や HRE 外縁の赤境界線との重なり対策。背景パネルは撤去済み）
+    // ・衝突制御（COLLISION_SIZE_SCALE 倍判定）は共通 base props
     ...labelLayerBaseProps(),
     id: LABEL_LAYER_ID,
     data,

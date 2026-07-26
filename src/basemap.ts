@@ -52,9 +52,9 @@ export const PARCHMENT_LANDCOVER_COLORS = {
  * 各値の根拠:
  * - background #e7d9b2: --parchment-shade と同値。タイル未読込領域と UI の
  *   縁が同色になり、地図の「紙」が画面外まで続いて見える。
- * - earth #f0e6cd: --parchment (#f4ecd7) をわずかに沈めた値。ラベル背景パネル
- *   （labels.ts LABEL_BACKGROUND_COLOR = rgb(244,236,215)）より暗いため、
- *   パネルが下地に完全に溶けず、かつ同系色で浮かない。
+ * - earth #f0e6cd: --parchment (#f4ecd7) をわずかに沈めた値。ラベルの
+ *   クリーム halo（labels.ts LABEL_OUTLINE_COLOR = rgb(244,236,215)、TASK-72）
+ *   より暗いため、halo が下地に完全に溶けず、かつ同系色で浮かない。
  * - water #c7d2d0: くすんだ青灰。陸（暖色）との明度・色相差で海岸線は明確に
  *   読めるが、彩度は勢力ポリゴンの塗り（colors.json 由来）より十分低く、
  *   海が主張して勢力の色分けを邪魔しない。

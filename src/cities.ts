@@ -97,8 +97,8 @@ export function cityEntriesForYear(
  *
  * 設計根拠: 現行データ（scripts/build-cities.ts）は各年
  * CITIES_PER_YEAR=20 + HRE 域内最低 6 件補充で最大 23 件/年（TASK-61）。
- * 初期表示 z4 の密度をこの実績値と同じに保つことで、TASK-54/TASK-60 の
- * ラベル視認性対策（背景パネル・衝突間引き）を破綻させない。
+ * 初期表示 z4 の密度をこの実績値と同じに保つことで、TASK-54/TASK-60/TASK-72 の
+ * ラベル視認性対策（halo・衝突間引き）を破綻させない。
  */
 export const CITY_RANK_LIMIT_BASE = 23;
 
