@@ -94,6 +94,21 @@ export function getDataCopyTargets(
       to: `${distDir}/data/france_fiefs_${year}.geojson`,
     });
   }
+  // TASK-78: 諸侯領との二重輪郭・二重ラベルを解消する派生データ
+  // （deno task build-fief-dedupe で生成）。諸侯領がある年にしか存在しないため
+  // fiefYears が空なら 1 件も含めない（対象外年の描画は従来のまま）。
+  if (fiefYears.length > 0) {
+    targets.push({
+      from: "data/fief-dedupe.json",
+      to: `${distDir}/data/fief-dedupe.json`,
+    });
+    for (const year of fiefYears) {
+      targets.push({
+        from: `data/base_outline_${year}.geojson`,
+        to: `${distDir}/data/base_outline_${year}.geojson`,
+      });
+    }
+  }
   return targets;
 }
 

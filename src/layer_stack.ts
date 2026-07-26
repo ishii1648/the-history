@@ -41,9 +41,23 @@ import {
 export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
 
 /**
- * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 3 枚）。
- * 3 枚の相対順（powers → france-fiefs → hre-powers）は同一 beforeId の
- * グループ内で deck レイヤー配列順が保たれるため従来と変わらない。
+ * base 勢力の境界線オーバーレイ（GeoJsonLayer / LineString）のレイヤー ID
+ * （TASK-78）。諸侯領オーバーレイ対象年（1000〜1300）では powers の stroke を
+ * 止め、代わりに「諸侯領 union の外側だけに切り出した base 輪郭」
+ * （data/base_outline_<year>.geojson）をこの層で描く。これにより諸侯領の内側を
+ * 走る base 境界線（二重輪郭）が消え、外側の境界線は従来と同一に見える。
+ *
+ * pickable: false のため PICKING_PRIORITY には含めない（picking 非関与。
+ * base ポリゴンの塗り・ホバー/クリックは powers 側にそのまま残る）。
+ */
+export const BASE_OUTLINE_LAYER_ID = "base-outlines";
+
+/**
+ * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 3 枚 + base 輪郭）。
+ * 相対順（powers → base-outlines → france-fiefs → hre-powers）は同一 beforeId の
+ * グループ内で deck レイヤー配列順が保たれるため従来と変わらない。base-outlines も
+ * ここに含めるのが必須で、powers と別グループになると諸侯領より上／水面より上に
+ * 描かれて海上へのはみ出しが露出する（TASK-78）。
  *
  * hre-extent（帝国範囲の強調輪郭）は含めない: 常時表示ではなくトグルで出す
  * 強調記号であり、水面より下だと海側の輪郭が切れて「どこからどこまでが帝国か」の
@@ -51,6 +65,7 @@ export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
  */
 export const UNDER_WATER_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
+  BASE_OUTLINE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
 ];

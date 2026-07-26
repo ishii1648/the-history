@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import {
+  BASE_OUTLINE_LAYER_ID,
   CITY_LABEL_LAYER_ID,
   LABEL_LAYER_ID,
   OVERLAID_LAYER_IDS,
@@ -15,6 +16,7 @@ import {
   CITY_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
   POWER_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
@@ -42,14 +44,50 @@ Deno.test("WATER_STYLE_LAYER_ID はベースマップスタイルに実在する
   );
 });
 
-Deno.test("水面より下へ回すのは powers / france-fiefs / hre-powers の 3 ポリゴンレイヤーのみ", () => {
+Deno.test("水面より下へ回すのは政治ポリゴン 3 枚と base 境界線オーバーレイのみ", () => {
   assertEquals(
     [...UNDER_WATER_LAYER_IDS].sort(),
     [
+      BASE_OUTLINE_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       POWER_LAYER_ID,
     ].sort(),
+  );
+});
+
+Deno.test("base 境界線オーバーレイは powers と同じ水面下グループに入る（TASK-78）", () => {
+  // powers の stroke を置き換える層なので、beforeId が powers と一致しなければ
+  // 別グループに分かれて描画順（諸侯領より下）が壊れる
+  assertEquals(
+    underWaterBeforeId(BASE_OUTLINE_LAYER_ID, realStyleLayerIds),
+    underWaterBeforeId(POWER_LAYER_ID, realStyleLayerIds),
+  );
+});
+
+Deno.test("base 境界線オーバーレイは pickable 層ではない（picking 挙動は不変。TASK-78）", () => {
+  assert(!PICKING_PRIORITY.includes(BASE_OUTLINE_LAYER_ID));
+  // 追加しても既存の picking 順の検証は通る（優先リスト外は無視される）
+  assert(
+    layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      BASE_OUTLINE_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
+      HRE_LAYER_ID,
+      RIVERS_HIT_LAYER_ID,
+      CITY_LAYER_ID,
+      RIVERS_LAYER_ID,
+    ]),
+  );
+});
+
+Deno.test("base 境界線オーバーレイは overlaid 側に混ぜない（衝突フィルタの分配を壊さない。TASK-78）", () => {
+  assert(!OVERLAID_LAYER_IDS.includes(BASE_OUTLINE_LAYER_ID));
+  assert(
+    overlaySplitIsValid(
+      [POWER_LAYER_ID, BASE_OUTLINE_LAYER_ID, FRANCE_FIEF_LAYER_ID],
+      [LABEL_LAYER_ID, RIVER_LABEL_LAYER_ID, CITY_LABEL_LAYER_ID],
+    ),
   );
 });
 

@@ -1,7 +1,9 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import type { FeatureCollection } from "geojson";
 import {
+  baseOutlineDataUrlFor,
   colorKeyFor,
+  createBaseOutlineLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
   createHreOverlayLoader,
@@ -13,6 +15,7 @@ import {
   FILL_ALPHA,
   fillColorFor,
   franceFiefDataUrlFor,
+  hasBaseOutline,
   hasFranceFiefOverlay,
   hasHreOverlay,
   hexToRgb,
@@ -577,11 +580,13 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     base: fakeCollection("F"),
     hre: fakeCollection("A"),
     fiefs: EMPTY_FEATURE_COLLECTION,
+    outlines: EMPTY_FEATURE_COLLECTION,
   });
   d1400.resolve({
     base: fakeCollection("F"),
     hre: EMPTY_FEATURE_COLLECTION,
     fiefs: EMPTY_FEATURE_COLLECTION,
+    outlines: EMPTY_FEATURE_COLLECTION,
   });
   await Promise.all([p1, p2]);
   assertEquals(applied, [{ year: 1500, hreCount: 1 }]);
@@ -747,4 +752,124 @@ Deno.test("createCombinedYearLoader の has は fiefs も含めて判定する�
   assert(!loader.has(1200));
   await loader.load(1200);
   assert(loader.has(1200));
+});
+
+// --- TASK-78: base 境界線オーバーレイ（諸侯領の内側を除いた base 輪郭） ---
+
+Deno.test("baseOutlineDataUrlFor は data/base_outline_<year>.geojson を指す（TASK-78）", () => {
+  assertEquals(baseOutlineDataUrlFor(1200), "/data/base_outline_1200.geojson");
+});
+
+Deno.test("hasBaseOutline は諸侯領オーバーレイ対象年のみ true（TASK-78 AC #3）", () => {
+  for (const year of FRANCE_FIEF_OVERLAY_YEARS) {
+    assert(hasBaseOutline(year, FRANCE_FIEF_OVERLAY_YEARS));
+  }
+  for (const year of [900, 1400, 1492, 1500, 1914]) {
+    assert(!hasBaseOutline(year, FRANCE_FIEF_OVERLAY_YEARS));
+  }
+});
+
+Deno.test("createBaseOutlineLoader は非対象年で fetch せず空 FC を返す（TASK-78 AC #3）", async () => {
+  const calls: string[] = [];
+  const loader = createBaseOutlineLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(EMPTY_FEATURE_COLLECTION),
+    });
+  }, FRANCE_FIEF_OVERLAY_YEARS);
+  assertEquals(await loader.load(1400), EMPTY_FEATURE_COLLECTION);
+  assertEquals(calls, []);
+  assert(loader.has(1400));
+});
+
+Deno.test("createBaseOutlineLoader は対象年で base_outline URL を fetch する（TASK-78）", async () => {
+  const calls: string[] = [];
+  const loader = createBaseOutlineLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            properties: { NAME: "France" },
+            geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] },
+          }],
+        } as FeatureCollection),
+    });
+  }, FRANCE_FIEF_OVERLAY_YEARS);
+  const data = await loader.load(1200);
+  assertEquals(data.features.length, 1);
+  assertEquals(calls, ["/data/base_outline_1200.geojson"]);
+  // 2 回目はキャッシュから返す
+  await loader.load(1200);
+  assertEquals(calls.length, 1);
+});
+
+Deno.test("createBaseOutlineLoader は取得失敗時に warn して空 FC を返す（base 輪郭は powers 側の stroke で継続。TASK-78）", async () => {
+  const warnings: string[] = [];
+  const loader = createBaseOutlineLoader(
+    () =>
+      Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      }),
+    FRANCE_FIEF_OVERLAY_YEARS,
+    (message) => warnings.push(message),
+  );
+  assertEquals(await loader.load(1200), EMPTY_FEATURE_COLLECTION);
+  assertEquals(warnings.length, 1);
+  assert(warnings[0].includes("base 境界線"));
+});
+
+Deno.test("createCombinedYearLoader は outlines ローダを渡すと 4 系統を並行ロードする（TASK-78）", async () => {
+  const calls: string[] = [];
+  const fetchFn = (url: string) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            properties: { NAME: url },
+            geometry: { type: "Point", coordinates: [0, 0] },
+          }],
+        } as FeatureCollection),
+    });
+  };
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+    createBaseOutlineLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(
+    data.outlines.features[0].properties?.NAME,
+    "/data/base_outline_1200.geojson",
+  );
+  assert(calls.includes("/data/base_outline_1200.geojson"));
+});
+
+Deno.test("createCombinedYearLoader は outlines ローダ省略時に空 FC を返す（後方互換。TASK-78）", async () => {
+  const fetchFn = () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(EMPTY_FEATURE_COLLECTION),
+    });
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.outlines, EMPTY_FEATURE_COLLECTION);
 });
