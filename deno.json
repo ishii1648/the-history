@@ -43,6 +43,7 @@
     "@turf/difference": "npm:@turf/difference@^7",
     "@turf/helpers": "npm:@turf/helpers@^7",
     "@turf/intersect": "npm:@turf/intersect@^7",
+    "@turf/kinks": "npm:@turf/kinks@^7",
     "@turf/line-split": "npm:@turf/line-split@^7",
     "@turf/simplify": "npm:@turf/simplify@^7",
     "@turf/truncate": "npm:@turf/truncate@^7",

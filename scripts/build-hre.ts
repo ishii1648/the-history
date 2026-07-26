@@ -5,7 +5,8 @@
  * - dbf の start / end 属性で「year 時点で有効」な領邦に絞る（欠損は無期限扱い）
  * - 宗派期間ごとの同一領邦の重複行を dedup する
  * - 主要領邦のみ選定し、properties を NAME / SUBJECTO / PARTOF に間引く
- * - simplify + 座標丸めで 1 ファイル HRE_SIZE_LIMIT_BYTES 以下に収める
+ * - simplify + 座標丸め + ポリゴンのクリーンアップ（自己交差の解消・微小破片の除去、
+ *   scripts/clean-polygons.ts）で 1 ファイル HRE_SIZE_LIMIT_BYTES 以下に収める
  * - data/hre_<year>.geojson（year ∈ HRE_OVERLAY_YEARS）を生成する
  *
  * 出典: Roller, Ramona. "Spatio-temporal data on territories of the
@@ -22,6 +23,7 @@
 
 import type { Feature, FeatureCollection } from "geojson";
 import { shrinkToLimit } from "./build-data.ts";
+import { formatCleanStats } from "./clean-polygons.ts";
 
 /** 出典データセットの DOI */
 export const HRE_SOURCE_DOI = "10.3929/ethz-b-000472583";
@@ -299,7 +301,7 @@ async function main(): Promise<void> {
   const raw = await fetchTerritories();
   for (const year of HRE_OVERLAY_YEARS) {
     const selected = buildYearCollection(raw, year);
-    const { fc, tolerance, size } = shrinkToLimit(
+    const { fc, tolerance, size, cleanStats } = shrinkToLimit(
       selected,
       HRE_SIZE_LIMIT_BYTES,
     );
@@ -308,6 +310,8 @@ async function main(): Promise<void> {
     console.log(
       `${outPath}: ${size} bytes, tolerance=${tolerance}, features=${fc.features.length}`,
     );
+    const cleanLog = formatCleanStats(cleanStats);
+    if (cleanLog !== null) console.log(cleanLog);
   }
 }
 

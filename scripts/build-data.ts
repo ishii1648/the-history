@@ -3,7 +3,8 @@
  * - historical-basemaps の world_<year>.geojson × 20 年代を取得（コミット固定）
  * - ヨーロッパ bbox でクリップし、空ジオメトリになった feature を除去
  * - NAME の表記ゆれ・null を name-overrides.json で補正
- * - simplify + 座標丸めで 1 ファイル SIZE_LIMIT_BYTES 以下に収める
+ * - simplify + 座標丸め + ポリゴンのクリーンアップ（自己交差の解消・微小破片の除去、
+ *   scripts/clean-polygons.ts）で 1 ファイル SIZE_LIMIT_BYTES 以下に収める
  * - data/europe_<year>.geojson × 20 と data/index.json を生成する
  *
  * ロジックは純粋関数として export しテスト対象にする（scripts/build-data_test.ts）。
@@ -20,6 +21,11 @@ import type {
 import bboxClip from "@turf/bbox-clip";
 import simplify from "@turf/simplify";
 import truncate from "@turf/truncate";
+import {
+  cleanFeatureCollection,
+  type CleanStats,
+  formatCleanStats,
+} from "./clean-polygons.ts";
 import { SNAPSHOT_YEARS } from "../src/config.ts";
 
 /** 取得元リポジトリ（出典・ライセンス表記の根拠） */
@@ -186,16 +192,28 @@ function byteLength(text: string): number {
 }
 
 /**
- * simplify と座標丸めで FeatureCollection を limitBytes 以下に収める（純粋関数）。
+ * simplify・座標丸め・ポリゴンのクリーンアップで FeatureCollection を
+ * limitBytes 以下に収める（純粋関数）。
  * tolerances を昇順に試し、シリアライズ後サイズが limit 以下になる最小トレランスの
  * 結果を返す。どのトレランスでも超える場合はエラーを投げる。
+ *
+ * クリーンアップ（自己交差の解消と微小破片・微小な穴の除去、TASK-81）は
+ * simplify の後段に置く。simplify 自体が自己交差を生む（凹んだ海岸線を粗くすると
+ * 辺が交差する）ため、前段に置いても意味が無い。サイズ判定はクリーンアップ後の
+ * 出力に対して行うので、生成物は必ず limit 以下になる。
+ * 詳細は scripts/clean-polygons.ts を参照。
  */
 export function shrinkToLimit(
   fc: FeatureCollection,
   limitBytes: number,
   tolerances: number[] = SIMPLIFY_TOLERANCES,
   precision: number = COORD_PRECISION,
-): { fc: FeatureCollection; tolerance: number; size: number } {
+): {
+  fc: FeatureCollection;
+  tolerance: number;
+  size: number;
+  cleanStats: CleanStats;
+} {
   for (const tolerance of tolerances) {
     const simplified = simplify(fc, {
       tolerance,
@@ -207,8 +225,14 @@ export function shrinkToLimit(
       coordinates: 2,
       mutate: true,
     });
-    const size = byteLength(JSON.stringify(truncated));
-    if (size <= limitBytes) return { fc: truncated, tolerance, size };
+    const { fc: cleaned, stats: cleanStats } = cleanFeatureCollection(
+      truncated,
+      precision,
+    );
+    const size = byteLength(JSON.stringify(cleaned));
+    if (size <= limitBytes) {
+      return { fc: cleaned, tolerance, size, cleanStats };
+    }
   }
   throw new Error(
     `どのトレランス (${
@@ -251,12 +275,17 @@ async function main(): Promise<void> {
     const raw = await fetchFeatureCollection(year);
     const clipped = clipToBbox(raw, EUROPE_BBOX);
     const named = applyNameOverrides(clipped, overrides);
-    const { fc, tolerance, size } = shrinkToLimit(named, SIZE_LIMIT_BYTES);
+    const { fc, tolerance, size, cleanStats } = shrinkToLimit(
+      named,
+      SIZE_LIMIT_BYTES,
+    );
     const outPath = `${DATA_DIR}/europe_${year}.geojson`;
     await Deno.writeTextFile(outPath, JSON.stringify(fc));
     console.log(
       `${outPath}: ${size} bytes, tolerance=${tolerance}, features=${fc.features.length}`,
     );
+    const cleanLog = formatCleanStats(cleanStats);
+    if (cleanLog !== null) console.log(cleanLog);
   }
 
   const index = buildIndex(YEARS, {
