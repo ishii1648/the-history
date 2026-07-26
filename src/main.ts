@@ -1739,3 +1739,25 @@ map.on("load", () => {
     visibleCities: filterCitiesByZoom(entries, cityZoomStep).length,
   };
 };
+
+// TASK-69: ヘッドレス CDP 検証用に河川ラベルの表示状態を公開する
+// （__getCityDebug と同じ「目視/無人確認のための読み取り専用フック」。deck.gl の
+// canvas からは表示中の河川ラベルを数えられないため、フィルタ結果を直接返す）。
+(globalThis as unknown as {
+  __getRiverLabelDebug?: () => {
+    hovered: string | null;
+    selected: string | null;
+    visibleLabels: string[];
+  };
+}).__getRiverLabelDebug = () => {
+  const { data } = memoizedRiverLabelData(riversData, nameJa);
+  return {
+    hovered: hoveredRiverName,
+    selected: selectedRiverName,
+    visibleLabels: filterVisibleRiverLabels(
+      data,
+      hoveredRiverName,
+      selectedRiverName,
+    ).map((d) => d.name),
+  };
+};
