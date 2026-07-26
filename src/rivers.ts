@@ -215,17 +215,34 @@ function riverLabelPriority(totalLength: number): number {
 }
 
 /**
+ * 河川ラベル 1 件分のアンカーデータ（TASK-69）。
+ * 表示テキスト（text）は日本語化され得るため、ホバー/選択状態
+ * （selectedRiverName / hoveredRiverName、いずれも properties.name の英語名）
+ * との突合には使えない。突合キーとして元の英語名を name に保持する。
+ */
+export interface RiverLabelDatum extends LabelDatum {
+  /** 河川の元名（properties.name、英語）。hover/selected 状態との突合キー */
+  name: string;
+}
+
+/**
  * FeatureCollection から河川ラベルのアンカーデータを組み立てる（純粋関数）。
  * - name を持つ feature ごとに 1 件（name 欠落・折れ線を持たないものは除外）
  * - position は最長 LineString（MultiLineString は最長パート）の中点
  * - priority は全パート合計長由来（長い川を優先表示）
  * - ja（name-ja.json、英語名 → 日本語名）を渡すと text を日本語化。未登録は英語のまま
+ *
+ * TASK-50: 年代・hover/selection に依存しない計算なので、呼び出し側
+ * （main.ts memoizedRiverLabelData）は起動時ロード済みの riversData/nameJa に
+ * 対して 1 度だけ実行し、以降はメモ化された結果を使い回す。TASK-69 の
+ * 表示対象の絞り込みは filterVisibleRiverLabels（この結果に対する純粋な
+ * フィルタ）で行い、アンカー再計算は発生させない。
  */
 export function riverLabelAnchors(
   fc: FeatureCollection,
   ja: Record<string, string> = {},
-): LabelDatum[] {
-  const data: LabelDatum[] = [];
+): RiverLabelDatum[] {
+  const data: RiverLabelDatum[] = [];
   for (const feature of fc.features) {
     const name = riverNameFor(feature.properties);
     if (name === null) continue;
@@ -243,10 +260,44 @@ export function riverLabelAnchors(
       }
     }
     data.push({
+      name,
       text: ja[name] ?? name,
       position: midpointAlong(longest),
       priority: riverLabelPriority(totalLength),
     });
   }
   return data;
+}
+
+/**
+ * 地図上に表示する河川ラベルを、ホバー/選択状態から選び出す（純粋関数、TASK-69）。
+ *
+ * 通常状態（hovered・selected とも null）では 1 件も返さず、河川名ラベルは
+ * ホバー中・クリック選択中の河川に限って表示される。ライン強調
+ * （riverLineColor/riverLineWidth）と同じ「英語名での突合」を使うため、
+ * 強調されているラインとラベルが必ず一致する。
+ *
+ * 同名の feature が複数ある場合（Natural Earth の rivers は Rhine が 4 分割
+ * されている等、パート分割が普通にある）は最も priority が高い（= 合計長が
+ * 最長の）アンカー 1 件だけを残す。全件残すと 1 本の川に同じ名前のラベルが
+ * 何枚も出てしまい、ホバー中の川を 1 つの注記で示すという目的に反するため。
+ *
+ * アンカー自体は再計算せず、渡された datum の参照をそのまま返す
+ * （TASK-50 のメモ化を無効化しないための契約）。入力配列は破壊しない。
+ */
+export function filterVisibleRiverLabels(
+  anchors: readonly RiverLabelDatum[],
+  hovered: string | null,
+  selected: string | null,
+): RiverLabelDatum[] {
+  if (hovered === null && selected === null) return [];
+  const best = new Map<string, RiverLabelDatum>();
+  for (const a of anchors) {
+    if (a.name !== hovered && a.name !== selected) continue;
+    const current = best.get(a.name);
+    if (current === undefined || a.priority > current.priority) {
+      best.set(a.name, a);
+    }
+  }
+  return [...best.values()];
 }

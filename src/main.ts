@@ -47,6 +47,7 @@ import {
 import { extractHreExtent, shouldHighlightHre } from "./hre_extent.ts";
 import { memoizeLatest } from "./memo.ts";
 import {
+  filterVisibleRiverLabels,
   RIVER_HIT_LINE_COLOR,
   RIVER_HIT_LINE_WIDTH_PX,
   riverLabelAnchors,
@@ -439,6 +440,14 @@ function pickedLabel(info: PickingInfo): string | null {
  * Deck レベルのホバー処理（TASK-24 AC #3）。最前面の picking 結果 1 件だけを
  * 受け取るため、河川ライン上では河川名、勢力ポリゴン上では勢力ラベル、
  * どちらも無ければ非表示、が一意に決まる（rivers が powers のホバーを阻害しない）。
+ *
+ * TASK-69: 河川ホバー時はカーソル追従ツールチップ（ここ）と地図上の河川名
+ * ラベル（buildRiverLabelLayer）が同時に出る。ツールチップは残す方針とした:
+ * 地図上ラベルのアンカーは川の中点（rivers.ts riverLabelAnchors）で、ホバー
+ * 位置から遠い・ビューポート外のこともあり、それ単独ではホバーの即時
+ * フィードバックにならないため。ツールチップ = カーソル直下の即応表示、
+ * 地図ラベル = 川そのものへの注記（選択時は解除まで残る）と役割が異なり、
+ * 勢力・都市のホバー挙動（ツールチップ）とも一貫する。
  */
 function handlePickHover(info: PickingInfo): void {
   const label = pickedLabel(info);
@@ -662,18 +671,34 @@ const memoizedRiverLabelData = memoizeLatest(
 );
 
 /**
- * 河川名ラベルの TextLayer を生成する（TASK-24 AC #1）。
+ * 河川名ラベルの TextLayer を生成する（TASK-24 AC #1、TASK-69）。
  * アンカーは最長 LineString の中点（rivers.ts riverLabelAnchors）。勢力ラベル
  * より小さめの水色系文字 + 白 halo で「水系の注記」に見えるようにし、
  * CollisionFilterExtension（勢力ラベルと同一衝突空間）でライン長由来の
  * priority により長い川を優先表示する。pickable: false でライン・ポリゴンの
  * picking を妨げない。
+ *
+ * TASK-69: 常時表示をやめ、ホバー中・クリック選択中の河川だけを表示する。
+ * 表示対象の決定は純粋関数 filterVisibleRiverLabels に委ね、ここでは
+ * hovered/selected を渡すだけにする。アンカー生成（memoizedRiverLabelData）は
+ * 年代・hover/selection 非依存のまま全河川分を 1 度だけ行い、hover 連続移動で
+ * 再計算が走らないようにする（TASK-50 非退行）。characterSet も全河川分の
+ * メモ化結果（同一参照）を渡し続け、表示対象が変わってもフォントアトラスの
+ * 再生成が起きないようにする。
  */
 function buildRiverLabelLayer(): TextLayer<
   LabelDatum,
   CollisionFilterExtensionProps<LabelDatum>
 > {
-  const { data, characterSet } = memoizedRiverLabelData(riversData, nameJa);
+  const { data: anchors, characterSet } = memoizedRiverLabelData(
+    riversData,
+    nameJa,
+  );
+  const data = filterVisibleRiverLabels(
+    anchors,
+    hoveredRiverName,
+    selectedRiverName,
+  );
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
     // フォント・背景パネル（TASK-54 AC #1/#2: ライン/ワール/レク川合流部の
     // 密集や HRE 外縁の赤境界線との重なり対策）・衝突制御は共通 base props
