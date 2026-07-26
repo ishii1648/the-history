@@ -1,11 +1,11 @@
 ---
 id: TASK-72
 title: 地図ラベルの背景パネル（白枠）を撤去し白 halo を実効化する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-26 07:15'
-updated_date: '2026-07-26 08:16'
+updated_date: '2026-07-26 08:27'
 labels:
   - 'area:src-labels'
   - 'area:src-main'
@@ -31,12 +31,12 @@ ordinal: 68000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 ラベルの背景パネルが全 TextLayer（国名・HRE 領邦名・都市名・河川名）で描画されず、地図上の文字の周囲にベタ矩形が見えない
-- [ ] #2 1650 年・HRE 領邦の密集地帯（ズーム 6 付近）で、勢力名・都市名・河川名ラベルが下の塗りや HRE 外縁の赤境界線と重なっても判読できることを目視確認済み
-- [ ] #3 halo が文字ごとの白いベタ矩形に見えるほど太くなっていないことを目視確認済み（枠を消した目的を損なわない）
-- [ ] #4 ズーム 4 の欧州全体表示でラベル同士の重なりが背景パネル撤去前より悪化していないことを目視確認済み
-- [ ] #5 ラベルの配色・サイズ・アウトラインに関する定数とコメントが実際の deck.gl の挙動（outlineWidth は radius 比、px ではない）と整合している
-- [ ] #6 deno test が green
+- [x] #1 ラベルの背景パネルが全 TextLayer（国名・HRE 領邦名・都市名・河川名）で描画されず、地図上の文字の周囲にベタ矩形が見えない
+- [x] #2 1650 年・HRE 領邦の密集地帯（ズーム 6 付近）で、勢力名・都市名・河川名ラベルが下の塗りや HRE 外縁の赤境界線と重なっても判読できることを目視確認済み
+- [x] #3 halo が文字ごとの白いベタ矩形に見えるほど太くなっていないことを目視確認済み（枠を消した目的を損なわない）
+- [x] #4 ズーム 4 の欧州全体表示でラベル同士の重なりが背景パネル撤去前より悪化していないことを目視確認済み
+- [x] #5 ラベルの配色・サイズ・アウトラインに関する定数とコメントが実際の deck.gl の挙動（outlineWidth は radius 比、px ではない）と整合している
+- [x] #6 deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -50,3 +50,15 @@ ordinal: 68000
 6. fmt/lint/test/build green → mainagent がヘッドレス CDP で 1650 年 z6 密集地帯・z4 全体表示を目視確認（AC2〜4、マージ前）
 並列化判定: 見送り（理由: labels.ts と main.ts の共通 base props を軸にした単一の視覚チューニング作業で、halo 幅・衝突スケール・パネル撤去が相互依存するため独立サブ作業に分割できない）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+検証エビデンス: (AC1) labelTextStyleProps() が background: false を返し、LABEL_BACKGROUND_* の export 削除をテストで固定。スクリーンショットでベタ矩形なし。(AC2,3,4) ヘッドレス CDP（褪せ顔料パレット反映後の main 取り込み済みブランチ）で 1650 年 z6 ケルン周辺・ザクセン周辺・z4 欧州全体・1200 年 z5 を撮影し mainagent が目視確認: 密集地帯でも判読可、halo は細いクリーム縁（ベタ矩形化なし）、z4 の重なりは撤去前と同等で悪化なし（COLLISION_SIZE_SCALE 2.6→2.8 で補償）。(AC5) outlineWidth の radius 比正規化・outlineBuffer 式を deck.gl 9.3.7 ソースで確認し、labels.ts / main.ts / cities.ts / basemap.ts の誤りコメントを訂正。(AC6) deno test 684 passed, 0 failed。halo 色はクリーム（--parchment #f4ecd7）を採用（TASK-73 申し送りどおり。純白は羊皮紙下地で浮くため）。
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+全 TextLayer の背景パネルを撤去し、outlineWidth 5（radius 比）+ fontSettings {buffer:8, smoothing:0.1} でクリーム halo を実効化。COLLISION_SIZE_SCALE を 2.8 に補正し、共通スタイルを純粋関数化してテスト担保。1650 年密集地帯・z4 全体・1200 年でパネル無し判読性を目視確認（PASS）。deno test 684 passed。PR #84。
+<!-- SECTION:FINAL_SUMMARY:END -->
