@@ -16,6 +16,7 @@ import type {
   Position,
 } from "geojson";
 import polylabelModule from "@mapbox/polylabel";
+import { colorKeyFor } from "./powers.ts";
 
 /** polylabel の最小契約（パッケージに型定義が無いため自前で与える） */
 type PolylabelFn = (
@@ -54,6 +55,13 @@ export interface LabelDatum {
   priority: number;
   /** 由来種別（TASK-30 の文字色分け用。省略時は base 扱い） */
   kind?: LabelKind;
+  /**
+   * 強調キー（TASK-93）。powers.ts colorKeyFor と同一のキーで、塗りの色分け・
+   * power_highlight.ts の強調適用単位と一致する。これにより「アクティブ色に
+   * 塗られている面のラベル」だけを構造的に選び出せる（飛び地も同時に切り替わる）。
+   * 勢力ポリゴン由来のラベルにのみ付く（河川名・都市名は持たない）。
+   */
+  key?: string;
 }
 
 /** ラベル文字色の RGBA */
@@ -82,14 +90,82 @@ export const HRE_LABEL_COLOR: LabelColor = [140, 30, 30, 255];
 export const FIEF_LABEL_COLOR: LabelColor = [74, 42, 130, 255];
 
 /**
+ * 強調（ホバー/クリック）中の国名・諸侯領名ラベルに求めるコントラスト比
+ * （TASK-93 AC #2）。アクティブ塗り + 羊皮紙下地の合成色に対する比で測る。
+ *
+ * 基準値 4.5:1 の根拠: WCAG 2.1 の「通常サイズのテキスト」AA 基準。ラベルは
+ * 14px（POWER_LABEL_SIZE_PX）・weight 600 で、WCAG の「大きめテキスト」
+ * （18pt = 24px、または bold 14pt = 18.66px）には届かないため、緩い 3:1 では
+ * なく 4.5:1 を採る。強調は一時的な状態だが、その最中こそ「それが何か」を
+ * 読ませたい場面なので通常表示より基準を緩めない（AC #1 の「同等以上」）。
+ */
+export const MIN_ACTIVE_LABEL_CONTRAST = 4.5;
+
+/**
+ * 強調塗りの上に載る副次ラベル（都市名）の下限（TASK-93）。
+ * 都市名は強調キーを持たず色を切り替えないため、塗り側の明度調整だけで
+ * 満たせる水準として WCAG の大きめテキスト相当 3:1 を下限に置く。
+ */
+export const MIN_SECONDARY_LABEL_CONTRAST = 3;
+
+/**
+ * 文字色とクリーム halo（LABEL_OUTLINE_COLOR）の間に保つコントラスト比
+ * （TASK-93）。TASK-72 以降、判読性の主要な担保は halo による輪郭なので、
+ * 強調時に文字を明色へ振って halo と同化させてはいけない。7:1（WCAG AAA
+ * 相当）を下限にして「濃インク + クリーム halo」の関係を固定する。
+ */
+export const MIN_HALO_LABEL_CONTRAST = 7;
+
+/**
+ * アクティブ塗り（合成後）と羊皮紙下地の間に保つコントラスト比（TASK-93）。
+ * ラベル判読のために塗りを明るくしていくと、いずれ強調そのものが下地に
+ * 埋もれて TASK-90 の目的（国土の広がりが一目で分かる）を失う。塗りの
+ * 明度調整に上限を与えるための下限値で、1.8:1 は「弱い階調差」とされる
+ * 1.5:1 を明確に超える水準として採る。
+ */
+export const MIN_HIGHLIGHT_VISIBILITY_CONTRAST = 1.8;
+
+/**
+ * 強調中の独立国ラベルの文字色（TASK-93）。通常の濃グレー [40,40,40] より
+ * さらに深いインク。アクティブ塗り（緑青）の上でも 4.5:1 を確保する。
+ */
+export const ACTIVE_BASE_LABEL_COLOR: LabelColor = [26, 26, 26, 255];
+
+/**
+ * 強調中の HRE 領邦ラベルの文字色（TASK-93）。臙脂の色相を保ったまま暗く
+ * 沈めた深臙脂。TASK-30 の「帝国系は赤系」という記号性を強調中も維持する。
+ */
+export const ACTIVE_HRE_LABEL_COLOR: LabelColor = [95, 16, 16, 255];
+
+/**
+ * 強調中の仏諸侯領ラベルの文字色（TASK-93）。藍紫の色相を保ったまま暗く
+ * 沈めた深藍紫。TASK-71 の「諸侯領は青紫」という記号性を強調中も維持する。
+ * 通常色 [74,42,130] はアクティブ塗り上で最も沈むため、切替の効果が最大。
+ */
+export const ACTIVE_FIEF_LABEL_COLOR: LabelColor = [40, 20, 80, 255];
+
+/**
  * ラベルの文字色を由来種別から決める（純粋関数、TASK-30 AC #1・TASK-71 AC #1）。
  * kind=hre は帝国色、kind=fief は仏諸侯領色、それ以外（base・省略）は
  * 従来の濃グレー。
+ *
+ * TASK-93: active（そのラベルの勢力がホバー/クリックで強調中）のときは、
+ * 同じ色相のまま暗く沈めた強調用の色を返す。アクティブ塗りは通常塗りより
+ * 濃く、通常のラベル色では合成後の背景に埋もれて読めなくなるため。
+ * 色相を変えないので「濃グレー = 独立国 / 臙脂 = 帝国 / 藍紫 = 諸侯領」の
+ * 読み分けは強調中も保たれる。
  */
-export function labelColorFor(d: Pick<LabelDatum, "kind">): LabelColor {
-  if (d.kind === "hre") return HRE_LABEL_COLOR;
-  if (d.kind === "fief") return FIEF_LABEL_COLOR;
-  return BASE_LABEL_COLOR;
+export function labelColorFor(
+  d: Pick<LabelDatum, "kind">,
+  active: boolean = false,
+): LabelColor {
+  if (d.kind === "hre") {
+    return active ? ACTIVE_HRE_LABEL_COLOR : HRE_LABEL_COLOR;
+  }
+  if (d.kind === "fief") {
+    return active ? ACTIVE_FIEF_LABEL_COLOR : FIEF_LABEL_COLOR;
+  }
+  return active ? ACTIVE_BASE_LABEL_COLOR : BASE_LABEL_COLOR;
 }
 
 /**
@@ -342,6 +418,8 @@ export function labelPriorityFor(feature: Feature): number {
  * TASK-23: ja を渡すと text を日本語表記にする（未登録 NAME は英語のまま）。
  * TASK-30: kind を渡すと全 datum に由来種別を付与する（文字色分け用）。
  * 省略時は kind キー自体を持たない（従来の呼び出しと完全互換）。
+ * TASK-93: 強調キー（colorKeyFor と同一）を key に付与する。強調状態には
+ * 依存しないためホバーで再計算は起きない（polylabel のメモ化は有効なまま）。
  */
 export function buildLabelData(
   fc: FeatureCollection,
@@ -360,6 +438,8 @@ export function buildLabelData(
       priority: labelPriorityFor(feature),
     };
     if (kind !== undefined) datum.kind = kind;
+    const key = colorKeyFor(feature.properties);
+    if (key !== null) datum.key = key;
     data.push(datum);
   }
   return data;
