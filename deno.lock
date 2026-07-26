@@ -20,6 +20,7 @@
     "npm:@turf/difference@7": "7.3.5",
     "npm:@turf/helpers@7": "7.3.5",
     "npm:@turf/intersect@7": "7.3.5",
+    "npm:@turf/kinks@7": "7.3.5",
     "npm:@turf/line-split@7": "7.3.5",
     "npm:@turf/simplify@7": "7.3.5",
     "npm:@turf/truncate@7": "7.3.5",
@@ -397,6 +398,14 @@
     },
     "@turf/invariant@7.3.5": {
       "integrity": "sha512-ZVIvsBvjr8lO7WxC5zYNjRsjSDvyGvWkJMjuWaJjTU8x+1tmfNnw3gDX/TI2Sit83gcRYLYkNo23lB/udqx/Hg==",
+      "dependencies": [
+        "@turf/helpers",
+        "@types/geojson",
+        "tslib"
+      ]
+    },
+    "@turf/kinks@7.3.5": {
+      "integrity": "sha512-dPW8d4vs1v8WMobjyq/TVqajjPwkMsl94IF58yp1UYlmJDQrW4iNRUmI9fFzww+fl7epCKNwY+jZhXf1DRi93w==",
       "dependencies": [
         "@turf/helpers",
         "@types/geojson",
@@ -797,6 +806,7 @@
       "npm:@turf/difference@7",
       "npm:@turf/helpers@7",
       "npm:@turf/intersect@7",
+      "npm:@turf/kinks@7",
       "npm:@turf/line-split@7",
       "npm:@turf/simplify@7",
       "npm:@turf/truncate@7",

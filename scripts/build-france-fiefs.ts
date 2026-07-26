@@ -5,7 +5,8 @@
  * - start_date / end_date タグで「year 時点で有効」な諸侯領に絞る
  *   （年のみ表記 `0918` / 年月日表記 `1493-05-23` / end_date 欠損 = 無期限）
  * - メンバー way を端点で連結してリング化し、MultiPolygon を組み立てる
- * - simplify + 座標丸めで 1 ファイル FIEF_SIZE_LIMIT_BYTES 以下に収める
+ * - simplify + 座標丸め + ポリゴンのクリーンアップ（自己交差の解消・微小破片の除去、
+ *   scripts/clean-polygons.ts）で 1 ファイル FIEF_SIZE_LIMIT_BYTES 以下に収める
  * - data/france_fiefs_<year>.geojson（year ∈ FRANCE_FIEF_YEARS）を生成する
  *
  * 出典: OpenHistoricalMap（https://www.openhistoricalmap.org/）
@@ -24,6 +25,7 @@
 
 import type { FeatureCollection, MultiPolygon, Position } from "geojson";
 import { shrinkToLimit } from "./build-data.ts";
+import { formatCleanStats } from "./clean-polygons.ts";
 import { SNAPSHOT_YEARS } from "../src/config.ts";
 
 /** OHM の Overpass API エンドポイント */
@@ -530,7 +532,7 @@ async function main(): Promise<void> {
 
   for (const year of FRANCE_FIEF_YEARS) {
     const { fc, metadata } = buildYearCollection(tagged, geometries, year);
-    const { fc: shrunk, tolerance, size } = shrinkToLimit(
+    const { fc: shrunk, tolerance, size, cleanStats } = shrinkToLimit(
       fc,
       FIEF_SIZE_LIMIT_BYTES,
     );
@@ -541,6 +543,8 @@ async function main(): Promise<void> {
     console.log(
       `${outPath}: ${size} bytes, tolerance=${tolerance}, features=${shrunk.features.length}`,
     );
+    const cleanLog = formatCleanStats(cleanStats);
+    if (cleanLog !== null) console.log(cleanLog);
     const warnings = [
       ...Object.entries(metadata.missingWays).map(([id, ways]) =>
         `  欠損 way: relation ${id} -> ${ways.join(",")}`
