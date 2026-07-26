@@ -94,26 +94,46 @@ Deno.test("Aquitaine / Gascony の 1214 年以降の欠落が 1214 年以降の�
   }
 });
 
-// TASK-75: 地図上のエルベ川がハンブルク西の Wedel 付近で途切れ、北海河口
-// （クックスハーフェン、約 8.6E）まで描かれない。原因は採用ソース
-// （Natural Earth 50m rivers_lake_centerlines @ RIVERS_SOURCE_COMMIT）が
-// 下流のエルベを河川センターラインではなく海として扱っており、河口部のラインが
-// 元データに存在しないこと。より詳細な 10m 版・ne_10m_rivers_europe でも同区間は
-// 収録されていない（検証結果は docs/data-inventory/README.md §10 を参照）ため、
-// 補完可能な代替ソースが無い。ユーザには描画不具合ではなくデータの制約として
-// 明示する。
-Deno.test("エルベ川が河口まで描かれない制約が明記されている（TASK-75）", () => {
+// TASK-75 / TASK-76 / TASK-83: 河川ラインが実際の河口まで描かれない。原因は
+// 採用ソース（Natural Earth 50m rivers_lake_centerlines @ RIVERS_SOURCE_COMMIT）
+// が幅の広い河口部・潟・入り江を河川センターラインではなく海として扱っており、
+// その区間のラインが元データに存在しないこと。TASK-76 の横断検査
+// （docs/data-inventory/rivers-continuity-audit.md §3.2）で、これはエルベ固有の
+// 欠落ではなく Natural Earth 全体の一貫した仕様であり、ロワール・オーデル・
+// テージョ・ドニプロ等にも同様に当てはまることが判明した。より詳細な 10m 版・
+// ne_10m_rivers_europe でも同区間は収録されていないため補完可能な代替ソースが
+// 無い。ユーザには描画不具合ではなくソース仕様の制約として明示する。
+Deno.test("河口手前で河川が途切れる制約が NE 全体の仕様として明記されている（TASK-83）", () => {
   const parsed = parseKnownLimitations(knownLimitations);
   const entry = parsed.find((l) => l.id === "rivers-elbe-estuary-missing");
   assert(entry !== undefined, "rivers-elbe-estuary-missing が無い");
-  // 途切れる位置（50m の西端 9.78E ≒ Wedel）と、到達しない先（北海河口）を
-  // ユーザが自分で地図と突き合わせられる形で説明していること
-  for (const keyword of ["エルベ", "9.78", "北海", "Natural Earth"]) {
+  // 途切れる位置を、ユーザが自分で地図と突き合わせられる形で説明していること。
+  // 代表例は 3 河川（エルベ 9.78E / ロワール 1.74W / オーデル 14.58E）。
+  for (
+    const keyword of [
+      "エルベ",
+      "9.78",
+      "ロワール",
+      "1.74",
+      "オーデル",
+      "14.58",
+      "Natural Earth",
+    ]
+  ) {
     assert(
       entry.text.includes(keyword),
       `text が ${keyword} に言及していない`,
     );
   }
+  // エルベ限定ではなくソース全体の仕様であることが読み取れること
+  assert(
+    /河口部|潟/.test(entry.text) && entry.text.includes("海"),
+    "text が「河口部・潟を海として扱う」仕様に言及していない",
+  );
+  assert(
+    !/エルベ川?(の(ライン|線))?は北海の河口/.test(entry.text),
+    "text がエルベ限定の記述のままになっている",
+  );
   // 10m 版でも補完できないこと（代替ソース調査済みであること）に言及していること
   assert(
     entry.text.includes("10m"),
@@ -121,7 +141,7 @@ Deno.test("エルベ川が河口まで描かれない制約が明記されてい
   );
 });
 
-Deno.test("エルベ川の制約は河川オーバーレイと同じく年代非依存で常時 active（TASK-75）", () => {
+Deno.test("河口未到達の制約は河川オーバーレイと同じく年代非依存で常時 active（TASK-75）", () => {
   const parsed = parseKnownLimitations(knownLimitations);
   const entry = parsed.find((l) => l.id === "rivers-elbe-estuary-missing");
   assert(entry !== undefined);
