@@ -25,6 +25,10 @@ import {
   FRANCE_FIEF_YEARS,
 } from "./build-france-fiefs.ts";
 import { HRE_OVERLAY_YEARS, HRE_SIZE_LIMIT_BYTES } from "./build-hre.ts";
+import {
+  ITALY_FIEF_SIZE_LIMIT_BYTES,
+  ITALY_FIEF_YEARS,
+} from "./build-italy-fiefs.ts";
 import { BASE_OUTLINE_YEARS } from "../src/config.ts";
 
 /** 経緯度の矩形リング（反時計回り）。widthDeg 四方 */
@@ -352,6 +356,11 @@ Deno.test("生成物は年代ごとのサイズ上限に収まる", async () => 
     ...HRE_OVERLAY_YEARS.map((y): [string, number] => [
       `hre_${y}.geojson`,
       HRE_SIZE_LIMIT_BYTES,
+    ]),
+    // TASK-95: 中世イタリアの諸侯領・都市共和国オーバーレイ
+    ...ITALY_FIEF_YEARS.map((y): [string, number] => [
+      `italy_fiefs_${y}.geojson`,
+      ITALY_FIEF_SIZE_LIMIT_BYTES,
     ]),
     // TASK-92: 諸侯領 union を差し引いた派生 base。境界が諸侯領の輪郭に沿う分
     // 元の europe_<year> より頂点が増えるため、上限は base と同じ値で見張る

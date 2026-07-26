@@ -2,7 +2,7 @@
 
 本リポジトリの `data/`
 に現時点でコミットされているデータソースから、スナップショット年ごとに取得できる「国・勢力」「都市」「諸侯領土（HRE
-領邦・フランス諸侯領）」を機械的に集計したもの。**集計対象は地理的ヨーロッパの域内に限定**しており、北アフリカ・アナトリア・レヴァント・南コーカサス・中央アジア・シベリアの領域は除外している（§2）。年代ごとの詳細は個別ファイルに分割している。
+領邦・フランス諸侯領・イタリア諸侯領）」を機械的に集計したもの。**集計対象は地理的ヨーロッパの域内に限定**しており、北アフリカ・アナトリア・レヴァント・南コーカサス・中央アジア・シベリアの領域は除外している（§2）。年代ごとの詳細は個別ファイルに分割している。
 
 ## 1. データソース一覧
 
@@ -12,6 +12,7 @@
 | 都市                       | `data/cities.json`                                              | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得 | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                                          |
 | 諸侯領土（HRE 領邦）       | `data/hre_<year>.geojson` × 5                                   | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                       | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ               |
 | 諸侯領土（HRE 領邦・中世） | `data/hre_fiefs_<year>.geojson` × 7                             | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
+| 諸侯領土（伊諸侯領・中世） | `data/italy_fiefs_<year>.geojson` × 7                           | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
 | 諸侯領土（仏諸侯領）       | `data/france_fiefs_<year>.geojson` × 5                          | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
 | 二重表示の解消（派生）     | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 5 | `scripts/build-fief-dedupe.ts` が `europe_<year>` と `france_fiefs_<year>` から生成（§3.5）                                                                                                                                                 | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
 | 諸侯領の重なり解消（派生） | `data/france_fiefs_flat_<year>.geojson` × 5                     | `scripts/build-fief-flat.ts` が `france_fiefs_<year>` から生成（§3.6）。アプリが実際に配信・描画するのはこちら                                                                                                                              | CC0 1.0（`france_fiefs_<year>` の派生）                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
@@ -23,9 +24,9 @@
 > ライセンス上の注意: HRE 領邦データ（CC BY-NC-SA 4.0）は GPL-3.0 派生の
 > `europe_<year>.geojson`
 > と統合してはならず、別ファイルのオーバーレイとしてのみ利用する（`scripts/build-hre.ts`
-> の注記）。フランス諸侯領データと中世 HRE 領邦データ（いずれも
-> OpenHistoricalMap・CC0
-> 1.0）はパブリックドメインのため混合制約は無いが、出典管理を単純に保つため同じく独立ファイルとして生成する（`scripts/build-france-fiefs.ts`・`scripts/build-hre-fiefs.ts`）。
+> の注記）。フランス諸侯領データ・中世 HRE 領邦データ・中世イタリア諸侯領データ
+> （いずれも OpenHistoricalMap・CC0
+> 1.0）はパブリックドメインのため混合制約は無いが、出典管理を単純に保つため同じく独立ファイルとして生成する（`scripts/build-france-fiefs.ts`・`scripts/build-hre-fiefs.ts`・`scripts/build-italy-fiefs.ts`）。
 
 > HRE 領邦は年代で出典が分かれる。**1000〜1492 年は OpenHistoricalMap 由来の
 > `hre_fiefs_<year>.geojson`（§3.7）**、**1500〜1700 年は Roller
@@ -437,6 +438,148 @@ Lorraine も 1492 年に同種）、面としては正しいので `@turf/union`
 微小破片（1 km² 未満の外環・穴）と 4 頂点未満の退化リングも 0
 件（`scripts/build-hre-fiefs_test.ts` と `scripts/clean-polygons_test.ts`
 で担保）。
+
+### 3.8 諸侯領土（中世イタリア諸侯領 `italy_fiefs_<year>.geojson`）
+
+`deno task build-italy-fiefs`（`scripts/build-italy-fiefs.ts`、TASK-95）が
+OpenHistoricalMap（OHM）の Overpass API から生成する、1000〜1492
+年の北・中部イタリアの諸侯領・都市共和国。§3.7 の `hre_fiefs_<year>.geojson`
+とは別系統・別ファイルで、共通ロジック（Overpass クエリ・`start_date` /
+`end_date` の年判定・リレーション → MultiPolygon 化・くびれ解消）は
+`scripts/build-france-fiefs.ts` と `scripts/build-hre-fiefs.ts` から import
+している。
+
+**なぜ hre-fiefs の bbox・許可リストを広げず独立系統にしたか。** (1)
+帰属が単一でない。フィレンツェ・ジェノヴァ・ピサ・シエナ・ルッカのコムーネは名目上イタリア王国＝帝国の構成王国内だが実質は独立、スポレート公国とアンコーナ共和国は教皇領の側、サルッツォ辺境伯領はサヴォイア／プロヴァンス圏で、全
+feature に `SUBJECTO` / `PARTOF` = `Holy Roman Empire` を置く `hre_fiefs_<year>`
+の前提と噛み合わない。(2) 除外規則の論拠が当てはまらない。 `hre_fiefs`
+は帝国都市を「領邦ではなく市域だけの数十
+km²」として落とすが、イタリアのコムーネは contado（周辺農村）を含み 1,000〜6,000
+km² 規模で、同じ規則を当てると主要勢力を取りこぼす。(3) `hre_fiefs` の bbox
+を南へ広げると帝国側の取得件数（34,005
+リレーション）が増え、既存の生成物に不要な差分が出る。
+
+| プロパティ        | 内容                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| `NAME`            | 表示名（期間つき曖昧性解消を外した名前。例: Republic of Pisa）                           |
+| `OHM_NAME`        | OHM 上の名前（`name:en`。無ければ `name`。例: Republic of Pisa (1399-1406)）             |
+| `ADMIN_LEVEL`     | OHM の `admin_level`（3 / 4 / 6）                                                        |
+| `OHM_RELATION_ID` | 出典の OHM リレーション ID（`https://www.openhistoricalmap.org/relation/<id>` で参照可） |
+| `START_DATE`      | OHM の `start_date`（`0831` / `1395-05-11` など生の表記）                                |
+| `END_DATE`        | OHM の `end_date`。`null` は無期限（タグ欠損）                                           |
+
+`NAME` / `ADMIN_LEVEL` / `OHM_RELATION_ID` / `START_DATE` / `END_DATE` は
+`france_fiefs_<year>.geojson` と同じ形で、`OHM_NAME`
+だけが追加。生成物の末尾には同じく `metadata`（出典 `OpenHistoricalMap`・
+ライセンス `CC0-1.0`・年・feature 数・欠損記録・bbox 外で落としたパート数）を
+GeoJSON の foreign member として埋め込んでいる。
+
+#### 収録できた諸侯領（年代別）
+
+取得範囲は北・中部イタリアの bbox（北緯 42.0°〜46.6°、東経
+6.5°〜14.2°）で、この範囲の `boundary=administrative` は 1,353 リレーション。
+
+|   年 | 件数 | バイト数 | 合計面積（概算 km²） | 主な諸侯領                                                                    |
+| ---: | ---: | -------: | -------------------: | ----------------------------------------------------------------------------- |
+| 1000 |    3 |    8,983 |               57,285 | トスカーナ辺境伯領 / スポレート公国 / モンフェッラート辺境伯領                |
+| 1100 |    7 |   20,467 |               81,226 | 上記 + ピサ共和国 / ジェノヴァ共和国 / アンコーナ共和国 / アスティ伯領        |
+| 1200 |   10 |   18,416 |               55,530 | フィレンツェ共和国 / シエナ共和国 / ルッカ共和国 / サルッツォ辺境伯領         |
+| 1279 |   12 |   22,498 |               52,630 | 上記 + マッサ共和国 / ソヴァーナ伯領 / サンタ・フィオーラ伯領                 |
+| 1300 |   14 |   23,568 |               39,071 | 上記 + リミニ領主領 / オネーリア領主領                                        |
+| 1400 |   16 |   26,094 |               44,253 | 上記 + ピオンビーノ領主領 / ミランドラ公国 / ピティリアーノ伯領               |
+| 1492 |   20 |   38,679 |               61,467 | フィレンツェ公国 / モデナ・レッジョ公国 / フェラーラ公国 / マントヴァ辺境伯領 |
+
+面積は簡略化後の球面近似（諸侯領同士の重なりは差し引いていない）で、史実の領土面積ではない。比較として
+§3.7 の HRE 領邦は 1200 年が 26 件 / 122,184 km²。許可リスト
+`ITALY_FIEF_NAMES`（27 件）は実測データから作っており、全 27
+件がいずれかの年代の生成物に現れる（`scripts/build-italy-fiefs_test.ts`
+で担保）。1000 年は 3 件だけだが、トスカーナ辺境伯領（31,764 km²）と
+スポレート公国（22,146 km²）で中部イタリアの大半を覆うため収録する。
+
+#### 名前の解決と表示名の上書き
+
+OHM のイタリア系リレーションには `name:en` を持たず `name`
+が英語のものがあり（County of Asti / Republic of Ancona / 1350〜1555 の Republic
+of Siena / Republic of Noli）、`name:en`
+だけを見ると主要勢力を取りこぼす。そこで `name:en` → `name`
+の順で名前を解決する（英語でない `name`
+は許可リストに載らないので採用されない）。
+
+さらに `name:en` に期間の曖昧性解消が入ったものは表示名を上書きする。とくに
+`Republic of Pisa (1399-1406)` は 1050〜1406 の全 5
+リレーションが同じこの名前を持っており、括弧内の期間はどのリレーションの実際の期間とも一致しない（OHM
+側の誤り）。§3.7 の HRE 領邦は同種の `County of Ratzeburg (1143-1204)`
+を落としたが、ピサは中核勢力なので落とさず `Republic of Pisa`
+に上書きしている（`Lordship of Oneglia` / `Principality of Oneglia` /
+`Duchy of Ferrara` も同様）。
+
+#### 同名リレーションの選択規則
+
+OHM は 1 つの勢力について「存続期間全体を覆う包括リレーション」と「年代ごとの
+領域スナップショット」を並存させることがある。ピサ共和国は 6
+件すべてが同じ名前・同じ `admin_level` 4 で並ぶ:
+
+| リレーション ID | 期間       | 領域                | 面積（km²） |
+| --------------- | ---------- | ------------------- | ----------: |
+| 2750719         | 1081〜1406 | 本土のみ            |       4,577 |
+| 2853300         | 1050〜1115 | 本土 + コルシカ     |      16,184 |
+| 2853298         | 1184〜1207 | 本土 + コルシカ     |      16,184 |
+| 2853293         | 1215〜1295 | 本土 + サルデーニャ |      32,298 |
+| 2853296         | 1295〜1324 | 本土 + サルデーニャ |      20,796 |
+| 2853485         | 1399〜1406 | 本土のみ            |       3,552 |
+
+既存の `selectFiefsForYear` / `selectHreFiefsForYear` は「`admin_level` 昇順 →
+ID 昇順」で 1 件に絞るが、この 6 件は同 level なので ID の若い 2750719
+が偶然に選ばれ、どの年代でも同じ形になってしまう。そこで**有効期間が短い
+リレーションを優先する**（同じなら `admin_level` 昇順 → ID
+昇順）。期間の短い方が
+その年代に固有のスナップショットで、長い方は存続期間を通じて変わらない中核領域しか
+持たないため年代精度が落ちる、というのが根拠。この規則は 1100 / 1200
+年にコルシカを含み、1279 / 1300 年にサルデーニャを含み、メロリアの海戦後の 1400
+年には本土のみに戻る、という史実の推移を再現する。
+
+#### bbox の外に出るパートの除去
+
+海洋共和国のリレーションはイタリア半島の外に飛び地を持つ。実データでは Republic
+of Genoa の黒海（カッファ 908 / 2,463 km²・東経 34〜37 度）とエーゲ海（キオス
+1,603 km² 他・東経 26 度）の植民地、Republic of Genoa / Republic of Pisa
+のサルデーニャ（北緯 38.8〜41.3
+度）が該当する。これらは本オーバーレイの対象外なので、パートのバウンディングボックスが
+取得 bbox と交差しないものを落としている（1279 年 5 件・1300 年 6 件・1400 年 5
+件・1492 年 1 件）。クリップはしないので形は変えず、一部でも掛かるパートは残る
+（コルシカは北緯 41.3〜43.0 度で南限 42.0
+に掛かるため残り、ピサ・ジェノヴァのコルシカ支配が表現される）。
+
+#### 収録を見送った対象
+
+`admin_level` は 3 / 4 / 6 を採る。2 は主権国家レベル（ヴェネツィア共和国・
+教皇領・シチリア王国）で base の `europe_<year>` が担う。6 は本来 Plebis（教区）
+等の細分だが、March of Montferrat（アレラミチ家の辺境伯領・1000〜1708・3,382
+km²）だけが公領・共和国と同格の実体を持ちながらこの level に置かれているため、
+level ではなく許可リストで採っている。そのうえで以下の分類で落とした（根拠は
+`scripts/build-italy-fiefs.ts` の `ITALY_FIEF_EXCLUSIONS`
+にコードとして記録している）。
+
+| 分類                                 | 対象                                                                                                                                                                                      | 理由                                                                 |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| HRE 領邦と重複                       | Duchy of Milan / March of Verona / Lordship of Verona / Duchy of Bavaria / Duchy of Swabia / Duchy of Carinthia / Duchy of Carniola / Prince-Bishopric of Freising / Dauphiné of Viennois | §3.7 で収録済み。同じ土地を 2 系統で塗らない                         |
+| アルプス以北・アドリア海北岸の帝国領 | Margraviate of Istria 696 km² / Triest 163 km² / Free Imperial City of Bern                                                                                                               | イタリア王国の外（ハプスブルク領・スイス誓約同盟）                   |
+| 帝国構成王国・サヴォイア             | Kingdom of Burgundy 101,974〜114,748 km² / Savoyard state 35,989〜40,322 km²                                                                                                              | `admin_level` 3 で配下のサルッツォ・アスティ等と領域が重なる         |
+| シチリア（ナポリ）王国の州           | Aprutium beyond the Pescara 9,622 km² / Aprutium this side of the Pescara 3,390 km²                                                                                                       | 南イタリアは主権国家として base が担う                               |
+| フランス側の領域                     | Provence 23,215 km²（1487 年〜）                                                                                                                                                          | イタリアの諸侯領ではない                                             |
+| 100 km² 未満の微小領域               | San Marino 7〜22 km² / City of San Marino / Fiorentino / County of Vernio 12 km² / Republic of Noli 58 km² / County of Novellara and Bagnolo 50 km²                                       | 簡略化すると点に近くなる。収録した最小は County of Guastalla 133 km² |
+| OHM 側の年代誤り                     | Golden Ambrosian Republic（史実 1447〜1450 が OHM では 1449〜1500）                                                                                                                       | §3.7 と同じ扱い。結果として 1492 年のミラノは空白                    |
+| ジオメトリが無い                     | Lordship of Milan（1259〜1349）/ Pisan Corsica（1050〜1284）                                                                                                                              | メンバーが label ノードだけで面を組めない                            |
+| 親リレーションに含まれる島           | Genoese Corsica / Milanese Corsica（いずれも 11,502 km²）                                                                                                                                 | Republic of Genoa の年代スナップショットが同じコルシカのパートを含む |
+
+**ミラノは 1279 / 1300 / 1492 年が空白になる。** 1279 / 1300 年の
+`Lordship of
+Milan` はジオメトリが無く、1492 年に有効なのは年代誤りの
+`Golden Ambrosian
+Republic` だけで、1400 年は §3.7 の `Duchy of Milan`
+が収録している。OHM に無く収録できないその他の主要勢力:
+ヴェネツィア共和国（`admin_level` 2 で base
+側）・ボローニャ・パドヴァ・ウルビーノ公領。
 
 ## 4. 年代別サマリ
 
