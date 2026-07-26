@@ -122,6 +122,88 @@ export const BASEMAP_LAYER_IDS: readonly string[] = [
   WATER_LAYER_ID,
 ];
 
+/**
+ * 内水面（湖・川・運河・貯水池など）だけを描く水面レイヤーの ID（TASK-84）。
+ *
+ * TASK-77 で政治ポリゴンを water の下へ回した結果、海上のはみ出しは隠れたが
+ * 同時に内陸の水面ポリゴンまで政治ポリゴンの塗りの上に来てしまい、塗りが
+ * 虫食い状に抜けた（ジロンド川筋・ランド地方の湖沼で顕著）。海のはみ出しを
+ * 隠すのに必要なのは「海岸より外の水面」だけなので、water を kind で 2 つに
+ * 分割し、内水面だけを政治ポリゴンより下（= このレイヤー）へ下げる。
+ * 塗り色・ソースは分割前の water と同一で、重ね順以外は何も変えない。
+ */
+export const WATER_INLAND_LAYER_ID = "water-inland";
+
+/**
+ * 陸の輪郭（海岸線）を描くレイヤーの ID（TASK-84）。
+ *
+ * 政治ポリゴン（historical-basemaps 等）の海岸線は現代のベースマップより粗く、
+ * 輪郭線の総延長のおよそ 2〜3 割が海側へはみ出す（仏大西洋・海峡沿岸で実測:
+ * 諸侯領 32.9%・base 26.4%。海への浮き幅は中央値 1〜6 km、p90 で 5〜11 km、
+ * 最大 26 km）。この線を水面より上に戻すと「海の上を走る間違った海岸線」に
+ * なるため、政治ポリゴンは水面下に置いたまま、陸の輪郭はベースマップ自身の
+ * 陸ポリゴン（earth）の縁として描く。水面（water）と同じタイルから引くので、
+ * 塗りが切れる位置と線の位置が定義上一致する（別ソースの海岸線を重ねたときの
+ * 二重線が原理的に起きない）。
+ */
+export const COASTLINE_LAYER_ID = "coastline";
+
+/**
+ * 政治ポリゴンより下へ下げる水面の kind（TASK-84）。
+ *
+ * Protomaps basemap schema の water.kind のうち内陸の水域。ここに載っていない
+ * kind（ocean / sea / bay / strait / fjord / dock / reef、および将来スキーマが
+ * 増やす未知の値）は従来どおり政治ポリゴンより上に残す。判定を「内水面の
+ * 許可リスト」にしてあるのは、取りこぼしが必ず安全側（海のはみ出しを隠す
+ * 従来挙動）に倒れるようにするため。
+ *
+ * 河口（ジロンド）や潟湖（アルカション湾）は OSM の海岸線の外側にあり
+ * kind: ocean なので内水面には含まれない。これらは水面のまま残るが、
+ * COASTLINE_LAYER_ID の線が縁を描くため「塗りの虫食い」ではなく入り江として
+ * 読める（TASK-84 の実機確認で確認）。
+ */
+export const INLAND_WATER_KINDS: readonly string[] = [
+  "lake",
+  "water",
+  "river",
+  "stream",
+  "canal",
+  "ditch",
+  "drain",
+  "reservoir",
+  "basin",
+  "playa",
+  "pond",
+  "swimming_pool",
+];
+
+/** kind が海洋側（政治ポリゴンより上に残す水面）かを返す純粋関数（TASK-84） */
+export function waterKindIsMarine(kind: string): boolean {
+  return !INLAND_WATER_KINDS.includes(kind);
+}
+
+/**
+ * 海岸線の色（TASK-84）。境界線と同じインク（--frame #5c3d22 = powers.ts の
+ * LINE_COLOR と同値）を alpha 0.6 まで落としたもの。古地図のペン画に揃えつつ、
+ * 政治境界線（同色 alpha 0.75・1px）より一段弱くすることで「地形の線」と
+ * 「政治の線」を濃さで読み分けられるようにする。
+ */
+export const COASTLINE_COLOR = "rgba(92, 61, 34, 0.6)";
+
+/** 海岸線レイヤー定義（TASK-84）。earth は島名の Point も含むためポリゴンに絞る */
+const COASTLINE_LAYER: BasemapStyle["layers"][number] = {
+  id: COASTLINE_LAYER_ID,
+  type: "line",
+  source: BASEMAP_SOURCE_ID,
+  "source-layer": "earth",
+  filter: ["==", ["geometry-type"], "Polygon"],
+  paint: {
+    "line-color": COASTLINE_COLOR,
+    // 広域では細く（線が主張して塗り分けを邪魔しない）、詰めると少し太く
+    "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.8, 7, 1, 10, 1.4],
+  },
+};
+
 const KEEP_IDS: ReadonlySet<string> = new Set(BASEMAP_LAYER_IDS);
 
 /** レイヤー定義から採用レイヤーのみを残す純粋関数（id の完全一致で判定） */
@@ -213,6 +295,50 @@ function insertHillshade(
 }
 
 /**
+ * water を「内水面（water-inland）→ 海洋（water）」の 2 枚に分割し、海洋の直上に
+ * 海岸線（coastline）を挿入する純粋関数（TASK-84）。
+ *
+ * 分割後の重ね順は
+ *   earth → landcover → hillshade → water-inland → 〈政治ポリゴン〉→ water → coastline
+ * で、政治ポリゴンは beforeId = water（layer_stack.ts）によりこの位置へ入る。
+ * これにより
+ * - 海側へはみ出した塗りは海洋 water に覆われる（TASK-77 の目的を維持）
+ * - 湖・川の水面は政治ポリゴンの下に来るので塗りが虫食いにならない（TASK-84）
+ * - 陸の輪郭は coastline が水面より上に描くので沿岸でも線が読める（TASK-84）
+ * が同時に成り立つ。
+ *
+ * water が無いレイヤー列（想定外・将来のスタイル変更）ではそのまま返す。
+ * 分割・海岸線なしでも従来表示に縮退するだけで、スタイル全体は壊れない。
+ */
+export function splitWaterAndAddCoastline(
+  baseLayers: BasemapStyle["layers"],
+): BasemapStyle["layers"] {
+  const waterIdx = baseLayers.findIndex((l) => l.id === WATER_LAYER_ID);
+  if (waterIdx < 0) return [...baseLayers];
+  const water = baseLayers[waterIdx];
+  const kinds: unknown = ["literal", [...INLAND_WATER_KINDS]];
+  // 元の filter（["==", "$type", "Polygon"]）はレガシー構文で式と混在できない
+  // ため、ポリゴン絞り込みも式（geometry-type）で書き直す
+  const polygonOnly: unknown = ["==", ["geometry-type"], "Polygon"];
+  const inland = {
+    ...water,
+    id: WATER_INLAND_LAYER_ID,
+    filter: ["all", polygonOnly, ["in", ["get", "kind"], kinds]],
+  };
+  const marine = {
+    ...water,
+    filter: ["all", polygonOnly, ["!", ["in", ["get", "kind"], kinds]]],
+  };
+  return [
+    ...baseLayers.slice(0, waterIdx),
+    inland,
+    marine,
+    COASTLINE_LAYER,
+    ...baseLayers.slice(waterIdx + 1),
+  ];
+}
+
+/**
  * PMTiles URL からベースマップ用の MapLibre スタイルを組み立てる純粋関数。
  * ラベルレイヤーを生成しないため glyphs / sprite は不要。
  *
@@ -249,8 +375,10 @@ export function buildBasemapStyle(pmtilesUrl: string): BasemapStyle {
           '<a href="https://registry.opendata.aws/terrain-tiles/">Terrain Tiles</a> (Mapzen)',
       },
     },
-    layers: insertHillshade(
-      filterBasemapLayers(allLayers) as BasemapStyle["layers"],
+    layers: splitWaterAndAddCoastline(
+      insertHillshade(
+        filterBasemapLayers(allLayers) as BasemapStyle["layers"],
+      ),
     ),
   };
 }
