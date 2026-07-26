@@ -1,9 +1,12 @@
 import { assert, assertEquals } from "@std/assert";
 import {
+  CITY_HIT_LAYER_ID,
   CITY_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  isCityPickLayerId,
   isDirectPickFinal,
+  isNearCursorRepickable,
   isRiversPickLayerId,
   layerOrderMatchesPickingPriority,
   PICKING_PRIORITY,
@@ -17,17 +20,32 @@ import {
 
 // ---- PICKING_PRIORITY ----
 
-Deno.test("PICKING_PRIORITY: 河川 > 都市 > 河川ヒット層 > HRE 領邦 > 仏諸侯領 > 勢力 の順で並ぶ（TASK-49, TASK-71）", () => {
+Deno.test("PICKING_PRIORITY: 河川 > 都市 > 都市ヒット層 > 河川ヒット層 > HRE 領邦 > 仏諸侯領 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82）", () => {
   assertEquals(
     [...PICKING_PRIORITY],
     [
       RIVERS_LAYER_ID,
       CITY_LAYER_ID,
+      CITY_HIT_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
       HRE_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ],
+  );
+});
+
+Deno.test("PICKING_PRIORITY: cities-hit は可視の河川ライン（rivers）と都市ドット（cities）には劣後する（TASK-82 AC #3）", () => {
+  const hit = PICKING_PRIORITY.indexOf(CITY_HIT_LAYER_ID);
+  assert(hit !== -1);
+  assert(PICKING_PRIORITY.indexOf(RIVERS_LAYER_ID) < hit);
+  assert(PICKING_PRIORITY.indexOf(CITY_LAYER_ID) < hit);
+});
+
+Deno.test("PICKING_PRIORITY: cities-hit は rivers-hit より優先される（都市の判定円が河川の判定帯に遮蔽されない）（TASK-82 AC #1）", () => {
+  assert(
+    PICKING_PRIORITY.indexOf(CITY_HIT_LAYER_ID) <
+      PICKING_PRIORITY.indexOf(RIVERS_HIT_LAYER_ID),
   );
 });
 
@@ -77,6 +95,29 @@ Deno.test("isRiversPickLayerId: rivers 系以外は false（TASK-43）", () => {
   assert(!isRiversPickLayerId(CITY_LAYER_ID));
   assert(!isRiversPickLayerId(HRE_LAYER_ID));
   assert(!isRiversPickLayerId(undefined));
+});
+
+// ---- isCityPickLayerId / isNearCursorRepickable（TASK-82）----
+
+Deno.test("isCityPickLayerId: cities / cities-hit の両方で true（TASK-82）", () => {
+  assert(isCityPickLayerId(CITY_LAYER_ID));
+  assert(isCityPickLayerId(CITY_HIT_LAYER_ID));
+});
+
+Deno.test("isCityPickLayerId: 都市系以外は false（TASK-82）", () => {
+  assert(!isCityPickLayerId(RIVERS_LAYER_ID));
+  assert(!isCityPickLayerId(RIVERS_HIT_LAYER_ID));
+  assert(!isCityPickLayerId(POWER_LAYER_ID));
+  assert(!isCityPickLayerId(undefined));
+});
+
+Deno.test("isNearCursorRepickable: cities-hit だけがクリックの近傍再ピック対象外（ホバーと実効判定範囲を一致させる）（TASK-82 AC #2）", () => {
+  assert(!isNearCursorRepickable(CITY_HIT_LAYER_ID));
+  assert(isNearCursorRepickable(CITY_LAYER_ID));
+  assert(isNearCursorRepickable(RIVERS_LAYER_ID));
+  assert(isNearCursorRepickable(RIVERS_HIT_LAYER_ID));
+  assert(isNearCursorRepickable(POWER_LAYER_ID));
+  assert(isNearCursorRepickable(undefined));
 });
 
 // ---- selectPreferredPick ----
@@ -194,11 +235,35 @@ Deno.test("resolveClickPick: 都市 > HRE > 勢力 の優先順も rivers 同様
   assertEquals(resolveClickPick([power, city]), city);
 });
 
-Deno.test("isDirectPickFinal: rivers/rivers-hit/cities の直下ヒットは radius 再ピックで上書きしない（TASK-49）", () => {
+Deno.test("resolveClickPick: cities-hit は近傍再ピックの候補から除外され、他候補が選ばれる（TASK-82 AC #2）", () => {
+  const cityHit = pickInfo(CITY_HIT_LAYER_ID, "パリ");
+  const power = pickInfo(POWER_LAYER_ID, "フランス王国");
+  // 直下が powers で、半径 6px 内にだけ都市の判定円がある状況。ホバーでは
+  // 都市を拾えない位置なので、クリックでも拾わない（範囲を一致させる）
+  assertEquals(resolveClickPick([power, cityHit]), power);
+  assertEquals(resolveClickPick([cityHit, power]), power);
+});
+
+Deno.test("resolveClickPick: 候補が cities-hit だけなら null（直下 pick の結果へフォールバック）（TASK-82 AC #2）", () => {
+  const cityHit = pickInfo(CITY_HIT_LAYER_ID, "パリ");
+  assertEquals(resolveClickPick([cityHit]), null);
+});
+
+Deno.test("resolveClickPick: cities-hit を除外しても cities（ドット）は従来どおり選ばれる（TASK-82）", () => {
+  const cityHit = pickInfo(CITY_HIT_LAYER_ID, "ルーアン");
+  const city = pickInfo(CITY_LAYER_ID, "パリ");
+  const power = pickInfo(POWER_LAYER_ID, "フランス王国");
+  assertEquals(resolveClickPick([power, cityHit, city]), city);
+});
+
+Deno.test("isDirectPickFinal: rivers/rivers-hit/cities/cities-hit の直下ヒットは radius 再ピックで上書きしない（TASK-49, TASK-82）", () => {
   assert(isDirectPickFinal(RIVERS_LAYER_ID));
   assert(isDirectPickFinal(RIVERS_HIT_LAYER_ID));
   // 都市ドットの直下ヒットを近傍河川の radius 再ピックで奪ってはいけない
   assert(isDirectPickFinal(CITY_LAYER_ID));
+  // 都市の判定円（cities-hit）も同様。ここを確定にしないと、直下で都市を
+  // 拾えているのに近傍再ピックの rivers（PICKING_PRIORITY 上位）に奪われる
+  assert(isDirectPickFinal(CITY_HIT_LAYER_ID));
   assert(!isDirectPickFinal(POWER_LAYER_ID));
   assert(!isDirectPickFinal(HRE_LAYER_ID));
   assert(!isDirectPickFinal(undefined));
@@ -219,6 +284,7 @@ Deno.test("renderOrderFromPickingPriority: 描画順（下→上）は優先順�
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
+      CITY_HIT_LAYER_ID,
       CITY_LAYER_ID,
       RIVERS_LAYER_ID,
     ],
@@ -284,6 +350,41 @@ Deno.test("layerOrderMatchesPickingPriority: 一部レイヤーが無くても�
   // cities が無い構成でも rivers が powers より上なら整合
   assert(layerOrderMatchesPickingPriority([POWER_LAYER_ID, RIVERS_LAYER_ID]));
   assert(!layerOrderMatchesPickingPriority([RIVERS_LAYER_ID, POWER_LAYER_ID]));
+});
+
+Deno.test("layerOrderMatchesPickingPriority: cities-hit は rivers-hit の上・cities の下でないと整合しない（TASK-82 AC #5）", () => {
+  assert(
+    layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      HRE_LAYER_ID,
+      RIVERS_HIT_LAYER_ID,
+      CITY_HIT_LAYER_ID,
+      CITY_LAYER_ID,
+      RIVERS_LAYER_ID,
+    ]),
+  );
+  // cities より上（= cities より優先）に置くと不整合
+  assert(
+    !layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      HRE_LAYER_ID,
+      RIVERS_HIT_LAYER_ID,
+      CITY_LAYER_ID,
+      CITY_HIT_LAYER_ID,
+      RIVERS_LAYER_ID,
+    ]),
+  );
+  // rivers-hit より下（= rivers-hit に遮蔽される）に置くと不整合
+  assert(
+    !layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      HRE_LAYER_ID,
+      CITY_HIT_LAYER_ID,
+      RIVERS_HIT_LAYER_ID,
+      CITY_LAYER_ID,
+      RIVERS_LAYER_ID,
+    ]),
+  );
 });
 
 Deno.test("layerOrderMatchesPickingPriority: rivers-hit は cities より下・rivers より下でないと整合しない（TASK-49）", () => {

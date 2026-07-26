@@ -29,6 +29,24 @@ export const FRANCE_FIEF_LAYER_ID = "france-fiefs";
 /** 主要都市マーカー（ScatterplotLayer）のレイヤー ID（TASK-27） */
 export const CITY_LAYER_ID = "cities";
 
+/**
+ * 都市マーカーの透明ヒット層（ScatterplotLayer）のレイヤー ID（TASK-82）。
+ * cities と同一データを完全透明・大半径（cities.ts CITY_HIT_RADIUS_PX）で
+ * 描画する判定専用レイヤー。rivers-hit（TASK-43）と同型の仕組みで、
+ * 「ホバーは直下 pick のみ・クリックだけ近傍再ピック」という非対称
+ * （TASK-36 の設計判断）を、ホバー側にコストを足さずに解消する。
+ *
+ * PICKING_PRIORITY 上は cities（可視ドット）と rivers（可視ライン）には
+ * 劣後させ、rivers-hit よりは優先させる:
+ * - 可視の河川ライン直上は従来どおり河川（decision-7 / TASK-49 維持）
+ * - 都市ドット直上は都市（ドット層が上なので隣接都市の判定円に負けない）
+ * - 河川の判定帯（rivers-hit、±7px）と都市の判定円が重なる領域は都市。
+ *   河畔都市（パリ・ルーアン等）でも「中心から一定距離以内は必ず都市」
+ *   （AC #1）を成立させるため。可視ラインは rivers が最優先のままなので、
+ *   見えている川をクリックできなくなる領域は生じない。
+ */
+export const CITY_HIT_LAYER_ID = "cities-hit";
+
 /** 主要河川ライン（GeoJsonLayer）のレイヤー ID（TASK-24） */
 export const RIVERS_LAYER_ID = "rivers";
 
@@ -66,9 +84,10 @@ export const PICKING_RADIUS_PX = 6;
 export const RIVERS_HIT_LAYER_ID = "rivers-hit";
 
 /**
- * picking の優先順（先頭が最優先）: 河川 > 都市 > 河川ヒット層 > HRE 領邦 >
- * 仏諸侯領 > 勢力（AC #4、TASK-49 で rivers-hit を cities より劣後させ都市
- * picking の遮蔽を解消、TASK-71 で france-fiefs を powers の上に追加）。
+ * picking の優先順（先頭が最優先）: 河川 > 都市 > 都市ヒット層 > 河川ヒット層 >
+ * HRE 領邦 > 仏諸侯領 > 勢力（AC #4、TASK-49 で rivers-hit を cities より
+ * 劣後させ都市 picking の遮蔽を解消、TASK-71 で france-fiefs を powers の上に
+ * 追加、TASK-82 で cities-hit を cities と rivers-hit の間に追加）。
  * pickable なレイヤーだけを含む（ラベル系レイヤーは
  * pickable: false のため picking に関与せず、このリストにも含めない）。
  *
@@ -87,6 +106,7 @@ export const RIVERS_HIT_LAYER_ID = "rivers-hit";
 export const PICKING_PRIORITY: readonly string[] = [
   RIVERS_LAYER_ID,
   CITY_LAYER_ID,
+  CITY_HIT_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
   HRE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
@@ -101,6 +121,35 @@ export const PICKING_PRIORITY: readonly string[] = [
  */
 export function isRiversPickLayerId(id: string | undefined): boolean {
   return id === RIVERS_LAYER_ID || id === RIVERS_HIT_LAYER_ID;
+}
+
+/**
+ * layerId が都市系（cities 可視ドット / cities-hit 判定専用層）かを判定する
+ * （TASK-82）。両層は同一データ（CityMarkerDatum）を持つため、ツールチップ/
+ * パネルの表示（main.ts pickedLabel）はどちらの pick でも同じ経路で扱える。
+ */
+export function isCityPickLayerId(id: string | undefined): boolean {
+  return id === CITY_LAYER_ID || id === CITY_HIT_LAYER_ID;
+}
+
+/**
+ * クリック時の「カーソル直下に何も無い場合の近傍再ピック」
+ * （main.ts resolveClickInfo の pickMultipleObjects、半径 PICKING_RADIUS_PX）
+ * の候補として採用してよいレイヤーか（TASK-82）。
+ *
+ * cities-hit だけを対象外にする。理由: cities-hit は「ホバーでもクリックでも
+ * 直下 pick で拾える」ことを目的とした層なので、そこにさらに再ピック半径が
+ * 合成されると、クリックだけ CITY_HIT_RADIUS_PX + PICKING_RADIUS_PX まで
+ * 広がってホバーとの非対称（TASK-82 が解消すべき当の問題）が再発する。
+ * 除外することで都市の実効判定範囲はホバー・クリックとも
+ * cities.ts CITY_PICK_TOLERANCE_PX（= CITY_HIT_RADIUS_PX）で一致する。
+ *
+ * rivers-hit を除外しないのは、河川が「細いライン + 全面を覆う powers」という
+ * 構造上、合成された余裕（rivers.ts RIVER_CLICK_TOLERANCE_PX）を意図して
+ * 残している既存設計（TASK-51）だから。
+ */
+export function isNearCursorRepickable(id: string | undefined): boolean {
+  return id !== CITY_HIT_LAYER_ID;
 }
 
 /**
@@ -163,24 +212,32 @@ export function selectPreferredPick<T extends { layerId: string }>(
  * だった場合の近傍探索」に限定する。
  */
 export function isDirectPickFinal(id: string | undefined): boolean {
-  return isRiversPickLayerId(id) || id === CITY_LAYER_ID;
+  return isRiversPickLayerId(id) || isCityPickLayerId(id);
 }
 
 export function resolveClickPick<T extends { layer: { id: string } | null }>(
   picks: readonly T[],
 ): T | null {
-  if (picks.length === 0) return null;
-  const pickable = picks.filter(
+  // TASK-82: cities-hit は近傍再ピックの候補にしない（isNearCursorRepickable）。
+  // 直下 pick が cities-hit なら isDirectPickFinal でここへ来ないため、ここに
+  // 現れる cities-hit は「カーソルから半径 PICKING_RADIUS_PX 以内にあるが
+  // 判定円の外」= ホバーでは都市を拾えない位置の候補で、採用するとクリック
+  // だけ範囲が広がる。
+  const considered = picks.filter((candidate) =>
+    isNearCursorRepickable(candidate.layer?.id)
+  );
+  if (considered.length === 0) return null;
+  const pickable = considered.filter(
     (candidate): candidate is T & { layer: { id: string } } =>
       candidate.layer !== null,
   );
-  if (pickable.length === 0) return picks[0];
+  if (pickable.length === 0) return considered[0];
   const withLayerId = pickable.map((info) => ({
     layerId: info.layer.id,
     info,
   }));
   const best = selectPreferredPick(withLayerId);
-  return best === null ? picks[0] : best.info;
+  return best === null ? considered[0] : best.info;
 }
 
 /**

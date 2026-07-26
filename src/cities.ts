@@ -37,6 +37,66 @@ export interface CityMarkerDatum {
 }
 
 /**
+ * 都市マーカー（可視ドット）の半径（px）（TASK-27。TASK-82 で main.ts の
+ * リテラルから定数化）。国土に対する「点」の記号なのでズームには追従させない。
+ */
+export const CITY_MARKER_RADIUS_PX = 3;
+
+/**
+ * 都市の透明ヒット層（picking.ts CITY_HIT_LAYER_ID）の半径（px）（TASK-82）。
+ * cities と同一データをこの半径・完全透明で cities の直下に重ね、ホバー/
+ * クリックの実効判定範囲を CITY_PICK_TOLERANCE_PX まで広げる。
+ *
+ * 9px を採る根拠:
+ * - 従来のクリックの実効範囲（ドット 3px + 近傍再ピック PICKING_RADIUS_PX
+ *   6px = 9px）と同値。クリック側の当たり方を一切変えずに、ホバー（従来は
+ *   ドットの 3px のみ）をそこへ揃えるという設計にできる（AC #2）。
+ * - 可視ドット（半径 3px + 白 stroke 1px ≒ 4px）の約 2 倍で、「点の周りの
+ *   見えない余白」として直感に反しない大きさ。AC #1 の目安 8〜10px の中央。
+ * - 密集地域とのトレードオフ: 実データの最小都市間距離は 1500 年 z4 の
+ *   Ghent–Bruges で 6.4px、z5 の Milan–Pavia（1000 年）で 9.1px、z7 の
+ *   Delft–The Hague で 10.7px。半径 9px なら判定円同士は重なるが、
+ *   「可視ドット直上は必ずその都市」は cities 層が cities-hit の上にある
+ *   ことで保証される（隣接都市の判定円がドットを覆えない）。曖昧なのは
+ *   「どちらのドットの上でもない中間帯」だけで、そこでどちらが返っても
+ *   ユーザーの意図と大きくは食い違わない。半径をこれ以上大きくすると
+ *   中間帯が広がるだけで、直上判定の確実性は上がらない。
+ */
+export const CITY_HIT_RADIUS_PX = 9;
+
+/**
+ * 都市の透明ヒット層の塗り色。完全透明（alpha 0）で、見た目（ドット + 白縁）は
+ * 一切変えない判定専用レイヤーにする（rivers.ts RIVER_HIT_LINE_COLOR と同型）。
+ */
+export const CITY_HIT_FILL_COLOR: [number, number, number, number] = [
+  0,
+  0,
+  0,
+  0,
+];
+
+/**
+ * 都市 picking の実効判定範囲（px）（TASK-82 AC #4。rivers.ts
+ * RIVER_CLICK_TOLERANCE_PX と同じ「合成値を定数で固定する」扱い）。
+ *
+ * 導出: マーカー中心からの距離が
+ * - CITY_MARKER_RADIUS_PX（3px）以内 → 可視ドット（cities）の直下 pick
+ * - CITY_HIT_RADIUS_PX（9px）以内 → 透明判定円（cities-hit）の直下 pick
+ * のいずれかで拾えるので、合成範囲は 2 つの半径の大きい方 = 9px。
+ *
+ * 近傍再ピック半径（picking.ts PICKING_RADIUS_PX）は**加算されない**。
+ * 河川（RIVER_CLICK_TOLERANCE_PX = ヒット帯半幅 + PICKING_RADIUS_PX）と違い、
+ * cities-hit は picking.ts isNearCursorRepickable で再ピック候補から除外して
+ * あり、クリックだけが 15px まで広がる非対称を作らないため（AC #2）。
+ * その代わり、ホバー・クリックとも直下 pick だけでこの範囲を得る
+ * （ホバーに pickMultipleObjects を足さない = TASK-36 のコスト設計を維持）。
+ */
+export const CITY_PICK_TOLERANCE_PX = Math.max(
+  CITY_MARKER_RADIUS_PX,
+  CITY_HIT_RADIUS_PX,
+);
+
+/**
  * 都市ラベル priority の下限（人口不明・人口 ≦ 1 の都市）。
  *
  * 設計根拠: 国名ラベル（labels.ts labelPriorityFor）は面積由来
