@@ -18,7 +18,7 @@ import {
   selectFiefsForYear,
   signedArea,
 } from "./build-france-fiefs.ts";
-import { SNAPSHOT_YEARS } from "../src/config.ts";
+import { FRANCE_FIEF_OVERLAY_YEARS, SNAPSHOT_YEARS } from "../src/config.ts";
 
 /** テスト用に OHM のリレーション要素（tags のみ）を組み立てる */
 function rel(
@@ -62,6 +62,12 @@ Deno.test("対象年は既存スナップショット年の部分集合（中世
       `${year} は SNAPSHOT_YEARS に含まれない`,
     );
   }
+});
+
+Deno.test("FRANCE_FIEF_YEARS はクライアント側 FRANCE_FIEF_OVERLAY_YEARS と同値（TASK-71）", () => {
+  // src → scripts の import は行わない規約のため値を重複定義しており、
+  // 生成対象年と配信・表示対象年がずれないことをここで担保する
+  assertEquals([...FRANCE_FIEF_YEARS], [...FRANCE_FIEF_OVERLAY_YEARS]);
 });
 
 Deno.test("parseOhmYear: 年のみ表記・年月日表記・欠損・紀元前", () => {

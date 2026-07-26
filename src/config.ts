@@ -91,6 +91,33 @@ export const HRE_OVERLAY_YEARS: readonly number[] = [
   1700,
 ];
 
+/**
+ * 中世フランスの諸侯領オーバーレイ（france_fiefs_<year>.geojson）が存在する
+ * 年代（昇順、TASK-70/71）。出典は OpenHistoricalMap（CC0）。
+ *
+ * scripts/build-france-fiefs.ts の FRANCE_FIEF_YEARS と同値（src → scripts の
+ * import は行わない規約のため値を重複定義し、同値性は build-france-fiefs_test.ts
+ * で担保する）。
+ *
+ * 900 は Anjou / Maine の 2 件しか有効な諸侯領が無く面として成立せず、1400 以降は
+ * 百年戦争期に多くの伯領が消滅して王領へ併合され、OHM 側の収録も admin_level 2
+ * （主権国家）へ移るため対象外。1400 以降はベースマップ（europe_<year>）の
+ * France ポリゴンが実態に一致するので、オーバーレイを重ねると同じ領域が二重に
+ * 表示されるだけになる（AC #4）。
+ *
+ * HRE_OVERLAY_YEARS（1500〜1700）とは互いに素で、現状 2 系統のオーバーレイが
+ * 同時に表示される年は無い。機構としては独立レイヤー（france-fiefs / hre-powers）
+ * として共存でき、同時表示年が将来生じても描画順・picking 順は
+ * PICKING_PRIORITY で一意に決まる（TASK-71）。
+ */
+export const FRANCE_FIEF_OVERLAY_YEARS: readonly number[] = [
+  1000,
+  1100,
+  1200,
+  1279,
+  1300,
+];
+
 /** 歴史的国境ポリゴンが存在する年代スナップショット一覧（昇順） */
 export const SNAPSHOT_YEARS: readonly number[] = [
   900,

@@ -3,6 +3,7 @@ import type { FeatureCollection } from "geojson";
 import {
   colorKeyFor,
   createCombinedYearLoader,
+  createFranceFiefOverlayLoader,
   createHreOverlayLoader,
   createYearDataLoader,
   createYearSwitcher,
@@ -11,6 +12,8 @@ import {
   EMPTY_FEATURE_COLLECTION,
   FILL_ALPHA,
   fillColorFor,
+  franceFiefDataUrlFor,
+  hasFranceFiefOverlay,
   hasHreOverlay,
   hexToRgb,
   hreDataUrlFor,
@@ -18,7 +21,11 @@ import {
   type Rgba,
   type YearLayerData,
 } from "./powers.ts";
-import { HRE_OVERLAY_YEARS, SNAPSHOT_YEARS } from "./config.ts";
+import {
+  FRANCE_FIEF_OVERLAY_YEARS,
+  HRE_OVERLAY_YEARS,
+  SNAPSHOT_YEARS,
+} from "./config.ts";
 
 Deno.test("colorKeyFor は独立勢力（SUBJECTO が NAME と同じ）では NAME を返す", () => {
   assertEquals(colorKeyFor({ NAME: "Cyprus", SUBJECTO: "Cyprus" }), "Cyprus");
@@ -558,9 +565,178 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
   const p1 = switcher.switchTo(1400);
   const p2 = switcher.switchTo(1500);
   // 新しい 1500 が先に、古い 1400 が後から解決する
-  d1500.resolve({ base: fakeCollection("F"), hre: fakeCollection("A") });
-  d1400.resolve({ base: fakeCollection("F"), hre: EMPTY_FEATURE_COLLECTION });
+  d1500.resolve({
+    base: fakeCollection("F"),
+    hre: fakeCollection("A"),
+    fiefs: EMPTY_FEATURE_COLLECTION,
+  });
+  d1400.resolve({
+    base: fakeCollection("F"),
+    hre: EMPTY_FEATURE_COLLECTION,
+    fiefs: EMPTY_FEATURE_COLLECTION,
+  });
   await Promise.all([p1, p2]);
   assertEquals(applied, [{ year: 1500, hreCount: 1 }]);
   assertEquals(switcher.currentYear(), 1500);
+});
+
+// ---- フランス諸侯領オーバーレイ（TASK-71）----
+
+Deno.test("franceFiefDataUrlFor はフランス諸侯領オーバーレイ GeoJSON のパスを返す（TASK-71）", () => {
+  assertEquals(franceFiefDataUrlFor(1000), "/data/france_fiefs_1000.geojson");
+  assertEquals(franceFiefDataUrlFor(1279), "/data/france_fiefs_1279.geojson");
+});
+
+Deno.test("hasFranceFiefOverlay は中世の対象年のみ true を返す（TASK-71 AC #4）", () => {
+  for (const year of FRANCE_FIEF_OVERLAY_YEARS) {
+    assert(hasFranceFiefOverlay(year, FRANCE_FIEF_OVERLAY_YEARS));
+  }
+  // 近世以降（ベースマップの France ポリゴンだけで表現される年）は対象外
+  for (const year of [900, 1400, 1492, 1500, 1650, 1700, 1815, 1914]) {
+    assert(
+      !hasFranceFiefOverlay(year, FRANCE_FIEF_OVERLAY_YEARS),
+      `${year} でフランス諸侯オーバーレイが有効になってはいけない`,
+    );
+  }
+});
+
+Deno.test("createFranceFiefOverlayLoader は非対象年で fetch せず空 FC を返す（二重表示回避。TASK-71 AC #4）", async () => {
+  const calls: string[] = [];
+  const loader = createFranceFiefOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Duchy of Normandy")),
+    });
+  }, FRANCE_FIEF_OVERLAY_YEARS);
+  for (
+    const year of SNAPSHOT_YEARS.filter((y) =>
+      !FRANCE_FIEF_OVERLAY_YEARS.includes(y)
+    )
+  ) {
+    const fc = await loader.load(year);
+    assertEquals(fc, EMPTY_FEATURE_COLLECTION, `${year} で空 FC でない`);
+    // 非対象年は fetch 不要なので「取得済み」扱い（スピナーを出さない）
+    assert(loader.has(year));
+  }
+  assertEquals(calls, []);
+});
+
+Deno.test("createFranceFiefOverlayLoader は対象年で france_fiefs URL を fetch して返す（キャッシュあり）（TASK-71）", async () => {
+  const calls: string[] = [];
+  const loader = createFranceFiefOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Duchy of Normandy")),
+    });
+  }, FRANCE_FIEF_OVERLAY_YEARS);
+  assert(!loader.has(1200));
+  const fc = await loader.load(1200);
+  assertEquals(fc.features[0].properties?.NAME, "Duchy of Normandy");
+  assertEquals(calls, ["/data/france_fiefs_1200.geojson"]);
+  await loader.load(1200);
+  assertEquals(calls, ["/data/france_fiefs_1200.geojson"]);
+  assert(loader.has(1200));
+});
+
+Deno.test("createFranceFiefOverlayLoader は取得失敗時に warn して空 FC を返す（キャッシュせず再試行可能）（TASK-71）", async () => {
+  let count = 0;
+  const warns: string[] = [];
+  const loader = createFranceFiefOverlayLoader(
+    (_url) => {
+      count++;
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      });
+    },
+    FRANCE_FIEF_OVERLAY_YEARS,
+    (msg) => warns.push(msg),
+  );
+  const fc = await loader.load(1000);
+  assertEquals(fc, EMPTY_FEATURE_COLLECTION);
+  assertEquals(warns.length, 1);
+  assert(!loader.has(1000));
+  await loader.load(1000);
+  assertEquals(count, 2);
+});
+
+/** base / hre / france_fiefs を出し分けるモック fetch を作る（TASK-71） */
+function makeThreeWayFetch(calls: string[]) {
+  return (url: string) => {
+    calls.push(url);
+    const name = url.includes("france_fiefs_")
+      ? "Duchy of Normandy"
+      : url.includes("hre_")
+      ? "Austria"
+      : "France";
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(name)),
+    });
+  };
+}
+
+Deno.test("createCombinedYearLoader は fiefs ローダを渡すと base/hre/fiefs を並行ロードして返す（TASK-71）", async () => {
+  const calls: string[] = [];
+  const fetchFn = makeThreeWayFetch(calls);
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.base.features[0].properties?.NAME, "France");
+  assertEquals(data.hre, EMPTY_FEATURE_COLLECTION);
+  assertEquals(data.fiefs.features[0].properties?.NAME, "Duchy of Normandy");
+  assertEquals(calls.sort(), [
+    "/data/europe_1200.geojson",
+    "/data/france_fiefs_1200.geojson",
+  ]);
+});
+
+Deno.test("createCombinedYearLoader はオーバーレイ対象外の年で fiefs を fetch せず空 FC にする（TASK-71 AC #4）", async () => {
+  const calls: string[] = [];
+  const fetchFn = makeThreeWayFetch(calls);
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1500);
+  assertEquals(data.fiefs, EMPTY_FEATURE_COLLECTION);
+  assertEquals(data.fiefs.features.length, 0);
+  assertEquals(calls.sort(), [
+    "/data/europe_1500.geojson",
+    "/data/hre_1500.geojson",
+  ]);
+});
+
+Deno.test("createCombinedYearLoader は fiefs ローダ省略時も従来どおり動く（空 FC）（TASK-71）", async () => {
+  const calls: string[] = [];
+  const fetchFn = makeThreeWayFetch(calls);
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.fiefs, EMPTY_FEATURE_COLLECTION);
+});
+
+Deno.test("createCombinedYearLoader の has は fiefs も含めて判定する（TASK-71）", async () => {
+  const calls: string[] = [];
+  const fetchFn = makeThreeWayFetch(calls);
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+  );
+  assert(!loader.has(1200));
+  await loader.load(1200);
+  assert(loader.has(1200));
 });
