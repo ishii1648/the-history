@@ -72,6 +72,9 @@ export function getDataCopyTargets(
     { from: "data/name-ja.json", to: `${distDir}/data/name-ja.json` },
     // TASK-21: 主要河川オーバーレイ用の GeoJSON（deno task build-rivers で生成）
     { from: "data/rivers.geojson", to: `${distDir}/data/rivers.geojson` },
+    // TASK-97: 主要山脈ポリゴン（deno task build-mountains で生成）。河川と同じく
+    // 年代非依存の 1 ファイルで、山脈名ラベルのアンカー元になる
+    { from: "data/mountains.geojson", to: `${distDir}/data/mountains.geojson` },
     // TASK-27: 各年代の主要都市マーカー（deno task build-cities で生成）
     { from: "data/cities.json", to: `${distDir}/data/cities.json` },
     // TASK-33: 年代ごとの歴史解説パネル用テキスト

@@ -76,6 +76,11 @@ Protomaps 配布の既成 PMTiles を使用する（`map-rendering-research.md` 
 - ベースマップが表示するのは**地形・海岸線のみ**。現代の国境・都市名・道路等のレイヤーはスタイル定義で非表示にする（歴史地図の上に現代の情報が透けるのを防ぐ）。河川はベースマップでは描画せず、データオーバーレイ（deck.gl
   の主要河川レイヤー）へ一本化する（ベースマップの川ラインは picking
   対象の河川データと経路が乖離し、クリックできないデコイになるため。TASK-44）
+- 山岳は地形陰影（hillshade、TASK-34）で表現し、山脈名は河川と同じくデータ
+  オーバーレイ（Natural Earth 由来の `data/mountains.geojson`
+  から作る常時表示のラベル層、TASK-97）で補う。年代に依らない地形なので
+  年代スナップショットとは独立の 1 ファイルにし、表示するズーム段は Natural
+  Earth の `MIN_LABEL` から決める
 - 配信: Cloudflare R2 に PMTiles を配置し HTTP Range Request
   で取得。フォールバックとして OpenFreeMap を設定
 - MVP ではヨーロッパ域のみを抽出した PMTiles
@@ -151,8 +156,8 @@ R2）に配置する。
     塗りが切れる位置が定義上一致する
   - 上記 3 層の相対順（内水面 → 政治ポリゴン → 海洋 → 海岸線）は
     `layer_stack.ts` の `waterStackIsValid` が描画ごとに検証する
-  - ラベル 3 層（勢力名・河川名・都市名）だけは interleaved ではなく overlaid
-    の別オーバーレイに載せる。`beforeId` で interleaved
+  - ラベル 4 層（山脈名・勢力名・河川名・都市名）だけは interleaved ではなく
+    overlaid の別オーバーレイに載せる。`beforeId` で interleaved
     のレイヤーグループが分かれると `CollisionFilterExtension`
     の衝突マップが先行グループのパスで壊れ、ラベルが全滅するため。ラベルは
     `pickable: false` かつ常に最前面なので、picking・見た目への影響はない
