@@ -1,0 +1,292 @@
+/**
+ * 宗主-封臣関係を持つ勢力の「勢力圏の外枠」を扱う DOM/deck.gl 非依存な純粋
+ * ロジック（TASK-94。TASK-30 の HRE 専用実装 hre_extent.ts を一般化したもの）。
+ *
+ * - 宗主キーの解決（resolveSuzerainKey / suzerainExtentKey）
+ * - 宗主に属する全 feature の抽出と union（extractSuzerainMembers /
+ *   buildSuzerainExtent）
+ * - 宗主補正の適用（applySuzerainOverrides / withSuzerainOverrides）
+ *
+ * ## 外枠の定義
+ * 「宗主キーごとに、その宗主に属する全 feature（本体 + 従属）の union の外縁」。
+ * HRE も同じ規則に載る（NAME=Holy Roman Empire の本体に加え、SUBJECTO=Holy
+ * Roman Empire の従属勢力も囲まれる。TASK-30 では本体だけだったが、「一体性を
+ * 示す」という表現の目的からは従属勢力を含む方が正しい）。
+ *
+ * データ源は base（europe_*）に一本化する。領邦オーバーレイ（hre_fiefs_flat_* /
+ * france_fiefs_flat_*）は base の内側を細分するだけで勢力圏の外縁を広げないため、
+ * オーバーレイの有無に依らず同じ外枠が得られる。仏諸侯領は宗主プロパティ自体を
+ * 持たないので入力にもできない。
+ *
+ * ## 宗主補正（suzerains）
+ * base の SUBJECTO は史実の封建関係を必ずしも反映しない（例: ブルターニュ公は
+ * フランス王の封臣だが base では SUBJECTO=Britany の独立勢力）。name-overrides.json
+ * の `suzerains`（NAME → 宗主 NAME）でこれを補正する。補正は SUBJECTO の
+ * 書き換えとして適用するため、外枠だけでなく色キー（powers.ts colorKeyFor =
+ * "NAME|SUBJECTO"）・情報パネルの表示（info.ts displayLabel）も一貫して従属関係を
+ * 反映する。歴史的に宗主関係が明白でデータが欠くものに限り最小限に留める。
+ */
+
+import union from "@turf/union";
+import { featureCollection } from "@turf/helpers";
+import type {
+  Feature,
+  FeatureCollection,
+  GeoJsonProperties,
+  MultiPolygon,
+  Polygon,
+} from "geojson";
+import { HRE_LAYER_ID, POWER_LAYER_ID } from "./picking.ts";
+import type { YearDataLoader } from "./powers.ts";
+
+/**
+ * 宗主キーの解決に使う name-overrides.json の内容。
+ * - renames: SUBJECTO の表記ゆれ正規化（info.ts displayLabel と同じ規約）
+ * - suzerains: base が欠く封建関係の補正（NAME → 宗主 NAME）
+ */
+export interface SuzerainOverrides {
+  renames: Record<string, string>;
+  suzerains: Record<string, string>;
+}
+
+/** 補正なし（取得失敗時のフォールバック。base の SUBJECTO をそのまま使う） */
+export const EMPTY_SUZERAIN_OVERRIDES: SuzerainOverrides = {
+  renames: {},
+  suzerains: {},
+};
+
+/** 外枠の対象になるレイヤー。仏諸侯領は宗主プロパティを持たないため含めない */
+const EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
+  POWER_LAYER_ID,
+  HRE_LAYER_ID,
+];
+
+/** properties から文字列プロパティを取り出す。空文字・非文字列は null */
+function stringProp(props: GeoJsonProperties, key: string): string | null {
+  const v = props?.[key];
+  return typeof v === "string" && v !== "" ? v : null;
+}
+
+/** unknown が「文字列だけを値に持つ辞書」ならそれを返す。それ以外は空辞書 */
+function stringMap(value: unknown): Record<string, string> {
+  if (value === null || typeof value !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === "string") out[k] = v;
+  }
+  return out;
+}
+
+/** name-overrides.json の JSON を SuzerainOverrides へ解釈する（純粋関数） */
+export function parseSuzerainOverrides(data: unknown): SuzerainOverrides {
+  if (data === null || typeof data !== "object") {
+    return EMPTY_SUZERAIN_OVERRIDES;
+  }
+  const obj = data as Record<string, unknown>;
+  return {
+    renames: stringMap(obj.renames),
+    suzerains: stringMap(obj.suzerains),
+  };
+}
+
+/**
+ * feature の宗主キーを解決する（純粋関数）。
+ * 優先順は 宗主補正テーブル（NAME 起点）> SUBJECTO（renames 正規化）> NAME。
+ * 独立勢力は SUBJECTO が自己参照なので自分自身のキーになり、外枠は自分だけを
+ * 囲む（無関係な勢力へ波及しない）。NAME を持たない feature は null。
+ *
+ * 補正は SUBJECTO の書き換えとしても適用される（applySuzerainOverrides）ため、
+ * 書き換え前後のどちらの properties を渡しても同じキーになる（冪等）。
+ */
+export function resolveSuzerainKey(
+  props: GeoJsonProperties,
+  overrides: SuzerainOverrides,
+): string | null {
+  const name = stringProp(props, "NAME");
+  if (name === null) return null;
+  const override = overrides.suzerains[name];
+  if (override !== undefined) return overrides.renames[override] ?? override;
+  const subjecto = stringProp(props, "SUBJECTO");
+  if (subjecto === null) return name;
+  return overrides.renames[subjecto] ?? subjecto;
+}
+
+/**
+ * picking 結果から「表示すべき外枠の宗主キー」を解決する（純粋関数）。
+ * 対象外レイヤー（仏諸侯領・都市・河川・picking なし）は null = 外枠を出さない。
+ * レイヤー ID を先に判定するため、GeoJSON Feature でない picking 結果
+ * （都市マーカー）でも安全に null を返す。
+ */
+export function suzerainExtentKey(
+  pickedLayerId: string | undefined,
+  pickedProps: GeoJsonProperties | undefined,
+  overrides: SuzerainOverrides,
+): string | null {
+  if (pickedLayerId === undefined) return null;
+  if (!EXTENT_SOURCE_LAYER_IDS.includes(pickedLayerId)) return null;
+  return resolveSuzerainKey(pickedProps ?? null, overrides);
+}
+
+/**
+ * base から宗主キーに属する feature（本体 + 従属）を抽出する（純粋関数）。
+ * key が null・該当なしなら空配列。
+ */
+export function extractSuzerainMembers(
+  fc: FeatureCollection,
+  key: string | null,
+  overrides: SuzerainOverrides,
+): Feature[] {
+  if (key === null) return [];
+  return fc.features.filter((f) =>
+    resolveSuzerainKey(f.properties, overrides) === key
+  );
+}
+
+/** Polygon / MultiPolygon の feature だけに絞る（union の入力条件） */
+function polygonsOnly(
+  features: Feature[],
+): Feature<Polygon | MultiPolygon>[] {
+  return features.filter((f): f is Feature<Polygon | MultiPolygon> =>
+    f.geometry !== null &&
+    (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon")
+  );
+}
+
+/**
+ * 宗主キーの外枠（構成 feature の union）を FeatureCollection で返す
+ * （純粋関数）。
+ *
+ * union で融合することで、宗主本体と従属勢力の間に走る内部境界が外縁線として
+ * 描かれず、「どこからどこまでが 1 つの勢力圏か」だけが読める。飛び地
+ * （アンジュー帝国の英本土と大陸領など）は MultiPolygon として保たれる。
+ *
+ * union が失敗した場合（base ポリゴンの自己交差など）は構成 feature をそのまま
+ * 返す。外枠が内部境界込みになるだけで、範囲の情報は失われない。
+ */
+export function buildSuzerainExtent(
+  fc: FeatureCollection,
+  key: string | null,
+  overrides: SuzerainOverrides,
+): FeatureCollection {
+  const members = polygonsOnly(extractSuzerainMembers(fc, key, overrides));
+  // 構成 feature が 1 枚（宗主-封臣関係を持たない単独勢力）なら融合する相手が
+  // 無く、そのポリゴンの外縁がそのまま外枠になる（turf union は 2 件未満を
+  // 受け付けないため、最も多いこのケースを先に返す）
+  if (members.length <= 1) {
+    return { type: "FeatureCollection", features: members };
+  }
+  const properties = { NAME: key };
+  try {
+    const merged = union(featureCollection(members), { properties });
+    if (merged !== null) {
+      return { type: "FeatureCollection", features: [merged] };
+    }
+  } catch (error) {
+    console.warn(
+      `勢力圏の外枠の union に失敗しました。構成ポリゴンをそのまま描画します (${key}): ${
+        String(error)
+      }`,
+    );
+  }
+  return { type: "FeatureCollection", features: members };
+}
+
+/** buildSuzerainExtent をメモ化した関数の型 */
+export type SuzerainExtentCache = (
+  fc: FeatureCollection,
+  key: string | null,
+  overrides: SuzerainOverrides,
+) => FeatureCollection;
+
+/**
+ * buildSuzerainExtent の結果を宗主キー単位でメモ化する（TASK-94）。
+ *
+ * union は毎フレーム計算してよい重さではない。ビルド時に全宗主の union を
+ * 派生データとして持つ案（年代 × 宗主ぶんのファイル）と比較して、実行時
+ * オンデマンド + メモ化を採る:
+ * - 外枠が要るのはホバー/クリックした 1 宗主だけで、1 年代あたり実際に計算
+ *   されるのは高々数キー。base の feature 数は年代あたり 100 未満で、
+ *   構成 feature も数枚のため 1 回の union は軽い。
+ * - 宗主補正（name-overrides.json）を唯一の真実に保てる。派生データにすると
+ *   補正の変更がビルド生成物の再生成とセットになり、data/ に年代 × 宗主の
+ *   ファイルが増え、取得経路（ローダ・失敗時フォールバック）も増える。
+ *
+ * base の参照が変わったら（年代切替）キャッシュを丸ごと捨てる。同じ宗主を
+ * 再びホバーしたときは同一インスタンスを返すため、deck.gl の data 差分更新も
+ * 無駄打ちしない。
+ */
+export function createSuzerainExtentCache(): SuzerainExtentCache {
+  let lastFc: FeatureCollection | null = null;
+  let lastOverrides: SuzerainOverrides | null = null;
+  const cache = new Map<string, FeatureCollection>();
+  const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
+
+  return (fc, key, overrides) => {
+    if (fc !== lastFc || overrides !== lastOverrides) {
+      cache.clear();
+      lastFc = fc;
+      lastOverrides = overrides;
+    }
+    if (key === null) return empty;
+    const cached = cache.get(key);
+    if (cached !== undefined) return cached;
+    const built = buildSuzerainExtent(fc, key, overrides);
+    cache.set(key, built);
+    return built;
+  };
+}
+
+/**
+ * 宗主補正を FeatureCollection の SUBJECTO へ適用する（純粋関数）。
+ *
+ * 外枠の判定は resolveSuzerainKey だけで足りるが、色キー（powers.ts
+ * colorKeyFor）と表示ラベル（info.ts displayLabel）は properties の SUBJECTO を
+ * 直接読む。補正した勢力の色・ラベルが「独立勢力のまま」では外枠と食い違うため、
+ * 取得直後のデータへ一度だけ適用して以降の全経路を揃える
+ * （colors.json も scripts/build-colors.ts で同じ補正を適用して生成する）。
+ *
+ * 補正が 1 件も効かない場合は入力インスタンスをそのまま返す（deck.gl の
+ * data 参照同値による差分更新・memoizeLatest を壊さないため）。
+ */
+export function applySuzerainOverrides(
+  fc: FeatureCollection,
+  overrides: SuzerainOverrides,
+): FeatureCollection {
+  let changed = false;
+  const features = fc.features.map((f) => {
+    const name = stringProp(f.properties, "NAME");
+    if (name === null) return f;
+    const suzerain = overrides.suzerains[name];
+    if (suzerain === undefined) return f;
+    const normalized = overrides.renames[suzerain] ?? suzerain;
+    if (stringProp(f.properties, "SUBJECTO") === normalized) return f;
+    changed = true;
+    return { ...f, properties: { ...f.properties, SUBJECTO: normalized } };
+  });
+  return changed ? { ...fc, features } : fc;
+}
+
+/**
+ * 年代データローダに宗主補正を挟む（TASK-94）。
+ * 変換結果は年ごとに保持し、同じ年に対しては常に同一インスタンスを返す
+ * （ローダ本体のキャッシュと同じ参照安定性を保つ）。
+ */
+export function withSuzerainOverrides(
+  loader: YearDataLoader,
+  getOverrides: () => SuzerainOverrides,
+): YearDataLoader {
+  const cache = new Map<number, FeatureCollection>();
+  return {
+    has: (year) => loader.has(year),
+    async load(year) {
+      const cached = cache.get(year);
+      if (cached !== undefined) return cached;
+      const applied = applySuzerainOverrides(
+        await loader.load(year),
+        getOverrides(),
+      );
+      cache.set(year, applied);
+      return applied;
+    },
+  };
+}

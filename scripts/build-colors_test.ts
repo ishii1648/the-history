@@ -427,6 +427,61 @@ Deno.test("buildColorMap: 第 3 引数省略時は従来挙動（全属領が派
   );
 });
 
+Deno.test("buildColorMap: suzerains の宗主補正で独立勢力が属領キーになる（TASK-94）", () => {
+  // base では独立勢力（SUBJECTO==NAME）の Britany を France の封土として扱う。
+  // ランタイムは applySuzerainOverrides で SUBJECTO を補正後の宗主名へ書き換える
+  // ため、色キーも補正後の "NAME|宗主" にする（両者が食い違うと色が引けない）。
+  const fc = collection([
+    feature({ NAME: "France", SUBJECTO: null }),
+    feature({ NAME: "Britany", SUBJECTO: "Britany" }),
+  ]);
+  const map = buildColorMap([fc], {
+    renames: {},
+    suzerains: { "Britany": "France" },
+  });
+  assertEquals(map["Britany|France"], deriveSubjectColor("France"));
+  assert(!("Britany" in map));
+});
+
+Deno.test("buildColorMap: suzerains は生の SUBJECTO より優先する（TASK-94）", () => {
+  const fc = collection([
+    feature({ NAME: "Britany", SUBJECTO: "Angevin Empire" }),
+  ]);
+  const map = buildColorMap([fc], {
+    renames: {},
+    suzerains: { "Britany": "France" },
+  });
+  assertEquals(map["Britany|France"], deriveSubjectColor("France"));
+  assert(!("Britany|Angevin Empire" in map));
+});
+
+Deno.test("buildColorMap: suzerains の宗主名も renames で正規化する（TASK-94）", () => {
+  const fc = collection([
+    feature({ NAME: "Granada", SUBJECTO: "Granada" }),
+  ]);
+  const map = buildColorMap([fc], {
+    renames: { "Castille": "Castile" },
+    suzerains: { "Granada": "Castille" },
+  });
+  assertEquals(map["Granada|Castile"], deriveSubjectColor("Castile"));
+});
+
+Deno.test("buildColorMap: suzerains 省略時は従来どおり SUBJECTO だけで判定する", () => {
+  const fc = collection([
+    feature({ NAME: "Britany", SUBJECTO: "Britany" }),
+  ]);
+  const map = buildColorMap([fc], { renames: {} });
+  assertEquals(map["Britany"], assignColor("Britany"));
+});
+
+Deno.test("生成済み colors.json は宗主補正後のキーを持つ（TASK-94 AC #10）", () => {
+  // data/name-overrides.json の suzerains（Britany → France）を反映した
+  // colors.json が生成されていること。補正前のキーは残らない。
+  const colors = colorsJson as Record<string, string>;
+  assert("Britany|France" in colors);
+  assert(!("Britany" in colors));
+});
+
 Deno.test("buildColorMap: feature の順序に依存せず同一結果を返す（決定性）", () => {
   const names: string[] = [];
   for (let i = 0; i < 60; i++) names.push(`p-${i}`);
