@@ -9,13 +9,18 @@ import {
   CONTAINMENT_COVERAGE_THRESHOLD,
   FIEF_FLAT_YEARS,
   flatPathFor,
+  HRE_FIEF_FLAT_YEARS,
+  hreFlatPathFor,
+  hreRawPathFor,
   MIN_OVERLAP_AREA_M2,
   overlapsOf,
   rawPathFor,
   resolveOverlaps,
   SLIVER_AREA_LIMIT_M2,
+  subtractOverlay,
 } from "./build-fief-flat.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
+import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 
 /** 経度・緯度の矩形ポリゴン feature を作る（反時計回り） */
 function rect(
@@ -259,6 +264,174 @@ Deno.test("生成済みの france_fiefs_flat_<year> は raw と同じ feature �
           `${year}: ${fs[i].properties?.NAME} × ${
             fs[j].properties?.NAME
           } の重なりが ${(overlap / 1e6).toFixed(3)} km² 残っている`,
+        );
+      }
+    }
+  }
+});
+
+// ---- TASK-86: HRE 領邦（OHM 由来・1000〜1492）の重なり解消 ----
+
+Deno.test('overlapsOf の policy "keep-smaller" はスリバーでも大きい側を削り手にする（TASK-86）', () => {
+  const parent = rect("Parent", 0, 45, 2, 47);
+  const child = rect("Child", 0.5, 45.5, 1, 46);
+  const neighbour = rect("Neighbour", 1.99, 45, 3, 46);
+  const pairs = overlapsOf(
+    fcOf(parent, child, neighbour).features,
+    () => {},
+    "keep-smaller",
+  );
+
+  // 内包は既定方針と同じ（親を削る）
+  const containment = pairs.find((p) => p.kind === "containment");
+  assert(containment !== undefined);
+  assertEquals(containment.cutName, "Parent");
+  assertEquals(containment.keepName, "Child");
+
+  // スリバーは既定方針と逆で、小さい側（Neighbour）ではなく大きい側を削る
+  const sliver = pairs.find((p) => p.kind === "sliver");
+  assert(sliver !== undefined);
+  assertEquals(sliver.cutName, "Parent");
+  assertEquals(sliver.keepName, "Neighbour");
+});
+
+Deno.test('resolveOverlaps の policy "keep-smaller" は小さい側のジオメトリを丸ごと残す（TASK-86 AC #4）', () => {
+  // HRE の実データ相当: 帝国修道院領（小）が部族大公領（大）に 45/55 で
+  // またがる（Imperial Abbey of Werden × Lower Lotharingia / Saxony）。
+  // 既定方針（スリバーは小さい側を削る）だと修道院領がほぼ消えてしまう。
+  const west = rect("West", 0, 45, 2, 47);
+  const east = rect("East", 2, 45, 4, 47);
+  const abbey = rect("Abbey", 1.5, 45.5, 2.5, 46);
+  const { fc, resolutions } = resolveOverlaps(
+    fcOf(west, east, abbey),
+    () => {},
+    "keep-smaller",
+  );
+
+  // 修道院領は入力と完全同一（形・面積を失わない）
+  assertEquals(byName(fc, "Abbey").geometry, abbey.geometry);
+  assertAlmostEquals(
+    area(byName(fc, "Abbey")),
+    area(abbey),
+    area(abbey) * 1e-6,
+  );
+  // 削られたのは両側の大公領
+  assertEquals(
+    resolutions.map((r) => r.cutName).sort(),
+    ["East", "West"],
+  );
+  // 大公領の内側に修道院領の穴が空き、二重塗りが消える
+  const inAbbey: Position = [1.75, 45.75];
+  assert(
+    !booleanPointInPolygon(inAbbey, byName(fc, "West") as Feature<Polygon>),
+  );
+});
+
+Deno.test("subtractOverlay は別レイヤーで描かれる領域を差し引く（TASK-86 AC #4: 仏諸侯領との二重塗り解消）", () => {
+  // 実データ: 1100 年の County of Bar（仏諸侯領レイヤー）は
+  // Duchy of Upper Lotharingia（HRE 領邦レイヤー）にほぼ内包される。
+  const duchy = rect("Duchy of Upper Lotharingia", 0, 45, 2, 47);
+  const bar = rect("County of Bar", 0.5, 45.5, 1, 46);
+  const outside = rect("Duchy of Bohemia", 10, 45, 11, 46);
+  const { fc, removals } = subtractOverlay(
+    fcOf(duchy, outside),
+    fcOf(bar).features,
+    () => {},
+  );
+
+  assertEquals(removals.length, 1);
+  assertEquals(removals[0].cutName, "Duchy of Upper Lotharingia");
+  assertEquals(removals[0].externalName, "County of Bar");
+  // 重ならない feature は同一参照のまま
+  assertEquals(byName(fc, "Duchy of Bohemia").geometry, outside.geometry);
+  // 公領には Bar の穴が空く
+  assert(
+    !booleanPointInPolygon(
+      [0.75, 45.75] as Position,
+      byName(fc, "Duchy of Upper Lotharingia") as Feature<Polygon>,
+    ),
+  );
+  // 並び・properties は保持
+  assertEquals(fc.features.map((f) => f.properties?.NAME), [
+    "Duchy of Upper Lotharingia",
+    "Duchy of Bohemia",
+  ]);
+});
+
+Deno.test("subtractOverlay は重なりが無ければ入力をそのまま返す（TASK-86）", () => {
+  const a = rect("A", 0, 45, 1, 46);
+  const b = rect("B", 10, 45, 11, 46);
+  const input = fcOf(a);
+  const { fc, removals } = subtractOverlay(input, fcOf(b).features, () => {});
+  assertEquals(removals, []);
+  assertEquals(fc.features[0].geometry, a.geometry);
+});
+
+Deno.test("HRE_FIEF_FLAT_YEARS は build-hre-fiefs の対象年と一致する（TASK-86）", () => {
+  assertEquals([...HRE_FIEF_FLAT_YEARS], [...HRE_FIEF_YEARS]);
+});
+
+Deno.test("HRE 領邦のパス関数は data/ 配下の入出力を指す（TASK-86）", () => {
+  assertEquals(hreRawPathFor(1300), "data/hre_fiefs_1300.geojson");
+  assertEquals(hreFlatPathFor(1300), "data/hre_fiefs_flat_1300.geojson");
+});
+
+Deno.test("生成済みの hre_fiefs_flat_<year> は raw と同じ feature 構成で領邦同士の重なりが解消されている（TASK-86 AC #4）", async () => {
+  for (const year of HRE_FIEF_FLAT_YEARS) {
+    const raw = JSON.parse(
+      await Deno.readTextFile(hreRawPathFor(year)),
+    ) as FeatureCollection;
+    const flat = JSON.parse(
+      await Deno.readTextFile(hreFlatPathFor(year)),
+    ) as FeatureCollection;
+    assertEquals(
+      flat.features.map((f) => f.properties?.NAME),
+      raw.features.map((f) => f.properties?.NAME),
+      `${year}: feature の並び・件数が raw と異なる`,
+    );
+    for (const [i, f] of flat.features.entries()) {
+      assertEquals(
+        f.properties,
+        raw.features[i].properties,
+        `${year}: properties が raw と異なる`,
+      );
+    }
+    const fs = flat.features;
+    for (let i = 0; i < fs.length; i++) {
+      for (let j = i + 1; j < fs.length; j++) {
+        // deno-lint-ignore no-explicit-any
+        const ov = intersect(featureCollection([fs[i] as any, fs[j] as any]));
+        const overlap = ov === null ? 0 : area(ov);
+        assert(
+          overlap < 1e6,
+          `${year}: ${fs[i].properties?.NAME} × ${
+            fs[j].properties?.NAME
+          } の重なりが ${(overlap / 1e6).toFixed(3)} km² 残っている`,
+        );
+      }
+    }
+  }
+});
+
+Deno.test("hre_fiefs_flat と france_fiefs_flat は同時表示年（1000〜1300）で重ならない（TASK-86 AC #4）", async () => {
+  for (const year of HRE_FIEF_FLAT_YEARS) {
+    if (!FIEF_FLAT_YEARS.includes(year)) continue;
+    const hre = JSON.parse(
+      await Deno.readTextFile(hreFlatPathFor(year)),
+    ) as FeatureCollection;
+    const fr = JSON.parse(
+      await Deno.readTextFile(flatPathFor(year)),
+    ) as FeatureCollection;
+    for (const h of hre.features) {
+      for (const f of fr.features) {
+        // deno-lint-ignore no-explicit-any
+        const ov = intersect(featureCollection([h as any, f as any]));
+        const overlap = ov === null ? 0 : area(ov);
+        assert(
+          overlap < 1e6,
+          `${year}: ${h.properties?.NAME} × ${f.properties?.NAME} の重なりが ${
+            (overlap / 1e6).toFixed(3)
+          } km² 残っている`,
         );
       }
     }

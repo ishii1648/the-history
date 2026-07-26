@@ -131,6 +131,56 @@ Deno.test("getDataCopyTargets は fiefYears 省略時に france_fiefs を含め�
   );
 });
 
+Deno.test("getDataCopyTargets は hreFiefYears の hre_fiefs_flat をコピー対象に含める（TASK-86 AC #1）", () => {
+  const targets = getDataCopyTargets("dist", [1400], [1500], [], [1400, 1492]);
+  assertEquals(
+    targets.filter((t) => t.from.includes("hre_fiefs_flat")),
+    [
+      {
+        from: "data/hre_fiefs_flat_1400.geojson",
+        to: "dist/data/hre_fiefs_flat_1400.geojson",
+      },
+      {
+        from: "data/hre_fiefs_flat_1492.geojson",
+        to: "dist/data/hre_fiefs_flat_1492.geojson",
+      },
+    ],
+  );
+  // OHM 由来の生データ（hre_fiefs_<year>）は派生データの入力なので dist に含めない
+  assertEquals(
+    targets.filter((t) => /hre_fiefs_\d/.test(t.from)),
+    [],
+  );
+});
+
+Deno.test("getDataCopyTargets は base_outline を仏諸侯領年と HRE 領邦年の和集合で出す（TASK-86 AC #3）", () => {
+  const targets = getDataCopyTargets(
+    "dist",
+    [1300],
+    [1500],
+    [1300],
+    [1300, 1492],
+  );
+  assertEquals(
+    targets.filter((t) => t.from.includes("base_outline")).map((t) => t.from),
+    ["data/base_outline_1300.geojson", "data/base_outline_1492.geojson"],
+  );
+  assertEquals(
+    targets.filter((t) => t.from.includes("fief-dedupe")).length,
+    1,
+  );
+});
+
+Deno.test("getDataCopyTargets は hreFiefYears のみでも fief-dedupe / base_outline を出す（TASK-86）", () => {
+  const targets = getDataCopyTargets("dist", [1492], [1500], [], [1492]);
+  assertEquals(
+    targets.filter((t) =>
+      t.from.includes("fief-dedupe") || t.from.includes("base_outline")
+    ).map((t) => t.from),
+    ["data/fief-dedupe.json", "data/base_outline_1492.geojson"],
+  );
+});
+
 Deno.test("findNodeImports は node: の静的 import specifier を重複なく列挙する", () => {
   const code = [
     `import * as WorkerThreads from "node:worker_threads";`,

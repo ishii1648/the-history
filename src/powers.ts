@@ -90,9 +90,30 @@ export function dataUrlFor(year: number): string {
   return `/data/europe_${year}.geojson`;
 }
 
-/** HRE（神聖ローマ帝国）領邦オーバーレイ GeoJSON の配信 URL を返す（純粋関数） */
-export function hreDataUrlFor(year: number): string {
-  return `/data/hre_${year}.geojson`;
+/**
+ * HRE（神聖ローマ帝国）領邦オーバーレイ GeoJSON の配信 URL を返す（純粋関数）。
+ *
+ * 出典が年代で 2 系統に分かれる（TASK-86）:
+ * - 中世（medievalFiefYears ∈ config.HRE_FIEF_OVERLAY_YEARS = 1000〜1492）:
+ *   OpenHistoricalMap 由来の hre_fiefs_flat_<year>（生成は
+ *   scripts/build-hre-fiefs.ts → scripts/build-fief-flat.ts）
+ * - 近世（それ以外 = config.HRE_OVERLAY_YEARS = 1500〜1700）: ETH Zürich
+ *   Roller 由来の hre_<year>（生成は scripts/build-hre.ts）
+ *
+ * どちらも properties は NAME / SUBJECTO / PARTOF 互換なので、レイヤー
+ * （hre-powers）・色解決（colorKeyFor）・ラベル・picking は年代をまたいで同一の
+ * 経路で処理される。参照するのは flat（領邦同士の重なりを排他化した派生データ）で、
+ * franceFiefDataUrlFor と同じ理由（半透明の塗りが二重に濃くならないようにする）。
+ *
+ * medievalFiefYears を省略すると従来どおり全年代で hre_<year> を指す。
+ */
+export function hreDataUrlFor(
+  year: number,
+  medievalFiefYears: readonly number[] = [],
+): string {
+  return medievalFiefYears.includes(year)
+    ? `/data/hre_fiefs_flat_${year}.geojson`
+    : `/data/hre_${year}.geojson`;
 }
 
 /** 指定年に HRE オーバーレイが存在するか（純粋関数）。対象年は config.HRE_OVERLAY_YEARS */
@@ -263,16 +284,23 @@ function createOverlayLoader(
 /**
  * HRE 領邦オーバーレイ用のローダを作る（TASK-19）。
  * 挙動は createOverlayLoader（非対象年は空 FC・取得失敗は warn + 空 FC）に従う。
+ *
+ * TASK-86: overlayYears には中世・近世を合わせた config.HRE_ALL_OVERLAY_YEARS を、
+ * medievalFiefYears には OHM 由来の config.HRE_FIEF_OVERLAY_YEARS を渡す。
+ * 「オーバーレイがあるか」と「どの出典のファイルを引くか」を 1 つのローダ内で
+ * 分離することで、呼び出し側（main.ts）は年代をまたいで同一の hre スロットだけを
+ * 見ればよく、UI（レイヤー・ラベル色・帝国範囲強調・picking）に年代分岐が入らない。
  */
 export function createHreOverlayLoader(
   fetchFn: FetchLike,
   overlayYears: readonly number[],
   warnFn: (message: string) => void = console.warn,
+  medievalFiefYears: readonly number[] = [],
 ): YearDataLoader {
   return createOverlayLoader(
     fetchFn,
     overlayYears,
-    hreDataUrlFor,
+    (year) => hreDataUrlFor(year, medievalFiefYears),
     "HRE オーバーレイ",
     warnFn,
   );

@@ -26,6 +26,8 @@ import {
 } from "./powers.ts";
 import {
   FRANCE_FIEF_OVERLAY_YEARS,
+  HRE_ALL_OVERLAY_YEARS,
+  HRE_FIEF_OVERLAY_YEARS,
   HRE_OVERLAY_YEARS,
   SNAPSHOT_YEARS,
 } from "./config.ts";
@@ -325,6 +327,38 @@ Deno.test("hreDataUrlFor は HRE オーバーレイ GeoJSON のパスを返す",
   assertEquals(hreDataUrlFor(1650), "/data/hre_1650.geojson");
 });
 
+Deno.test("hreDataUrlFor は中世年代（TASK-85 収録年）で OHM 由来の hre_fiefs_flat を指す（TASK-86）", () => {
+  for (const year of HRE_FIEF_OVERLAY_YEARS) {
+    assertEquals(
+      hreDataUrlFor(year, HRE_FIEF_OVERLAY_YEARS),
+      `/data/hre_fiefs_flat_${year}.geojson`,
+    );
+  }
+  // 近世（Roller 由来）は従来のまま
+  for (const year of HRE_OVERLAY_YEARS) {
+    assertEquals(
+      hreDataUrlFor(year, HRE_FIEF_OVERLAY_YEARS),
+      `/data/hre_${year}.geojson`,
+    );
+  }
+});
+
+Deno.test("hreDataUrlFor の第 2 引数を省略すると従来の hre_<year> 規則になる（後方互換。TASK-86）", () => {
+  assertEquals(hreDataUrlFor(1300), "/data/hre_1300.geojson");
+});
+
+Deno.test("hasHreOverlay は HRE_ALL_OVERLAY_YEARS で中世・近世の双方を true にする（TASK-86 AC #1/#5）", () => {
+  for (const year of [1000, 1100, 1200, 1279, 1300, 1400, 1492, 1500, 1700]) {
+    assert(
+      hasHreOverlay(year, HRE_ALL_OVERLAY_YEARS),
+      `${year} で HRE オーバーレイが無い`,
+    );
+  }
+  // 900 は TASK-85 の対象外（OHM 側に面として成立する領邦が無い）
+  assert(!hasHreOverlay(900, HRE_ALL_OVERLAY_YEARS));
+  assert(!hasHreOverlay(1715, HRE_ALL_OVERLAY_YEARS));
+});
+
 Deno.test("hasHreOverlay は対象年のみ true を返す", () => {
   assert(hasHreOverlay(1500, HRE_OVERLAY_YEARS));
   assert(hasHreOverlay(1650, HRE_OVERLAY_YEARS));
@@ -374,6 +408,51 @@ Deno.test("createHreOverlayLoader は対象年で hre URL を fetch して返す
   await loader.load(1500);
   assertEquals(calls, ["/data/hre_1500.geojson"]);
   assert(loader.has(1500));
+});
+
+Deno.test("createHreOverlayLoader は中世年代で hre_fiefs_flat を fetch する（TASK-86 AC #1）", async () => {
+  const calls: string[] = [];
+  const loader = createHreOverlayLoader(
+    (url) => {
+      calls.push(url);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(fakeCollection("Duchy of Bavaria")),
+      });
+    },
+    HRE_ALL_OVERLAY_YEARS,
+    () => {},
+    HRE_FIEF_OVERLAY_YEARS,
+  );
+  const fc = await loader.load(1300);
+  assertEquals(fc.features[0].properties?.NAME, "Duchy of Bavaria");
+  assertEquals(calls, ["/data/hre_fiefs_flat_1300.geojson"]);
+  // 同一ローダで近世年代は Roller 由来のファイルを引く（年代をまたいで一貫）
+  await loader.load(1500);
+  assertEquals(calls, [
+    "/data/hre_fiefs_flat_1300.geojson",
+    "/data/hre_1500.geojson",
+  ]);
+});
+
+Deno.test("createHreOverlayLoader は 900 年で fetch せず空 FC を返す（TASK-86 AC #6）", async () => {
+  const calls: string[] = [];
+  const loader = createHreOverlayLoader(
+    (url) => {
+      calls.push(url);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(fakeCollection("Duchy of Bavaria")),
+      });
+    },
+    HRE_ALL_OVERLAY_YEARS,
+    () => {},
+    HRE_FIEF_OVERLAY_YEARS,
+  );
+  assertEquals(await loader.load(900), EMPTY_FEATURE_COLLECTION);
+  assertEquals(calls, []);
 });
 
 Deno.test("createHreOverlayLoader は取得失敗時に warn して空 FC を返す（キャッシュせず再試行可能）", async () => {

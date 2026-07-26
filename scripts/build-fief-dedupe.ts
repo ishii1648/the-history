@@ -45,16 +45,23 @@ import type {
   Polygon,
   Position,
 } from "geojson";
-import { FRANCE_FIEF_OVERLAY_YEARS } from "../src/config.ts";
+import {
+  BASE_OUTLINE_YEARS,
+  FRANCE_FIEF_OVERLAY_YEARS,
+  HRE_FIEF_OVERLAY_YEARS,
+} from "../src/config.ts";
 import { COORD_PRECISION } from "./build-data.ts";
 
 /**
- * 生成対象年。諸侯領オーバーレイが存在する年と同一
- * （src/config.ts FRANCE_FIEF_OVERLAY_YEARS = scripts/build-france-fiefs.ts の
- * FRANCE_FIEF_YEARS）。対象外の年は派生データを持たないため、ランタイムは
- * 従来どおりの描画（powers の stroke・base ラベル全件）になる（AC #3）。
+ * 生成対象年。オーバーレイ（中世フランス諸侯領・中世 HRE 領邦）のいずれかが
+ * 存在する年と同一（src/config.ts BASE_OUTLINE_YEARS）。対象外の年は派生データを
+ * 持たないため、ランタイムは従来どおりの描画（base ポリゴンの環・base ラベル
+ * 全件）になる（AC #3）。
+ *
+ * TASK-86: HRE 領邦（1000〜1492）を加えたことで 1400 / 1492 が対象に増え、
+ * 1000〜1300 は 2 系統のオーバーレイの union に対して被覆率・輪郭を計算する。
  */
-export const FIEF_DEDUPE_YEARS: readonly number[] = FRANCE_FIEF_OVERLAY_YEARS;
+export const FIEF_DEDUPE_YEARS: readonly number[] = BASE_OUTLINE_YEARS;
 
 /** 被覆率を丸める小数桁数（0.0001 = 面積比 0.01% 刻み） */
 export const COVERAGE_PRECISION = 4;
@@ -269,8 +276,8 @@ export function outlinesOutsideFiefs(
 export interface FiefDedupeFile {
   metadata: {
     generatedBy: string;
-    /** 年 → 入力ファイルのパス（再生成の手掛かり） */
-    inputs: Record<string, { base: string; fiefs: string }>;
+    /** 年 → 入力ファイルのパス（再生成の手掛かり）。fiefs は複数系統ありうる */
+    inputs: Record<string, { base: string; fiefs: string[] }>;
     coveragePrecision: number;
     minRecordedCoverage: number;
   };
@@ -287,6 +294,27 @@ export function fiefsPathFor(year: number): string {
   return `data/france_fiefs_${year}.geojson`;
 }
 
+/** HRE 領邦（OHM 由来・TASK-85）の入力パス */
+export function hreFiefsPathFor(year: number): string {
+  return `data/hre_fiefs_${year}.geojson`;
+}
+
+/**
+ * その年に存在するオーバーレイの入力パスを全て返す（純粋関数、TASK-86）。
+ * 被覆率も境界線の切り出しも「その年に描かれるオーバーレイ全体」に対する判定
+ * なので、仏諸侯領と HRE 領邦の両方がある年は 2 件を返す。
+ *
+ * 参照するのは flat（重なり解消済み）ではなく OHM 由来の生データ: union を取る
+ * 以上どちらでも結果は同じで、生データの方が入力として素直なため
+ * （flat は「どちらのレイヤーが塗るか」を決めたもので、union は変わらない）。
+ */
+export function fiefsPathsFor(year: number): string[] {
+  const paths: string[] = [];
+  if (FRANCE_FIEF_OVERLAY_YEARS.includes(year)) paths.push(fiefsPathFor(year));
+  if (HRE_FIEF_OVERLAY_YEARS.includes(year)) paths.push(hreFiefsPathFor(year));
+  return paths;
+}
+
 export function outlinePathFor(year: number): string {
   return `data/base_outline_${year}.geojson`;
 }
@@ -300,21 +328,29 @@ async function readCollection(path: string): Promise<FeatureCollection> {
 
 async function main(): Promise<void> {
   const years: Record<string, Record<string, number>> = {};
-  const inputs: Record<string, { base: string; fiefs: string }> = {};
+  const inputs: Record<string, { base: string; fiefs: string[] }> = {};
   for (const year of FIEF_DEDUPE_YEARS) {
     const base = await readCollection(basePathFor(year));
-    const fiefs = await readCollection(fiefsPathFor(year));
+    const fiefPaths = fiefsPathsFor(year);
+    const collections = await Promise.all(fiefPaths.map(readCollection));
+    // 2 系統のオーバーレイは同じ 1 枚の「オーバーレイが覆う面」として扱う
+    const fiefs: FeatureCollection = {
+      type: "FeatureCollection",
+      features: collections.flatMap((c) => c.features),
+    };
     const fiefUnion = fiefUnionOf(fiefs);
     if (fiefUnion === null) {
       throw new Error(
-        `${fiefsPathFor(year)} にポリゴンが無く諸侯領 union を作れません`,
+        `${
+          fiefPaths.join(" / ")
+        } にポリゴンが無くオーバーレイ union を作れません`,
       );
     }
     const coverage = coverageByPowerName(base, fiefUnion);
     years[String(year)] = coverage;
     inputs[String(year)] = {
       base: basePathFor(year),
-      fiefs: fiefsPathFor(year),
+      fiefs: fiefPaths,
     };
 
     const outlines = outlinesOutsideFiefs(base, fiefUnion);

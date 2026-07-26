@@ -22,6 +22,7 @@ import {
   removePinchPointsFromCollection,
   selectHreFiefsForYear,
 } from "./build-hre-fiefs.ts";
+import { HRE_FIEF_OVERLAY_YEARS } from "../src/config.ts";
 import {
   FRANCE_FIEF_NAMES,
   OHM_SOURCE_HOMEPAGE,
@@ -570,4 +571,11 @@ Deno.test("生成物: Roller 由来 hre_<year>.geojson と年代が重ならな�
   for (const key of rollerKeys) {
     assert(ohmKeys.includes(key), `${key} が OHM 側の properties に無い`);
   }
+});
+
+Deno.test("HRE_FIEF_YEARS は src/config.ts の HRE_FIEF_OVERLAY_YEARS と同値（TASK-86）", () => {
+  // ランタイム側は src → scripts を import しない規約のため値を重複定義している。
+  // 片方だけ増減すると「生成されていない年を fetch する」「生成したのに表示
+  // されない」が起きるので、同値性をここで固定する（FRANCE_FIEF_YEARS と同方針）。
+  assertEquals([...HRE_FIEF_YEARS], [...HRE_FIEF_OVERLAY_YEARS]);
 });

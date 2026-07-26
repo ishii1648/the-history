@@ -11,12 +11,19 @@ import type {
 } from "geojson";
 import {
   coverageByPowerName,
+  fiefsPathsFor,
   fiefUnionOf,
   MIN_RECORDED_COVERAGE,
   outlinesOutsideFiefs,
 } from "./build-fief-dedupe.ts";
-import { FRANCE_FIEF_OVERLAY_YEARS } from "../src/config.ts";
+import { BASE_OUTLINE_YEARS } from "../src/config.ts";
 import { FIEF_DEDUPE_YEARS } from "./build-fief-dedupe.ts";
+import dedupeTable from "../data/fief-dedupe.json" with { type: "json" };
+import {
+  FIEF_COVERAGE_SUPPRESS_THRESHOLD,
+  parseFiefDedupeTable,
+  suppressedPowerNames,
+} from "../src/fief_dedupe.ts";
 
 /** 矩形ポリゴンの feature（NAME 付き） */
 function box(
@@ -49,8 +56,51 @@ function midpoint(coords: readonly Position[]): Position {
   ];
 }
 
-Deno.test("FIEF_DEDUPE_YEARS は諸侯領オーバーレイ対象年と同値", () => {
-  assertEquals([...FIEF_DEDUPE_YEARS], [...FRANCE_FIEF_OVERLAY_YEARS]);
+Deno.test("FIEF_DEDUPE_YEARS は base 境界線オーバーレイの対象年（仏諸侯領 ∪ HRE 領邦）と同値（TASK-86）", () => {
+  assertEquals([...FIEF_DEDUPE_YEARS], [...BASE_OUTLINE_YEARS]);
+  // TASK-86 で HRE 領邦だけがある 1400 / 1492 が加わった
+  assert(FIEF_DEDUPE_YEARS.includes(1400));
+  assert(FIEF_DEDUPE_YEARS.includes(1492));
+});
+
+Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力を全て返す（TASK-86）", () => {
+  // 同時表示年は仏諸侯領と HRE 領邦の両方
+  assertEquals(fiefsPathsFor(1200), [
+    "data/france_fiefs_1200.geojson",
+    "data/hre_fiefs_1200.geojson",
+  ]);
+  // 1400 以降は HRE 領邦のみ
+  assertEquals(fiefsPathsFor(1492), ["data/hre_fiefs_1492.geojson"]);
+  // 対象外年は 1 件も無い
+  assertEquals(fiefsPathsFor(900), []);
+});
+
+Deno.test("生成済みの fief-dedupe.json は HRE 領邦年代を含み、帝国本体のラベルは抑制しない（TASK-86 AC #3/#5）", () => {
+  const table = parseFiefDedupeTable(dedupeTable);
+  for (const year of FIEF_DEDUPE_YEARS) {
+    assert(
+      table.years[String(year)] !== undefined,
+      `${year} の被覆率が fief-dedupe.json に無い`,
+    );
+    // 帝国本体は領邦オーバーレイに覆い尽くされないため、
+    // 「神聖ローマ帝国」のラベルは 1500 年以降と同じく常に出る
+    assert(
+      !suppressedPowerNames(table, year).has("Holy Roman Empire"),
+      `${year} で Holy Roman Empire のラベルが抑制されている`,
+    );
+  }
+});
+
+Deno.test("base と HRE 領邦の双方に現れる勢力は base 側のラベルが抑制される（TASK-86 AC #3）", () => {
+  // europe_1000 の Duchy of Swabia は hre_fiefs_1000 にも同名で入っており、
+  // オーバーレイが同じ土地を描き直すため base 側のラベルは二重表示になる。
+  const table = parseFiefDedupeTable(dedupeTable);
+  const coverage = table.years["1000"]?.["Duchy of Swabia"] ?? 0;
+  assert(
+    coverage >= FIEF_COVERAGE_SUPPRESS_THRESHOLD,
+    `Duchy of Swabia の被覆率が閾値未満: ${coverage}`,
+  );
+  assert(suppressedPowerNames(table, 1000).has("Duchy of Swabia"));
 });
 
 Deno.test("fiefUnionOf は隣接する諸侯領を 1 つのポリゴンへ統合する", () => {

@@ -51,6 +51,7 @@ import {
   EMPTY_FEATURE_COLLECTION,
   fillColorFor,
   hasFranceFiefOverlay,
+  hasHreOverlay,
   LINE_COLOR,
   LINE_WIDTH_PX,
   type Rgba,
@@ -118,12 +119,14 @@ import {
   succeedLoading,
 } from "./loading_state.ts";
 import {
+  BASE_OUTLINE_YEARS,
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
   DEM_PMTILES_URL,
   FALLBACK_STYLE_URL,
   FRANCE_FIEF_OVERLAY_YEARS,
-  HRE_OVERLAY_YEARS,
+  HRE_ALL_OVERLAY_YEARS,
+  HRE_FIEF_OVERLAY_YEARS,
   INITIAL_CENTER,
   INITIAL_YEAR,
   INITIAL_ZOOM,
@@ -338,20 +341,29 @@ let renames: Record<string, string> = {};
 let nameJa: Record<string, string> = {};
 
 // 年代 GeoJSON のローダ（fetch は本番のもの）。base（europe_*）・HRE 領邦
-// オーバーレイ（hre_*、1500〜1700）・中世フランス諸侯領オーバーレイ
-// （france_fiefs_*、1000〜1300。TASK-71）を複合ローダで束ね、並行ロードして
-// 全て揃ってから反映する。オーバーレイの取得失敗は powers.ts 側で warn +
-// 空扱いになり、base の表示・ローディング/エラー UI（failLoading）は base
-// 失敗時のみ動く。非対象年のオーバーレイは fetch されず空 FC になるため、
-// ベースマップの勢力ポリゴンと二重表示になることはない。
-// TASK-78: base 境界線オーバーレイ（base_outline_*、1000〜1300）も同じ複合
-// ローダに載せる。諸侯領と同じ年集合の派生データで、揃ってから同時に反映しないと
-// 「stroke を止めたのに輪郭層がまだ来ていない」1 フレームが出るため。
+// オーバーレイ・中世フランス諸侯領オーバーレイ（france_fiefs_*、1000〜1300。
+// TASK-71）を複合ローダで束ね、並行ロードして全て揃ってから反映する。
+// オーバーレイの取得失敗は powers.ts 側で warn + 空扱いになり、base の表示・
+// ローディング/エラー UI（failLoading）は base 失敗時のみ動く。非対象年の
+// オーバーレイは fetch されず空 FC になるため、ベースマップの勢力ポリゴンと
+// 二重表示になることはない。
+// TASK-86: HRE 領邦は 1000〜1492（OHM 由来 hre_fiefs_flat_*）と 1500〜1700
+// （Roller 由来 hre_*）の 2 系統を 1 本のローダ・1 枚のレイヤー（hre-powers）で
+// 扱う。年代→ファイルの解決だけ hreDataUrlFor に閉じ込めてあるため、以降の
+// 色・ラベル・帝国範囲強調・picking は年代分岐なしで一貫する。
+// TASK-78/86: base 境界線オーバーレイ（base_outline_*）も同じ複合ローダに載せる。
+// オーバーレイのある全年（BASE_OUTLINE_YEARS = 1000〜1492）の派生データで、
+// 揃ってから同時に反映しないと「輪郭層がまだ来ていない」1 フレームが出るため。
 const dataLoader = createCombinedYearLoader(
   createYearDataLoader((url) => fetch(url)),
-  createHreOverlayLoader((url) => fetch(url), HRE_OVERLAY_YEARS),
+  createHreOverlayLoader(
+    (url) => fetch(url),
+    HRE_ALL_OVERLAY_YEARS,
+    console.warn,
+    HRE_FIEF_OVERLAY_YEARS,
+  ),
   createFranceFiefOverlayLoader((url) => fetch(url), FRANCE_FIEF_OVERLAY_YEARS),
-  createBaseOutlineLoader((url) => fetch(url), FRANCE_FIEF_OVERLAY_YEARS),
+  createBaseOutlineLoader((url) => fetch(url), BASE_OUTLINE_YEARS),
 );
 
 /**
@@ -2190,6 +2202,35 @@ map.on("load", () => {
     overlay: hasFranceFiefOverlay(year, FRANCE_FIEF_OVERLAY_YEARS),
     featureCount: fiefs.features.length,
     labels: buildLabelData(fiefs, nameJa, "fief").map((d) => d.text),
+  };
+};
+
+// TASK-86: ヘッドレス CDP 検証用に HRE 領邦オーバーレイの表示状態を公開する
+// （__getFranceFiefDebug と同型の読み取り専用フック）。中世（OHM 由来）と
+// 近世（Roller 由来）で出典が替わっても同じ hre-powers レイヤーに載ることを、
+// 年代を切り替えながら source / featureCount / labels で確認できる。
+(globalThis as unknown as {
+  __getHreFiefDebug?: () => {
+    year: number;
+    overlay: boolean;
+    source: "ohm-medieval" | "roller-early-modern" | "none";
+    featureCount: number;
+    labels: string[];
+  };
+}).__getHreFiefDebug = () => {
+  const year = yearSwitcher.currentYear() ?? INITIAL_YEAR;
+  const hre = currentView?.hre ?? EMPTY_FEATURE_COLLECTION;
+  const overlay = hasHreOverlay(year, HRE_ALL_OVERLAY_YEARS);
+  return {
+    year,
+    overlay,
+    source: !overlay
+      ? "none"
+      : HRE_FIEF_OVERLAY_YEARS.includes(year)
+      ? "ohm-medieval"
+      : "roller-early-modern",
+    featureCount: hre.features.length,
+    labels: buildLabelData(hre, nameJa, "hre").map((d) => d.text),
   };
 };
 

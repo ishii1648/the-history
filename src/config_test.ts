@@ -1,9 +1,12 @@
 import { assert, assertEquals } from "@std/assert";
 import {
+  BASE_OUTLINE_YEARS,
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
   FALLBACK_STYLE_URL,
   FRANCE_FIEF_OVERLAY_YEARS,
+  HRE_ALL_OVERLAY_YEARS,
+  HRE_FIEF_OVERLAY_YEARS,
   HRE_OVERLAY_YEARS,
   INITIAL_CENTER,
   INITIAL_YEAR,
@@ -149,9 +152,69 @@ Deno.test("FRANCE_FIEF_OVERLAY_YEARS は近世以降（1400 年以降）を含�
   }
 });
 
-Deno.test("FRANCE_FIEF_OVERLAY_YEARS と HRE_OVERLAY_YEARS は互いに素（現状 2 系統のオーバーレイは同時表示年を持たない。TASK-71）", () => {
+Deno.test("FRANCE_FIEF_OVERLAY_YEARS と HRE_OVERLAY_YEARS は互いに素（Roller 由来の近世領邦と中世仏諸侯領は同時表示年を持たない。TASK-71）", () => {
   const overlap = FRANCE_FIEF_OVERLAY_YEARS.filter((y) =>
     HRE_OVERLAY_YEARS.includes(y)
   );
   assertEquals(overlap, []);
+});
+
+Deno.test("HRE_FIEF_OVERLAY_YEARS は中世 7 年代である（TASK-86）", () => {
+  assertEquals([...HRE_FIEF_OVERLAY_YEARS], [
+    1000,
+    1100,
+    1200,
+    1279,
+    1300,
+    1400,
+    1492,
+  ]);
+});
+
+Deno.test("HRE_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS の部分集合（TASK-86）", () => {
+  const sorted = [...HRE_FIEF_OVERLAY_YEARS].sort((a, b) => a - b);
+  assertEquals([...HRE_FIEF_OVERLAY_YEARS], sorted);
+  assertEquals(
+    new Set(HRE_FIEF_OVERLAY_YEARS).size,
+    HRE_FIEF_OVERLAY_YEARS.length,
+  );
+  for (const year of HRE_FIEF_OVERLAY_YEARS) {
+    assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
+});
+
+Deno.test("HRE_FIEF_OVERLAY_YEARS は 900 を含まず、Roller 由来の HRE_OVERLAY_YEARS とも互いに素（TASK-86）", () => {
+  assert(!HRE_FIEF_OVERLAY_YEARS.includes(900));
+  const overlap = HRE_FIEF_OVERLAY_YEARS.filter((y) =>
+    HRE_OVERLAY_YEARS.includes(y)
+  );
+  assertEquals(overlap, []);
+});
+
+Deno.test("HRE_ALL_OVERLAY_YEARS は中世 OHM 年代と近世 Roller 年代の和で昇順・重複なし（TASK-86）", () => {
+  assertEquals([...HRE_ALL_OVERLAY_YEARS], [
+    ...HRE_FIEF_OVERLAY_YEARS,
+    ...HRE_OVERLAY_YEARS,
+  ]);
+  const sorted = [...HRE_ALL_OVERLAY_YEARS].sort((a, b) => a - b);
+  assertEquals([...HRE_ALL_OVERLAY_YEARS], sorted);
+  assertEquals(
+    new Set(HRE_ALL_OVERLAY_YEARS).size,
+    HRE_ALL_OVERLAY_YEARS.length,
+  );
+});
+
+Deno.test("HRE_ALL_OVERLAY_YEARS は 1492 と 1500 を連続して含む（1492↔1500 の切替で表示が途切れない。TASK-86 AC #5）", () => {
+  assert(HRE_ALL_OVERLAY_YEARS.includes(1492));
+  assert(HRE_ALL_OVERLAY_YEARS.includes(1500));
+});
+
+Deno.test("BASE_OUTLINE_YEARS は仏諸侯領年代と HRE 領邦年代の和集合で昇順・重複なし（TASK-86）", () => {
+  const expected = [
+    ...new Set([...FRANCE_FIEF_OVERLAY_YEARS, ...HRE_FIEF_OVERLAY_YEARS]),
+  ].sort((a, b) => a - b);
+  assertEquals([...BASE_OUTLINE_YEARS], expected);
+  for (const year of BASE_OUTLINE_YEARS) {
+    assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
 });

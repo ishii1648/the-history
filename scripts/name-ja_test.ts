@@ -3,10 +3,12 @@ import nameJa from "../data/name-ja.json" with { type: "json" };
 import nameOverrides from "../data/name-overrides.json" with { type: "json" };
 import citiesData from "../data/cities.json" with { type: "json" };
 
-// data/europe_*.geojson（全 20 年代）・data/hre_*.geojson（5 年代）・
-// data/france_fiefs_*.geojson（5 年代、TASK-71）の全 feature の
-// NAME / SUBJECTO のユニーク値（null 除外）に data/rivers.geojson の全 feature の
-// name のユニーク値（null 除外）を加えたリスト（勢力名 + 河川名）。
+// data/europe_*.geojson（全 20 年代）・data/hre_*.geojson（Roller 由来の 5 年代 +
+// TASK-85/86 の中世 HRE 領邦 hre_fiefs_* 7 年代。再生成コマンドの glob
+// `data/hre_*.geojson` が両方を拾う）・data/france_fiefs_*.geojson（5 年代、
+// TASK-71）の全 feature の NAME / SUBJECTO のユニーク値（null 除外）に
+// data/rivers.geojson の全 feature の name のユニーク値（null 除外）を加えた
+// リスト（勢力名 + 河川名）。
 //
 // TASK-47: 元々は data/name-overrides.json の renames 値・data/cities.json の
 // 都市名（TASK-27）もこの静的リストに含めていたが、これらは自己参照問題
@@ -71,6 +73,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Bavaria",
   "Belgium",
   "Beylik of Aydin",
+  "Billung March",
   "Blue Horde",
   "Bokhara Khanate",
   "Borcea",
@@ -87,6 +90,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Bulgaria",
   "Bulgars",
   "Burgandy",
+  "Burgraviate of Nuremberg",
   "Buwayhid Emirates",
   "Byzantine Empire",
   "Caliphate of Córdoba",
@@ -99,15 +103,40 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Chuds",
   "Comté de Toulouse",
   "Corsica",
+  "County of Abensberg",
   "County of Alençon",
   "County of Anjou",
   "County of Artois",
   "County of Bar",
+  "County of Bentheim",
+  "County of Castell",
   "County of Champagne",
+  "County of Drenthe",
+  "County of East Frisia",
+  "County of Falkenstein",
   "County of Flanders",
+  "County of Henneberg-Schleusingen",
+  "County of Hohenlohe",
+  "County of Hohnstein",
+  "County of Holland",
+  "County of Holstein-Pinneberg",
+  "County of Horne",
+  "County of Kladsko",
+  "County of Leiningen",
   "County of Maine",
+  "County of Mark",
+  "County of Moers",
+  "County of Montbéliard",
   "County of Poitou",
   "County of Ponthieu",
+  "County of Ravensberg",
+  "County of Rietberg",
+  "County of Schaumburg",
+  "County of Schaunberg",
+  "County of Spiegelberg",
+  "County of Sponheim",
+  "County of Tecklenburg",
+  "County/Principality of Neuchâtel",
   "Crimean Khanate",
   "Croatia",
   "Croatian kingdom",
@@ -116,20 +145,44 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Cuxhaven",
   "Cyprus",
   "Danes",
+  "Danish March",
   "Danube",
   "Daugava",
+  "Dauphiné of Viennois",
   "Denmark",
   "Denmark-Norway",
   "Derbent",
   "Dnipro",
   "Duchy of Aquitaine",
+  "Duchy of Austria",
+  "Duchy of Bar",
   "Duchy of Bavaria",
+  "Duchy of Berg",
+  "Duchy of Bohemia",
   "Duchy of Brittany",
   "Duchy of Burgundy",
+  "Duchy of Carinthia",
+  "Duchy of Carniola",
+  "Duchy of Cleves",
+  "Duchy of Crossen",
+  "Duchy of Franconia",
   "Duchy of Gascony",
+  "Duchy of Guelders",
+  "Duchy of Lorraine",
+  "Duchy of Lower Lotharingia",
+  "Duchy of Luxembourg",
+  "Duchy of Milan",
   "Duchy of Normandy",
+  "Duchy of Pless",
+  "Duchy of Pomerania",
+  "Duchy of Pomerania-Stettin",
+  "Duchy of Saxe-Wittenberg",
   "Duchy of Saxony",
+  "Duchy of Siewierz",
   "Duchy of Swabia",
+  "Duchy of Thuringia",
+  "Duchy of Upper Lotharingia",
+  "Duchy of Westphalia",
   "Duchy of Württemberg",
   "Durdzuks",
   "Dutch Republic",
@@ -140,7 +193,9 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Electoral Hesse",
   "Electorate of Bavaria",
   "Electorate of Brandenburg",
+  "Electorate of Cologne",
   "Electorate of Saxony",
+  "Electorate of Saxony(-Wittenberg)",
   "Electorate of the Palatinate",
   "Emirate of Córdoba",
   "Emirate of Sicily",
@@ -149,6 +204,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "England",
   "England and Ireland",
   "English territory",
+  "Erfurt Territory",
   "Essex",
   "Euphrates",
   "Fatimid Caliphate",
@@ -159,6 +215,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Florence",
   "France",
   "Franche-Comté",
+  "Friesland",
   "Geneva",
   "Genoa",
   "Georgia",
@@ -187,6 +244,14 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Icelandic Commonwealth",
   "Idrisid Caliphate",
   "Ilkhanate",
+  "Imperial Abbey of Berchtesgaden",
+  "Imperial Abbey of Burtscheid",
+  "Imperial Abbey of Corvey",
+  "Imperial Abbey of Essen",
+  "Imperial Abbey of Hersfeld",
+  "Imperial Abbey of Ottobeuren",
+  "Imperial Abbey of Thorn",
+  "Imperial Abbey of Werden",
   "Imperial Hungary",
   "Irlanda",
   "Italy",
@@ -218,6 +283,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Landgraviate of Hesse",
   "Landgraviate of Hesse-Darmstadt",
   "Landgraviate of Hesse-Kassel",
+  "Landgraviate of Thurgau",
   "Lek",
   "Leks",
   "León",
@@ -226,12 +292,18 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Loire",
   "Lombard duchies",
   "Lombardy",
+  "Lordship of Cottbus",
+  "Lordship of Ruppin",
+  "Lordship of Verona",
   "Lucca",
   "Luxembourg",
   "Lübeck",
   "Magyars",
   "Malta",
   "Mamluke Sultanate",
+  "March of Cham",
+  "March of Meissen",
+  "March of Verona",
   "Maskat",
   "Massa",
   "Mecklenburg-Schwerin",
@@ -244,6 +316,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Moldova",
   "Mongol Empire",
   "Montenegro",
+  "Moravia",
   "Morocco",
   "Naples",
   "Nassau",
@@ -266,6 +339,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Paleo-Siberian hunter-gatherers",
   "Papal States",
   "Parma",
+  "Peasant Republic of Dithmarschen",
   "Pechenegs",
   "Pechora",
   "Persia",
@@ -279,6 +353,28 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Pomerania",
   "Pontremoli",
   "Portugal",
+  "Prince-Archbishopric of Bremen",
+  "Prince-Archbishopric of Magdeburg",
+  "Prince-Archbishopric of Salzburg",
+  "Prince-Bishopric of Bamberg",
+  "Prince-Bishopric of Basel",
+  "Prince-Bishopric of Cammin",
+  "Prince-Bishopric of Eichstätt",
+  "Prince-Bishopric of Freising",
+  "Prince-Bishopric of Lübeck",
+  "Prince-Bishopric of Minden",
+  "Prince-Bishopric of Paderborn",
+  "Prince-Bishopric of Passau",
+  "Prince-Bishopric of Regensburg",
+  "Prince-Bishopric of Utrecht",
+  "Prince-Bishopric of Verden",
+  "Prince-Bishopric of Worms",
+  "Prince-Bishopric of Würzburg",
+  "Princely Abbey of Fulda",
+  "Princely Abbey of Kempten",
+  "Princely Abbey of Stavelot-Malmedy",
+  "Principality of Ansbach",
+  "Principality of Bayreuth",
   "Principality of Galicia-Volhynia",
   "Principality of Kyiv",
   "Principality of Novgorod",
@@ -307,6 +403,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Sardinia-Piedmont",
   "Savoy",
   "Savoy-Piedmont",
+  "Saxon Eastern March",
   "Saxony",
   "Schaumburg-Lippe",
   "Schleswig",
@@ -453,6 +550,51 @@ Deno.test("中世フランス諸侯領 14 件が称号付きの日本語表記�
       `${name} の訳に称号が無い: ${ja}`,
     );
   }
+});
+
+Deno.test("中世 HRE 領邦が TASK-32 の称号規約に沿った日本語表記で登録されている（TASK-86 AC #2）", () => {
+  // 爵位・称号ごとの規約: Duchy → 公領 / County → 伯領 / March・Margraviate →
+  // 辺境伯領 / Burgraviate → 城伯領 / Landgraviate → 方伯領 /
+  // Electorate → 選帝侯領 / Principality → 侯領 / Lordship → 領主領 /
+  // Prince-Bishopric → 司教領 / Prince-Archbishopric → 大司教領 /
+  // Imperial Abbey → 帝国修道院領 / Princely Abbey → 侯修道院領
+  const expected: Record<string, string> = {
+    "Duchy of Austria": "オーストリア公領",
+    "Duchy of Lower Lotharingia": "下ロタリンギア公領",
+    "Duchy of Swabia": "シュヴァーベン公領",
+    "County of Holland": "ホラント伯領",
+    "County of Mark": "マルク伯領",
+    "March of Meissen": "マイセン辺境伯領",
+    "Billung March": "ビルング辺境伯領",
+    "Moravia": "モラヴィア辺境伯領",
+    "Burgraviate of Nuremberg": "ニュルンベルク城伯領",
+    "Landgraviate of Thurgau": "トゥールガウ方伯領",
+    "Electorate of Cologne": "ケルン選帝侯領",
+    "Principality of Ansbach": "アンスバッハ侯領",
+    "Lordship of Cottbus": "コトブス領主領",
+    "Prince-Bishopric of Würzburg": "ヴュルツブルク司教領",
+    "Prince-Archbishopric of Magdeburg": "マクデブルク大司教領",
+    "Imperial Abbey of Corvey": "コルヴァイ帝国修道院領",
+    "Princely Abbey of Fulda": "フルダ侯修道院領",
+    "Peasant Republic of Dithmarschen": "ディトマルシェン農民共和国",
+  };
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+});
+
+Deno.test("帝国内の称号を持つ領邦の訳は全て『〜領』で終わる（TASK-86 AC #2）", () => {
+  // base データ側の HRE 領邦（TASK-32 で統一済み）と中世領邦で表記規約を揃える。
+  // "Principality of ..." は帝国外の主権公国（キエフ・ワラキア等）にも使われ
+  // 「〜公国」が正しい訳になるため、この検査の対象から外す（帝国内の
+  // Principality of Ansbach / Bayreuth は上のテストが個別に固定している）。
+  const titled =
+    /^(Duchy|County|March|Margraviate|Burgraviate|Landgraviate|Electorate|Lordship|Prince-Bishopric|Prince-Archbishopric|Archbishopric|Bishopric|Imperial Abbey|Princely Abbey) of /;
+  const offenders = Object.entries(mapping)
+    .filter(([name]) => titled.test(name))
+    .filter(([, ja]) => !ja.endsWith("領"))
+    .map(([name, ja]) => `${name} -> ${ja}`);
+  assertEquals(offenders, []);
 });
 
 Deno.test("TASK-55 で消えた手書き都市訳が復元されている（TASK-61）", () => {
