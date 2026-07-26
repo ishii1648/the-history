@@ -1,9 +1,11 @@
 ---
 id: TASK-74
 title: 勢力色パレットを褪せた顔料トーンへ変更し colors.json を再生成する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-26 07:36'
+updated_date: '2026-07-26 08:16'
 labels:
   - 'area:scripts'
   - 'area:data'
@@ -43,3 +45,13 @@ ordinal: 70000
 - [ ] #6 パレットの実効色数が 288 のまま維持されている
 - [ ] #7 deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. scripts/build-colors.ts の SATURATIONS を [0.20,0.30,0.40]、LIGHTNESSES を [0.52,0.62,0.72,0.82] に変更（承認済み提案値。目視で微調整可）。色相の黄金角 24 段・FNV-1a・SUBJECTO ロジックは不変
+2. テスト先行: 定数変更の期待値テスト（実効色数 288 維持・決定的生成）を red→green（AC2, AC6）
+3. deno task build-colors で data/colors.json（332 キー）を再生成。手作業改変なし
+4. fmt/lint/test/build green → mainagent がヘッドレス CDP で 1200/1500/1815 年の隣接勢力識別・属領と宗主国の区別・HRE 領邦識別・下地埋もれを目視確認（AC3〜5、マージ前）。彩度下限で識別性が不足する場合は SATURATIONS を上げ再生成して再確認
+並列化判定: 見送り（理由: 定数変更 + 再生成 + 目視確認の単一直列フローで独立サブ作業が存在しない）
+<!-- SECTION:PLAN:END -->
