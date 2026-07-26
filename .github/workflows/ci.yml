@@ -43,7 +43,9 @@ jobs:
 
       - name: deno test
         if: steps.check_deno_config.outputs.exists == 'true'
-        run: deno test
+        # TASK-76: 河川連続性の回帰テストが data/rivers.geojson を読むため、
+        # data ディレクトリの読み取りのみ許可する（ネットワークは不許可のまま）
+        run: deno test --allow-read=data
 
       - name: deno task build
         if: steps.check_deno_config.outputs.exists == 'true'
