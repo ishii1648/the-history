@@ -447,11 +447,13 @@ build-fief-flat`（`scripts/build-fief-flat.ts`、ネットワーク不要）が
 - **hre-boundaries-1700-extrapolated**（1700〜1700 年）:
   1700年の神聖ローマ帝国内の領邦境界は、採用データセット（ETH Zürich,
   Roller）の最終スナップショットである1650年時点の形状をそのまま外挿した近似です。1650年以降の領土変化（1653年のブランデンブルクによるヒンターポンメルン獲得、1680年のマクデブルク獲得など）は反映されていません（TASK-68）。
-- **rivers-elbe-estuary-missing**（全年代）:
-  エルベ川のラインは北海の河口（クックスハーフェン付近）まで届かず、ハンブルク西のヴェーデル付近（東経約9.78度）で途切れます。採用している河川データ（Natural
+- **rivers-elbe-estuary-missing**（全年代 / id は TASK-75 当時のまま維持）:
+  河川のラインは実際の河口まで届かず、幅の広い河口部・潟・入り江の手前で途切れます。採用している河川データ（Natural
   Earth 50m
-  rivers_lake_centerlines）では、これより下流の幅の広い河口部が河川ではなく海として扱われており、センターラインが元データに存在しないためです。より詳細な10m版（西端は東経約9.82度でさらに手前）およびヨーロッパ詳細版でも同区間は収録されていないため、補完できる代替データは現状ありません（TASK-75
-  調査）。検証手順は §10 を参照。
+  rivers_lake_centerlines）では、こうした水域を河川ではなく海として扱い、センターラインを収録していないためです。エルベ川はハンブルク西のヴェーデル付近（東経約9.78度）、ロワール川はナント西（西経約1.74度）、オーデル川はシュチェチン潟の南端（東経約14.58度）で終わり、いずれも終端が海岸線に接しています。テージョ川・ドニプロ川なども同様で、特定の河川だけの欠落ではなく元データ全体の仕様です。より詳細な10m版（エルベは東経約9.82度とさらに手前）およびヨーロッパ詳細版でも同区間は収録されていないため、補完できる代替データは現状ありません（TASK-75・TASK-76
+  調査）。エルベ単独での 10m 版検証手順は §10、全 30 河川での裏付け（終端が
+  `ne_50m_coastline` に接することの実測・Loire / Oder への 10m 版適用結果）は
+  [rivers-continuity-audit.md](rivers-continuity-audit.md) §3.2 を参照。
 
 ## 10. 注記
 
@@ -494,7 +496,11 @@ build-fief-flat`（`scripts/build-fief-flat.ts`、ネットワーク不要）が
   が下流のエルベを海として扱っていることが裏付けられる。再現は各 GeoJSON を
   `https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/<file>`
   から取得し、`name == "Elbe"` の feature の全頂点の最小経度と、上記 bbox
-  に入る頂点の有無を数えれば確認できる。
+  に入る頂点の有無を数えれば確認できる。同じ手順を Loire・Oder
+  に適用しても結論は変わらず、これがエルベ固有ではなく Natural Earth
+  全体の仕様であることは
+  [rivers-continuity-audit.md](rivers-continuity-audit.md) §3.2 で全 30
+  河川を対象に確認している（TASK-76）。
 - 生成スクリプトは `.outputs/claude/data-inventory/_gen/`（`europe-mask.ts` = §2
   の境界定義、`gen-inventory.ts` =
   集計・出力）に置いてある。`deno run -A gen-inventory.ts <出力先>`
