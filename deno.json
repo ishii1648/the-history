@@ -16,6 +16,7 @@
     "build-hre": "deno run --allow-net --allow-read --allow-write scripts/build-hre.ts",
     "build-france-fiefs": "deno run --allow-net --allow-read --allow-write scripts/build-france-fiefs.ts",
     "build-hre-fiefs": "deno run --allow-net --allow-read --allow-write scripts/build-hre-fiefs.ts",
+    "build-italy-fiefs": "deno run --allow-net --allow-read --allow-write scripts/build-italy-fiefs.ts",
     "build-fief-dedupe": "deno run --allow-read --allow-write scripts/build-fief-dedupe.ts",
     "build-fief-flat": "deno run --allow-read --allow-write scripts/build-fief-flat.ts",
     "extract-pmtiles": "deno run --allow-net=build-metadata.protomaps.dev --allow-run=pmtiles --allow-read scripts/extract-pmtiles.ts",
