@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
+import type { Rgba } from "./powers.ts";
 import { memoizeLatest } from "./memo.ts";
 import { PICKING_RADIUS_PX } from "./picking.ts";
 import {
@@ -138,9 +139,12 @@ Deno.test("riverLineColor: hovered が null なら通常色（回帰）", () => 
 });
 
 Deno.test("riverLineColor: 中間強調色は通常色と選択強調色のどちらとも異なる", () => {
+  // 参照比較ではなく値比較で 3 状態の識別を担保する（TASK-73）
+  const key = (c: readonly number[]) => c.join(",");
   assert(
-    RIVER_HOVERED_LINE_COLOR !== RIVER_LINE_COLOR &&
-      RIVER_HOVERED_LINE_COLOR !== RIVER_SELECTED_LINE_COLOR,
+    key(RIVER_HOVERED_LINE_COLOR) !== key(RIVER_LINE_COLOR) &&
+      key(RIVER_HOVERED_LINE_COLOR) !== key(RIVER_SELECTED_LINE_COLOR) &&
+      key(RIVER_LINE_COLOR) !== key(RIVER_SELECTED_LINE_COLOR),
   );
 });
 
@@ -403,4 +407,74 @@ Deno.test("RIVERS_DATA_URL は scripts 側の生成物パスと一致する", ()
 
 Deno.test("RIVER_LINE_WIDTH_PX は 3 以上（唯一の川表示としての視認性, TASK-44）", () => {
   assert(RIVER_LINE_WIDTH_PX >= 3);
+});
+
+// ---- TASK-73: 羊皮紙/古地図トーンへの配色統一 ----
+// ベースマップ（basemap.ts PARCHMENT_FLAVOR_OVERRIDES）が羊皮紙トーンになった
+// ため、light flavor の water（#80deea）由来だった水色系の 3 状態を、青灰 +
+// 朱（--wax）の古地図配色へ置き換える。3 状態の識別（TASK-42 AC）は退行させない。
+
+/** HSV 相当の彩度（0..1）。0 に近いほど無彩色 */
+function saturation([r, g, b]: Rgba): number {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return max === 0 ? 0 : (max - min) / max;
+}
+
+/** sRGB の相対輝度（0..255 の近似。3 状態の明度差の比較に使う） */
+function luminance([r, g, b]: Rgba): number {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+Deno.test("RIVER_LINE_COLOR は青灰系（低彩度・寒色寄り）で不透明", () => {
+  assertEquals(RIVER_LINE_COLOR, [122, 148, 158, 255]);
+  assert(
+    saturation(RIVER_LINE_COLOR) < 0.3,
+    `通常色 ${RIVER_LINE_COLOR} は低彩度（シアンではない）はず`,
+  );
+  assert(
+    RIVER_LINE_COLOR[2] > RIVER_LINE_COLOR[0],
+    "青が赤より強い（寒色寄り）",
+  );
+  assertEquals(RIVER_LINE_COLOR[3], 255);
+});
+
+Deno.test("RIVER_HOVERED_LINE_COLOR は通常色と同系の青灰で、より暗い中間強調", () => {
+  assertEquals(RIVER_HOVERED_LINE_COLOR, [74, 106, 122, 255]);
+  assert(
+    RIVER_HOVERED_LINE_COLOR[2] > RIVER_HOVERED_LINE_COLOR[0],
+    "ホバー色も寒色寄り（通常色と同系）",
+  );
+  assert(
+    luminance(RIVER_HOVERED_LINE_COLOR) < luminance(RIVER_LINE_COLOR),
+    "ホバー色は通常色より暗く、下地の羊皮紙上で明確に強調される",
+  );
+  assertEquals(RIVER_HOVERED_LINE_COLOR[3], 255);
+});
+
+Deno.test("RIVER_SELECTED_LINE_COLOR は --wax 系の赤茶（古地図の朱）で他 2 状態と色相が異なる", () => {
+  // app.css の --wax #7a2e22
+  assertEquals(RIVER_SELECTED_LINE_COLOR, [122, 46, 34, 255]);
+  assert(
+    RIVER_SELECTED_LINE_COLOR[0] > RIVER_SELECTED_LINE_COLOR[2],
+    "選択色は赤が青より強い（暖色）= 青灰の通常/ホバーと色相で区別できる",
+  );
+  assertEquals(RIVER_SELECTED_LINE_COLOR[3], 255);
+});
+
+Deno.test("河川 3 状態はいずれも羊皮紙下地（#f0e6cd 相当）より十分暗く視認できる", () => {
+  // 下地 earth #f0e6cd の近似輝度
+  const earthLuminance = luminance([240, 230, 205, 255]);
+  for (
+    const color of [
+      RIVER_LINE_COLOR,
+      RIVER_HOVERED_LINE_COLOR,
+      RIVER_SELECTED_LINE_COLOR,
+    ]
+  ) {
+    assert(
+      earthLuminance - luminance(color) > 60,
+      `${color} は羊皮紙下地に対して十分な明度差を持つはず`,
+    );
+  }
 });

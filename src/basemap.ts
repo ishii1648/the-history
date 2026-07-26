@@ -11,8 +11,78 @@
  * 除外し、河川の見た目とクリック対象を deck オーバーレイへ一本化した。
  */
 
-import { layers, namedFlavor } from "@protomaps/basemaps";
+import { type Flavor, layers, namedFlavor } from "@protomaps/basemaps";
 import { BASEMAP_SOURCE_ID, DEM_PMTILES_URL, DEM_SOURCE_ID } from "./config.ts";
+
+/**
+ * 自然被覆（landcover）の羊皮紙トーン（TASK-73）。
+ *
+ * light flavor の landcover は彩度の高い緑（forest rgba(196,231,210)、
+ * grassland rgba(210,239,207) 等）で、羊皮紙の下地に載せると「現代の
+ * 植生図」に見えてしまう。古地図の顔料（黄土・オリーブ）に寄せるため、
+ * 色相を緑〜黄緑から黄土へ振り、彩度を大きく落とす。被覆種別の識別は
+ * 明度差（forest が最も暗く、barren が最も明るい）で残す。
+ *
+ * なお landcover は fill-opacity が z5→z7 で 1→0 に落ちるため、この色が
+ * 効くのは広域表示（ヨーロッパ全体〜地方）に限られる。
+ */
+export const PARCHMENT_LANDCOVER_COLORS = {
+  // 森林: 最も暗いオリーブ（古地図の緑顔料の退色を想定）
+  forest: "rgba(196, 188, 145, 1)",
+  // 草地・農地: 森林よりやや明るい黄土オリーブ
+  grassland: "rgba(214, 203, 160, 1)",
+  farmland: "rgba(219, 209, 168, 1)",
+  scrub: "rgba(223, 213, 174, 1)",
+  // 荒地: 砂地（sand）に近い明るい黄土
+  barren: "rgba(234, 223, 193, 1)",
+  // 市街地: 彩度をほぼ落とした灰褐色（現代的な要素なので目立たせない）
+  urban_area: "rgba(221, 209, 181, 1)",
+  // 氷河: 羊皮紙の最も明るい部分（純白にはしない）
+  glacier: "rgba(244, 239, 226, 1)",
+} as const satisfies Record<string, string>;
+
+/**
+ * ベースマップ（protomaps light flavor）への羊皮紙トーン上書き（TASK-73）。
+ *
+ * 地図外 UI（app.css の --parchment #f4ecd7 / --parchment-shade #e7d9b2 /
+ * --ink #3a2712 / --frame #5c3d22、TASK-40）に対し、地図本体が light flavor の
+ * まま（海 #80deea のシアン、背景 #cccccc のグレー）だったため配色が乖離して
+ * いた。地図外 UI と同じ羊皮紙系のパレットへ揃える。
+ *
+ * 各値の根拠:
+ * - background #e7d9b2: --parchment-shade と同値。タイル未読込領域と UI の
+ *   縁が同色になり、地図の「紙」が画面外まで続いて見える。
+ * - earth #f0e6cd: --parchment (#f4ecd7) をわずかに沈めた値。ラベル背景パネル
+ *   （labels.ts LABEL_BACKGROUND_COLOR = rgb(244,236,215)）より暗いため、
+ *   パネルが下地に完全に溶けず、かつ同系色で浮かない。
+ * - water #c7d2d0: くすんだ青灰。陸（暖色）との明度・色相差で海岸線は明確に
+ *   読めるが、彩度は勢力ポリゴンの塗り（colors.json 由来）より十分低く、
+ *   海が主張して勢力の色分けを邪魔しない。
+ * - glacier #f4efe2 / sand #e8dcc0 / beach #ece0c4: 陸地と同系の羊皮紙階調。
+ */
+export const PARCHMENT_FLAVOR_OVERRIDES = {
+  background: "#e7d9b2",
+  earth: "#f0e6cd",
+  water: "#c7d2d0",
+  glacier: "#f4efe2",
+  sand: "#e8dcc0",
+  beach: "#ece0c4",
+} as const satisfies Record<string, string>;
+
+/**
+ * light flavor に羊皮紙トーンの上書きを適用した flavor を返す純粋関数
+ * （TASK-73）。namedFlavor("light") の戻り値は呼び出しごとの新しいオブジェクト
+ * だが、破壊的変更を避けるため常に新オブジェクトへ spread して返す。
+ * 採用しないレイヤー（道路・建物・POI 等、BASEMAP_LAYER_IDS 外）の色は
+ * light flavor のまま残す（filterBasemapLayers で捨てられるため無害）。
+ */
+export function parchmentFlavor(): Flavor {
+  return {
+    ...namedFlavor("light"),
+    ...PARCHMENT_FLAVOR_OVERRIDES,
+    landcover: { ...PARCHMENT_LANDCOVER_COLORS },
+  };
+}
 
 /**
  * @protomaps/basemaps ^5.7.2 の nolabels_layers()（src/base_layers.ts）に
@@ -138,6 +208,9 @@ function insertHillshade(
  * PMTiles URL からベースマップ用の MapLibre スタイルを組み立てる純粋関数。
  * ラベルレイヤーを生成しないため glyphs / sprite は不要。
  *
+ * TASK-73: 配色は protomaps の light flavor をそのまま使わず、
+ * parchmentFlavor()（羊皮紙トーン）を通す。
+ *
  * TASK-34: DEM（terrarium PMTiles）ソースと hillshade レイヤーを含める。
  * DEM アーカイブは任意生成のため存在しない環境もあるが、MapLibre はソースの
  * タイル取得失敗でスタイル全体を落とさず、hillshade が描画されないだけで
@@ -145,7 +218,9 @@ function insertHillshade(
  * しないことは src/fallback.ts が担保する）。
  */
 export function buildBasemapStyle(pmtilesUrl: string): BasemapStyle {
-  const flavor = namedFlavor("light");
+  // TASK-73: light flavor をそのまま使わず、羊皮紙トーンへ上書きした flavor
+  // から生成する（配色の定義は PARCHMENT_FLAVOR_OVERRIDES に集約）。
+  const flavor = parchmentFlavor();
   const allLayers = layers(BASEMAP_SOURCE_ID, flavor);
   return {
     version: 8,

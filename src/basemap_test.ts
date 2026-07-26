@@ -5,6 +5,9 @@ import {
   buildBasemapStyle,
   filterBasemapLayers,
   HILLSHADE_LAYER_ID,
+  PARCHMENT_FLAVOR_OVERRIDES,
+  PARCHMENT_LANDCOVER_COLORS,
+  parchmentFlavor,
 } from "./basemap.ts";
 import {
   BASEMAP_PMTILES_URL,
@@ -180,4 +183,160 @@ Deno.test("hillshade 追加後もベースマップレイヤーの相対順序�
 Deno.test("BASEMAP_LAYER_IDS は water_river / water_stream を含まない（河川表示は deck オーバーレイに一本化, TASK-44）", () => {
   assert(!BASEMAP_LAYER_IDS.includes("water_river"));
   assert(!BASEMAP_LAYER_IDS.includes("water_stream"));
+});
+
+// --- TASK-73: 羊皮紙/古地図トーンへの配色統一 ---
+// 地図外 UI（app.css の --parchment #f4ecd7 / --parchment-shade #e7d9b2 /
+// --ink #3a2712 等、TASK-40）と地図本体の乖離を解消するため、protomaps の
+// light flavor を羊皮紙系の色で上書きする。
+
+/** "#rrggbb" → [r,g,b]（テスト用の素朴なパーサ） */
+function hex(color: string): [number, number, number] {
+  const n = parseInt(color.slice(1), 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+/** "rgba(r, g, b, a)" → [r,g,b]（テスト用の素朴なパーサ） */
+function rgba(color: string): [number, number, number] {
+  const m = /^rgba\((\d+),\s*(\d+),\s*(\d+)/.exec(color);
+  assert(m !== null, `${color} は rgba(...) 形式のはず`);
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+/** HSV 相当の彩度（0..1）。0 に近いほど無彩色 */
+function saturation([r, g, b]: [number, number, number]): number {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return max === 0 ? 0 : (max - min) / max;
+}
+
+Deno.test("PARCHMENT_FLAVOR_OVERRIDES は承認済みの羊皮紙系の色を定義する", () => {
+  assertEquals(PARCHMENT_FLAVOR_OVERRIDES.background, "#e7d9b2");
+  assertEquals(PARCHMENT_FLAVOR_OVERRIDES.earth, "#f0e6cd");
+  assertEquals(PARCHMENT_FLAVOR_OVERRIDES.water, "#c7d2d0");
+  assertEquals(PARCHMENT_FLAVOR_OVERRIDES.glacier, "#f4efe2");
+  assertEquals(PARCHMENT_FLAVOR_OVERRIDES.sand, "#e8dcc0");
+});
+
+Deno.test("羊皮紙系の陸地・背景色は暖色（R >= G > B）で明るい", () => {
+  for (
+    const key of ["background", "earth", "glacier", "sand", "beach"] as const
+  ) {
+    const value = PARCHMENT_FLAVOR_OVERRIDES[key];
+    const [r, g, b] = hex(value);
+    assert(r >= g && g > b, `${key}=${value} は暖色のはず`);
+    assert(r >= 200, `${key}=${value} は明るい下地のはず`);
+  }
+});
+
+Deno.test("water はシアンではなくくすんだ青灰（低彩度・寒色寄り）", () => {
+  const water = hex(PARCHMENT_FLAVOR_OVERRIDES.water);
+  // light flavor の #80deea（シアン）は彩度 0.45 超。羊皮紙下地では大幅に落とす
+  assert(
+    saturation(water) < 0.2,
+    `water=${PARCHMENT_FLAVOR_OVERRIDES.water} は低彩度のはず`,
+  );
+  // 陸（暖色）と区別できるよう、赤より青が強い（または同等）寒色寄りにする
+  assert(water[2] >= water[0], "water は青が赤以上（寒色寄り）のはず");
+});
+
+Deno.test("PARCHMENT_LANDCOVER_COLORS は light flavor の緑系を彩度の低いオリーブへ置き換える", () => {
+  const keys = [
+    "grassland",
+    "barren",
+    "urban_area",
+    "farmland",
+    "glacier",
+    "scrub",
+    "forest",
+  ] as const;
+  const base = namedFlavor("light").landcover as unknown as Record<
+    string,
+    string
+  >;
+  for (const key of keys) {
+    const color = PARCHMENT_LANDCOVER_COLORS[key];
+    assert(color !== undefined, `${key} の色が定義されていること`);
+    assert(color !== base[key], `${key} は light flavor から変更されること`);
+    const c = rgba(color);
+    assert(saturation(c) < 0.3, `landcover.${key}=${color} は低彩度のはず`);
+    // 緑被覆も含めて暖色（オリーブ）側に寄せる: 青が最も弱い
+    assert(
+      c[2] <= c[0] && c[2] <= c[1],
+      `landcover.${key}=${color} は青が最も弱い（オリーブ/羊皮紙寄り）はず`,
+    );
+  }
+});
+
+Deno.test("parchmentFlavor は light flavor の上書きで、未指定キーは維持する", () => {
+  const base = namedFlavor("light");
+  const flavor = parchmentFlavor();
+  assertEquals(flavor.background, PARCHMENT_FLAVOR_OVERRIDES.background);
+  assertEquals(flavor.earth, PARCHMENT_FLAVOR_OVERRIDES.earth);
+  assertEquals(flavor.water, PARCHMENT_FLAVOR_OVERRIDES.water);
+  assertEquals(flavor.landcover, PARCHMENT_LANDCOVER_COLORS);
+  // 採用しないレイヤー（建物・道路等）の色は light flavor のまま
+  assertEquals(flavor.buildings, base.buildings);
+  assertEquals(flavor.highway, base.highway);
+});
+
+Deno.test("parchmentFlavor は namedFlavor('light') を破壊的に変更しない", () => {
+  parchmentFlavor();
+  const base = namedFlavor("light");
+  assertEquals(base.earth, "#e2dfda");
+  assertEquals(base.water, "#80deea");
+});
+
+Deno.test("buildBasemapStyle の background / earth / water に羊皮紙色が反映される", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  const byId = new Map(style.layers.map((l) => [l.id, l]));
+  const paintOf = (id: string): Record<string, unknown> => {
+    const layer = byId.get(id);
+    assert(layer !== undefined, `${id} レイヤーが存在すること`);
+    return layer.paint as Record<string, unknown>;
+  };
+  assertEquals(
+    paintOf("background")["background-color"],
+    PARCHMENT_FLAVOR_OVERRIDES.background,
+  );
+  assertEquals(
+    paintOf("earth")["fill-color"],
+    PARCHMENT_FLAVOR_OVERRIDES.earth,
+  );
+  assertEquals(
+    paintOf("water")["fill-color"],
+    PARCHMENT_FLAVOR_OVERRIDES.water,
+  );
+});
+
+Deno.test("buildBasemapStyle の landcover に羊皮紙系のオリーブが反映され、light flavor の緑が残らない", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  const landcover = style.layers.find((l) => l.id === "landcover");
+  assert(landcover !== undefined);
+  const paint = landcover.paint as Record<string, unknown>;
+  const serialized = JSON.stringify(paint["fill-color"]);
+  for (const color of Object.values(PARCHMENT_LANDCOVER_COLORS)) {
+    assert(
+      serialized.includes(color),
+      `landcover の fill-color に ${color} が含まれること`,
+    );
+  }
+  const baseLandcover = namedFlavor("light").landcover as unknown as Record<
+    string,
+    string
+  >;
+  for (const color of Object.values(baseLandcover)) {
+    assert(
+      !serialized.includes(color),
+      `light flavor の landcover 色 ${color} は残らないこと`,
+    );
+  }
+});
+
+Deno.test("buildBasemapStyle に light flavor の現代的な色（シアンの海・グレー背景）が残らない", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  const serialized = JSON.stringify(style.layers);
+  for (const legacy of ["#80deea", "#e2dfda", "#cccccc", "#e7e7e7"]) {
+    assert(!serialized.includes(legacy), `${legacy} は残らないこと`);
+  }
 });

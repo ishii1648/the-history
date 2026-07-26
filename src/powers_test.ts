@@ -107,10 +107,18 @@ Deno.test("DEFAULT_FILL_COLOR は塗りと同じ alpha を持つグレー系", (
   assert(Math.abs(r - g) <= 8 && Math.abs(g - b) <= 8);
 });
 
-Deno.test("LINE_COLOR は白系（RGB が高く不透明寄り）", () => {
+// TASK-73: 白線は羊皮紙下地から浮くため、app.css の --frame #5c3d22 と同系の
+// インク（焦茶）へ変更する。
+
+Deno.test("LINE_COLOR はインク（焦茶）系で、白系ではない", () => {
+  // app.css の --frame #5c3d22 と同値の RGB
+  assertEquals(LINE_COLOR, [92, 61, 34, 190]);
   const [r, g, b, a] = LINE_COLOR;
-  assert(r >= 200 && g >= 200 && b >= 200);
-  assert(a > 0);
+  assert(!(r >= 200 && g >= 200 && b >= 200), "白系ではないこと");
+  // 暖色の焦茶: R > G > B かつ十分暗い
+  assert(r > g && g > b, `LINE_COLOR=${LINE_COLOR} は暖色の焦茶のはず`);
+  assert(r < 140, "羊皮紙下地に対して十分暗いインク色であること");
+  assert(a > 150 && a < 255, "境界線は不透明寄りだが完全不透明ではない");
 });
 
 Deno.test("dataUrlFor は同一オリジンの GeoJSON パスを返す", () => {

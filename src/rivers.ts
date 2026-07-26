@@ -28,22 +28,40 @@ import { PICKING_RADIUS_PX } from "./picking.ts";
 export const RIVERS_DATA_URL = "/data/rivers.geojson";
 
 /**
- * 通常時のライン色。TASK-21 の MapLibre rivers レイヤーが使っていた
- * @protomaps/basemaps light flavor の water 色（#80deea）と同値。
- * この定数のためだけに basemaps への依存を持ち込まないよう直書きする。
+ * 通常時のライン色（青灰 #7a949e。TASK-73）。
+ *
+ * TASK-21〜42 では light flavor の water 色（#80deea、シアン）と同系の
+ * 明るい水色だったが、羊皮紙トーンのベースマップ（basemap.ts
+ * PARCHMENT_FLAVOR_OVERRIDES、海 #c7d2d0）の上では彩度が高すぎて浮く。
+ * 海と同系のくすんだ青灰にしつつ、海（明るい #c7d2d0）より暗くして、
+ * 河口付近で海面と河川が溶けないようにする。
+ * ベースマップ側の定数を直接参照しないのは従来どおり（basemaps への依存を
+ * この定数のためだけに持ち込まない）。
  */
-export const RIVER_LINE_COLOR: Rgba = [128, 222, 234, 255];
-
-/** 選択（強調）時のライン色。通常色と同系統の濃い水色（#0288d1） */
-export const RIVER_SELECTED_LINE_COLOR: Rgba = [2, 136, 209, 255];
+export const RIVER_LINE_COLOR: Rgba = [122, 148, 158, 255];
 
 /**
- * ホバー（未選択）時のライン色（TASK-42）。選択強調（#0288d1）とは視覚的に
- * 区別できる中間強調として、Material Design の Light Blue 300（#64B5F6）を
- * 採用する。通常色（#80deea、明るい水色）より明確に濃く、選択強調（#0288d1、
- * 最も濃い青）よりは淡いため、3 状態を彩度・明度の連続的な段階として知覚できる。
+ * 選択（強調）時のライン色（赤茶 #7a2e22 = app.css の --wax。TASK-73）。
+ *
+ * 従来は通常色と同系の濃い水色（#0288d1）で「明度の段階」だけで 3 状態を
+ * 表していたが、羊皮紙トーンでは彩度の高い青が下地から浮く。古地図で注記を
+ * 朱で入れる表現に倣い、選択だけ色相を変えて（青灰 → 朱系の赤茶）ひと目で
+ * 「選ばれている川」と分かるようにする。--wax は情報パネルの強調にも使う色で、
+ * 地図外 UI との記号の一貫性も保てる。
  */
-export const RIVER_HOVERED_LINE_COLOR: Rgba = [100, 181, 246, 255];
+export const RIVER_SELECTED_LINE_COLOR: Rgba = [122, 46, 34, 255];
+
+/**
+ * ホバー（未選択）時のライン色（濃い青灰 #4a6a7a。TASK-42 / TASK-73）。
+ *
+ * 3 状態は「色相 + 明度」で区別する:
+ * - 通常 #7a949e: 淡い青灰
+ * - ホバー #4a6a7a: 通常と同色相のまま明確に暗く（= マウス直下の予告）
+ * - 選択 #7a2e22: 色相ごと赤茶へ（= 確定した選択）
+ * ホバーを通常と同系に留めることで、「暗くなる = まだ選んでいない強調」
+ * 「色が変わる = 選択済み」という段階が保たれる。
+ */
+export const RIVER_HOVERED_LINE_COLOR: Rgba = [74, 106, 122, 255];
 
 /**
  * 通常時の線幅（px）。TASK-44 でベースマップの川ラインを除外し deck 河川が
