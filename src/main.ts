@@ -74,7 +74,6 @@ import {
   CITY_LABEL_SIZE_PX,
   COLLISION_SIZE_SCALE,
   FIEF_LABEL_COLOR,
-  labelColorFor,
   type LabelDatum,
   labelTextStyleProps,
   POWER_LABEL_SIZE_PX,
@@ -186,6 +185,7 @@ import {
   isPowerActive,
   powerFillColor,
   powerHighlightKey,
+  powerLabelColor,
   YEAR_FILL_TRANSITION_MS,
 } from "./power_highlight.ts";
 
@@ -1493,11 +1493,28 @@ function buildLabelLayer(
     // TASK-30 AC #1: 文字色は kind で塗り分け（独立国 = 濃グレー、HRE 域内の
     // 領邦 = 臙脂 HRE_LABEL_COLOR、TASK-71: フランス諸侯領 = 藍紫
     // FIEF_LABEL_COLOR）。ラベルだけで由来の系統を区別できる。
+    // TASK-93: 強調（ホバー/クリック）中の勢力・領邦のラベルは、同じ色相のまま
+    // 暗く沈めた強調用の色へ切り替える。アクティブ塗りの上で通常色のままだと
+    // 文字が塗りに埋もれるため（判定は d.key = 塗りと同一の強調キー）。
     getSize: POWER_LABEL_SIZE_PX,
-    getColor: (d: LabelDatum) => [...labelColorFor(d)],
+    getColor: (d: LabelDatum) => [
+      ...powerLabelColor(
+        d,
+        powerHighlight.selected(),
+        powerHighlight.hovered(),
+      ),
+    ],
     // ü などの非 ASCII 文字（Württemberg 等）もグリフを生成する
     characterSet,
-    updateTriggers: { getText: [year], getPosition: [year] },
+    // TASK-93: 強調キーは getColor の入力なので trigger に足す（足さないと
+    // deck.gl が getColor を再評価せず文字色が切り替わらない）。data 自体は
+    // 強調状態に依存しないため memoizedPowerLabelData のキャッシュは効き続け、
+    // ホバーのたびに polylabel が走ることはない。
+    updateTriggers: {
+      getText: [year],
+      getPosition: [year],
+      getColor: [powerHighlight.selected(), powerHighlight.hovered()],
+    },
   });
 }
 

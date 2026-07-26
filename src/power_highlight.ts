@@ -16,6 +16,7 @@
 
 import type { GeoJsonProperties } from "geojson";
 import { colorKeyFor, fillColorFor, type Rgba } from "./powers.ts";
+import { type LabelColor, labelColorFor, type LabelDatum } from "./labels.ts";
 import {
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -34,7 +35,7 @@ export const POWER_HIGHLIGHT_LAYER_IDS: readonly string[] = [
 ];
 
 /**
- * アクティブ時の塗り色（緑青＝ヴェルディグリ #2e6e66、alpha 214）。
+ * アクティブ時の塗り色（緑青＝ヴェルディグリ #68a094、alpha 214）。
  *
  * 色の選定（TASK-90 AC #8。TASK-73 / TASK-74 の褪せ顔料・古地図トーン方針に沿う）:
  * - 緑青（銅の錆）は古地図の彩色に実在した顔料で、羊皮紙トーンの下地
@@ -50,8 +51,17 @@ export const POWER_HIGHLIGHT_LAYER_IDS: readonly string[] = [
  *   固有色（colors.json）を実質的に覆い隠すことで、飛び地を含む同一勢力の
  *   範囲が「1 つの面」として一目で読める。完全不透明にしないのは、下地の
  *   陰影・概略境界・領邦境界を残して地図としての情報を失わせないため。
+ *
+ * TASK-93 で明度を引き上げた（旧 #2e6e66 → #68a094。色相・alpha は不変）。
+ * 旧値は合成後の背景が中明度の暗い面（相対輝度 0.19）になり、その上に載る
+ * 暗色ラベル（国名・諸侯領名・都市名）が沈んで読めなかった。文字色を深く
+ * するだけでは 3.9:1 止まりで基準（labels.ts MIN_ACTIVE_LABEL_CONTRAST）に
+ * 届かず、色を切り替えない都市名は 1.9:1 のまま救えないため、塗り側も
+ * 「褪せた緑青の淡彩」へ寄せる。上げすぎると強調自体が羊皮紙の下地に
+ * 埋もれるため、下地とのコントラストは MIN_HIGHLIGHT_VISIBILITY_CONTRAST
+ * を下限として単体テストで固定する（AC #5 の両立点）。
  */
-export const ACTIVE_FILL_COLOR: Rgba = [46, 110, 102, 214];
+export const ACTIVE_FILL_COLOR: Rgba = [104, 160, 148, 214];
 
 /** 年代切替時の塗りフェード時間（ms）。従来からの値（docs/app-spec.md §5.1） */
 export const YEAR_FILL_TRANSITION_MS = 400;
@@ -147,6 +157,26 @@ export function powerFillColor(
     return ACTIVE_FILL_COLOR;
   }
   return fillColorFor(props, colors);
+}
+
+/**
+ * ラベルの文字色を強調状態から決める（純粋関数、TASK-93 AC #1/#3/#4）。
+ *
+ * 判定単位は powerFillColor と同じ強調キー（LabelDatum.key = colorKeyFor）で、
+ * 「アクティブ色に塗られた面の上に載るラベル」と「色を切り替えるラベル」が
+ * 構造的に一致する。飛び地を持つ勢力ではすべてのラベルが同時に切り替わる。
+ * key を持たないラベル（河川名・都市名）は常に通常色（対象外。判読は
+ * クリーム halo と、アクティブ塗り側の明度調整が担う）。
+ *
+ * 強調が解除されれば selected/hovered が null になり、そのまま通常色へ戻る
+ * （切替のために別途状態を持たない）。
+ */
+export function powerLabelColor(
+  d: Pick<LabelDatum, "kind" | "key">,
+  selected: string | null,
+  hovered: string | null,
+): LabelColor {
+  return labelColorFor(d, isPowerActive(d.key ?? null, selected, hovered));
 }
 
 /** 強調状態（選択・ホバー）の保持と変化検知 */

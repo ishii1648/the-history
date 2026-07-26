@@ -25,6 +25,7 @@ import {
   RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
 } from "./labels.ts";
+import { colorKeyFor } from "./powers.ts";
 
 /** テスト用の Feature を組み立てる */
 function feature(
@@ -290,6 +291,45 @@ Deno.test("buildLabelData は kind 省略時に kind キーを持たない（後
   };
   const data = buildLabelData(fc);
   assertEquals("kind" in data[0], false);
+});
+
+// TASK-93: 強調キー（key）の付与。強調中のラベル色切替の判定単位で、
+// powers.ts colorKeyFor（= 塗りの色分け・power_highlight の適用単位）と同一。
+Deno.test("buildLabelData は colorKeyFor と同一の強調キーを付与する（TASK-93）", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      feature({ type: "Polygon", coordinates: [squareRing(0, 0, 10)] }, {
+        NAME: "France",
+      }),
+      feature({ type: "Polygon", coordinates: [squareRing(20, 0, 10)] }, {
+        NAME: "Bavaria",
+        SUBJECTO: "Holy Roman Empire",
+      }),
+    ],
+  };
+  const data = buildLabelData(fc, {}, "base");
+  assertEquals(data.map((d) => d.key), [
+    colorKeyFor({ NAME: "France" }) ?? undefined,
+    colorKeyFor({ NAME: "Bavaria", SUBJECTO: "Holy Roman Empire" }) ??
+      undefined,
+  ]);
+});
+
+Deno.test("buildLabelData は飛び地（同一 NAME の別 feature）へ同じ強調キーを付与する", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      feature({ type: "Polygon", coordinates: [squareRing(0, 0, 10)] }, {
+        NAME: "Denmark",
+      }),
+      feature({ type: "Polygon", coordinates: [squareRing(30, 0, 8)] }, {
+        NAME: "Denmark",
+      }),
+    ],
+  };
+  const data = buildLabelData(fc, {}, "base");
+  assertEquals(data[0].key, data[1].key);
 });
 
 // ---- labelColorFor ----
