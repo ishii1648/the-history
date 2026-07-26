@@ -7,5 +7,8 @@
     "Poland-Llituania": "Poland-Lithuania",
     "Baltic tribes": "Baltic Tribes",
     "Kyivan Rus": "Kievan Rus"
+  },
+  "suzerains": {
+    "Britany": "France"
   }
 }

@@ -24,9 +24,16 @@ const COLORS_PATH = `${DATA_DIR}/colors.json`;
 /** 独立勢力キーと属領キー（NAME|SUBJECTO）を区切る文字。国名には現れない */
 export const SUBJECT_KEY_SEP = "|";
 
-/** name-overrides.json の構造（表記ゆれ・別名のリネームマップ） */
+/**
+ * name-overrides.json の構造。
+ * - renames: 表記ゆれ・別名のリネームマップ
+ * - suzerains: base が欠く封建関係の補正（NAME → 宗主 NAME、TASK-94）。
+ *   ランタイム側（src/suzerain_extent.ts applySuzerainOverrides）が SUBJECTO を
+ *   補正後の宗主名へ書き換えるため、色キーも同じ補正を通して作る。
+ */
 export interface NameOverrides {
   renames: Record<string, string>;
+  suzerains?: Record<string, string>;
 }
 
 /** HSL 色（h: 0..360, s: 0..1, l: 0..1） */
@@ -211,6 +218,22 @@ function stringProp(
   return typeof v === "string" && v !== "" ? v : null;
 }
 
+/**
+ * 色キーに使う SUBJECTO を決める（純粋関数、TASK-94）。
+ * overrides.suzerains に NAME の宗主補正があればそれ（renames 正規化後）を、
+ * なければ生の SUBJECTO を使う。ランタイム側の
+ * src/suzerain_extent.ts applySuzerainOverrides と同一の規則。
+ */
+function effectiveSubjecto(
+  name: string,
+  props: Record<string, unknown> | null | undefined,
+  overrides: NameOverrides,
+): string | null {
+  const suzerain = overrides.suzerains?.[name];
+  if (suzerain !== undefined) return overrides.renames[suzerain] ?? suzerain;
+  return stringProp(props, "SUBJECTO");
+}
+
 /** buildColorMap の第 1 パスで抽出する 1 エントリ分の割当情報 */
 interface ColorEntry {
   /** クライアント参照キー（NAME または NAME|SUBJECTO） */
@@ -257,12 +280,13 @@ export function buildColorMap(
       const props = f.properties as Record<string, unknown> | null;
       const name = stringProp(props, "NAME");
       if (name === null) continue;
-      const subjecto = stringProp(props, "SUBJECTO");
+      const subjecto = effectiveSubjecto(name, props, overrides);
       const key = compositeKey(name, subjecto);
       if (seenKeys.has(key)) continue;
       seenKeys.add(key);
       if (subjecto !== null && subjecto !== name) {
         const suzerain = overrides.renames[subjecto] ?? subjecto;
+        // suzerains 補正済みの値は既に正規化されているので renames は no-op
         if (suzerain === name) {
           // 補正前綴りの自己参照 → 属領扱いせずベース色
           entries.push({ key, baseName: name, subject: false });
@@ -310,9 +334,13 @@ async function loadOverrides(path: string): Promise<NameOverrides> {
         typeof data.renames === "object"
       ? data.renames as Record<string, string>
       : {};
-    return { renames };
+    const suzerains = data && typeof data === "object" && data.suzerains &&
+        typeof data.suzerains === "object"
+      ? data.suzerains as Record<string, string>
+      : {};
+    return { renames, suzerains };
   } catch {
-    return { renames: {} };
+    return { renames: {}, suzerains: {} };
   }
 }
 

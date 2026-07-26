@@ -57,6 +57,7 @@ import {
   LINE_WIDTH_PX,
   powerFillDataFor,
   type Rgba,
+  type YearDataLoader,
 } from "./powers.ts";
 import { displayLabel } from "./info.ts";
 import {
@@ -80,7 +81,15 @@ import {
   RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
 } from "./labels.ts";
-import { extractHreExtent, shouldHighlightHre } from "./hre_extent.ts";
+import {
+  createSuzerainExtentCache,
+  EMPTY_SUZERAIN_OVERRIDES,
+  extractSuzerainMembers,
+  parseSuzerainOverrides,
+  suzerainExtentKey,
+  type SuzerainOverrides,
+  withSuzerainOverrides,
+} from "./suzerain_extent.ts";
 import { memoizeLatest } from "./memo.ts";
 import {
   filterVisibleRiverLabels,
@@ -313,15 +322,18 @@ map.on("styledata", syncApproximateBorders);
 // 場所で管理する。
 
 /**
- * HRE 帝国範囲の強調オーバーレイ（GeoJsonLayer）のレイヤー ID（TASK-30）。
+ * 勢力圏の外枠オーバーレイ（GeoJsonLayer）のレイヤー ID（TASK-30 / TASK-94）。
  * pickable: false のため PICKING_PRIORITY には含めない（picking 非関与）。
+ * ID は "hre-extent" のまま据え置く（TASK-94 で対象を全勢力へ広げたが、
+ * レイヤー順・overlaid 分配（layer_stack.ts）の既存の扱いを変えないため）。
  */
 const HRE_EXTENT_LAYER_ID = "hre-extent";
 
 /**
- * 帝国範囲の強調色（TASK-30 AC #2）。HRE 領邦ラベルの臙脂
+ * 勢力圏の外枠の色（TASK-30 AC #2）。HRE 領邦ラベルの臙脂
  * （labels.ts HRE_LABEL_COLOR）と同系色で「帝国系」の記号を揃える。
  * 外縁線は不透明、塗りはごく薄くして下の勢力塗り・領邦境界を隠さない。
+ * TASK-94 で対象を全勢力へ広げた際も、この見た目は据え置く（AC #2）。
  */
 const HRE_EXTENT_LINE_COLOR: [number, number, number, number] = [
   140,
@@ -336,14 +348,17 @@ const HRE_EXTENT_FILL_COLOR: [number, number, number, number] = [
   30,
 ];
 
-/** 帝国範囲の外縁線の太さ（px）。通常の勢力境界（1px 白）より明確に太くする */
+/** 勢力圏の外枠の線の太さ（px）。通常の勢力境界（1px 白）より明確に太くする */
 const HRE_EXTENT_LINE_WIDTH_PX = 3;
 
 /** colors.json（NAME / "NAME|SUBJECTO" → HEX のフラットマップ） */
 let colors: Record<string, string> = {};
 
-/** name-overrides.json の renames（SUBJECTO 生値 → 正規化名）。ラベル整形で使う */
-let renames: Record<string, string> = {};
+/**
+ * name-overrides.json の内容（renames = SUBJECTO 生値 → 正規化名、
+ * suzerains = 宗主補正）。ラベル整形と勢力圏の外枠（TASK-94）で使う。
+ */
+let overrides: SuzerainOverrides = EMPTY_SUZERAIN_OVERRIDES;
 
 /**
  * name-ja.json（英語 NAME → 日本語名のフラットマップ）。ツールチップ・パネル・
@@ -365,19 +380,34 @@ let nameJa: Record<string, string> = {};
 // TASK-78/86: base 境界線オーバーレイ（base_outline_*）も同じ複合ローダに載せる。
 // オーバーレイのある全年（BASE_OUTLINE_YEARS = 1000〜1492）の派生データで、
 // 揃ってから同時に反映しないと「輪郭層がまだ来ていない」1 フレームが出るため。
+// TASK-94: 取得した全レイヤーへ宗主補正（name-overrides.json suzerains）を
+// 一度だけ適用する。SUBJECTO を補正後の宗主名へ書き換えることで、外枠
+// （suzerain_extent.ts）だけでなく色キー（powers.ts colorKeyFor）・表示ラベル
+// （info.ts displayLabel）も同じ封建関係を反映する。補正が 1 件も効かない年は
+// 入力インスタンスがそのまま返り、deck.gl の差分更新は従来どおり効く。
+const withOverrides = (loader: YearDataLoader) =>
+  withSuzerainOverrides(loader, () => overrides);
+
 const dataLoader = createCombinedYearLoader(
-  createYearDataLoader((url) => fetch(url)),
-  createHreOverlayLoader(
+  withOverrides(createYearDataLoader((url) => fetch(url))),
+  withOverrides(createHreOverlayLoader(
     (url) => fetch(url),
     HRE_ALL_OVERLAY_YEARS,
     console.warn,
     HRE_FIEF_OVERLAY_YEARS,
+  )),
+  withOverrides(
+    createFranceFiefOverlayLoader(
+      (url) => fetch(url),
+      FRANCE_FIEF_OVERLAY_YEARS,
+    ),
   ),
-  createFranceFiefOverlayLoader((url) => fetch(url), FRANCE_FIEF_OVERLAY_YEARS),
-  createBaseOutlineLoader((url) => fetch(url), BASE_OUTLINE_YEARS),
+  withOverrides(
+    createBaseOutlineLoader((url) => fetch(url), BASE_OUTLINE_YEARS),
+  ),
   // TASK-92: 諸侯領の下地になる base 塗りを差し引いた派生 base。輪郭
   // （base_outline_*）と同じ union から作られるので、年集合も同一。
-  createBaseFillLoader((url) => fetch(url), BASE_OUTLINE_YEARS),
+  withOverrides(createBaseFillLoader((url) => fetch(url), BASE_OUTLINE_YEARS)),
 );
 
 /**
@@ -415,10 +445,18 @@ let selectedRiverName: string | null = null;
 let hoveredRiverName: string | null = null;
 
 /**
- * HRE 本体・域内領邦のホバー/クリック中に帝国範囲を強調表示するか
- * （TASK-30 AC #2/#3）。判定は hre_extent.ts の shouldHighlightHre に委ねる。
+ * ホバー/クリック中の勢力の「宗主キー」（TASK-94。null は外枠なし）。
+ * この宗主に属する全 feature（本体 + 従属）の union が勢力圏の外枠として
+ * 描かれる。判定は suzerain_extent.ts の suzerainExtentKey に委ねる。
+ * TASK-30 の HRE 専用状態（hreHighlighted）を一般化したもの。
  */
-let hreHighlighted = false;
+let extentKey: string | null = null;
+
+/**
+ * 宗主キーごとの外枠（union）のメモ化キャッシュ（TASK-94）。base の参照が
+ * 変われば内部で捨てられるため、年代切替をまたいで古い形が残ることはない。
+ */
+const suzerainExtent = createSuzerainExtentCache();
 
 /**
  * 政治ポリゴン（powers / hre-powers / france-fiefs）のアクティブ強調状態
@@ -685,7 +723,7 @@ function pickedLabel(info: PickingInfo): string | null {
   ) {
     // TASK-71: フランス諸侯領は SUBJECTO を持たないため displayLabel は NAME の
     // 日本語表記（称号付き）をそのまま返す（宗主国込み表記にはならない）
-    return displayLabel(feature.properties, renames, nameJa);
+    return displayLabel(feature.properties, overrides.renames, nameJa);
   }
   return null;
 }
@@ -707,12 +745,12 @@ function handlePickHover(info: PickingInfo): void {
   const label = pickedLabel(info);
   if (label !== null) showTooltip(label, info.x, info.y);
   else hideTooltip();
-  // TASK-30 AC #2/#3: HRE 本体・域内領邦のホバーで帝国範囲を強調し、
-  // ホバー解除（picking なし・非 HRE 対象）で通常表示へ戻す
-  applyHreHighlight(hreHighlightFromPick(info));
+  // TASK-30 / TASK-94: 勢力（宗主・封臣のいずれ）のホバーでその勢力圏の外枠を
+  // 出し、ホバー解除（picking なし・対象外レイヤー）で通常表示へ戻す
+  applyExtentKey(extentKeyFromPick(info));
   // TASK-90: 勢力・領邦のホバー強調。河川・都市・何も無い場所のホバーでは
   // キーが null になり強調が解除される（AC #2/#6）。判定経路は
-  // hreHighlightFromPick と同型（同じ info から純粋関数でキーを解決する）。
+  // extentKeyFromPick と同型（同じ info から純粋関数でキーを解決する）。
   powerHighlight.hover(powerHighlightKeyFromPick(info));
   // TASK-42: 河川ホバー中の中間強調。pick が rivers 以外・picking なしの場合は
   // null（通常表示）に戻す。ホバーの picking 方式自体（直下 pick）は変更しない
@@ -725,24 +763,24 @@ function handlePickHover(info: PickingInfo): void {
 }
 
 /**
- * picking 結果から帝国範囲を強調すべきかを判定する（TASK-30）。
- * 判定本体は hre_extent.ts の shouldHighlightHre（純粋関数）。都市マーカーの
- * picking 結果は GeoJSON Feature ではないが、shouldHighlightHre がレイヤー ID
- * を先に見るため properties が undefined でも安全に false になる。
+ * picking 結果から、外枠を出すべき宗主キーを解決する（TASK-94）。
+ * 判定本体は suzerain_extent.ts の suzerainExtentKey（純粋関数）。都市マーカーの
+ * picking 結果は GeoJSON Feature ではないが、suzerainExtentKey がレイヤー ID
+ * を先に見るため properties が undefined でも安全に null になる。
  */
-function hreHighlightFromPick(info: PickingInfo): boolean {
-  if (info.object === undefined || info.layer === null) return false;
-  return shouldHighlightHre(
+function extentKeyFromPick(info: PickingInfo): string | null {
+  if (info.object === undefined || info.layer === null) return null;
+  return suzerainExtentKey(
     info.layer.id,
     (info.object as Feature).properties,
-    renames,
+    overrides,
   );
 }
 
 /**
  * picking 結果から政治ポリゴンの強調キーを解決する（TASK-90）。
  * 判定本体は power_highlight.ts の powerHighlightKey（純粋関数）。
- * hreHighlightFromPick と同型にし、ホバー（直下 pick）とクリック
+ * extentKeyFromPick と同型にし、ホバー（直下 pick）とクリック
  * （resolveClickInfo で選び直した pick）が同じ経路を通ることを保証する。
  * 都市マーカーの picking 結果は GeoJSON Feature ではないが、
  * powerHighlightKey がレイヤー ID を先に見るため安全に null になる。
@@ -752,10 +790,14 @@ function powerHighlightKeyFromPick(info: PickingInfo): string | null {
   return powerHighlightKey(info.layer.id, (info.object as Feature).properties);
 }
 
-/** 帝国範囲の強調状態を更新し、変化があればレイヤーを再構築して反映する */
-function applyHreHighlight(next: boolean): void {
-  if (next === hreHighlighted) return;
-  hreHighlighted = next;
+/**
+ * 勢力圏の外枠の対象（宗主キー）を更新し、変化があればレイヤーを再構築する。
+ * キー単位の変化検知なので、同じ宗主の別 feature へホバーが移っても
+ * renderLayers は呼ばれない（TASK-50 の規律）。
+ */
+function applyExtentKey(next: string | null): void {
+  if (next === extentKey) return;
+  extentKey = next;
   renderLayers();
 }
 
@@ -811,11 +853,10 @@ function resolveClickInfo(info: PickingInfo): PickingInfo {
  */
 function handlePickClick(rawInfo: PickingInfo): void {
   const info = resolveClickInfo(rawInfo);
-  // TASK-30 AC #2/#3: クリックでも帝国範囲の強調/解除を反映する（デスクトップ
-  // ではホバー経路で既に反映済みだが、ホバーの無いタッチ操作でも成立させる。
-  // 別の場所（河川・都市・非 HRE 勢力・空白）のクリックは false 側へ倒れて
-  // 強調が解除される）
-  applyHreHighlight(hreHighlightFromPick(info));
+  // TASK-30 / TASK-94: クリックでも勢力圏の外枠を反映する（デスクトップでは
+  // ホバー経路で既に反映済みだが、ホバーの無いタッチ操作でも成立させる。
+  // 河川・都市・空白のクリックはキー null に倒れて外枠が消える）
+  applyExtentKey(extentKeyFromPick(info));
   // TASK-90: 勢力・領邦のクリック強調（ホバーの無いタッチ操作でも成立させる）。
   // 保持・解除規則は power_highlight.ts togglePowerSelection（河川の選択トグルと
   // 同一規則）: 同一対象の再クリックで解除・別対象で移動・河川/都市/空クリック
@@ -1173,22 +1214,22 @@ function buildCityLabelLayer(
 }
 
 /**
- * HRE 帝国範囲の強調オーバーレイ（GeoJsonLayer）を生成する（TASK-30 AC #2〜#4）。
- * データは base の HRE 本体ポリゴン（extractHreExtent）で、領邦オーバーレイの
- * 有無に依らず帝国全体の輪郭が取れる。太い臙脂の外縁線 + ごく薄い塗りで
- * 「どこからどこまでが帝国か」を一目で示す。pickable: false のため picking の
- * 優先順位（PICKING_PRIORITY）・ツールチップ・パネルには一切関与しない
- * （AC #5）。強調の on/off は visible で切り替え、レイヤー ID を保って
- * deck.gl の差分更新に任せる。
+ * 勢力圏の外枠オーバーレイ（GeoJsonLayer）を生成する（TASK-30 AC #2〜#4 /
+ * TASK-94）。データは base（europe_*）から宗主キーで集めた feature の union
+ * （suzerain_extent.ts）で、領邦オーバーレイの有無に依らず勢力圏全体の輪郭が
+ * 取れる。太い臙脂の外縁線 + ごく薄い塗りで「どこからどこまでが 1 つの勢力圏か」
+ * を一目で示す。pickable: false のため picking の優先順位（PICKING_PRIORITY）・
+ * ツールチップ・パネルには一切関与しない（AC #5）。表示の on/off は visible で
+ * 切り替え、レイヤー ID を保って deck.gl の差分更新に任せる。
  */
-function buildHreExtentLayer(
+function buildSuzerainExtentLayer(
   year: number,
   base: FeatureCollection,
 ): GeoJsonLayer {
   return new GeoJsonLayer({
     id: HRE_EXTENT_LAYER_ID,
-    data: extractHreExtent(base),
-    visible: hreHighlighted,
+    data: suzerainExtent(base, extentKey, overrides),
+    visible: extentKey !== null,
     pickable: false,
     stroked: true,
     filled: true,
@@ -1210,7 +1251,7 @@ function buildHreExtentLayer(
  * （諸侯領の内側を走る base 境界線を描かない）はそのまま維持される。
  *
  * memoizeLatest で包む理由は buildLabelData と同じ: applyRiverHover /
- * applyHreHighlight / ズーム段の変化は currentView を差し替えずに renderLayers()
+ * applyExtentKey / ズーム段の変化は currentView を差し替えずに renderLayers()
  * を呼ぶため、同じ参照が渡り続けてセグメント分割（1 年あたり 5〜7 千セグメント）
  * を再計算しない。年代切替でだけ参照が変わって再計算される。
  */
@@ -1374,11 +1415,11 @@ function renderLayers(): void {
       throw new Error(`PICKING_PRIORITY のレイヤー ${id} に builder が無い`);
     }
     layers.push(build());
-    // TASK-30: 帝国範囲の強調は powers/hre-powers の上・cities の下に挿入する
-    // （領邦の塗りの上に輪郭が乗り、都市マーカー・河川は隠さない）。
+    // TASK-30 / TASK-94: 勢力圏の外枠は powers/hre-powers の上・cities の下に
+    // 挿入する（領邦の塗りの上に輪郭が乗り、都市マーカー・河川は隠さない）。
     // pickable: false のため PICKING_PRIORITY 外の ID で、整合検証では
     // 無視される（layerOrderMatchesPickingPriority の既存仕様）。
-    if (id === HRE_LAYER_ID) layers.push(buildHreExtentLayer(year, base));
+    if (id === HRE_LAYER_ID) layers.push(buildSuzerainExtentLayer(year, base));
   }
   // TASK-77: ラベル 3 層は overlaid オーバーレイ（別 canvas）へ載せる。
   // 順序は従来の描画順（勢力名 → 河川名 → 都市名）をそのまま保つ。
@@ -1426,7 +1467,7 @@ function renderLayers(): void {
  * 勢力名ラベルのデータ + characterSet をメモ化する（TASK-50）。
  * 直近実測 ~4.3ms/回の主因だった buildLabelData（全 base+hre feature への
  * polylabel）を、year・base・hre・nameJa の参照同値でキャッシュする。
- * applyRiverHover / applyRiverSelection / applyHreHighlight は currentView
+ * applyRiverHover / applyRiverSelection / applyExtentKey は currentView
  * （base/hre）を書き換えずに renderLayers() を呼ぶだけなので、同じ引数の
  * 参照が渡り続けてキャッシュヒットし polylabel は走らない。switchYear
  * 経由で currentView が新しい base/hre に置き換わったとき（年代切替・
@@ -2108,15 +2149,17 @@ async function loadColors(): Promise<void> {
 }
 
 /**
- * name-overrides.json の renames を取得する。失敗時は空マップのまま生値で継続する。
- * ラベル整形（displayLabel）が SUBJECTO の綴りゆれを正規化するのに使う。
+ * name-overrides.json を取得する。失敗時は空マップのまま生値で継続する。
+ * ラベル整形（displayLabel）が SUBJECTO の綴りゆれを正規化するのに使い、
+ * 宗主補正（suzerains）は勢力圏の外枠・色キー・表示ラベルで使う（TASK-94）。
+ * initPowerLayer は switchYear より前にこれを待つため、年代データへ補正を
+ * 適用する withSuzerainOverrides から見て overrides は常に確定済み。
  */
 async function loadOverrides(): Promise<void> {
   try {
     const res = await fetch("/data/name-overrides.json");
     if (!res.ok) throw new Error(`status ${res.status}`);
-    const data = await res.json() as { renames?: Record<string, string> };
-    renames = data.renames ?? {};
+    overrides = parseSuzerainOverrides(await res.json());
   } catch (error) {
     console.warn(
       `name-overrides.json の取得に失敗しました。SUBJECTO 生値で継続します: ${
@@ -2449,7 +2492,8 @@ map.on("load", () => {
     hovered: string | null;
     activeColor: number[];
     activeFeatures: Record<string, number>;
-    hreExtentVisible: boolean;
+    extentKey: string | null;
+    extentMembers: string[];
   };
 }).__getPowerHighlightDebug = () => {
   const selected = powerHighlight.selected();
@@ -2475,7 +2519,15 @@ map.on("load", () => {
         currentView?.fiefs ?? EMPTY_FEATURE_COLLECTION,
       ),
     },
-    hreExtentVisible: hreHighlighted,
+    // TASK-94: 外枠の対象（宗主キー）と、その外枠に含まれる base feature の
+    // NAME 一覧。canvas のピクセルからは外枠の範囲を読めないため、実機検証は
+    // ここで「誰が囲まれているか」を突き合わせる（AC #1/#3/#8/#9）。
+    extentKey,
+    extentMembers: extractSuzerainMembers(
+      currentView?.base ?? EMPTY_FEATURE_COLLECTION,
+      extentKey,
+      overrides,
+    ).map((f) => String(f.properties?.NAME ?? "")),
   };
 };
 
