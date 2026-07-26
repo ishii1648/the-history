@@ -6,24 +6,32 @@
 
 ## 1. データソース一覧
 
-| 対象                       | ファイル                                                        | 出典                                                                                                                                                                                                                                        | ライセンス                                                             | カバー年代                            |
-| -------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------- |
-| 国・勢力ポリゴン           | `data/europe_<year>.geojson` × 20                               | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) @ `62d8f1a03a71`                                                                                                                                          | GPL-3.0                                                                | 全 20 年代                            |
-| 都市                       | `data/cities.json`                                              | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得 | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                            |
-| 諸侯領土（HRE 領邦）       | `data/hre_<year>.geojson` × 5                                   | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                       | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ |
-| 諸侯領土（仏諸侯領）       | `data/france_fiefs_<year>.geojson` × 5                          | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ |
-| 二重表示の解消（派生）     | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 5 | `scripts/build-fief-dedupe.ts` が `europe_<year>` と `france_fiefs_<year>` から生成（§3.5）                                                                                                                                                 | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 のみ |
-| 諸侯領の重なり解消（派生） | `data/france_fiefs_flat_<year>.geojson` × 5                     | `scripts/build-fief-flat.ts` が `france_fiefs_<year>` から生成（§3.6）。アプリが実際に配信・描画するのはこちら                                                                                                                              | CC0 1.0（`france_fiefs_<year>` の派生）                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ |
-| 日本語表記                 | `data/name-ja.json`                                             | 本リポジトリで手当て（勢力名・都市名・領邦名の対訳 951 件）                                                                                                                                                                                 | —                                                                      | —                                     |
-| 勢力色                     | `data/colors.json`                                              | `scripts/build-colors.ts` が NAME から決定的に生成（332 キー）                                                                                                                                                                              | —                                                                      | —                                     |
-| 年代解説                   | `data/notes.json`                                               | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                      | —                                                                      | 全 20 年代                            |
-| 河川                       | `data/rivers.geojson`                                           | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                    | Public Domain (Natural Earth)                                          | 年代共通                              |
+| 対象                       | ファイル                                                        | 出典                                                                                                                                                                                                                                        | ライセンス                                                             | カバー年代                                          |
+| -------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
+| 国・勢力ポリゴン           | `data/europe_<year>.geojson` × 20                               | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) @ `62d8f1a03a71`                                                                                                                                          | GPL-3.0                                                                | 全 20 年代                                          |
+| 都市                       | `data/cities.json`                                              | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得 | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                                          |
+| 諸侯領土（HRE 領邦）       | `data/hre_<year>.geojson` × 5                                   | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                       | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ               |
+| 諸侯領土（HRE 領邦・中世） | `data/hre_fiefs_<year>.geojson` × 7                             | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
+| 諸侯領土（仏諸侯領）       | `data/france_fiefs_<year>.geojson` × 5                          | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
+| 二重表示の解消（派生）     | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 5 | `scripts/build-fief-dedupe.ts` が `europe_<year>` と `france_fiefs_<year>` から生成（§3.5）                                                                                                                                                 | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
+| 諸侯領の重なり解消（派生） | `data/france_fiefs_flat_<year>.geojson` × 5                     | `scripts/build-fief-flat.ts` が `france_fiefs_<year>` から生成（§3.6）。アプリが実際に配信・描画するのはこちら                                                                                                                              | CC0 1.0（`france_fiefs_<year>` の派生）                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
+| 日本語表記                 | `data/name-ja.json`                                             | 本リポジトリで手当て（勢力名・都市名・領邦名の対訳 951 件）                                                                                                                                                                                 | —                                                                      | —                                                   |
+| 勢力色                     | `data/colors.json`                                              | `scripts/build-colors.ts` が NAME から決定的に生成（332 キー）                                                                                                                                                                              | —                                                                      | —                                                   |
+| 年代解説                   | `data/notes.json`                                               | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                      | —                                                                      | 全 20 年代                                          |
+| 河川                       | `data/rivers.geojson`                                           | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                    | Public Domain (Natural Earth)                                          | 年代共通                                            |
 
 > ライセンス上の注意: HRE 領邦データ（CC BY-NC-SA 4.0）は GPL-3.0 派生の
 > `europe_<year>.geojson`
 > と統合してはならず、別ファイルのオーバーレイとしてのみ利用する（`scripts/build-hre.ts`
-> の注記）。フランス諸侯領データ（CC0
-> 1.0）はパブリックドメインのため混合制約は無いが、出典管理を単純に保つため同じく独立ファイルとして生成する（`scripts/build-france-fiefs.ts`）。
+> の注記）。フランス諸侯領データと中世 HRE 領邦データ（いずれも
+> OpenHistoricalMap・CC0
+> 1.0）はパブリックドメインのため混合制約は無いが、出典管理を単純に保つため同じく独立ファイルとして生成する（`scripts/build-france-fiefs.ts`・`scripts/build-hre-fiefs.ts`）。
+
+> HRE 領邦は年代で出典が分かれる。**1000〜1492 年は OpenHistoricalMap 由来の
+> `hre_fiefs_<year>.geojson`（§3.7）**、**1500〜1700 年は Roller
+> データセット由来の
+> `hre_<year>.geojson`（§3.3）**で、年代は重複しない。統一しない理由は §3.7
+> の「Roller データとの統一の是非」を参照。
 
 ## 2. 「ヨーロッパ」の範囲（本インベントリの絞り込み基準）
 
@@ -204,6 +212,137 @@ build-fief-flat`（`scripts/build-fief-flat.ts`、ネットワーク不要）が
 年別の処理件数: 1000 年 3 件（全てスリバー）、1100 年 4 件（内包 1・スリバー
 3）、1200 年 6 件（内包 1・スリバー 5）、1279 / 1300 年 各 5 件（全て
 スリバー）。ライセンスは入力の `france_fiefs_<year>`（CC0 1.0）を引き継ぐ。
+
+### 3.7 諸侯領土（中世 HRE 領邦 `hre_fiefs_<year>.geojson`）
+
+`deno task build-hre-fiefs`（`scripts/build-hre-fiefs.ts`、TASK-85）が
+OpenHistoricalMap（OHM）の Overpass API から生成する、1000〜1492
+年の神聖ローマ帝国 領邦。**§3.3 の `hre_<year>.geojson`（Roller
+由来・1500〜1700）とは別系統・別ファイル**
+で、年代は重複しない。共通ロジック（Overpass クエリ・`start_date` / `end_date`
+の年判定・ リレーション → MultiPolygon 化）は `scripts/build-france-fiefs.ts`
+から import している。
+
+| プロパティ        | 内容                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| `NAME`            | 領邦の英語名（OHM の `name:en` そのまま。例: Prince-Bishopric of Würzburg）              |
+| `SUBJECTO`        | `Holy Roman Empire` 固定（`hre_<year>.geojson` と同じ）                                  |
+| `PARTOF`          | `Holy Roman Empire` 固定（同上）                                                         |
+| `ADMIN_LEVEL`     | OHM の `admin_level`（4 = 公領・司教領級 / 5 = 下位の伯領・領主領）                      |
+| `OHM_RELATION_ID` | 出典の OHM リレーション ID（`https://www.openhistoricalmap.org/relation/<id>` で参照可） |
+| `START_DATE`      | OHM の `start_date`（`0962` / `1254-04-03` など生の表記）                                |
+| `END_DATE`        | OHM の `end_date`。`null` は無期限（タグ欠損）                                           |
+
+properties は `hre_<year>.geojson` の 3 プロパティ（`NAME` / `SUBJECTO` /
+`PARTOF`）を
+含む上位集合なので、表示側は年代で出典が変わっても同じ扱いができる。生成物の末尾には
+`france_fiefs_<year>.geojson` と同じ `metadata`（出典 `OpenHistoricalMap`・
+ライセンス `CC0-1.0`・年・feature 数・欠損記録）を GeoJSON の foreign member
+として 埋め込んでいる。
+
+#### 収録できた領邦（年代別）
+
+取得範囲は帝国中核域の bbox（南緯 45.5°〜北緯 55.0°、東経 5.5°〜19.0°）で、
+この範囲の `boundary=administrative` は 34,005 リレーション。
+
+|   年 | 件数 | バイト数 | 合計面積（概算 km²） | 主な領邦                                                            |
+| ---: | ---: | -------: | -------------------: | ------------------------------------------------------------------- |
+| 1000 |   19 |   58,386 |              544,855 | バイエルン公領 / ザクセン公領 / フランケン公領 / シュヴァーベン公領 |
+| 1100 |   23 |   68,958 |              542,256 | 上記 + ボヘミア公領                                                 |
+| 1200 |   26 |   83,916 |              122,184 | シュヴァーベン公領 / モラヴィア / マクデブルク大司教領              |
+| 1279 |   40 |  128,306 |              110,706 | オーストリア公領 / モラヴィア / ニュルンベルク城伯領                |
+| 1300 |   52 |  160,944 |              151,447 | 上記 + ヴィエノワ・ドーフィネ / ホラント伯領                        |
+| 1400 |   63 |  151,583 |              239,371 | ミラノ公領 / オーストリア公領 / ルクセンブルク公領                  |
+| 1492 |   73 |  174,993 |              226,502 | ポンメルン公領 / モラヴィア / ロレーヌ公領 / フリースラント         |
+
+面積は簡略化前の球面近似（クリップなし）で、史実の領土面積ではない。許可リスト
+`HRE_FIEF_NAMES`（98 件）は実測データから作っており、全 98 件がいずれかの年代の
+生成物に現れる（`scripts/build-hre-fiefs_test.ts` で担保）。
+
+採用したのは帝国等族のうち領域を持つもので、世俗領邦（Duchy / March /
+Burgraviate / Landgraviate / County / Lordship / Principality /
+Electorate）・聖界領邦 （Prince-Archbishopric / Prince-Bishopric / Imperial
+Abbey / Princely Abbey）・ 特殊な 3
+件（ディトマルシェン農民共和国・エルフルト行政体・モラヴィア）。
+
+#### 収録を見送った対象
+
+`admin_level` は 4 / 5 のみを採る。2 は主権国家レベル（帝国自身・フランス /
+ハンガリー / ポーランド / クロアチア王国・ヴェネツィア）、3 は帝国の構成王国
+（Regnum Burgundiae / Regnum
+Lotharii）とサヴォイアで、配下の領邦と領域が重なる。 そのうえで対象年に有効な
+171 件から 72 件を以下の分類で落とした（根拠は `scripts/build-hre-fiefs.ts` の
+`HRE_FIEF_EXCLUSIONS` にコードとして記録している）。
+
+| 分類                                 | 件数 | 理由                                                                                  |
+| ------------------------------------ | ---: | ------------------------------------------------------------------------------------- |
+| 帝国都市・ハンザ都市・都市共和国     |   43 | 帝国等族だが領邦ではなく、市域だけの数十 km² なので簡略化で微小破片になる             |
+| ハンガリー王国の県（`vármegye`）     |    9 | bbox 東端が西ハンガリーに掛かるため入るが帝国外                                       |
+| ポーランド王国の県（Voivodeship 等） |   11 | bbox 北東端に掛かる帝国外の行政区画                                                   |
+| クロアチア王国の県                   |    1 | Varasdin County。bbox 南東端に掛かる帝国外                                            |
+| ザクセン公領内の部族地域             |    4 | Angria / Eastphalia / Nordalbingia / Westphalia。領主のいる領邦ではなく二重塗りになる |
+| 仏諸侯領と重複                       |    3 | County of Bar / County of Champagne / Duchy of Burgundy は §3.4 で収録済み            |
+| 包含関係の連合体                     |    1 | County of Schaumburg and Holstein-Pinneberg は構成 2 伯領を採るため連合体側を落とす   |
+| 表示名に使えない名称                 |    1 | County of Ratzeburg (1143-1204) は `name:en` に期間の曖昧性解消が入っている           |
+| OHM 側の年代誤り                     |    1 | Golden Ambrosian Republic（史実 1447〜1450）が 1492 年でも有効判定になる              |
+
+デンマークの Herred（13 件）と北イタリアの Plebis（11 件）はいずれも OHM で
+`admin_level` 6 なので、`admin_level` の絞り込みの段で自動的に落ちる。
+
+**900 年は生成しない。** 神聖ローマ帝国の成立は 962 年で 900
+年時点は東フランク王国 であり、許可リストで有効なのも 6 件（うち Duchy of
+Lotharingia / Duchy of Saxony / March of Verona の 3 件で面積の 99.7%
+を占め、残りは Hersfeld 452 km² / Worms 145 km² / Werden 106 km²
+の点に近い領域）にとどまる。これに伴い 900 年にしか掛からない Duchy of
+Lotharingia は許可リストからも外している。
+
+**1200 年は「谷」だが収録する。** 1100 → 1200 で合計面積が 542,256 → 122,184 km²
+に 落ちるのは、OHM
+が部族大公領（バイエルン・ザクセン・フランケン・チューリンゲン。 いずれも
+1100〜1180 で `end_date`）を境に「大公領の面」から「個別領邦の面」へ収録方式を
+切り替えているためで、データ欠損ではなく粒度の変化である。1200 年（26 件 /
+122,184 km²）は収録済みの 1279 年（40 件 / 110,706 km²）より被覆が広いため、1279
+を 採る以上 1200 を落とす理由が無い。ただし 1200
+年は帝国中核（バイエルン・ザクセン・ フランケン・チューリンゲン）が空白になる。
+
+#### Roller データとの統一の是非（比較のみ・現状維持）
+
+1500 年以降も OHM に統一すれば出典が 1 本化されライセンスも CC0
+に揃うが、採らない。
+
+| 観点         | Roller（`hre_<year>`・1500〜1700）                       | OHM（`hre_fiefs_<year>`・1000〜1492）                      |
+| ------------ | -------------------------------------------------------- | ---------------------------------------------------------- |
+| 性質         | 査読済み学術データセット（DOI 10.3929/ethz-b-000472583） | コミュニティ編集                                           |
+| 属性         | 宗派・上位関係まで属性化（558 行 / 276 ユニーク id）     | `name:en` / `admin_level` / `start_date` / `end_date` のみ |
+| 選定         | 276 件から主要 14 領邦を選定して使用                     | 許可リスト 98 件・1492 年は 73 件                          |
+| 年代間の整合 | 同一ソースの時系列なので形状が年代間で整合               | 年代ごとに独立したリレーションで、粒度の変化がある         |
+
+差し替えると 1492 → 1500 の境目で形状が不整合になるため、「中世は OHM・近世は
+Roller」の 2 系統併存とし、年代の重なりは作らない。
+
+#### 座標丸めで生じる「くびれ」の後処理
+
+`shrinkToLimit` の座標丸め（小数 5 桁 ≒ 1 m）で近接した 2
+頂点が同一座標へ潰れると、パート内のリングが 1
+点だけを共有した状態になる。実データでは穴が外環に接する形で現れ（Prince-Bishopric
+of Passau は穴の始点が外環の頂点と同一座標 `[13.44967, 48.57576]`、Duchy of
+Lorraine も 1492 年に同種）、面としては正しいので `@turf/union`
+では形が変わらず、`scripts/clean-polygons.ts` の `normalizeSelfIntersections`
+では `unresolved` のまま残る。一方 `@turf/kinks`
+は自己交差として検出するため、`data/`
+全体の「自己交差ゼロ」不変条件（`scripts/clean-polygons_test.ts`
+の全年代テスト）を満たせない。
+
+そこで `scripts/build-hre-fiefs.ts` の `removePinchPoints`
+が、パート単位で同一座標の 2
+回目以降の出現を落として接触を解いている（外環を先に見るので落ちるのは穴側の頂点。形状の変化は丸め誤差の範囲）。実測で落ちるのは
+1 年代あたり 1〜2
+頂点だけ。生成ログの「自己交差が残存（要調査）」はこの後処理より前の集計なので、最終状態は同じログの「自己交差:
+0 件（最終状態）」を見る（残っていればビルドが失敗する）。
+
+微小破片（1 km² 未満の外環・穴）と 4 頂点未満の退化リングも 0
+件（`scripts/build-hre-fiefs_test.ts` と `scripts/clean-polygons_test.ts`
+で担保）。
 
 ## 4. 年代別サマリ
 
@@ -441,6 +580,11 @@ build-fief-flat`（`scripts/build-fief-flat.ts`、ネットワーク不要）が
   Zürich,
   Roller）は1500〜1650年のみを対象としており、代替となるオープンデータは現状見つかっていません（TASK-37
   調査）。
+  - **この制約文の前提は TASK-85 で覆っている**: OpenHistoricalMap に 1000〜1492
+    年の領邦データが存在し、`data/hre_fiefs_<year>.geojson`（§3.7）として生成済み。
+    ただし表示側（`src/`）は未対応で、この制約文の記述はアプリの現状としては正しい。
+    オーバーレイを表示する後続タスクで、この項目の文言（または項目そのもの）を
+    1000〜1492 年を除いた範囲に改める必要がある。
 - **england-ireland-wales-1530-1700**（1530〜1700 年）:
   1530〜1700年の年代では、イングランドとアイルランドが元データ（historical-basemaps）で単一勢力「イングランド・アイルランド」として収録されており、分離して表示できません。また、ウェールズも900年を除き独立した勢力として収録されていません（TASK-39
   調査）。
