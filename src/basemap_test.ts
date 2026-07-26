@@ -6,6 +6,7 @@ import {
   COASTLINE_COLOR,
   COASTLINE_LAYER_ID,
   filterBasemapLayers,
+  HILLSHADE_EXAGGERATION_STOPS,
   HILLSHADE_LAYER_ID,
   INLAND_WATER_KINDS,
   PARCHMENT_FLAVOR_OVERRIDES,
@@ -174,6 +175,85 @@ Deno.test("hillshade は landcover の後・water の前に挿入される", () 
   const waterIdx = ids.indexOf("water");
   assert(hillshadeIdx > landcoverIdx, "hillshade は landcover より上");
   assert(hillshadeIdx < waterIdx, "hillshade は water より下");
+});
+
+// --- TASK-98: 地形陰影のコントラストを上げる ---
+// TASK-34 の paint 値は「勢力ポリゴン（alpha 128）越しでも邪魔をしない」ことを
+// 優先して控えめに置いたが、その塗りの下では起伏がほとんど読めなかった。
+// 陰影を強めつつ、政治色の判別（塗りは半透明のまま）とラベル判読（halo が
+// 局所背景を作る）を壊さない値へ引き上げる。
+
+/** TASK-34 の paint 値（引き上げ前の基準として固定する） */
+const LEGACY_HILLSHADE_PAINT = {
+  exaggeration: 0.4,
+  shadowAlpha: 0.35,
+  highlightAlpha: 0.25,
+  accentAlpha: 0.15,
+} as const;
+
+/** "rgba(r, g, b, a)" から alpha を取り出す（不正な値は NaN） */
+function alphaOf(color: unknown): number {
+  const m = /^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)$/
+    .exec(String(color));
+  return m ? Number(m[1]) : NaN;
+}
+
+Deno.test("hillshade の exaggeration はどのズーム段でも TASK-34 の値より強い", () => {
+  for (const [zoom, value] of HILLSHADE_EXAGGERATION_STOPS) {
+    assert(
+      value > LEGACY_HILLSHADE_PAINT.exaggeration,
+      `z${zoom} の exaggeration ${value} が TASK-34 の ${LEGACY_HILLSHADE_PAINT.exaggeration} 以下`,
+    );
+  }
+});
+
+Deno.test("hillshade の exaggeration はズームが上がるほど弱まる（高ズームの DEM ノイズを抑える）", () => {
+  const stops = HILLSHADE_EXAGGERATION_STOPS;
+  assert(stops.length >= 2, "停止点は 2 つ以上");
+  for (let i = 1; i < stops.length; i++) {
+    assert(stops[i][0] > stops[i - 1][0], "停止点のズームは昇順");
+    assert(stops[i][1] <= stops[i - 1][1], "exaggeration は高ズームほど弱い");
+  }
+  assert(
+    stops[stops.length - 1][1] < stops[0][1],
+    "広域より拡大側を弱める（拡大では DEM の粒状ノイズが目立つため）",
+  );
+});
+
+Deno.test("hillshade の exaggeration は停止点どおりの zoom 補間式になる", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  const paint = (style.layers.find((l) => l.id === HILLSHADE_LAYER_ID)
+    ?.paint ?? {}) as Record<string, unknown>;
+  assertEquals(paint["hillshade-exaggeration"], [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    ...HILLSHADE_EXAGGERATION_STOPS.flat(),
+  ]);
+});
+
+Deno.test("hillshade の影・ハイライト・アクセントは TASK-34 より濃く、かつ半透明を保つ", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  const paint = (style.layers.find((l) => l.id === HILLSHADE_LAYER_ID)
+    ?.paint ?? {}) as Record<string, unknown>;
+  const cases: Array<[string, number]> = [
+    ["hillshade-shadow-color", LEGACY_HILLSHADE_PAINT.shadowAlpha],
+    ["hillshade-highlight-color", LEGACY_HILLSHADE_PAINT.highlightAlpha],
+    ["hillshade-accent-color", LEGACY_HILLSHADE_PAINT.accentAlpha],
+  ];
+  for (const [key, legacy] of cases) {
+    const alpha = alphaOf(paint[key]);
+    assert(
+      Number.isFinite(alpha),
+      `${key} が rgba() 形式でない: ${paint[key]}`,
+    );
+    assert(
+      alpha > legacy,
+      `${key} の alpha ${alpha} が TASK-34 の ${legacy} 以下`,
+    );
+    // 不透明にすると勢力ポリゴンの色が陰影で潰れる（AC #2）
+    assert(alpha < 1, `${key} の alpha ${alpha} が不透明`);
+  }
 });
 
 Deno.test("hillshade・水面分割・coastline の追加後もベースマップ採用レイヤーの相対順序は不変", () => {
