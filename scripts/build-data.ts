@@ -3,6 +3,8 @@
  * - historical-basemaps の world_<year>.geojson × 20 年代を取得（コミット固定）
  * - ヨーロッパ bbox でクリップし、空ジオメトリになった feature を除去
  * - NAME の表記ゆれ・null を name-overrides.json で補正
+ * - 上流が王国領に一括で含めている半独立の封土を、諸侯領オーバーレイの区画で
+ *   切り出して独立 feature にする（BASE_FIEF_SPLITS、TASK-101）
  * - simplify + 座標丸め + ポリゴンのクリーンアップ（自己交差の解消・微小破片の除去、
  *   scripts/clean-polygons.ts）で 1 ファイル SIZE_LIMIT_BYTES 以下に収める
  * - data/europe_<year>.geojson × 20 と data/index.json を生成する
@@ -19,8 +21,12 @@ import type {
   Polygon,
 } from "geojson";
 import bboxClip from "@turf/bbox-clip";
+import difference from "@turf/difference";
+import { featureCollection } from "@turf/helpers";
+import intersect from "@turf/intersect";
 import simplify from "@turf/simplify";
 import truncate from "@turf/truncate";
+import union from "@turf/union";
 import {
   cleanFeatureCollection,
   type CleanStats,
@@ -174,6 +180,171 @@ export function applyNameOverrides(
   return { type: "FeatureCollection", features };
 }
 
+/**
+ * base の勢力ポリゴンから切り出して独立 feature にする封土の指定（TASK-101）。
+ *
+ * 上流（historical-basemaps）は「王が名目上の宗主である領域」をまとめて 1 つの
+ * 王国ポリゴンにしており、実効支配が及んでいない半独立の封土も王国領として
+ * 塗られてしまう。切り出す区画は諸侯領オーバーレイ（OHM 由来）の同名 feature を
+ * 使うため、出典を持たない座標を合成することにはならない（decision-18）。
+ *
+ * ライセンス: 切り出しは base（GPL-3.0）に OHM 由来の形を取り込む操作なので、
+ * 入力に使えるのは CC0 のオーバーレイ（france_fiefs / hre_fiefs / italy_fiefs）に
+ * 限る。ETH Zürich（Roller）の HRE 領邦データ（CC BY-NC-SA 4.0、hre_<year>）は
+ * GPL-3.0 派生と統合してはならないため、ここには渡さない（decision-2）。
+ */
+export interface BaseFiefSplit {
+  /** 対象年 */
+  year: number;
+  /** 切り出し元の base 勢力 NAME */
+  fromName: string;
+  /** 切り出す封土の NAME。オーバーレイ側の NAME と一致させる */
+  fiefName: string;
+  /**
+   * 切り出した feature に与える SUBJECTO。NAME と同じ値（自己参照）なら
+   * 独立勢力の扱いになり、色キー（powers.ts colorKeyFor）はオーバーレイと同じ
+   * NAME 単独キー、表示ラベル（info.ts displayLabel）は NAME のみ、勢力圏の
+   * 外枠（suzerain_extent.ts）は自分だけを囲う。
+   */
+  subjecto: string;
+  /** 切り出しに使うオーバーレイ GeoJSON のパス */
+  fiefPath: string;
+}
+
+/**
+ * 適用する切り出しの一覧（TASK-101）。
+ *
+ * ## ノルマンディー公国（1000 / 1100）
+ * 上流の `Kingdom of France` はノルマンディーを含むが、911 年のサン・クレール・
+ * シュール・エプト条約以降のノルマンディーはカペー朝の実効支配が及ばない事実上
+ * 独立した公国で、フランス王国領として一括表示するのは不正確（カペー朝の実効
+ * 支配はイル・ド・フランス周辺に限られる）。
+ *
+ * SUBJECTO を NAME 自身（＝独立勢力）にする理由:
+ * - 1000 年・1100 年とも公はフランス王へ臣従礼を行う立場ではあるが、それは名目に
+ *   留まり、王が公領へ実効的な権限を及ぼした事実は無い。decision-19 は宗主補正を
+ *   「歴史的に宗主関係が明白でデータが欠いているもの」に限る方針で、名目のみの
+ *   この関係は該当しない（明白な例＝ブルターニュ公とは性質が異なる）。
+ * - `SUBJECTO = "France"` にすると勢力圏の外枠（TASK-94）は宗主キーの union なので
+ *   フランス王国を選んだときの外枠がノルマンディーを囲んだままになり、本タスクが
+ *   直そうとしている「フランス王国領として囲われて見える」症状が残る。
+ * - 1100 年はノルマンディー公ロベール 2 世とイングランド王ヘンリー 1 世が別人の
+ *   英諾分離期（1087〜1106）なので、England 配下に付け替えるのも不正確。
+ * - 独立扱いにすると色キーがオーバーレイと同じ `Duchy of Normandy` になり、base の
+ *   塗りと諸侯領オーバーレイの色が一致する（colors.json に新キーも増えない）。
+ */
+export const BASE_FIEF_SPLITS: readonly BaseFiefSplit[] = [1000, 1100].map(
+  (year) => ({
+    year,
+    fromName: "Kingdom of France",
+    fiefName: "Duchy of Normandy",
+    subjecto: "Duchy of Normandy",
+    fiefPath: `data/france_fiefs_flat_${year}.geojson`,
+  }),
+);
+
+/** ポリゴン系ジオメトリを持つ feature か */
+function isPolygonal(
+  feature: Feature,
+): feature is Feature<Polygon | MultiPolygon> {
+  const type = feature.geometry?.type;
+  return type === "Polygon" || type === "MultiPolygon";
+}
+
+/**
+ * FeatureCollection から NAME が一致するポリゴンを 1 つに統合する（純粋関数）。
+ * 該当が無ければ null。
+ */
+export function unionByName(
+  fc: FeatureCollection,
+  name: string,
+): Feature<Polygon | MultiPolygon> | null {
+  let merged: Feature<Polygon | MultiPolygon> | null = null;
+  for (const feature of fc.features) {
+    if (feature.properties?.NAME !== name || !isPolygonal(feature)) continue;
+    merged = merged === null
+      ? feature
+      : union(featureCollection([merged, feature])) ?? merged;
+  }
+  return merged;
+}
+
+/**
+ * base の勢力 feature から封土の区画を差し引き、独立した封土 feature を
+ * 同じ FeatureCollection に立てる（純粋関数、TASK-101）。
+ *
+ * 封土のジオメトリは「オーバーレイの区画 ∩ 切り出し元の勢力」にする。オーバーレイ
+ * （OHM）と base（historical-basemaps）は解像度も海岸線も異なるため、オーバーレイを
+ * そのまま置くと base の外へはみ出して海や隣国に重なる。交差を取れば base の
+ * 面の内訳が入れ替わるだけになり、他勢力の領域には一切触れない。
+ *
+ * 差し引きで面が残らなかった元 feature は落とす（飛び地が丸ごと封土だった場合）。
+ * 切り出し元が見つからない・交差が空の場合は警告して base をそのまま返す
+ * （生成を失敗させない）。
+ */
+export function splitFiefFromBase(
+  base: FeatureCollection,
+  fief: Feature<Polygon | MultiPolygon>,
+  split: BaseFiefSplit,
+  warnFn: (message: string) => void = console.warn,
+): FeatureCollection {
+  const sourceIndexes = base.features
+    .map((feature, index) =>
+      feature.properties?.NAME === split.fromName && isPolygonal(feature)
+        ? index
+        : -1
+    )
+    .filter((index) => index >= 0);
+  if (sourceIndexes.length === 0) {
+    warnFn(
+      `${split.year}: ${split.fromName} が base に無いため ${split.fiefName} を切り出せません`,
+    );
+    return base;
+  }
+
+  let carved: Feature<Polygon | MultiPolygon> | null = null;
+  const remainders = new Map<number, Feature | null>();
+  for (const index of sourceIndexes) {
+    const source = base.features[index] as Feature<Polygon | MultiPolygon>;
+    const overlap = intersect(featureCollection([source, fief]));
+    if (overlap !== null) {
+      carved = carved === null
+        ? overlap
+        : union(featureCollection([carved, overlap])) ?? carved;
+    }
+    const rest = difference(featureCollection([source, fief]));
+    remainders.set(
+      index,
+      rest === null ? null : { ...source, geometry: rest.geometry },
+    );
+  }
+  if (carved === null) {
+    warnFn(
+      `${split.year}: ${split.fiefName} が ${split.fromName} と交差しないため切り出しません`,
+    );
+    return base;
+  }
+
+  const fiefFeature: Feature = {
+    type: "Feature",
+    properties: { NAME: split.fiefName, SUBJECTO: split.subjecto },
+    geometry: carved.geometry,
+  };
+  const lastSourceIndex = sourceIndexes[sourceIndexes.length - 1];
+  const features: Feature[] = [];
+  for (const [index, feature] of base.features.entries()) {
+    if (remainders.has(index)) {
+      const rest = remainders.get(index)!;
+      if (rest !== null) features.push(rest);
+    } else {
+      features.push(feature);
+    }
+    // 封土は切り出し元の直後に置き、feature の並び（＝描画順）を決定的にする
+    if (index === lastSourceIndex) features.push(fiefFeature);
+  }
+  return { type: "FeatureCollection", features };
+}
+
 /** index.json の内容を生成する（純粋関数） */
 export function buildIndex(years: number[], source: SourceMeta): IndexData {
   return {
@@ -267,6 +438,42 @@ async function loadOverrides(path: string): Promise<NameOverrides> {
   }
 }
 
+/**
+ * 切り出しに使うオーバーレイの区画を読み込む（TASK-101）。
+ * 入力は生成済みかつリポジトリにコミット済みの派生データなので、欠けていれば
+ * 黙って素通りさせず失敗させる（素通りすると再生成のたびに修正が消えるため）。
+ */
+async function loadFiefPolygon(
+  split: BaseFiefSplit,
+): Promise<Feature<Polygon | MultiPolygon>> {
+  const fc = JSON.parse(
+    await Deno.readTextFile(split.fiefPath),
+  ) as FeatureCollection;
+  const merged = unionByName(fc, split.fiefName);
+  if (merged === null) {
+    throw new Error(
+      `${split.fiefPath} に ${split.fiefName} のポリゴンが無く、base から切り出せません`,
+    );
+  }
+  return merged;
+}
+
+/** その年に適用する切り出しを全て適用する（TASK-101） */
+async function applyBaseFiefSplits(
+  fc: FeatureCollection,
+  year: number,
+): Promise<FeatureCollection> {
+  let result = fc;
+  for (const split of BASE_FIEF_SPLITS.filter((s) => s.year === year)) {
+    const fief = await loadFiefPolygon(split);
+    result = splitFiefFromBase(result, fief, split);
+    console.log(
+      `${year}: ${split.fromName} から ${split.fiefName} を独立 feature として切り出しました`,
+    );
+  }
+  return result;
+}
+
 async function main(): Promise<void> {
   await Deno.mkdir(DATA_DIR, { recursive: true });
   const overrides = await loadOverrides(OVERRIDES_PATH);
@@ -275,8 +482,11 @@ async function main(): Promise<void> {
     const raw = await fetchFeatureCollection(year);
     const clipped = clipToBbox(raw, EUROPE_BBOX);
     const named = applyNameOverrides(clipped, overrides);
+    // 切り出しは simplify の前に行い、王国側の残余と封土が同じ座標列から
+    // 同じトレランスで簡略化されるようにする
+    const split = await applyBaseFiefSplits(named, year);
     const { fc, tolerance, size, cleanStats } = shrinkToLimit(
-      named,
+      split,
       SIZE_LIMIT_BYTES,
     );
     const outPath = `${DATA_DIR}/europe_${year}.geojson`;
