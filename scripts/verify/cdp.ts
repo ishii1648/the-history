@@ -55,6 +55,8 @@ export interface CdpApi {
   evaluate<T = unknown>(expr: string): Promise<T>;
   waitFor(expr: string, timeoutMs?: number): Promise<void>;
   waitForAppReady(timeoutMs?: number): Promise<void>;
+  /** クリックを伴わないマウス移動（ホバー強調の確認に使う。TASK-90） */
+  hover(x: number, y: number): Promise<void>;
   click(x: number, y: number): Promise<void>;
   keys(key: string, count?: number): Promise<void>;
   screenshot(path: string): Promise<void>;
@@ -425,8 +427,12 @@ export async function launch(): Promise<CdpApi> {
     );
   }
 
-  async function click(x: number, y: number): Promise<void> {
+  async function hover(x: number, y: number): Promise<void> {
     await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+  }
+
+  async function click(x: number, y: number): Promise<void> {
+    await hover(x, y);
     await send("Input.dispatchMouseEvent", {
       type: "mousePressed",
       x,
@@ -498,6 +504,7 @@ export async function launch(): Promise<CdpApi> {
     evaluate,
     waitFor,
     waitForAppReady,
+    hover,
     click,
     keys,
     screenshot,

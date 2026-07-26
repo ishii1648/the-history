@@ -42,6 +42,7 @@ import {
   decideFallback,
 } from "./fallback.ts";
 import {
+  colorKeyFor,
   createBaseOutlineLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
@@ -49,7 +50,6 @@ import {
   createYearDataLoader,
   createYearSwitcher,
   EMPTY_FEATURE_COLLECTION,
-  fillColorFor,
   hasFranceFiefOverlay,
   hasHreOverlay,
   LINE_COLOR,
@@ -177,6 +177,15 @@ import {
   RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
 } from "./picking.ts";
+import {
+  ACTIVE_FILL_COLOR,
+  createPowerHighlightStore,
+  HIGHLIGHT_FILL_TRANSITION_MS,
+  isPowerActive,
+  powerFillColor,
+  powerHighlightKey,
+  YEAR_FILL_TRANSITION_MS,
+} from "./power_highlight.ts";
 
 const mapContainer = document.getElementById("map");
 if (!mapContainer) {
@@ -406,6 +415,46 @@ let hoveredRiverName: string | null = null;
  */
 let hreHighlighted = false;
 
+/**
+ * 政治ポリゴン（powers / hre-powers / france-fiefs）のアクティブ強調状態
+ * （TASK-90）。ホバー/クリックした勢力・領邦の塗りをアクティブ色
+ * （power_highlight.ts ACTIVE_FILL_COLOR）へ変え、飛び地を含む同一勢力キーの
+ * 全ポリゴンを同時に光らせて国土の広がりを示す。
+ *
+ * onChange は「値が変わったときだけ」呼ばれる（変化検知はストア側。TASK-50 の
+ * 規律を維持し、mousemove ごとの全レイヤー再構築を避ける）。再構築時の塗りの
+ * 遷移は年代フェード（400ms）ではなく強調用の短い遷移を使う。
+ */
+const powerHighlight = createPowerHighlightStore(() => {
+  // 年代切替による解除は直後の renderLayers() にまとめる（下の applyFn 参照）
+  if (suppressPowerHighlightRender) return;
+  renderWithFillTransition(HIGHLIGHT_FILL_TRANSITION_MS);
+});
+
+/**
+ * 年代切替の適用中だけ true。powerHighlight.clear() による再構築を抑止し、
+ * 直後に呼ばれる renderLayers()（年代フェード付き）に 1 本化する。
+ */
+let suppressPowerHighlightRender = false;
+
+/**
+ * 次の renderLayers() で使う政治ポリゴンの getFillColor 遷移時間（ms）。
+ * 既定は年代切替のフェード（400ms、docs/app-spec.md §5.1）。強調の変化だけは
+ * renderWithFillTransition が一時的に短い値へ差し替える（TASK-90）。
+ */
+let fillTransitionMs: number = YEAR_FILL_TRANSITION_MS;
+
+/** 塗りの遷移時間を一時的に差し替えてレイヤーを再構築する（TASK-90） */
+function renderWithFillTransition(durationMs: number): void {
+  const previous = fillTransitionMs;
+  fillTransitionMs = durationMs;
+  try {
+    renderLayers();
+  } finally {
+    fillTransitionMs = previous;
+  }
+}
+
 /** 直近に反映された年代のデータ。選択変更時のレイヤー再構築で使う */
 let currentView:
   | {
@@ -553,17 +602,36 @@ function buildPowerLayer(
     stroked,
     filled: true,
     // AC #2: 塗り色は colors.json 参照・opacity 0.5 相当（alpha はカラーに内包）
-    getFillColor: (f: Feature) => fillColorFor(f.properties, colors),
+    // TASK-90: ホバー/クリック中の勢力キー（飛び地含む全 feature）だけは
+    // アクティブ色へ差し替える（判定は power_highlight.ts の純粋関数）
+    getFillColor: (f: Feature) =>
+      powerFillColor(
+        f.properties,
+        colors,
+        powerHighlight.selected(),
+        powerHighlight.hovered(),
+      ),
     // AC #2: 白系の境界線（TASK-71: フランス諸侯領のみ藍紫の少し太い線）
     getLineColor: lineColor,
     lineWidthUnits: "pixels",
     getLineWidth: lineWidth,
     // 塗りの alpha はカラー側で表現するため、レイヤー opacity は等倍にする
     opacity: 1,
-    updateTriggers: { getFillColor: [year] },
+    // TASK-90: 強調キー（選択・ホバー）も accessor の入力なので trigger に足す。
+    // 足さないと deck.gl が getFillColor を再評価せず、色が変わらない。
+    updateTriggers: {
+      getFillColor: [
+        year,
+        powerHighlight.selected(),
+        powerHighlight.hovered(),
+      ],
+    },
     // AC #5: 年代切替時に塗り色を数百 ms かけて補間し、ポリゴンをフェードさせる。
     // 同一 layer id を保つため deck.gl が差分更新し、getFillColor の遷移が発火する。
-    transitions: { getFillColor: { duration: 400 } },
+    // TASK-90: 同じ accessor に強調の色変化も乗るため、遷移時間は再構築の要因で
+    // 切り替える（年代切替 400ms / 強調 HIGHLIGHT_FILL_TRANSITION_MS）。年代
+    // フェードの 400ms をホバーへ流用すると色の追従が鈍く見える。
+    transitions: { getFillColor: { duration: fillTransitionMs } },
     // ホバー/クリックの表示処理は Deck レベルの handlePickHover / handlePickClick
     // に集約する（TASK-24。per-layer に分けると rivers との発火順レースになる）
   });
@@ -631,6 +699,10 @@ function handlePickHover(info: PickingInfo): void {
   // TASK-30 AC #2/#3: HRE 本体・域内領邦のホバーで帝国範囲を強調し、
   // ホバー解除（picking なし・非 HRE 対象）で通常表示へ戻す
   applyHreHighlight(hreHighlightFromPick(info));
+  // TASK-90: 勢力・領邦のホバー強調。河川・都市・何も無い場所のホバーでは
+  // キーが null になり強調が解除される（AC #2/#6）。判定経路は
+  // hreHighlightFromPick と同型（同じ info から純粋関数でキーを解決する）。
+  powerHighlight.hover(powerHighlightKeyFromPick(info));
   // TASK-42: 河川ホバー中の中間強調。pick が rivers 以外・picking なしの場合は
   // null（通常表示）に戻す。ホバーの picking 方式自体（直下 pick）は変更しない
   // （TASK-36 の半径補正はクリック限定という設計判断を維持）。
@@ -654,6 +726,19 @@ function hreHighlightFromPick(info: PickingInfo): boolean {
     (info.object as Feature).properties,
     renames,
   );
+}
+
+/**
+ * picking 結果から政治ポリゴンの強調キーを解決する（TASK-90）。
+ * 判定本体は power_highlight.ts の powerHighlightKey（純粋関数）。
+ * hreHighlightFromPick と同型にし、ホバー（直下 pick）とクリック
+ * （resolveClickInfo で選び直した pick）が同じ経路を通ることを保証する。
+ * 都市マーカーの picking 結果は GeoJSON Feature ではないが、
+ * powerHighlightKey がレイヤー ID を先に見るため安全に null になる。
+ */
+function powerHighlightKeyFromPick(info: PickingInfo): string | null {
+  if (info.object === undefined || info.layer === null) return null;
+  return powerHighlightKey(info.layer.id, (info.object as Feature).properties);
 }
 
 /** 帝国範囲の強調状態を更新し、変化があればレイヤーを再構築して反映する */
@@ -720,6 +805,11 @@ function handlePickClick(rawInfo: PickingInfo): void {
   // 別の場所（河川・都市・非 HRE 勢力・空白）のクリックは false 側へ倒れて
   // 強調が解除される）
   applyHreHighlight(hreHighlightFromPick(info));
+  // TASK-90: 勢力・領邦のクリック強調（ホバーの無いタッチ操作でも成立させる）。
+  // 保持・解除規則は power_highlight.ts togglePowerSelection（河川の選択トグルと
+  // 同一規則）: 同一対象の再クリックで解除・別対象で移動・河川/都市/空クリック
+  // （キー null）で解除。年代切替では yearSwitcher の applyFn が clear する。
+  powerHighlight.click(powerHighlightKeyFromPick(info));
   const layerId = info.layer?.id;
   if (isRiversPickLayerId(layerId) && info.object !== undefined) {
     const name = riverNameFor((info.object as Feature).properties);
@@ -1709,6 +1799,12 @@ let reflectYearToTimeline: (year: number) => void = () => {};
 const yearSwitcher = createYearSwitcher(
   dataLoader,
   (year, data) => {
+    // TASK-90: 年代が変われば同じ勢力が同じ形で存在するとは限らないため、
+    // ポリゴンの強調（選択・ホバー）は年代切替で解除する。ここでの再構築は
+    // 抑止し、直後の renderLayers()（年代フェード付き）へまとめる。
+    suppressPowerHighlightRender = true;
+    powerHighlight.clear();
+    suppressPowerHighlightRender = false;
     // TASK-24: レイヤー組み立ては renderLayers に集約（河川選択の変更と共用）
     currentView = {
       year,
@@ -2306,6 +2402,44 @@ map.on("load", () => {
     hoverLabel: pickedLabel(raw),
     clickLayer: click.layer?.id ?? null,
     clickLabel: pickedLabel(click),
+  };
+};
+
+// TASK-90: ヘッドレス CDP 検証用に政治ポリゴンの強調状態を公開する
+// （__getCityDebug と同じ読み取り専用フック）。canvas のピクセルからは
+// 「どの feature がアクティブ色で塗られているか」を数えられないため、
+// 現在の選択・ホバーキーと、そのキーでアクティブになる feature 数を
+// レイヤー別に返す。飛び地を含む同一勢力が同時に強調されること（AC #1/#4）と、
+// 解除（AC #2/#6）・HRE 帝国範囲強調との併存（AC #5）を無人で確認できる。
+(globalThis as unknown as {
+  __getPowerHighlightDebug?: () => {
+    selected: string | null;
+    hovered: string | null;
+    activeColor: number[];
+    activeFeatures: Record<string, number>;
+    hreExtentVisible: boolean;
+  };
+}).__getPowerHighlightDebug = () => {
+  const selected = powerHighlight.selected();
+  const hovered = powerHighlight.hovered();
+  const countActive = (fc: FeatureCollection) =>
+    fc.features.filter((f) =>
+      isPowerActive(colorKeyFor(f.properties), selected, hovered)
+    ).length;
+  return {
+    selected,
+    hovered,
+    activeColor: [...ACTIVE_FILL_COLOR],
+    activeFeatures: {
+      [POWER_LAYER_ID]: countActive(
+        currentView?.base ?? EMPTY_FEATURE_COLLECTION,
+      ),
+      [HRE_LAYER_ID]: countActive(currentView?.hre ?? EMPTY_FEATURE_COLLECTION),
+      [FRANCE_FIEF_LAYER_ID]: countActive(
+        currentView?.fiefs ?? EMPTY_FEATURE_COLLECTION,
+      ),
+    },
+    hreExtentVisible: hreHighlighted,
   };
 };
 
