@@ -1,4 +1,9 @@
-import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
+import {
+  assert,
+  assertAlmostEquals,
+  assertEquals,
+  assertNotEquals,
+} from "@std/assert";
 import type { FeatureCollection } from "geojson";
 import {
   assignColor,
@@ -111,6 +116,44 @@ Deno.test("パレットは 288 色（>= 想定ユニーク NAME 数 272）を持
   );
 });
 
+Deno.test("彩度・明度段は褪せた顔料トーン（羊皮紙 UI と同系統・TASK-74）", () => {
+  assertEquals(SATURATIONS, [0.2, 0.3, 0.4]);
+  assertEquals(LIGHTNESSES, [0.52, 0.62, 0.72, 0.82]);
+});
+
+Deno.test("全パレット色が低彩度・中〜高明度に収まる（羊皮紙下地から浮かない）", () => {
+  for (let i = 0; i < PALETTE_SIZE; i++) {
+    const { s, l } = paletteHslForIndex(i);
+    assert(s <= 0.4, `index ${i} の彩度 ${s} が高すぎる（褪せトーンでない）`);
+    assert(s >= 0.15, `index ${i} の彩度 ${s} が低すぎる（灰色に潰れる）`);
+    assert(l >= 0.5 && l <= 0.85, `index ${i} の明度 ${l} がレンジ外`);
+  }
+});
+
+Deno.test("属領は全パレット色で識別可能な明度差を保つ（明度レンジ上げの副作用検証）", () => {
+  for (let i = 0; i < PALETTE_SIZE; i++) {
+    const base = paletteHslForIndex(i);
+    const sub = shiftLightnessForSubject(base);
+    assertEquals(sub.h, base.h);
+    assertEquals(sub.s, base.s);
+    assert(
+      Math.abs(sub.l - base.l) >= 0.15,
+      `index ${i} の宗主国-属領 明度差 ${
+        Math.abs(sub.l - base.l)
+      } が小さすぎる`,
+    );
+    assert(
+      sub.l >= 0 && sub.l <= 1,
+      `index ${i} の属領明度 ${sub.l} が [0,1] 外`,
+    );
+    assertNotEquals(
+      hslToHex(sub.h, sub.s, sub.l),
+      hslToHex(base.h, base.s, base.l),
+      `index ${i} の宗主国と属領が同色`,
+    );
+  }
+});
+
 Deno.test("連続インデックスは色相が大きく離れる（隣接色衝突の緩和）", () => {
   // 黄金角配置により、隣接インデックスの色相差は最低でも 60 度以上離れる
   for (let i = 0; i < 24 - 1; i++) {
@@ -149,8 +192,8 @@ Deno.test("shiftLightnessForSubject は色相・彩度を保ち明度だけを�
   assertEquals(sub.s, base.s);
   assertAlmostEquals(sub.l, base.l + SUBJECT_LIGHTNESS_SHIFT, 1e-9);
   // 明るめのベースは暗くなる（[0,1] に収める）
-  const bright = shiftLightnessForSubject({ h: 0, s: 0.5, l: 0.76 });
-  assertAlmostEquals(bright.l, 0.76 - SUBJECT_LIGHTNESS_SHIFT, 1e-9);
+  const bright = shiftLightnessForSubject({ h: 0, s: 0.5, l: 0.82 });
+  assertAlmostEquals(bright.l, 0.82 - SUBJECT_LIGHTNESS_SHIFT, 1e-9);
   assert(bright.l >= 0 && bright.l <= 1);
 });
 
@@ -285,7 +328,10 @@ Deno.test("buildColorMap: 上位勢力群の色は十分に分散する（AC#3 �
   const colors = majors.map((n) => map[n]);
   // 全て相異なる色（プロービングで衝突解消済み）
   assertEquals(new Set(colors).size, majors.length);
-  // 隣接し得る主要勢力ペアの平均色差が閾値以上（十分な彩度差）
+  // 隣接し得る主要勢力ペアの平均色差が閾値以上（色相差で判別できること）。
+  // TASK-74 で褪せた顔料トーン（低彩度）へ移行したため、RGB 距離の絶対値は
+  // 構造的に縮む（旧パレット avg 138 → 新パレット avg 80）。色相分散は黄金角で
+  // 維持されているため、閾値は 70 とする。
   let total = 0;
   let count = 0;
   for (let i = 0; i < colors.length; i++) {
@@ -295,7 +341,7 @@ Deno.test("buildColorMap: 上位勢力群の色は十分に分散する（AC#3 �
     }
   }
   const avg = total / count;
-  assert(avg >= 80, `主要勢力ペアの平均色差 ${avg.toFixed(1)} が小さすぎる`);
+  assert(avg >= 70, `主要勢力ペアの平均色差 ${avg.toFixed(1)} が小さすぎる`);
 });
 
 Deno.test("buildColorMap: 独立勢力は互いに完全に相異なる色になる（名前数 <= パレット数）", () => {

@@ -49,11 +49,19 @@ export const HUE_COUNT = 24;
 /** 黄金角（度）。色相をインデックス順で大きく分散させ、隣接色の衝突を緩和する */
 export const GOLDEN_ANGLE = 137.508;
 
-/** 彩度段（塗り opacity 0.5 でも視認できる範囲） */
-export const SATURATIONS: readonly number[] = [0.45, 0.6, 0.75];
+/**
+ * 彩度段（TASK-74: 褪せた顔料トーン）。
+ * 羊皮紙ベースマップ（陸地 #f0e6cd）・羊皮紙 UI から浮かないよう低彩度に寄せる。
+ * 塗り opacity 0.5 でも下地に埋もれない下限として 0.20 を採る。
+ */
+export const SATURATIONS: readonly number[] = [0.2, 0.3, 0.4];
 
-/** 明度段（暗すぎ・明るすぎを避けた中間帯） */
-export const LIGHTNESSES: readonly number[] = [0.4, 0.52, 0.64, 0.76];
+/**
+ * 明度段（TASK-74: 褪せた顔料トーン）。
+ * 羊皮紙下地に載る顔料として中〜高明度帯へ引き上げる。
+ * 属領の明度シフト（SUBJECT_LIGHTNESS_SHIFT）後も [0,1] に収まる範囲に保つ。
+ */
+export const LIGHTNESSES: readonly number[] = [0.52, 0.62, 0.72, 0.82];
 
 /** パレット総色数 */
 export const PALETTE_SIZE = HUE_COUNT * SATURATIONS.length * LIGHTNESSES.length;
