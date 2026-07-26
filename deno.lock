@@ -17,6 +17,7 @@
     "npm:@turf/area@7": "7.3.5",
     "npm:@turf/bbox-clip@7": "7.3.5",
     "npm:@turf/boolean-point-in-polygon@7": "7.3.5",
+    "npm:@turf/difference@7": "7.3.5",
     "npm:@turf/helpers@7": "7.3.5",
     "npm:@turf/intersect@7": "7.3.5",
     "npm:@turf/line-split@7": "7.3.5",
@@ -344,6 +345,16 @@
       "dependencies": [
         "@turf/helpers",
         "@types/geojson",
+        "tslib"
+      ]
+    },
+    "@turf/difference@7.3.5": {
+      "integrity": "sha512-iDyWYCvgS3vgB8W1ai2cvfJaTq9bOt1QghiVkCNIyccF97CgtYJzenREVVUlp8qU9lJlbQ/ameyKvXPA1uOAlA==",
+      "dependencies": [
+        "@turf/helpers",
+        "@turf/meta",
+        "@types/geojson",
+        "polyclip-ts",
         "tslib"
       ]
     },
@@ -783,6 +794,7 @@
       "npm:@turf/area@7",
       "npm:@turf/bbox-clip@7",
       "npm:@turf/boolean-point-in-polygon@7",
+      "npm:@turf/difference@7",
       "npm:@turf/helpers@7",
       "npm:@turf/intersect@7",
       "npm:@turf/line-split@7",

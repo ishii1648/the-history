@@ -72,8 +72,8 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
     { from: "data/hre_1530.geojson", to: "dist/data/hre_1530.geojson" },
     // TASK-71: 中世フランス諸侯領オーバーレイ（deno task build-france-fiefs で生成）
     {
-      from: "data/france_fiefs_1200.geojson",
-      to: "dist/data/france_fiefs_1200.geojson",
+      from: "data/france_fiefs_flat_1200.geojson",
+      to: "dist/data/france_fiefs_flat_1200.geojson",
     },
     // TASK-78: 諸侯領との二重輪郭・二重ラベルを解消する派生データ
     // （deno task build-fief-dedupe で生成）
@@ -112,8 +112,8 @@ Deno.test("getDataCopyTargets は distDir を反映する", () => {
     { from: "data/europe_1492.geojson", to: "out/data/europe_1492.geojson" },
     { from: "data/hre_1650.geojson", to: "out/data/hre_1650.geojson" },
     {
-      from: "data/france_fiefs_1279.geojson",
-      to: "out/data/france_fiefs_1279.geojson",
+      from: "data/france_fiefs_flat_1279.geojson",
+      to: "out/data/france_fiefs_flat_1279.geojson",
     },
     { from: "data/fief-dedupe.json", to: "out/data/fief-dedupe.json" },
     {

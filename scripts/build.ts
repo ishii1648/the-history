@@ -87,11 +87,15 @@ export function getDataCopyTargets(
       to: `${distDir}/data/hre_${year}.geojson`,
     });
   }
-  // TASK-71: 中世フランス諸侯領オーバーレイ（deno task build-france-fiefs で生成）
+  // TASK-71: 中世フランス諸侯領オーバーレイ（deno task build-france-fiefs で生成）。
+  // TASK-79: 配信するのは諸侯領同士の重なりを排他化した派生データ
+  // （france_fiefs_flat_<year>、deno task build-fief-flat で生成）で、
+  // ランタイムの参照先（powers.ts franceFiefDataUrlFor）と一致させる。
+  // OHM 由来の生データ（france_fiefs_<year>）は派生データの入力なので dist には含めない。
   for (const year of fiefYears) {
     targets.push({
-      from: `data/france_fiefs_${year}.geojson`,
-      to: `${distDir}/data/france_fiefs_${year}.geojson`,
+      from: `data/france_fiefs_flat_${year}.geojson`,
+      to: `${distDir}/data/france_fiefs_flat_${year}.geojson`,
     });
   }
   // TASK-78: 諸侯領との二重輪郭・二重ラベルを解消する派生データ

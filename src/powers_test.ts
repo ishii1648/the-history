@@ -596,8 +596,14 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
 // ---- フランス諸侯領オーバーレイ（TASK-71）----
 
 Deno.test("franceFiefDataUrlFor はフランス諸侯領オーバーレイ GeoJSON のパスを返す（TASK-71）", () => {
-  assertEquals(franceFiefDataUrlFor(1000), "/data/france_fiefs_1000.geojson");
-  assertEquals(franceFiefDataUrlFor(1279), "/data/france_fiefs_1279.geojson");
+  assertEquals(
+    franceFiefDataUrlFor(1000),
+    "/data/france_fiefs_flat_1000.geojson",
+  );
+  assertEquals(
+    franceFiefDataUrlFor(1279),
+    "/data/france_fiefs_flat_1279.geojson",
+  );
 });
 
 Deno.test("hasFranceFiefOverlay は中世の対象年のみ true を返す（TASK-71 AC #4）", () => {
@@ -649,9 +655,9 @@ Deno.test("createFranceFiefOverlayLoader は対象年で france_fiefs URL を fe
   assert(!loader.has(1200));
   const fc = await loader.load(1200);
   assertEquals(fc.features[0].properties?.NAME, "Duchy of Normandy");
-  assertEquals(calls, ["/data/france_fiefs_1200.geojson"]);
+  assertEquals(calls, ["/data/france_fiefs_flat_1200.geojson"]);
   await loader.load(1200);
-  assertEquals(calls, ["/data/france_fiefs_1200.geojson"]);
+  assertEquals(calls, ["/data/france_fiefs_flat_1200.geojson"]);
   assert(loader.has(1200));
 });
 
@@ -682,7 +688,7 @@ Deno.test("createFranceFiefOverlayLoader は取得失敗時に warn して空 FC
 function makeThreeWayFetch(calls: string[]) {
   return (url: string) => {
     calls.push(url);
-    const name = url.includes("france_fiefs_")
+    const name = url.includes("france_fiefs_flat_")
       ? "Duchy of Normandy"
       : url.includes("hre_")
       ? "Austria"
@@ -709,7 +715,7 @@ Deno.test("createCombinedYearLoader は fiefs ローダを渡すと base/hre/fie
   assertEquals(data.fiefs.features[0].properties?.NAME, "Duchy of Normandy");
   assertEquals(calls.sort(), [
     "/data/europe_1200.geojson",
-    "/data/france_fiefs_1200.geojson",
+    "/data/france_fiefs_flat_1200.geojson",
   ]);
 });
 
