@@ -10,13 +10,19 @@ import type {
   Position,
 } from "geojson";
 import {
+  baseFillOutsideFiefs,
+  baseFillPathFor,
   coverageByPowerName,
   fiefsPathsFor,
   fiefUnionOf,
   MIN_RECORDED_COVERAGE,
   outlinesOutsideFiefs,
 } from "./build-fief-dedupe.ts";
-import { BASE_OUTLINE_YEARS } from "../src/config.ts";
+import {
+  BASE_OUTLINE_YEARS,
+  FRANCE_FIEF_OVERLAY_YEARS,
+  HRE_FIEF_OVERLAY_YEARS,
+} from "../src/config.ts";
 import { FIEF_DEDUPE_YEARS } from "./build-fief-dedupe.ts";
 import dedupeTable from "../data/fief-dedupe.json" with { type: "json" };
 import {
@@ -45,6 +51,13 @@ function box(
 
 function fc(features: Feature[]): FeatureCollection {
   return { type: "FeatureCollection", features };
+}
+
+/** data/ 直下の生成物を読む（TASK-92 の実データ検査で使う） */
+async function readCollection(name: string): Promise<FeatureCollection> {
+  return JSON.parse(
+    await Deno.readTextFile(`data/${name}`),
+  ) as FeatureCollection;
 }
 
 /** ライン片の中央セグメントの中点（端点は境界上になり得るため使わない） */
@@ -256,4 +269,199 @@ Deno.test("outlinesOutsideFiefs は穴（内環）も独立したラインとし
   };
   const outlines = outlinesOutsideFiefs(fc([withHole]), null);
   assertEquals(outlines.features.length, 2);
+});
+
+// ---------------------------------------------------------------------------
+// TASK-92: 諸侯領オーバーレイと base 勢力の二重塗り解消（europe_flat_<year>）
+// ---------------------------------------------------------------------------
+
+Deno.test("baseFillOutsideFiefs は諸侯領 union と重なる部分を base 塗りから取り除く（TASK-92）", () => {
+  const base = fc([box("France", 0, 0, 10, 10)]);
+  const union = box("fiefs", 0, 0, 5, 10);
+  const { fc: flat, removedNames } = baseFillOutsideFiefs(base, union);
+  assertEquals(removedNames, []);
+  assertEquals(flat.features.length, 1);
+  assertEquals(flat.features[0].properties?.NAME, "France");
+  // 残るのは東半分だけ（面積比 1/2）
+  assertAlmostEquals(
+    area(flat.features[0]) / area(base.features[0]),
+    0.5,
+    0.01,
+  );
+  // 残った面は諸侯領の内側を含まない
+  assert(
+    !booleanPointInPolygon([2.5, 5], flat.features[0] as Feature<Polygon>),
+  );
+  assert(booleanPointInPolygon([7.5, 5], flat.features[0] as Feature<Polygon>));
+});
+
+Deno.test("baseFillOutsideFiefs は諸侯領 union に完全内包される勢力を落とす（ブルターニュ相当。TASK-92）", () => {
+  const base = fc([box("Britany", 2, 2, 4, 4), box("France", 0, 0, 10, 10)]);
+  const union = box("fiefs", 1, 1, 5, 5);
+  const { fc: flat, removedNames } = baseFillOutsideFiefs(base, union);
+  assertEquals(removedNames, ["Britany"]);
+  assertEquals(flat.features.map((f) => f.properties?.NAME), ["France"]);
+});
+
+Deno.test("baseFillOutsideFiefs は諸侯領と重ならない勢力を同一参照のまま残す（TASK-92）", () => {
+  const untouched = box("Poland", 20, 20, 30, 30);
+  const base = fc([untouched]);
+  const { fc: flat, removedNames } = baseFillOutsideFiefs(
+    base,
+    box("fiefs", 0, 0, 5, 5),
+  );
+  assertEquals(removedNames, []);
+  assertEquals(
+    JSON.stringify(flat.features[0].geometry),
+    JSON.stringify(untouched.geometry),
+  );
+});
+
+Deno.test("baseFillOutsideFiefs は union が null なら入力をそのまま返す（対象外年の非退行。TASK-92）", () => {
+  const base = fc([box("France", 0, 0, 10, 10)]);
+  const { fc: flat, removedNames } = baseFillOutsideFiefs(base, null);
+  assertEquals(removedNames, []);
+  assertEquals(flat, base);
+});
+
+Deno.test("baseFillPathFor は data/europe_flat_<year>.geojson を指す（TASK-92）", () => {
+  assertEquals(baseFillPathFor(1200), "data/europe_flat_1200.geojson");
+});
+
+/** bbox 付きの feature（点包含判定の前フィルタ用） */
+interface Indexed {
+  feature: Feature;
+  bbox: [number, number, number, number];
+}
+
+function bboxOf(feature: Feature): [number, number, number, number] {
+  const geometry = feature.geometry as Polygon | MultiPolygon;
+  const parts = geometry.type === "Polygon"
+    ? [geometry.coordinates]
+    : geometry.coordinates;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const part of parts) {
+    for (const [x, y] of part[0]) {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  return [minX, minY, maxX, maxY];
+}
+
+function indexOf(features: readonly Feature[]): Indexed[] {
+  return features
+    .filter((f) =>
+      f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon"
+    )
+    .map((feature) => ({ feature, bbox: bboxOf(feature) }));
+}
+
+/** 点を含む feature の NAME 一覧（bbox で前フィルタしてから厳密判定） */
+function namesContaining(index: readonly Indexed[], point: Position): string[] {
+  const names: string[] = [];
+  for (const { feature, bbox } of index) {
+    if (
+      point[0] < bbox[0] || point[0] > bbox[2] ||
+      point[1] < bbox[1] || point[1] > bbox[3]
+    ) {
+      continue;
+    }
+    if (booleanPointInPolygon(point, feature as Feature<Polygon>)) {
+      const name = feature.properties?.NAME;
+      names.push(typeof name === "string" ? name : "(no name)");
+    }
+  }
+  return names;
+}
+
+/** feature の内部を格子状にサンプリングした点（決定的） */
+function samplePointsInside(feature: Feature, steps: number): Position[] {
+  const [minX, minY, maxX, maxY] = bboxOf(feature);
+  const points: Position[] = [];
+  for (let i = 0; i < steps; i++) {
+    for (let j = 0; j < steps; j++) {
+      const point: Position = [
+        minX + ((i + 0.5) / steps) * (maxX - minX),
+        minY + ((j + 0.5) / steps) * (maxY - minY),
+      ];
+      if (booleanPointInPolygon(point, feature as Feature<Polygon>)) {
+        points.push(point);
+      }
+    }
+  }
+  return points;
+}
+
+/** その年に実際に描かれる諸侯領（flat）の feature を全系統ぶん集める */
+async function renderedFiefFeatures(year: number): Promise<Feature[]> {
+  const paths: string[] = [];
+  if (FRANCE_FIEF_OVERLAY_YEARS.includes(year)) {
+    paths.push(`france_fiefs_flat_${year}.geojson`);
+  }
+  if (HRE_FIEF_OVERLAY_YEARS.includes(year)) {
+    paths.push(`hre_fiefs_flat_${year}.geojson`);
+  }
+  const collections = await Promise.all(paths.map(readCollection));
+  return collections.flatMap((c) => c.features);
+}
+
+Deno.test("諸侯領の内側に base 塗りが残っていない（二重塗りの再現テスト。TASK-92 AC #1）", async () => {
+  const offenders: string[] = [];
+  for (const year of FIEF_DEDUPE_YEARS) {
+    const flat = indexOf(
+      (await readCollection(`europe_flat_${year}.geojson`)).features,
+    );
+    for (const fief of await renderedFiefFeatures(year)) {
+      for (const point of samplePointsInside(fief, 8)) {
+        for (const name of namesContaining(flat, point)) {
+          offenders.push(
+            `${year} ${String(fief.properties?.NAME)} @ ${
+              point.map((v) => v.toFixed(4)).join(",")
+            } に base ${name} が残存`,
+          );
+        }
+      }
+    }
+  }
+  assertEquals(offenders.slice(0, 10), []);
+});
+
+Deno.test("諸侯領が覆わない領域の base 塗りは従来どおり残る（TASK-92 AC #2）", async () => {
+  const coverage = parseFiefDedupeTable(dedupeTable);
+  for (const year of FIEF_DEDUPE_YEARS) {
+    const base = await readCollection(`europe_${year}.geojson`);
+    const flat = await readCollection(`europe_flat_${year}.geojson`);
+    const areaByName = (features: readonly Feature[]) => {
+      const totals = new Map<string, number>();
+      for (const f of features) {
+        const name = f.properties?.NAME;
+        if (typeof name !== "string" || f.geometry === null) continue;
+        if (
+          f.geometry.type !== "Polygon" && f.geometry.type !== "MultiPolygon"
+        ) {
+          continue;
+        }
+        totals.set(name, (totals.get(name) ?? 0) + area(f));
+      }
+      return totals;
+    };
+    const before = areaByName(base.features);
+    const after = areaByName(flat.features);
+    for (const [name, baseArea] of before) {
+      const covered = coverage.years[String(year)]?.[name] ?? 0;
+      const expected = baseArea * (1 - covered);
+      const actual = after.get(name) ?? 0;
+      // 被覆率は fief-dedupe.json と同じ union から求めた値なので、残る面積は
+      // (1 - 被覆率) × 元面積 に一致する（差は座標丸め・微小片の除去のみ）
+      assertAlmostEquals(
+        actual / baseArea,
+        expected / baseArea,
+        0.02,
+        `${year} ${name} の残存塗り面積が想定と乖離（覆われた割合 ${covered}）`,
+      );
+    }
+  }
 });

@@ -175,6 +175,35 @@ export function hasBaseOutline(
 }
 
 /**
+ * base 塗りオーバーレイ GeoJSON の配信 URL を返す（純粋関数、TASK-92）。
+ * 中身は base 勢力ポリゴンから諸侯領 union を差し引いた派生 base
+ * （生成は scripts/build-fief-dedupe.ts）。諸侯領オーバーレイ対象年に限り
+ * powers レイヤーの塗りをこちらへ差し替えることで、半透明の諸侯領の下に
+ * base の塗りが重なって生じる「境界線を伴わない濃淡」を消す。
+ * baseOutlineDataUrlFor（線）と同じ union から作られており、
+ * 「base の輪郭が消える範囲」と「base の塗りが消える範囲」は常に一致する。
+ */
+export function baseFillDataUrlFor(year: number): string {
+  return `/data/europe_flat_${year}.geojson`;
+}
+
+/**
+ * powers レイヤーの塗りに使う FeatureCollection を選ぶ（純粋関数、TASK-92）。
+ * 派生 base（baseFill）があればそれを、無ければ従来どおり base を返す。
+ *
+ * 空 FC になるのは「諸侯領オーバーレイが無い年」と「派生データの取得に
+ * 失敗した年」で、どちらも従来の描画（base をそのまま塗る）へ縮退させたい。
+ * ラベル・帝国範囲強調・picking の入力は base のままにするため、差し替えは
+ * この 1 箇所に閉じ込める。
+ */
+export function powerFillDataFor(
+  base: FeatureCollection,
+  baseFill: FeatureCollection,
+): FeatureCollection {
+  return baseFill.features.length > 0 ? baseFill : base;
+}
+
+/**
  * feature を持たない空の FeatureCollection（非対象年の HRE オーバーレイ用）。
  * 同一参照を返し続けることで deck.gl の data 差分判定を最小化する。
  */
@@ -348,6 +377,27 @@ export function createBaseOutlineLoader(
 }
 
 /**
+ * base 塗りオーバーレイ用のローダを作る（TASK-92）。
+ * base 境界線オーバーレイ（createBaseOutlineLoader）と同じ機構に載せるため、
+ * 非対象年は fetch せず空 FC、取得失敗は warn + 空 FC になる。空 FC のときは
+ * powerFillDataFor が従来の base を返すので、この派生データが欠けても
+ * 見た目は TASK-92 以前（＝二重塗りは残るが表示は壊れない）に留まる。
+ */
+export function createBaseFillLoader(
+  fetchFn: FetchLike,
+  overlayYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    overlayYears,
+    baseFillDataUrlFor,
+    "base 塗りオーバーレイ",
+    warnFn,
+  );
+}
+
+/**
  * 年代切替で同時に反映する base（europe_*）・hre（hre_*）・
  * fiefs（france_fiefs_*、TASK-71）・outlines（base_outline_*、TASK-78）の
  * データ組
@@ -364,6 +414,11 @@ export interface YearLayerData {
    * FeatureCollection（非対象年・取得失敗時は空 = powers の stroke で描く）
    */
   outlines: FeatureCollection;
+  /**
+   * base 塗りオーバーレイ（諸侯領 union を差し引いた派生 base、TASK-92）の
+   * FeatureCollection（非対象年・取得失敗時は空 = base をそのまま塗る）
+   */
+  baseFill: FeatureCollection;
 }
 
 /** base + hre + fiefs をまとめてロードする複合ローダ */
@@ -390,20 +445,23 @@ export function createCombinedYearLoader(
   hreLoader: YearDataLoader,
   fiefLoader?: YearDataLoader,
   outlineLoader?: YearDataLoader,
+  baseFillLoader?: YearDataLoader,
 ): CombinedYearLoader {
   return {
     has: (year) =>
       baseLoader.has(year) && hreLoader.has(year) &&
       (fiefLoader === undefined || fiefLoader.has(year)) &&
-      (outlineLoader === undefined || outlineLoader.has(year)),
+      (outlineLoader === undefined || outlineLoader.has(year)) &&
+      (baseFillLoader === undefined || baseFillLoader.has(year)),
     async load(year) {
-      const [base, hre, fiefs, outlines] = await Promise.all([
+      const [base, hre, fiefs, outlines, baseFill] = await Promise.all([
         baseLoader.load(year),
         hreLoader.load(year),
         fiefLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
         outlineLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
+        baseFillLoader?.load(year) ?? Promise.resolve(EMPTY_FEATURE_COLLECTION),
       ]);
-      return { base, hre, fiefs, outlines };
+      return { base, hre, fiefs, outlines, baseFill };
     },
   };
 }

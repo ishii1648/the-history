@@ -43,6 +43,7 @@ import {
 } from "./fallback.ts";
 import {
   colorKeyFor,
+  createBaseFillLoader,
   createBaseOutlineLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
@@ -54,6 +55,7 @@ import {
   hasHreOverlay,
   LINE_COLOR,
   LINE_WIDTH_PX,
+  powerFillDataFor,
   type Rgba,
 } from "./powers.ts";
 import { displayLabel } from "./info.ts";
@@ -373,6 +375,9 @@ const dataLoader = createCombinedYearLoader(
   ),
   createFranceFiefOverlayLoader((url) => fetch(url), FRANCE_FIEF_OVERLAY_YEARS),
   createBaseOutlineLoader((url) => fetch(url), BASE_OUTLINE_YEARS),
+  // TASK-92: 諸侯領の下地になる base 塗りを差し引いた派生 base。輪郭
+  // （base_outline_*）と同じ union から作られるので、年集合も同一。
+  createBaseFillLoader((url) => fetch(url), BASE_OUTLINE_YEARS),
 );
 
 /**
@@ -464,6 +469,12 @@ let currentView:
     fiefs: FeatureCollection;
     /** TASK-78: 諸侯領の内側を除いた base 輪郭（空なら powers の stroke で描く） */
     outlines: FeatureCollection;
+    /**
+     * TASK-92: 諸侯領 union を差し引いた派生 base（空なら base をそのまま塗る）。
+     * 使うのは powers レイヤーの塗りだけで、ラベル・帝国範囲強調・picking の
+     * 入力は base のまま。
+     */
+    baseFill: FeatureCollection;
   }
   | null = null;
 
@@ -1320,7 +1331,7 @@ function syncApproximateBorders(): void {
  */
 function renderLayers(): void {
   if (currentView === null) return;
-  const { year, base, hre, fiefs, outlines } = currentView;
+  const { year, base, hre, fiefs, outlines, baseFill } = currentView;
   // TASK-80: base の境界線は全年代とも MapLibre の概略境界レイヤー
   // （approximate-borders-*、syncApproximateBorders）が描くため、powers の
   // stroke は常に止める（TASK-78 は諸侯領オーバーレイ対象年だけ止めていた）。
@@ -1331,7 +1342,10 @@ function renderLayers(): void {
       buildPowerLayer(
         POWER_LAYER_ID,
         year,
-        base,
+        // TASK-92: 諸侯領オーバーレイ対象年は諸侯領 union を差し引いた派生 base を
+        // 塗る。諸侯領の下に base の半透明が重なって出る「境界線を伴わない濃淡」を
+        // 消すのが目的で、非対象年・取得失敗時は base に縮退する。
+        powerFillDataFor(base, baseFill),
         LINE_COLOR,
         LINE_WIDTH_PX,
         false,
@@ -1812,6 +1826,7 @@ const yearSwitcher = createYearSwitcher(
       hre: data.hre,
       fiefs: data.fiefs,
       outlines: data.outlines,
+      baseFill: data.baseFill,
     };
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
@@ -2432,7 +2447,11 @@ map.on("load", () => {
     activeColor: [...ACTIVE_FILL_COLOR],
     activeFeatures: {
       [POWER_LAYER_ID]: countActive(
-        currentView?.base ?? EMPTY_FEATURE_COLLECTION,
+        // TASK-92: powers が実際に塗るのは派生 base（対象年）なのでそれを数える
+        powerFillDataFor(
+          currentView?.base ?? EMPTY_FEATURE_COLLECTION,
+          currentView?.baseFill ?? EMPTY_FEATURE_COLLECTION,
+        ),
       ),
       [HRE_LAYER_ID]: countActive(currentView?.hre ?? EMPTY_FEATURE_COLLECTION),
       [FRANCE_FIEF_LAYER_ID]: countActive(

@@ -128,6 +128,13 @@ export function getDataCopyTargets(
         from: `data/base_outline_${year}.geojson`,
         to: `${distDir}/data/base_outline_${year}.geojson`,
       });
+      // TASK-92: 諸侯領の下地になる base 塗りを差し引いた派生 base。
+      // powers レイヤーはオーバーレイ対象年に限りこちらを塗りに使う
+      // （ラベル・帝国範囲強調・picking は従来の europe_<year> のまま）。
+      targets.push({
+        from: `data/europe_flat_${year}.geojson`,
+        to: `${distDir}/data/europe_flat_${year}.geojson`,
+      });
     }
   }
   return targets;

@@ -14,6 +14,15 @@
  *    諸侯領 union の外側だけに切り出した LineString の集合。ランタイムは
  *    諸侯領対象年に限り base ポリゴンの stroke を止めてこの層を描くため、
  *    諸侯領の内側を走る base 境界線が消え、外側の境界線は従来と同一に見える。
+ * 3. data/europe_flat_<year>.geojson … base 勢力ポリゴンから諸侯領 union を
+ *    差し引いた派生 base（TASK-92）。ランタイム（powers レイヤー）は諸侯領
+ *    対象年に限りこちらを塗りのデータに使い、諸侯領の下に別の半透明が重なって
+ *    生じる「境界線を伴わない濃淡」を消す。ラベル・帝国範囲強調・被覆率計算は
+ *    従来どおり元の europe_<year> を使う（形が変わると polylabel の位置や
+ *    帝国範囲の外形が動くため）。
+ *
+ * 3 つとも同じ union（fiefUnionOf）から導くため、「base の輪郭が消える範囲」と
+ * 「base の塗りが消える範囲」は常に一致する。
  *
  * なぜ 2 系統に分けるのか（実測に基づく設計判断。1200 年のデータで計測）:
  * - 完全内包される base 勢力は Britany（被覆率 1.0000）のみで、次に高い
@@ -31,6 +40,7 @@
 
 import area from "@turf/area";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import difference from "@turf/difference";
 import { featureCollection, lineString } from "@turf/helpers";
 import intersect from "@turf/intersect";
 import lineSplit from "@turf/line-split";
@@ -51,6 +61,7 @@ import {
   HRE_FIEF_OVERLAY_YEARS,
 } from "../src/config.ts";
 import { COORD_PRECISION } from "./build-data.ts";
+import { cleanFeatureCollection, formatCleanStats } from "./clean-polygons.ts";
 
 /**
  * 生成対象年。オーバーレイ（中世フランス諸侯領・中世 HRE 領邦）のいずれかが
@@ -272,6 +283,84 @@ export function outlinesOutsideFiefs(
   });
 }
 
+/** baseFillOutsideFiefs の結果 */
+export interface BaseFillOutsideFiefs {
+  fc: FeatureCollection;
+  /** union に完全に覆われ、塗りを 1 つも持たなくなった勢力 NAME（入力順） */
+  removedNames: string[];
+}
+
+/**
+ * base 勢力ポリゴンからオーバーレイ union を差し引いた FeatureCollection を返す
+ * （純粋関数、TASK-92）。outlinesOutsideFiefs が境界線に対して行うことの塗り版。
+ *
+ * ## なぜ必要か
+ * 諸侯領（france-fiefs / hre-powers）は base 勢力（powers）の直上に FILL_ALPHA=128
+ * の半透明で描かれるため、見える色は「0.5 × 諸侯領色 + 0.5 × 下地」になる。
+ * 下地の base 勢力は諸侯領と境界が一致しておらず、1 つの諸侯領の内側を base の
+ * 境界が横切る（1200 年の Duchy of Gascony は下地が Angevin Empire 88% ＋
+ * County of Toulouse 11%）。同じ諸侯領なのに下地が替わる場所で合成色が変わり、
+ * 「境界線を伴わない濃淡」として見える。下地を幾何的に取り除けば諸侯領の下は
+ * 常にベースマップだけになり、1 つの諸侯領は 1 色に落ち着く。
+ *
+ * ## 完全に覆われる勢力は feature ごと落とす
+ * difference が null（＝ union に完全内包）になる base 勢力（1200 年の Britany は
+ * 被覆率 1.0000）は、塗りが全て諸侯領の下に隠れているので残す意味が無い。
+ * build-fief-flat.ts の subtractOverlay は同じ状況で「元のまま残して警告」する
+ * が、あちらは領邦が地図から消えることを避ける判断で、ここでは逆に残すと
+ * 二重塗り（＝解決したい症状そのもの）が残る。落としても base ラベルは
+ * fief-dedupe.json の被覆率で既に抑制されており（FIEF_COVERAGE_SUPPRESS_THRESHOLD）、
+ * ラベル・picking・帝国範囲強調は元の base（europe_<year>）を使い続けるため
+ * 影響しない。
+ *
+ * union と bbox が交差しない feature は差し引きを試みず座標をそのまま返す
+ * （形は一切変わらない・重い difference も省く）。差し引きに失敗した feature は警告して
+ * 元のまま残す（塗りが消えるより二重塗りが残る方が安全）。
+ * 座標は新しくできる交点の桁が伸びるため COORD_PRECISION へ丸める。
+ */
+export function baseFillOutsideFiefs(
+  base: FeatureCollection,
+  fiefUnion: PolygonalFeature | null,
+  warnFn: (message: string) => void = console.warn,
+): BaseFillOutsideFiefs {
+  if (fiefUnion === null) return { fc: base, removedNames: [] };
+  const unionBbox = geometryBbox(fiefUnion);
+  const kept: Feature[] = [];
+  const removedNames: string[] = [];
+  for (const feature of base.features) {
+    if (!isPolygonal(feature)) {
+      kept.push(feature);
+      continue;
+    }
+    if (!bboxIntersects(geometryBbox(feature), unionBbox)) {
+      kept.push(feature);
+      continue;
+    }
+    let cut: Feature<Polygon | MultiPolygon> | null;
+    try {
+      cut = difference(featureCollection([feature, fiefUnion]));
+    } catch (error) {
+      warnFn(
+        `${
+          nameOf(feature) ?? "(no name)"
+        } からオーバーレイを差し引けませんでした: ${String(error)}`,
+      );
+      kept.push(feature);
+      continue;
+    }
+    if (cut === null) {
+      removedNames.push(nameOf(feature) ?? "(no name)");
+      continue;
+    }
+    kept.push({ ...feature, geometry: cut.geometry });
+  }
+  const fc: FeatureCollection = { type: "FeatureCollection", features: kept };
+  return {
+    fc: truncate(fc, { precision: COORD_PRECISION, coordinates: 2 }),
+    removedNames,
+  };
+}
+
 /** fief-dedupe.json の中身 */
 export interface FiefDedupeFile {
   metadata: {
@@ -319,6 +408,16 @@ export function outlinePathFor(year: number): string {
   return `data/base_outline_${year}.geojson`;
 }
 
+/**
+ * base 塗り（オーバーレイ union を差し引いた派生 base）の出力パス（TASK-92）。
+ * ランタイム（src/powers.ts baseFillDataUrlFor）が powers レイヤーの data として
+ * 引くのはこのファイルで、ラベル・帝国範囲強調・被覆率の計算は従来どおり
+ * 元の europe_<year> を使う。
+ */
+export function baseFillPathFor(year: number): string {
+  return `data/europe_flat_${year}.geojson`;
+}
+
 /** fief-dedupe.json のパス */
 export const DEDUPE_PATH = "data/fief-dedupe.json";
 
@@ -360,6 +459,27 @@ async function main(): Promise<void> {
     console.log(
       `${outlinePath}: ${json.length} bytes, lines=${outlines.features.length}`,
     );
+    // TASK-92: 諸侯領の下地になる base 塗りを取り除いた派生 base
+    const { fc: fill, removedNames } = baseFillOutsideFiefs(base, fiefUnion);
+    const { fc: cleanedFill, stats } = cleanFeatureCollection(
+      fill,
+      COORD_PRECISION,
+    );
+    const cleanLine = formatCleanStats(stats);
+    if (cleanLine !== null) console.log(`  ${cleanLine}`);
+    const fillPath = baseFillPathFor(year);
+    const fillJson = JSON.stringify(cleanedFill);
+    await Deno.writeTextFile(fillPath, fillJson);
+    console.log(
+      `${fillPath}: ${fillJson.length} bytes, features=${cleanedFill.features.length}（完全被覆で除外=${
+        removedNames.join(", ") || "なし"
+      }${
+        stats.droppedFeatures.length > 0
+          ? `, 微小片のみで除外=${stats.droppedFeatures.join(", ")}`
+          : ""
+      }）`,
+    );
+
     const suppressed = Object.entries(coverage)
       .filter(([, ratio]) => ratio >= 0.9)
       .map(([name, ratio]) => `${name}(${ratio})`);

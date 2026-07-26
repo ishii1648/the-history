@@ -17,6 +17,7 @@ import {
   normalizeSelfIntersections,
   polygonParts,
   selfIntersectionPoints,
+  separateTouchingRings,
 } from "./clean-polygons.ts";
 import { SIZE_LIMIT_BYTES, YEARS } from "./build-data.ts";
 import {
@@ -24,6 +25,7 @@ import {
   FRANCE_FIEF_YEARS,
 } from "./build-france-fiefs.ts";
 import { HRE_OVERLAY_YEARS, HRE_SIZE_LIMIT_BYTES } from "./build-hre.ts";
+import { BASE_OUTLINE_YEARS } from "../src/config.ts";
 
 /** 経緯度の矩形リング（反時計回り）。widthDeg 四方 */
 function square(
@@ -351,9 +353,62 @@ Deno.test("生成物は年代ごとのサイズ上限に収まる", async () => 
       `hre_${y}.geojson`,
       HRE_SIZE_LIMIT_BYTES,
     ]),
+    // TASK-92: 諸侯領 union を差し引いた派生 base。境界が諸侯領の輪郭に沿う分
+    // 元の europe_<year> より頂点が増えるため、上限は base と同じ値で見張る
+    ...BASE_OUTLINE_YEARS.map((y): [string, number] => [
+      `europe_flat_${y}.geojson`,
+      SIZE_LIMIT_BYTES,
+    ]),
   ];
   for (const [name, limit] of limits) {
     const { size } = await Deno.stat(`data/${name}`);
     assert(size <= limit, `data/${name} が ${size} バイトで上限 ${limit} 超過`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// TASK-92: 1 点で接するリング同士の分離（difference が作る接触の修復）
+// ---------------------------------------------------------------------------
+
+/** 外環の頂点 (0,5) に穴が 1 点で接するポリゴン（difference が作る形と同型） */
+function ringTouchingShell(): Polygon {
+  return poly([
+    [[0, 0], [10, 0], [10, 10], [0, 10], [0, 5], [0, 0]],
+    [[0, 5], [3, 3], [3, 7], [0, 5]],
+  ]);
+}
+
+Deno.test("separateTouchingRings は 1 点で接する穴を引き離して自己交差を消す（TASK-92）", () => {
+  const geometry = ringTouchingShell();
+  assert(selfIntersectionPoints(geometry).length > 0);
+  const repaired = separateTouchingRings(geometry);
+  assert(repaired !== null);
+  assertEquals(selfIntersectionPoints(repaired).length, 0);
+  // 外環は 1 頂点も動かさない（動かすのは面積が小さい側 = 穴）
+  assertEquals(polygonParts(repaired)[0][0], polygonParts(geometry)[0][0]);
+  // 穴の形の変化は頂点 1 つを数グリッド（1e-5 度）動かした分だけ
+  const before = area(turfPolygon([polygonParts(geometry)[0][1]]));
+  const after = area(turfPolygon([polygonParts(repaired)[0][1]]));
+  assert(
+    Math.abs(after - before) / before < 1e-4,
+    `穴の面積が ${before} から ${after} へ変わりすぎ`,
+  );
+});
+
+Deno.test("separateTouchingRings は接触点が頂点でない交差を修復できず null を返す（TASK-92）", () => {
+  assertEquals(separateTouchingRings(poly([BOWTIE])), null);
+});
+
+Deno.test("separateTouchingRings は入力を変更しない（純粋関数。TASK-92）", () => {
+  const geometry = ringTouchingShell();
+  const snapshot = JSON.stringify(geometry);
+  separateTouchingRings(geometry);
+  assertEquals(JSON.stringify(geometry), snapshot);
+});
+
+Deno.test("cleanGeometry は 1 点で接する穴を分離し unresolved にしない（TASK-92）", () => {
+  const result = cleanGeometry(ringTouchingShell());
+  assert(result.geometry !== null);
+  assertEquals(selfIntersectionPoints(result.geometry).length, 0);
+  assertEquals(result.unresolved, false);
 });
