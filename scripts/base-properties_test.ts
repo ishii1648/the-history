@@ -227,22 +227,23 @@ const EXPECTED_ATTRIBUTIONS: ReadonlyArray<{
     reason: "1830 年侵攻・1848 年に本国の県へ編入",
   },
   // A-10〜A-12: ユトレヒト条約（1713 年）後の配置が 1700 年に入り込んでいる
+  // 宗主名は TASK-107（監査 B-3）で Spanish Habsburg → Spain に正規化した
   {
     year: 1700,
     name: "Naples",
-    subjecto: "Spanish Habsburg",
+    subjecto: "Spain",
     reason: "オーストリア占領は 1707 年",
   },
   {
     year: 1700,
     name: "Sardinia",
-    subjecto: "Spanish Habsburg",
+    subjecto: "Spain",
     reason: "オーストリア占領は 1708 年",
   },
   {
     year: 1700,
     name: "Sicily",
-    subjecto: "Spanish Habsburg",
+    subjecto: "Spain",
     reason: "サヴォイア領は 1713〜1720 年",
   },
   // A-13: メクレンブルク＝シュトレーリッツは 1701 年以来の主権公国
@@ -309,12 +310,12 @@ Deno.test("確度 A と判定した宗主の誤りが是正されている（TAS
 Deno.test("是正した宗主が同年代に勢力として実在する（TASK-104）", () => {
   // 宗主キー（suzerain_extent.ts resolveSuzerainKey）の union で外枠を描くため、
   // 宗主名が同年代の NAME に無いと「宙に浮いた宗主」になり、その勢力を選んでも
-  // 外枠が出ない。1700 年の Spanish Habsburg だけは上流が同年の Milan /
-  // Franche-Comté / Spain にも使っている表記で、正規化は B-3 の別タスク扱い。
+  // 外枠が出ない。TASK-104 の時点では 1700 年の Spanish Habsburg だけが例外
+  // （上流が同年の Milan / Franche-Comté / Spain にも使っている表記）だったが、
+  // TASK-107 が Spain へ正規化したので例外は無くなった。
   const dangling: string[] = [];
   for (const expected of EXPECTED_ATTRIBUTIONS) {
     if (expected.subjecto === expected.name) continue; // 独立（自己参照）
-    if (expected.subjecto === "Spanish Habsburg") continue;
     const exists = readBase(expected.year).features.some(
       (feature) => feature.properties?.NAME === expected.subjecto,
     );
@@ -352,12 +353,14 @@ const EXPECTED_NAME_OVERRIDES: ReadonlyArray<{
     reason: "1308 年に滅亡した勢力名が 1400 年に残っている",
   },
   // B-7: 131 万 km² をオカ川中流域の一公国の名で塗っている。1200 年に上流自身が
-  // 使う総称 NAME へ寄せる。SUBJECTO は上流の値のまま（正規化は TASK-107）
+  // 使う総称 NAME へ寄せる。SUBJECTO は TASK-106 では上流の値のままにしたが、
+  // TASK-107（監査 B-1）が 1279 の Mongol Empire を 1300 と同じ実在の宗主へ
+  // 正規化したので、両年とも Khanate of the Golden Horde になる。
   {
     year: 1279,
     from: "Ryazan",
     to: "Other Rus Principalities",
-    subjecto: "Mongol Empire",
+    subjecto: "Khanate of the Golden Horde",
     partof: "Other Rus Principalities",
     reason: "リャザンの規模ではない広域を代表名で塗っている",
   },
@@ -433,6 +436,329 @@ Deno.test("NAME の上書きが対象年代の外へ波及していない（TASK
     if (!exists) lost.push(`${year} ${name}`);
   }
   assertEquals(lost, [], `巻き込みで消えた勢力: ${lost.join(", ")}`);
+});
+
+/**
+ * 確度 B（解釈の余地あり）の一貫性正規化（TASK-107 / 監査 §3）。
+ *
+ * 根拠は docs/data-inventory/base-attribution-audit.md §3 と decision-25。
+ * 「どちらの表記も一理あるが年代間で一貫していない」ものを、
+ *
+ * 1. 宗主名がその年代に勢力として存在しない（宙に浮いた宗主）か
+ * 2. 上流自身が隣接年代で別の表記を使っている
+ *
+ * の 2 点で切り分け、両方に当たるものだけを是正した（B-5 Algiers / Tunis は
+ * 2. だけで 1. に当たらないため対象外。下の波及テストで現状維持を固定する）。
+ */
+const EXPECTED_CONSISTENCY_FIXES: ReadonlyArray<{
+  year: number;
+  name: string;
+  subjecto: string;
+  partof?: string;
+  reason: string;
+}> = [
+  // B-1: モンゴル帝国は 1260〜64 年に分裂し、どの年代にも NAME として存在しない
+  {
+    year: 1279,
+    name: "Ilkhanate",
+    subjecto: "Ilkhanate",
+    partof: "Ilkhanate",
+    reason: "1300 年の上流表記に揃えて独立",
+  },
+  {
+    year: 1279,
+    name: "Khanate of the Golden Horde",
+    subjecto: "Khanate of the Golden Horde",
+    partof: "Khanate of the Golden Horde",
+    reason: "1262 年のベルケ・フレグ戦争以降は事実上独立",
+  },
+  {
+    year: 1300,
+    name: "Khanate of the Golden Horde",
+    subjecto: "Khanate of the Golden Horde",
+    partof: "Khanate of the Golden Horde",
+    reason: "同年の Ilkhanate は独立表記で年内不整合",
+  },
+  {
+    year: 1279,
+    name: "Other Rus Principalities",
+    subjecto: "Khanate of the Golden Horde",
+    partof: "Other Rus Principalities",
+    reason: "1300 年に同一 feature の前例がある",
+  },
+  {
+    year: 1279,
+    name: "Seljuk Caliphate",
+    subjecto: "Ilkhanate",
+    partof: "Ilkhanate",
+    reason: "1243 年ケセ・ダグ以降ルーム・セルジュークはイル・ハン朝の従属",
+  },
+  {
+    year: 1400,
+    name: "Moldova",
+    subjecto: "Moldova",
+    partof: "Moldova",
+    reason: "PARTOF だけが宙に浮いた Mongol Empire を指していた",
+  },
+  // B-2: 1071 年マンジケルト以後、大アルメニアはビザンツ領ではない
+  {
+    year: 1100,
+    name: "Armenia",
+    subjecto: "Seljuk Empire",
+    partof: "Armenia",
+    reason: "1064 年アニ陥落・1071 年マンジケルトでセルジューク圏",
+  },
+  // B-3: Spanish Habsburg は王朝名で、どの年代にも NAME として存在しない
+  {
+    year: 1650,
+    name: "Spain",
+    subjecto: "Spain",
+    partof: "Spain",
+    reason: "1600 / 1715 年の上流表記に揃えて独立",
+  },
+  {
+    year: 1700,
+    name: "Spain",
+    subjecto: "Spain",
+    partof: "Spain",
+    reason: "1600 / 1715 年の上流表記に揃えて独立",
+  },
+  {
+    year: 1650,
+    name: "Milan",
+    subjecto: "Spain",
+    reason: "スペイン王の領（ミラノ公国）",
+  },
+  {
+    year: 1700,
+    name: "Milan",
+    subjecto: "Spain",
+    reason: "スペイン王の領（ミラノ公国）",
+  },
+  {
+    year: 1650,
+    name: "Franche-Comté",
+    subjecto: "Spain",
+    reason: "1678 年ナイメーヘン条約までスペイン王の領",
+  },
+  {
+    year: 1700,
+    name: "Franche-Comté",
+    subjecto: "Spain",
+    reason: "上流が 1700 年も同値で持つ（実体は 1678 年にフランス領）",
+  },
+  {
+    year: 1650,
+    name: "Naples",
+    subjecto: "Spain",
+    partof: "Naples",
+    reason: "1504 年以降スペイン王の領",
+  },
+  {
+    year: 1650,
+    name: "Sicily",
+    subjecto: "Spain",
+    partof: "Sicily",
+    reason: "1412 年以降アラゴン＝スペイン王の領",
+  },
+  {
+    year: 1650,
+    name: "Sardinia",
+    subjecto: "Spain",
+    partof: "Sardinia",
+    reason: "1530 / 1600 年と同じ Spain 表記に揃える",
+  },
+  // B-4: 1714〜1837 年の英国とハノーファーは同君連合であって従属ではない
+  {
+    year: 1800,
+    name: "Hanover",
+    subjecto: "Hanover",
+    partof: "Hanover",
+    reason: "1715 / 1783 / 1815 年は上流も独立表記",
+  },
+];
+
+Deno.test("確度 B と判定した帰属の一貫性正規化が効いている（TASK-107）", () => {
+  const wrong: string[] = [];
+  for (const expected of EXPECTED_CONSISTENCY_FIXES) {
+    const features = readBase(expected.year).features.filter(
+      (feature) => feature.properties?.NAME === expected.name,
+    );
+    if (features.length === 0) {
+      wrong.push(`${expected.year} ${expected.name}: feature が無い`);
+      continue;
+    }
+    for (const feature of features) {
+      const props = (feature.properties ?? {}) as Record<string, unknown>;
+      const checks: Array<[string, string]> = [
+        ["SUBJECTO", expected.subjecto],
+      ];
+      if (expected.partof !== undefined) {
+        checks.push(["PARTOF", expected.partof]);
+      }
+      for (const [key, want] of checks) {
+        if (props[key] !== want) {
+          wrong.push(
+            `${expected.year} ${expected.name}.${key}=${
+              JSON.stringify(props[key])
+            } (期待 ${JSON.stringify(want)} / ${expected.reason})`,
+          );
+        }
+      }
+    }
+  }
+  assertEquals(wrong, [], `是正されていない帰属: ${wrong.join(", ")}`);
+});
+
+/**
+ * どの年代にも NAME として現れない「宙に浮いた宗主」の文字列（TASK-107）。
+ * 王朝名・既に解体した帝国名で、宗主キー（suzerain_extent.ts）としては本体の
+ * 無い外枠を、色キー（powers.ts colorKeyFor）としては実在しない勢力の従属色を
+ * 生む。上流の語彙にある実在の勢力名（Spain / Ilkhanate / Khanate of the
+ * Golden Horde）へ寄せて全滅させる。
+ */
+const PHANTOM_SUZERAINS = ["Spanish Habsburg", "Mongol Empire"] as const;
+
+Deno.test("宙に浮いた宗主が全年代のどのプロパティにも残っていない（TASK-107）", () => {
+  const left: string[] = [];
+  for (const [year, props] of allProperties()) {
+    for (const key of ["NAME", "SUBJECTO", "PARTOF"] as const) {
+      const value = props[key];
+      if (typeof value !== "string") continue;
+      if ((PHANTOM_SUZERAINS as readonly string[]).includes(value)) {
+        left.push(`${year} ${String(props.NAME)}.${key}=${value}`);
+      }
+    }
+  }
+  assertEquals(left, [], `宙に浮いた宗主が残っている: ${left.join(", ")}`);
+});
+
+Deno.test("Spain / Hanover の色キーが年代間で一貫する（TASK-107）", () => {
+  // 監査 B-3 / B-4 の実害は「同じ勢力の色が年代切替で変わる」ことだった
+  // （実測: Spain は 1600 #77c598 → 1650 / 1700 #b0d194 → 1715 #77c598、
+  // Hanover は 1783 #adcda2 → 1800 #94d1a6 → 1815 #adcda2）。どちらも
+  // 全出現年代で独立勢力キー（NAME 単独）になることを固定する。
+  for (const name of ["Spain", "Hanover"]) {
+    const keys = new Map<number, string>();
+    for (const [year, props] of allProperties()) {
+      if (props.NAME !== name) continue;
+      const key = colorKeyFor(props);
+      assert(key !== null, `${year}: ${name} の色キーが引けない`);
+      keys.set(year, key);
+    }
+    assert(keys.size >= 2, `${name} が複数年代に存在しない`);
+    assertEquals(
+      [...new Set(keys.values())],
+      [name],
+      `${name} の年代ごとの色キー: ${JSON.stringify([...keys])}`,
+    );
+  }
+});
+
+Deno.test("確度 B の正規化が対象外の年代・勢力へ波及していない（TASK-107）", () => {
+  // 上流が正しく持っている帰属（是正の前後で変わってはいけないもの）と、
+  // 監査が「対応しない」と決めた B-5（Algiers / Tunis の名目的宗主権）。
+  const untouched: ReadonlyArray<{
+    year: number;
+    name: string;
+    subjecto: string;
+    why: string;
+  }> = [
+    // B-1 の周辺: 1300 年に上流が既に独立/実在の宗主で持っているもの
+    { year: 1300, name: "Ilkhanate", subjecto: "Ilkhanate", why: "上流が独立" },
+    {
+      year: 1300,
+      name: "Seljuk Caliphate",
+      subjecto: "Seljuk Caliphate",
+      why: "上流が独立",
+    },
+    {
+      year: 1300,
+      name: "Other Rus Principalities",
+      subjecto: "Khanate of the Golden Horde",
+      why: "上流が実在の宗主で持つ（1279 の是正はこれに合わせたもの）",
+    },
+    {
+      year: 1200,
+      name: "Other Rus Principalities",
+      subjecto: "Other Rus Principalities",
+      why: "モンゴル侵入前",
+    },
+    // B-2 の周辺: 1100 年だけがビザンツ帰属だった
+    { year: 1000, name: "Armenia", subjecto: "Armenia", why: "アニ王国は独立" },
+    { year: 1200, name: "Armenia", subjecto: "Armenia", why: "上流が独立" },
+    // B-3 の周辺: ユトレヒト条約後（1715）の帰属は正しい
+    {
+      year: 1715,
+      name: "Milan",
+      subjecto: "Austrian Empire",
+      why: "1714 年ラシュタット条約",
+    },
+    {
+      year: 1715,
+      name: "Naples",
+      subjecto: "Austrian Empire",
+      why: "1713 年ユトレヒト条約",
+    },
+    {
+      year: 1715,
+      name: "Sardinia",
+      subjecto: "Austrian Empire",
+      why: "1713 年ユトレヒト条約",
+    },
+    {
+      year: 1715,
+      name: "Sicily",
+      subjecto: "Savoy-Piedmont",
+      why: "1713〜1720 年はサヴォイア領",
+    },
+    { year: 1715, name: "Spain", subjecto: "Spain", why: "上流が独立" },
+    { year: 1600, name: "Spain", subjecto: "Spain", why: "上流が独立" },
+    // B-4 の周辺: 1800 年以外は上流も独立表記
+    { year: 1783, name: "Hanover", subjecto: "Hanover", why: "上流が独立" },
+    { year: 1815, name: "Hanover", subjecto: "Hanover", why: "上流が独立" },
+    // B-4 の隣: 同じ 1800 年の UK 表記そのものは触らない（別系統の表記ゆれ）
+    {
+      year: 1800,
+      name: "Kingdom of Ireland",
+      subjecto: "UK",
+      why: "1800 年合同法。同君連合ではなく実際の従属関係",
+    },
+    // B-5: 監査が「対応しない」と決めた名目的宗主権（known-limitations 記載済み）
+    {
+      year: 1800,
+      name: "Algiers",
+      subjecto: "Ottoman Empire",
+      why: "名目的宗主権は実在し、どちらの表記も一理ある（B-5）",
+    },
+    {
+      year: 1800,
+      name: "Tunis",
+      subjecto: "Ottoman Empire",
+      why: "同上（B-5）",
+    },
+  ];
+  const changed: string[] = [];
+  for (const { year, name, subjecto, why } of untouched) {
+    const features = readBase(year).features.filter(
+      (feature) => feature.properties?.NAME === name,
+    );
+    if (features.length === 0) {
+      changed.push(`${year} ${name}: feature が無い`);
+      continue;
+    }
+    for (const feature of features) {
+      const actual = (feature.properties ?? {}).SUBJECTO;
+      if (actual !== subjecto) {
+        changed.push(
+          `${year} ${name}.SUBJECTO=${JSON.stringify(actual)} (期待 ${
+            JSON.stringify(subjecto)
+          } / ${why})`,
+        );
+      }
+    }
+  }
+  assertEquals(changed, [], `巻き込みで変わった帰属: ${changed.join(", ")}`);
 });
 
 Deno.test("NAME が無い feature は帰属プロパティを 1 つも持たない（TASK-102）", () => {
