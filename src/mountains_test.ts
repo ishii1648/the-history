@@ -3,14 +3,28 @@ import type { Feature, FeatureCollection, Polygon } from "geojson";
 import { MAX_ZOOM, MIN_ZOOM } from "./config.ts";
 import {
   filterVisibleMountainLabels,
+  isMountainActive,
+  MOUNTAIN_HIGHLIGHT_COLOR,
+  MOUNTAIN_HIT_FILL_COLOR,
+  MOUNTAIN_HIT_LAYER_ID,
+  MOUNTAIN_HIT_RADIUS_PX,
   MOUNTAIN_LABEL_PRIORITY_MAX,
   MOUNTAIN_LABEL_PRIORITY_MIN,
+  mountainDisplayName,
+  mountainHitData,
   mountainLabelAnchors,
   mountainLabelMinZoom,
   mountainLabelPriority,
+  mountainOutlineColor,
+  mountainOutlineWidth,
+  mountainPickLabel,
   MOUNTAINS_DATA_URL,
+  toggleMountainSelection,
 } from "./mountains.ts";
-import { CITY_LABEL_PRIORITY_MIN } from "./cities.ts";
+import { CITY_HIT_RADIUS_PX, CITY_LABEL_PRIORITY_MIN } from "./cities.ts";
+import { MOUNTAIN_LABEL_COLOR, MOUNTAIN_LABEL_SIZE_PX } from "./labels.ts";
+import { RIVER_SELECTED_LINE_COLOR } from "./rivers.ts";
+import { ACTIVE_FILL_COLOR } from "./power_highlight.ts";
 
 /** テスト用に矩形 Polygon の Feature を組み立てる */
 function boxFeature(
@@ -180,4 +194,144 @@ Deno.test("filterVisibleMountainLabels は入力配列を破壊せず、datum �
 
   assertEquals(anchors.length, 1);
   assert(visible[0] === anchors[0]);
+});
+
+// ---- ホバー/クリック対象化（TASK-100）----
+
+Deno.test("MOUNTAIN_HIT_LAYER_ID: 判定専用層の ID は cities-hit / rivers-hit と同じ命名（TASK-100）", () => {
+  assertEquals(MOUNTAIN_HIT_LAYER_ID, "mountains-hit");
+});
+
+Deno.test("MOUNTAIN_HIT_RADIUS_PX: 都市の判定円より広い（山脈は常時可視の点記号を持たないため）（TASK-100 AC #1）", () => {
+  assert(MOUNTAIN_HIT_RADIUS_PX > CITY_HIT_RADIUS_PX);
+  // ラベル（MOUNTAIN_LABEL_SIZE_PX）の高さ全体を余裕をもって覆う
+  assert(MOUNTAIN_HIT_RADIUS_PX >= MOUNTAIN_LABEL_SIZE_PX);
+  // 判定専用層なので見た目には出さない（完全透明）
+  assertEquals([...MOUNTAIN_HIT_FILL_COLOR], [0, 0, 0, 0]);
+});
+
+Deno.test("mountainDisplayName: name-ja.json を引き、未登録は英語のまま（TASK-100 AC #1）", () => {
+  const ja = { ALPS: "アルプス山脈" };
+  assertEquals(mountainDisplayName("ALPS", ja), "アルプス山脈");
+  assertEquals(mountainDisplayName("PYRENEES", ja), "PYRENEES");
+  assertEquals(mountainDisplayName("ALPS"), "ALPS");
+});
+
+Deno.test("mountainPickLabel: 情報パネルに出すのは山脈名のみ（標高等を足さない）（TASK-100 AC #1/#6）", () => {
+  const ja = { ALPS: "アルプス山脈" };
+  assertEquals(mountainPickLabel({ name: "ALPS" }, ja), "アルプス山脈");
+  assertEquals(mountainPickLabel({ name: "Balkan Mts." }, ja), "Balkan Mts.");
+});
+
+Deno.test("mountainPickLabel: 年代に依存しない（年代引数を取らず、同じ入力なら常に同じ表示）（TASK-100 AC #5）", () => {
+  const ja = { ALPS: "アルプス山脈" };
+  // 山脈は年代非依存の地形なので、ラベル整形は (datum, ja) だけの純粋関数。
+  // 引数に年が無いこと自体が「年代切替で内容が変わらない」ことの担保になる
+  assertEquals(mountainPickLabel.length, 2);
+  const first = mountainPickLabel({ name: "ALPS" }, ja);
+  assertEquals(mountainPickLabel({ name: "ALPS" }, ja), first);
+});
+
+Deno.test("mountainHitData: 表示中の山脈ラベルと同じアンカー・同じズーム条件で作られる（TASK-100 AC #1）", () => {
+  const fc = collection([
+    boxFeature({ name: "ALPS", scalerank: 1, min_label: 2 }, [4, 44, 16, 48]),
+    boxFeature({ name: "Sierra Morena", scalerank: 4, min_label: 6 }, [
+      -7,
+      37,
+      -3,
+      39,
+    ]),
+  ]);
+  const anchors = mountainLabelAnchors(fc);
+
+  // ズーム段ごとの取捨はラベルと完全に一致する（見えていない山脈は拾えない）
+  assertEquals(mountainHitData(anchors, 4).map((d) => d.name), ["ALPS"]);
+  assertEquals(mountainHitData(anchors, 6).map((d) => d.name), [
+    "ALPS",
+    "Sierra Morena",
+  ]);
+  // datum の参照はそのまま（main.ts 側のメモ化を壊さない）
+  assert(mountainHitData(anchors, 8)[0] === anchors[0]);
+});
+
+Deno.test("toggleMountainSelection: 同一で解除・別で移動・対象外クリックで解除（河川/勢力と同一規則）（TASK-100 AC #4）", () => {
+  assertEquals(toggleMountainSelection(null, "ALPS"), "ALPS");
+  assertEquals(toggleMountainSelection("ALPS", "ALPS"), null);
+  assertEquals(toggleMountainSelection("ALPS", "PYRENEES"), "PYRENEES");
+  assertEquals(toggleMountainSelection("ALPS", null), null);
+  assertEquals(toggleMountainSelection(null, null), null);
+});
+
+Deno.test("isMountainActive: 選択中またはホバー中で true（キー null は決してアクティブにしない）（TASK-100 AC #4）", () => {
+  assert(isMountainActive("ALPS", "ALPS", null));
+  assert(isMountainActive("ALPS", null, "ALPS"));
+  assert(!isMountainActive("ALPS", "PYRENEES", "URAL MOUNTAINS"));
+  assert(!isMountainActive(null, null, null));
+});
+
+Deno.test("mountainOutlineColor / mountainOutlineWidth: 強調時だけ輪郭が出る（通常は完全透明・幅 0）（TASK-100 AC #4）", () => {
+  const props = { name: "ALPS" };
+  // 通常表示は完全透明（勢力の塗りの上に余計な線を足さない）
+  assertEquals(mountainOutlineColor(props, null, null)[3], 0);
+  assertEquals(mountainOutlineWidth(props, null, null), 0);
+  // ホバー・選択のいずれでも同じ色（河川と同じ「色は 2 値・幅で段階を付ける」設計）
+  assertEquals(
+    [...mountainOutlineColor(props, null, "ALPS")],
+    [...MOUNTAIN_HIGHLIGHT_COLOR],
+  );
+  assertEquals(
+    [...mountainOutlineColor(props, "ALPS", null)],
+    [...MOUNTAIN_HIGHLIGHT_COLOR],
+  );
+  // 選択はホバーより太い（選択 > ホバー > 通常）
+  assert(
+    mountainOutlineWidth(props, "ALPS", null) >
+      mountainOutlineWidth(props, null, "ALPS"),
+  );
+  assert(mountainOutlineWidth(props, null, "ALPS") > 0);
+  // name を持たない feature は決して強調されない
+  assertEquals(mountainOutlineColor({ name: null }, null, null)[3], 0);
+});
+
+/** [r,g,b] の色相（度）。彩度 0（無彩色）は 0 を返す（power_highlight_test.ts と同一） */
+function hueDeg([r, g, b]: readonly number[]): number {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d === 0) return 0;
+  const h = max === r
+    ? ((g - b) / d) % 6
+    : max === g
+    ? (b - r) / d + 2
+    : (r - g) / d + 4;
+  return ((h * 60) % 360 + 360) % 360;
+}
+
+/** 円環上の色相差（0..180 度） */
+function hueDistance(a: readonly number[], b: readonly number[]): number {
+  const diff = Math.abs(hueDeg(a) - hueDeg(b)) % 360;
+  return diff > 180 ? 360 - diff : diff;
+}
+
+Deno.test("MOUNTAIN_HIGHLIGHT_COLOR: 既存 4 種の強調色と色相が 60 度以上離れている（TASK-100 AC #4）", () => {
+  const others: Record<string, readonly number[]> = {
+    // 河川の選択/ホバー強調（rivers.ts）
+    "河川強調": RIVER_SELECTED_LINE_COLOR,
+    // 勢力・領邦のアクティブ塗り（power_highlight.ts）
+    "勢力アクティブ塗り": ACTIVE_FILL_COLOR,
+    // HRE 帝国範囲の外縁（main.ts HRE_EXTENT_LINE_COLOR）。定数は DOM 依存の
+    // main.ts にあるためリテラルで固定する（power_highlight_test.ts と同じ扱い）
+    "HRE 外縁の臙脂": [140, 30, 30],
+    // 諸侯領境界（main.ts FIEF_LINE_COLOR）
+    "諸侯領境界の藍紫": [74, 42, 130],
+  };
+  for (const [label, other] of Object.entries(others)) {
+    const distance = hueDistance(MOUNTAIN_HIGHLIGHT_COLOR, other);
+    assert(distance >= 60, `${label} と色相が近すぎる: ${distance} 度`);
+  }
+});
+
+Deno.test("MOUNTAIN_HIGHLIGHT_COLOR: 山脈名ラベルの苔緑（通常時の地形色）とも読み分けられる（TASK-100 AC #4）", () => {
+  // 同じ「地形」系統だが、強調は通常時と一目で区別できる必要がある
+  assert(hueDistance(MOUNTAIN_HIGHLIGHT_COLOR, MOUNTAIN_LABEL_COLOR) >= 30);
 });

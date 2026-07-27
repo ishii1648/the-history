@@ -6,10 +6,15 @@ import {
   HRE_LAYER_ID,
   isCityPickLayerId,
   isDirectPickFinal,
+  isMountainPickLayerId,
   isNearCursorRepickable,
+  isPeakPickLayerId,
   isRiversPickLayerId,
   ITALY_FIEF_LAYER_ID,
   layerOrderMatchesPickingPriority,
+  MOUNTAIN_HIT_LAYER_ID,
+  PEAK_HIT_LAYER_ID,
+  PEAK_LAYER_ID,
   PICKING_PRIORITY,
   POWER_LAYER_ID,
   renderOrderFromPickingPriority,
@@ -21,19 +26,170 @@ import {
 
 // ---- PICKING_PRIORITY ----
 
-Deno.test("PICKING_PRIORITY: 河川 > 都市 > 都市ヒット層 > 河川ヒット層 > HRE 領邦 > 仏諸侯領 > 伊諸侯領 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82, TASK-96）", () => {
+Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明判定層（都市 > 山峰 > 山脈 > 河川）> 領邦 3 系統 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82, TASK-96, TASK-100）", () => {
   assertEquals(
     [...PICKING_PRIORITY],
     [
       RIVERS_LAYER_ID,
       CITY_LAYER_ID,
+      PEAK_LAYER_ID,
       CITY_HIT_LAYER_ID,
+      PEAK_HIT_LAYER_ID,
+      MOUNTAIN_HIT_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
       HRE_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ],
+  );
+});
+
+// ---- 山岳（TASK-100）----
+
+Deno.test("PICKING_PRIORITY: 山岳 3 層はすべて政治ポリゴン 4 層より上（勢力の上に載る）（TASK-100 AC #1/#2）", () => {
+  const political = [
+    HRE_LAYER_ID,
+    FRANCE_FIEF_LAYER_ID,
+    ITALY_FIEF_LAYER_ID,
+    POWER_LAYER_ID,
+  ];
+  for (
+    const terrain of [PEAK_LAYER_ID, PEAK_HIT_LAYER_ID, MOUNTAIN_HIT_LAYER_ID]
+  ) {
+    const index = PICKING_PRIORITY.indexOf(terrain);
+    assert(index !== -1, `${terrain} が PICKING_PRIORITY に無い`);
+    for (const id of political) {
+      assert(
+        index < PICKING_PRIORITY.indexOf(id),
+        `${terrain} が ${id} より下にあると picking されない`,
+      );
+    }
+  }
+});
+
+Deno.test("PICKING_PRIORITY: 山脈の判定層は面ではなくアンカー円なので、勢力より上でも既存 3 主題（河川・都市・山峰）には劣後する（TASK-100 AC #3）", () => {
+  const mountain = PICKING_PRIORITY.indexOf(MOUNTAIN_HIT_LAYER_ID);
+  assert(PICKING_PRIORITY.indexOf(RIVERS_LAYER_ID) < mountain);
+  assert(PICKING_PRIORITY.indexOf(CITY_LAYER_ID) < mountain);
+  assert(PICKING_PRIORITY.indexOf(CITY_HIT_LAYER_ID) < mountain);
+  assert(PICKING_PRIORITY.indexOf(PEAK_LAYER_ID) < mountain);
+  assert(PICKING_PRIORITY.indexOf(PEAK_HIT_LAYER_ID) < mountain);
+});
+
+Deno.test("PICKING_PRIORITY: 可視記号（山峰 ▲）は透明判定層（都市・山峰・山脈・河川）より優先される（TASK-100 AC #3）", () => {
+  const peak = PICKING_PRIORITY.indexOf(PEAK_LAYER_ID);
+  for (
+    const hit of [
+      CITY_HIT_LAYER_ID,
+      PEAK_HIT_LAYER_ID,
+      MOUNTAIN_HIT_LAYER_ID,
+      RIVERS_HIT_LAYER_ID,
+    ]
+  ) {
+    assert(peak < PICKING_PRIORITY.indexOf(hit), `${hit} より上であること`);
+  }
+});
+
+Deno.test("PICKING_PRIORITY: 山峰・山脈の判定層は rivers-hit（透明帯）より優先される（河川の判定帯に構造的に遮蔽されない）（TASK-100 AC #3）", () => {
+  const riversHit = PICKING_PRIORITY.indexOf(RIVERS_HIT_LAYER_ID);
+  assert(PICKING_PRIORITY.indexOf(PEAK_HIT_LAYER_ID) < riversHit);
+  assert(PICKING_PRIORITY.indexOf(MOUNTAIN_HIT_LAYER_ID) < riversHit);
+});
+
+Deno.test("PICKING_PRIORITY: 山岳の追加で既存 4 主題の相対順（河川 > 都市 > 都市ヒット > 河川ヒット > 領邦 > 勢力）は変わらない（TASK-100 AC #3）", () => {
+  const existing = [
+    RIVERS_LAYER_ID,
+    CITY_LAYER_ID,
+    CITY_HIT_LAYER_ID,
+    RIVERS_HIT_LAYER_ID,
+    HRE_LAYER_ID,
+    FRANCE_FIEF_LAYER_ID,
+    ITALY_FIEF_LAYER_ID,
+    POWER_LAYER_ID,
+  ];
+  const actual = PICKING_PRIORITY.filter((id) => existing.includes(id));
+  assertEquals([...actual], existing);
+});
+
+Deno.test("isMountainPickLayerId / isPeakPickLayerId: それぞれの層だけで true（TASK-100）", () => {
+  assert(isMountainPickLayerId(MOUNTAIN_HIT_LAYER_ID));
+  assert(!isMountainPickLayerId(PEAK_LAYER_ID));
+  assert(!isMountainPickLayerId(POWER_LAYER_ID));
+  assert(!isMountainPickLayerId(undefined));
+  assert(isPeakPickLayerId(PEAK_LAYER_ID));
+  assert(isPeakPickLayerId(PEAK_HIT_LAYER_ID));
+  assert(!isPeakPickLayerId(MOUNTAIN_HIT_LAYER_ID));
+  assert(!isPeakPickLayerId(CITY_LAYER_ID));
+  assert(!isPeakPickLayerId(undefined));
+});
+
+Deno.test("isNearCursorRepickable: 透明判定層 3 種（都市・山峰・山脈）はクリックの近傍再ピック対象外（ホバーと実効範囲を一致させる）（TASK-100 AC #3）", () => {
+  assert(!isNearCursorRepickable(PEAK_HIT_LAYER_ID));
+  assert(!isNearCursorRepickable(MOUNTAIN_HIT_LAYER_ID));
+  assert(isNearCursorRepickable(PEAK_LAYER_ID));
+});
+
+Deno.test("isDirectPickFinal: 山峰・山脈の直下ヒットは近傍河川の再ピックに奪われない（TASK-100 AC #1/#2）", () => {
+  assert(isDirectPickFinal(PEAK_LAYER_ID));
+  assert(isDirectPickFinal(PEAK_HIT_LAYER_ID));
+  assert(isDirectPickFinal(MOUNTAIN_HIT_LAYER_ID));
+});
+
+Deno.test("resolveClickPick: 山峰は勢力より優先、河川ライン・都市ドットには劣後する（TASK-100 AC #3）", () => {
+  const power = pickInfo(POWER_LAYER_ID, "神聖ローマ帝国");
+  const peak = pickInfo(PEAK_LAYER_ID, "モンブラン");
+  const city = pickInfo(CITY_LAYER_ID, "ジュネーヴ");
+  const river = pickInfo(RIVERS_LAYER_ID, "ローヌ川");
+  assertEquals(resolveClickPick([power, peak]), peak);
+  assertEquals(resolveClickPick([peak, city]), city);
+  assertEquals(resolveClickPick([peak, river]), river);
+});
+
+Deno.test("resolveClickPick: 山脈の判定円は近傍再ピック候補から除外される（クリックだけ範囲が広がらない）（TASK-100 AC #3）", () => {
+  const power = pickInfo(POWER_LAYER_ID, "スイス盟約者団");
+  const mountain = pickInfo(MOUNTAIN_HIT_LAYER_ID, "アルプス山脈");
+  assertEquals(resolveClickPick([power, mountain]), power);
+  assertEquals(resolveClickPick([mountain]), null);
+});
+
+Deno.test("layerOrderMatchesPickingPriority: 山岳 3 層を含む実際の描画順が整合する（TASK-100 AC #6）", () => {
+  assert(
+    layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
+      HRE_LAYER_ID,
+      // hre-extent / mountain-outline（pickable: false）は優先リスト外なので無視される
+      "hre-extent",
+      "mountain-outline",
+      RIVERS_HIT_LAYER_ID,
+      MOUNTAIN_HIT_LAYER_ID,
+      PEAK_HIT_LAYER_ID,
+      CITY_HIT_LAYER_ID,
+      PEAK_LAYER_ID,
+      CITY_LAYER_ID,
+      RIVERS_LAYER_ID,
+      "mountain-labels",
+      "peak-labels",
+    ]),
+  );
+  // 山脈の判定円を勢力より下に描くと整合しない（勢力に覆われて拾えない）
+  assert(
+    !layerOrderMatchesPickingPriority([
+      MOUNTAIN_HIT_LAYER_ID,
+      POWER_LAYER_ID,
+      RIVERS_LAYER_ID,
+    ]),
+  );
+  // 山峰マーカーを都市ドットの上に描くと整合しない（可視記号の相対順が反転）
+  assert(
+    !layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      CITY_LAYER_ID,
+      PEAK_LAYER_ID,
+      RIVERS_LAYER_ID,
+    ]),
   );
 });
 
@@ -339,7 +495,10 @@ Deno.test("renderOrderFromPickingPriority: 描画順（下→上）は優先順�
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
+      MOUNTAIN_HIT_LAYER_ID,
+      PEAK_HIT_LAYER_ID,
       CITY_HIT_LAYER_ID,
+      PEAK_LAYER_ID,
       CITY_LAYER_ID,
       RIVERS_LAYER_ID,
     ],

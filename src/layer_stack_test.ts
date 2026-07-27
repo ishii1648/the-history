@@ -35,6 +35,8 @@ import {
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   layerOrderMatchesPickingPriority,
+  MOUNTAIN_HIT_LAYER_ID,
+  PEAK_HIT_LAYER_ID,
   PICKING_PRIORITY,
   POWER_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
@@ -337,11 +339,11 @@ Deno.test("overlaid 側に載せるのはラベル 5 層のみ（TASK-97 で山�
 });
 
 Deno.test("山峰マーカーは interleaved 側・山峰名ラベルは overlaid 側（TASK-99）", () => {
-  // マーカー（記号）は地図に interleave する。pickable ではないため
-  // PICKING_PRIORITY には含めず（TASK-100 でホバー対象化する余地は残す）、
-  // 水面より下へも回さない（都市マーカーと同じ扱い）
+  // マーカー（記号）は地図に interleave する。TASK-100 でホバー/クリック対象に
+  // したため PICKING_PRIORITY に含まれる（可視記号なので都市ドットと同じ扱い）が、
+  // 水面より下へは回さない（都市マーカーと同じ扱い）
   assert(!OVERLAID_LAYER_IDS.includes(PEAK_LAYER_ID));
-  assert(!PICKING_PRIORITY.includes(PEAK_LAYER_ID));
+  assert(PICKING_PRIORITY.includes(PEAK_LAYER_ID));
   assert(!UNDER_WATER_LAYER_IDS.includes(PEAK_LAYER_ID));
   assertEquals(underWaterBeforeId(PEAK_LAYER_ID, realStyleLayerIds), undefined);
   // ラベルは勢力名・都市名と同一の衝突空間（overlaid の 1 オーバーレイ）へ
@@ -434,7 +436,10 @@ Deno.test("beforeId の付与は picking 優先順（PICKING_PRIORITY）に影�
   assertEquals(PICKING_PRIORITY, [
     RIVERS_LAYER_ID,
     CITY_LAYER_ID,
+    PEAK_LAYER_ID,
     CITY_HIT_LAYER_ID,
+    PEAK_HIT_LAYER_ID,
+    MOUNTAIN_HIT_LAYER_ID,
     RIVERS_HIT_LAYER_ID,
     HRE_LAYER_ID,
     FRANCE_FIEF_LAYER_ID,
