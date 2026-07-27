@@ -282,7 +282,7 @@ claude-in-chrome も使えない場合）は、ビルド成果物・データ出
 
 複数の worktree が同時に存在する運用（mainagent のセッション worktree ＋ 実行中
 subagent の worktree）のため、**他セッションのものを誤って消さない**
-ことを最優先に設計している。`--force` / `-D` は使わず、git が拒否した削除は
+ことを最優先に設計している。ブランチ削除に `-D` は使わず、git が拒否した削除は
 skipped として理由付きで報告する。加えて削除対象を次の条件で絞る:
 
 - loop が生成した名前のみ（ブランチ `task-<N>-*` / `worktree-agent-*`、 worktree
@@ -302,12 +302,45 @@ skipped として理由付きで報告する。加えて削除対象を次の条
 ただし該当するのはコミットが 1 つも無いブランチだけなので失われる作業は無く、
 同名ブランチを作り直せば復帰できる。逆に `worktree-agent-*` はそもそも
 コミットを持たない足場ブランチなので、この条件により削除が 1
-イテレーション遅れる。いずれも steady state のブランチ数は「1
+イテレーション遅れる（TASK-118 で `--force` による回収を入れたあとも、この 1
+イテレーション遅れは変わらない）。いずれも steady state のブランチ数は「1
 イテレーションぶん」で頭打ちになり、単調増加はしない。
 
-判定ロジックは純粋関数（`planCleanup` / `parseWorktreeList` /
-`parseMergedBranches`）に切り出し、`scripts/cleanup_branches_test.ts` で
-ネットワーク・git 非依存の単体テストを持つ。
+判定ロジックは純粋関数（`planCleanup` / `canForceRemoveWorktree` /
+`parseWorktreeList` / `parseMergedBranches`）に切り出し、
+`scripts/cleanup_branches_test.ts` でネットワーク・git 非依存の単体テストを
+持つ。
+
+#### subagent worktree の dirty は常態として扱う（TASK-118）
+
+subagent には「commit / push はしない。ファイル変更のみ行い報告する」と
+指示しているため、mainagent がパッチを取り出したあとの subagent worktree は
+**必ず未コミットの変更を抱えたまま終わる**。TASK-112 は `git worktree remove` の
+dirty 拒否を安全装置に据えたが、この運用では dirty は異常ではなく常態
+なので安全装置が常に発動し、worktree の削除が一切進まなかった（実測: 7 タスク
+処理後の `--apply` で 8 件すべて拒否・`worktree-agent-*` が 9 本残存）。
+そのため次の二段構えに改めた。
+
+1. **通常経路（mainagent の手順）**: subagent の成果をパッチとして取り出した
+   直後に `git -C <wt> reset --hard HEAD && git -C <wt> clean -fd` で worktree
+   を元に戻す（`-x` は付けない。ignored ファイルが残っていても
+   `git worktree remove` は通る）。これで `--force` なしで削除できる。手順は
+   `.claude/skills/agent-loop/SKILL.md` の手順 2 に定義する。
+2. **取りこぼしの回収（スクリプト）**: 1 を忘れた・subagent が異常終了した等で
+   dirty なまま残った worktree を回収するため、通常の `git worktree remove` が
+   拒否された場合に限り `--force` で再試行する。許すのは
+   `canForceRemoveWorktree` が真、すなわち次を**すべて**満たすものだけ:
+   `.claude/worktrees/` 配下・`locked` でない・自分自身の worktree でない・
+   チェックアウト中のブランチが `worktree-agent-*`。
+
+`--force` の範囲を「loop が生成した使い捨ての足場」に厳密に限定するのが要点で、
+subagent の成果は mainagent がパッチとして取り出し済みなので worktree に残る
+変更は複製にすぎず、失われるものは無い。逆に agent worktree であっても detached
+や `task-N-*` がチェックアウトされている場合は loop の足場ではないため `--force`
+の対象外とし、従来どおり git の拒否を尊重して skipped に残す。
+**この限定が崩れると他セッションの作業を破壊する**ため、条件を緩める変更は
+`scripts/cleanup_branches_test.ts` の `canForceRemoveWorktree` テストと本章・
+decision-24 の更新をセットで行う。
 
 #### `active_branch_days` の値（backlog/config.yml）
 
