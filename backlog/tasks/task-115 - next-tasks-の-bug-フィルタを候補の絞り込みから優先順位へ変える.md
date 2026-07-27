@@ -4,9 +4,10 @@ title: next-tasks の bug フィルタを候補の絞り込みから優先順位
 status: To Do
 assignee: []
 created_date: '2026-07-27 14:14'
+updated_date: '2026-07-27 19:51'
 labels:
-  - 'area:scripts'
   - 'area:docs'
+  - 'area:scripts-loop'
 dependencies: []
 ordinal: 108000
 ---

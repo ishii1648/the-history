@@ -253,3 +253,66 @@ Deno.test("selectNextTasks の結果は契約どおりの JSON 1 行に直列化
       '"skipped":[{"id":"TASK-30","reason":"area conflict: src-main (TASK-29)"}]}',
   );
 });
+
+// ---- TASK-114: area の細分化（scripts / data） ----
+// 粗い area:scripts / area:data を細分化しても selectNextTasks のロジックは
+// 変わらない（文字列一致で交差を見るだけ）ことと、細分化によって従来は
+// 衝突扱いだった組み合わせが並列に選ばれるようになることを固定する。
+// 区分と対応パスの目安は docs/development-style.md 4.2 章。
+
+Deno.test("TASK-114: 細分化した scripts の area は互いに交差せず並列に選ばれる", () => {
+  // 細分化前はどちらも area:scripts で TASK-2 がスキップされていた組み合わせ。
+  // 実例: ループ支援ツール（next_tasks.ts）とビルドパイプライン
+  // （build-cliopatria-fiefs.ts）は origin/main で一度も同一 PR に現れない。
+  const tasks = [
+    task({ id: "TASK-1", ordinal: 1000, labels: ["area:scripts-loop"] }),
+    task({ id: "TASK-2", ordinal: 2000, labels: ["area:scripts-fiefs"] }),
+  ];
+  assertEquals(selectNextTasks(tasks), {
+    tasks: [
+      { id: "TASK-1", areas: ["scripts-loop"] },
+      { id: "TASK-2", areas: ["scripts-fiefs"] },
+    ],
+    skipped: [],
+  });
+});
+
+Deno.test("TASK-114: 細分化した data の area は互いに交差せず並列に選ばれる", () => {
+  const tasks = [
+    task({ id: "TASK-1", ordinal: 1000, labels: ["area:data-base"] }),
+    task({ id: "TASK-2", ordinal: 2000, labels: ["area:data-features"] }),
+  ];
+  assertEquals(selectNextTasks(tasks), {
+    tasks: [
+      { id: "TASK-1", areas: ["data-base"] },
+      { id: "TASK-2", areas: ["data-features"] },
+    ],
+    skipped: [],
+  });
+});
+
+Deno.test("TASK-114: 同じ細分化 area どうしは従来どおり衝突し reason に細分化名が出る", () => {
+  // 細分化は「実ファイルが競合しうる単位」に合わせたので、同じ area を持つ
+  // タスク同士は引き続き直列になる。skipped の reason には細分化後の名前が出る。
+  const tasks = [
+    task({ id: "TASK-1", ordinal: 1000, labels: ["area:scripts-fiefs"] }),
+    task({
+      id: "TASK-2",
+      ordinal: 2000,
+      labels: ["area:scripts-fiefs", "area:data-fiefs"],
+    }),
+  ];
+  assertEquals(selectNextTasks(tasks).skipped, [
+    { id: "TASK-2", reason: "area conflict: scripts-fiefs (TASK-1)" },
+  ]);
+});
+
+Deno.test("TASK-114: 粗い area:scripts と細分化 area は文字列が違うため交差しない", () => {
+  // docs/development-style.md が「粗い area:scripts / area:data は使わない」と
+  // 定めている理由。混在させると実際には競合するタスクが並列に選ばれてしまう。
+  const tasks = [
+    task({ id: "TASK-1", ordinal: 1000, labels: ["area:scripts"] }),
+    task({ id: "TASK-2", ordinal: 2000, labels: ["area:scripts-fiefs"] }),
+  ];
+  assertEquals(selectNextTasks(tasks).skipped, []);
+});

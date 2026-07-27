@@ -80,8 +80,31 @@ backlog task create "<タイトル>" \
 - `docs/development-style.md` 4.2 章の表に従い `area:<領域>` を付与する
   （複数可）。タスク間並列実行の判定（`deno task next-tasks`）に使われるため
   省略しない。
-- 領域: `area:docs` / `area:workflow` / `area:scripts` / `area:data` /
-  `area:src-main` / `area:src-<module>`。対応パスの目安は同章の表を参照。
+- 領域: `area:docs` / `area:workflow` / `area:src-main` / `area:src-<module>`
+  と、 `scripts/` `data/` の細分化領域（下表）。対応パスの目安は同章の表を参照。
+- **`scripts/` `data/` は細分化領域を使う。** 粗い `area:scripts` / `area:data`
+  は使わない（`next-tasks` は文字列一致で衝突を見るため、粗いラベルと
+  細分化ラベルが混在すると実際には衝突するタスクが並列に選ばれる）。範囲が広い
+  タスクは該当する細分化領域を複数併記する。
+
+| 細分化領域              | 対応パスの目安                                                                                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `area:scripts-base`     | `scripts/build-data.ts`・`build-hre.ts`・`clean-polygons.ts`・`base-properties_test.ts`                                                              |
+| `area:scripts-fiefs`    | `scripts/build-*-fiefs.ts`・`build-fief-dedupe.ts`・`build-fief-flat.ts`・`clean-polygons.ts`                                                        |
+| `area:scripts-features` | `scripts/build-rivers.ts`・`build-mountains.ts`・`build-peaks.ts`・`build-cities.ts`・`audit-rivers.ts`                                              |
+| `area:scripts-meta`     | `scripts/build-colors.ts`・`build-attribution.ts`・`audit-attribution.ts`・`name-ja_test.ts`・`known-limitations-json_test.ts`・`notes-json_test.ts` |
+| `area:scripts-build`    | `scripts/build.ts`・`extract-pmtiles.ts`・`extract-dem.ts`（`build.ts` はハブなので同士は衝突扱い）                                                  |
+| `area:scripts-loop`     | `scripts/next_task.ts`・`next_tasks.ts`・`cleanup_branches.ts`                                                                                       |
+| `area:scripts-verify`   | `scripts/serve.ts`・`scripts/verify/`                                                                                                                |
+| `area:data-base`        | `data/europe_<year>.geojson`・`europe_flat_<year>.geojson`・`base_outline_<year>.geojson`・`hre_<year>.geojson`・`index.json`・`name-overrides.json` |
+| `area:data-fiefs`       | `data/<region>_fiefs_<year>.geojson`・`<region>_fiefs_flat_<year>.geojson`・`fief-dedupe.json`                                                       |
+| `area:data-features`    | `data/rivers.geojson`・`mountains.geojson`・`peaks.geojson`・`cities.json`                                                                           |
+| `area:data-meta`        | `data/colors.json`・`name-ja.json`・`notes.json`・`known-limitations.json`                                                                           |
+
+- `scripts-*` と `data-*` は同名サフィックスが対になる（`scripts-base` が
+  `data-base` を生成する等）。触るパイプラインを決めれば両方のラベルが決まる。
+  `scripts-build` / `scripts-loop` / `scripts-verify` は生成物を持たないため
+  対になる `data-*` はない。
 
 ### ordinal
 
