@@ -349,6 +349,163 @@ Deno.test("イタリア諸侯領の制限注記はオーバーレイの対象年
   }
 });
 
+// TASK-103 の横断監査（docs/data-inventory/base-attribution-audit.md §6）で
+// 「上流データの粒度・構造に由来し propertyFixes では直しきれない」と整理された
+// 4 項目。propertyFixes（TASK-104 / TASK-106 / TASK-107）で是正できるのは
+// properties の値だけで、年代ごとに独立した地図として作られていることに由来する
+// 表記・形状のずれは残るため、ユーザに読める形で明示する（TASK-105）。
+Deno.test("年代ごとの名称・宗主表記のぶれが明記されている（TASK-105 AC #1）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "base-attribution-snapshot-drift");
+  assert(entry !== undefined, "base-attribution-snapshot-drift が無い");
+  // 原因（上流が年代ごとに独立した地図）と、ユーザが突き合わせられる実例
+  for (
+    const keyword of [
+      "historical-basemaps",
+      "Kingdom of France",
+      "Kingdom of Hungary",
+      "Raška",
+      "Sámi",
+      "TASK-103",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // 表示名は対訳表が吸収するが配色は年代で変わる、という帰結に触れていること
+  assert(/色/.test(entry.text), "text が配色への影響に言及していない");
+});
+
+Deno.test("名称・宗主表記のぶれは全年代に該当し常時 active（TASK-105 AC #1）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "base-attribution-snapshot-drift");
+  assert(entry !== undefined);
+  // 年代ごとに独立した地図という上流の作りは全年代に共通なので years は付けない
+  assertEquals(entry.years, undefined);
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      true,
+      `${year} 年で active になっていない`,
+    );
+  }
+});
+
+Deno.test("名目上の宗主権の扱いが年代で揺れることが明記されている（TASK-105 AC #1）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "base-nominal-suzerainty");
+  assert(entry !== undefined, "base-nominal-suzerainty が無い");
+  // 揺れの実例（アルジェ・チュニス摂政領: 1800 のみオスマン従属）と、
+  // 明白な誤りだけを是正する方針に触れていること
+  for (
+    const keyword of [
+      "アルジェ",
+      "チュニス",
+      "オスマン",
+      "1800",
+      "1815",
+      "同君連合",
+      "TASK-103",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  assert(/名目/.test(entry.text), "text が名目上の宗主権に言及していない");
+});
+
+Deno.test("名目上の宗主権の制限は全年代に該当し常時 active（TASK-105 AC #1）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "base-nominal-suzerainty");
+  assert(entry !== undefined);
+  // 名目的な従属関係の描き分けは特定年代に限らないため years は付けない
+  assertEquals(entry.years, undefined);
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      true,
+      `${year} 年で active になっていない`,
+    );
+  }
+});
+
+Deno.test("消滅済み勢力名・過大な範囲の勢力名が明記されている（TASK-105 AC #1）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "base-extinct-or-overbroad-powers");
+  assert(entry !== undefined, "base-extinct-or-overbroad-powers が無い");
+  // 1400 Seljuk Caliphate（1308 年滅亡）・1279/1300 Ryazan（約 131 万 km²）
+  for (
+    const keyword of [
+      "セルジューク",
+      "1308",
+      "リャザン",
+      "131万",
+      "TASK-103",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // 形状を分割・削除できない（= 名称や宗主の是正までしかできない）こと
+  assert(
+    /分割/.test(entry.text) && /出典/.test(entry.text),
+    "text が形状を触らない方針に言及していない",
+  );
+});
+
+Deno.test("消滅済み・過大な勢力名の制限は 1279〜1400 でのみ active（TASK-105 AC #1）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "base-extinct-or-overbroad-powers");
+  assert(entry !== undefined);
+  assertEquals(entry.years, { from: 1279, to: 1400 });
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      year >= 1279 && year <= 1400,
+      `${year} 年の active 判定が期待と異なる`,
+    );
+  }
+});
+
+Deno.test("年代をまたぐポリゴンの使い回しが明記されている（TASK-105 AC #1）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "base-shape-reuse");
+  assert(entry !== undefined, "base-shape-reuse が無い");
+  // 1279 Serbia / 1300 Raška / 1400 Bosnia は座標が完全一致（実測）。
+  // 位置ずれの例として 1783・1800 の Mecklenburg-Strelitz も挙げる。
+  for (
+    const keyword of [
+      "セルビア",
+      "ラシュカ",
+      "ボスニア",
+      "1400",
+      "メクレンブルク",
+      "1783",
+      "TASK-103",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  assert(
+    /同じ形|完全に一致/.test(entry.text),
+    "text が形状の使い回しに言及していない",
+  );
+});
+
+Deno.test("ポリゴン使い回しの制限は 1300〜1400 でのみ active（TASK-105 AC #1）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "base-shape-reuse");
+  assert(entry !== undefined);
+  // 同一形状が別勢力名で描かれる実害が出るのは Raška(1300) → Bosnia(1400)。
+  // 1783・1800 のメクレンブルクも同種だが、years は連続範囲 1 つしか表せず
+  // 1492〜1715 に誤った該当バッジが出るため、本文で補って years は広げない。
+  assertEquals(entry.years, { from: 1300, to: 1400 });
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      year >= 1300 && year <= 1400,
+      `${year} 年の active 判定が期待と異なる`,
+    );
+  }
+});
+
 Deno.test("コルシカ島の帰属が諸侯領オーバーレイ側へ移ることが明記されている（TASK-96）", () => {
   // base の「コルシカ」は 1100 年以降ピサ／ジェノヴァ共和国のポリゴンに
   // 99.8% 覆われ、fief-dedupe の被覆率でラベルが抑制される。島名のラベルが
