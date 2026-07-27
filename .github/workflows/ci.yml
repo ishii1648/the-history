@@ -45,7 +45,10 @@ jobs:
         if: steps.check_deno_config.outputs.exists == 'true'
         # TASK-76: 河川連続性の回帰テストが data/rivers.geojson を読むため、
         # data ディレクトリの読み取りのみ許可する（ネットワークは不許可のまま）
-        run: deno test --allow-read=data
+        # TASK-108: label_collision_test.ts が @deck.gl/core を読み込み、その
+        # debug モジュールが process.env.NODE_ENV を参照するため、この 1 変数
+        # だけ env 読み取りを許可する（他の環境変数・ネットワークは不許可のまま）
+        run: deno test --allow-read=data --allow-env=NODE_ENV
 
       - name: deno task build
         if: steps.check_deno_config.outputs.exists == 'true'

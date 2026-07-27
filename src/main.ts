@@ -9,10 +9,7 @@ import { PMTiles, Protocol } from "pmtiles";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Layer, PickingInfo } from "@deck.gl/core";
 import { GeoJsonLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import {
-  CollisionFilterExtension,
-  type CollisionFilterExtensionProps,
-} from "@deck.gl/extensions";
+import type { CollisionFilterExtensionProps } from "@deck.gl/extensions";
 import type { Feature, FeatureCollection } from "geojson";
 import { buildBasemapStyle, WATER_LAYER_ID } from "./basemap.ts";
 import {
@@ -86,6 +83,7 @@ import {
   RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
 } from "./labels.ts";
+import { labelCollisionExtensions } from "./label_collision.ts";
 import {
   createSuzerainExtentCache,
   EMPTY_SUZERAIN_OVERRIDES,
@@ -991,6 +989,12 @@ function buildRiversLineLayer(): GeoJsonLayer {
  *   広い余白を確保し、初期ズーム z4 や密集地帯での判読不能な重なりを防ぐ。
  *   TASK-54 で 2 → 2.6、TASK-72 で背景パネル padding の喪失を補って 2.8）。
  *   表示優先は各層のデータが持つ priority に従う。
+ * - TASK-108: 衝突判定の結果（collision_fade）は 0/1 ではなく連続値なので、
+ *   負けかけたラベルが半透明のまま描かれ続ける。labelCollisionExtensions が
+ *   返す 2 つ目の extension でそれを二値化し、「読める」か「出ない」かの
+ *   二択に倒す（順序に意味があるため必ずこの関数から組み立てる）。
+ *   ここが唯一の extensions 指定箇所で、4 つの TextLayer builder（河川名・
+ *   山脈名・都市名・勢力名（HRE 領邦名/仏諸侯領名を含む））が全て spread する。
  * 層固有の props（id・data・getText/getPosition・サイズ・文字色・
  * characterSet・getPixelOffset・updateTriggers・pickable 等）は各 builder に
  * 残す。
@@ -999,7 +1003,7 @@ function labelLayerBaseProps() {
   return {
     sizeUnits: "pixels" as const,
     ...labelTextStyleProps(),
-    extensions: [new CollisionFilterExtension()],
+    extensions: labelCollisionExtensions(),
     collisionTestProps: { sizeScale: COLLISION_SIZE_SCALE },
     getCollisionPriority: (d: LabelDatum) => d.priority,
   };
