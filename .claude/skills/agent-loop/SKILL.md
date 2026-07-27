@@ -26,9 +26,9 @@ description: backlog の次タスクを決定的に選択し、実装から fina
      ブランチ `task-N-slug` を**いずれも main から分岐**して作成し、実装
      subagent を worktree isolation で並列起動する。タスクごとに個別 PR を
      作成する（1 タスク = 1 PR）。並列実行中も 1 タスク = 1 PR・bug intake・
-     エスカレーション基準（手順 5）は不変。
+     エスカレーション基準（手順 6）は不変。
    - 対象タスクのブランチ `task-N-*` が既に origin に存在する場合は状態を
-     調査し、再開できるなら再開、判断が必要なら 5 のエスカレーションに従う。
+     調査し、再開できるなら再開、判断が必要なら手順 6 のエスカレーションに従う。
 2. **標準タスクフローの実行**（CLAUDE.md / docs/development-style.md に従う。
    集合内の各タスクにそれぞれ適用する）
    - backlog CLI でタスクを `In Progress` にし、実装プランを記録する。
@@ -83,7 +83,7 @@ description: backlog の次タスクを決定的に選択し、実装から fina
      - **自動修正不可**: ループ内の操作では解消できないブロック。例）branch
        protection の必須レビュー承認を満たす承認者がループ内に存在しない、
        恒常的に満たせない必須 status check、リポジトリのマージ権限が無い等。
-       この場合は手順 5 のエスカレーションに従いループを停止する。
+       この場合は手順 6 のエスカレーションに従いループを停止する。
    - CI red なら修正して再 push し、green になるまでこのループを回す。
    - CI green になったら finalization（AC を検証エビデンス付きでチェック → final
      summary → `Done`）をタスクブランチ上でコミットし、再度 CI green を
@@ -118,7 +118,39 @@ description: backlog の次タスクを決定的に選択し、実装から fina
    - 目視確認 AC を持つタスクは、手順 3 の finalization で AC
      をチェックする前（マージ前）に dev サーバ等で確認を済ませておく。
      このフェーズではマージ後の main 上での再確認・回帰確認を行う。
-5. **例外時のみエスカレーション**
+5. **マージ後の後始末（refs の掃除）**
+   - **1 タスクのマージが完了するたびに**（動作確認の直後、次イテレーションに
+     進む前に）`deno task cleanup-branches --apply` を実行する。1 タスク = 1
+     ブランチ + subagent の worktree isolation 用ブランチを作り続けるため、
+     後始末をしないと refs が単調増加し、backlog.md のクロスブランチ走査
+     （全ブランチに `ls-tree` / `log` / `show`）が線形に遅くなる（TASK-112。
+     放置した結果 refs 285 本・`backlog board` 12.7 秒まで劣化した実績がある）。
+   - このコマンドは以下を 1 回で行う（実装は `scripts/cleanup_branches.ts`）:
+     - `git fetch --prune`（GitHub の `deleteBranchOnMerge` は 2026-07-27 に
+       有効化済みなので、origin 側の実体は既に消えている。残るのは リモート追跡
+       ref の掃除）
+     - subagent の worktree 削除（`git worktree remove` → `git worktree prune`）
+     - マージ済みタスクブランチの削除（`git branch -d`）
+   - **他セッションのブランチ・worktree を消さないための多重防御**（`--force` と
+     `-D` は使わない。git が拒否したものはスキップして skipped に記録される）:
+     - 削除対象は loop が生成した名前のみ（ブランチ `task-<N>-*` /
+       `worktree-agent-*`、worktree は `.claude/worktrees/` 配下）。人手の
+       `feat/*`・`docs/*` ブランチやセッション worktree（`<repo>@feat-*`）は
+       対象外。
+     - origin/main にマージ済みのブランチのみ削除する。
+     - どこかの worktree にチェックアウト中のブランチは削除しない。
+     - `locked` な worktree（実行中の subagent が保持）・自分自身の worktree は
+       削除しない。
+     - tip が origin/main と同一のブランチは削除しない（着手直後でまだ
+       コミットが無い in-flight のタスクブランチが「マージ済み」に見えるため）。
+   - 出力は JSON 1 行で `refsBefore` / `refsAfter` を含む。**`refsAfter` が
+     イテレーションをまたいで単調増加していないこと**を確認する。増えている
+     場合は `skipped` の理由を読み、loop の想定外にブランチが残っていないかを
+     調べる。
+   - 何が消えるか先に確かめたいときは `--apply` を外して dry-run
+     （`deno task cleanup-branches`）で計画だけを出力する。ネットワークを
+     使いたくない場合は `--no-fetch` を付ける。
+6. **例外時のみエスカレーション**
    - 以下のいずれかに限り、`needs-human` ラベル付き issue（**原因・検討した
      選択肢・推奨対応**を記載）を起票してループを停止する。それ以外で人の
      指示を待たない。
@@ -134,9 +166,9 @@ description: backlog の次タスクを決定的に選択し、実装から fina
      `needs-human` issue を起票してループを停止する。値・除外条件（ブロック
      中の待機時間の扱い等）・判定手順は同章の表と手順に従う。上限値を
      変更する場合は同章の表のみを更新し、本 SKILL.md の記述は変更不要である。
-6. **次イテレーション**
-   - 集合内の全タスクのマージ（finalization 含む）が完了したら、手順 1 に
-     戻って次の集合判定を行う。
+7. **次イテレーション**
+   - 集合内の全タスクのマージ（finalization 含む）と後始末（手順 5）が
+     完了したら、手順 1 に戻って次の集合判定を行う。
 
 ## bug intake（動作確認・ユーザー報告からの起票）
 

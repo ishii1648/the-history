@@ -263,6 +263,78 @@ claude-in-chrome も使えない場合）は、ビルド成果物・データ出
 禁止）は `docs/agent-loop-recovery.md` を参照（TASK-59。 2026-07-24〜25
 のインシデント記録を含む）。
 
+### 4.3.3 マージ後の後始末（refs の掃除）
+
+自律ループは 1 タスクにつきタスクブランチ 1 本と subagent の worktree isolation
+用ブランチ（`worktree-agent-*`）を作る。マージ後にこれらを消さないと refs
+が単調増加し、backlog.md のクロスブランチ走査（`active_branch_days` の
+窓に入る全ブランチに対する `ls-tree` / `log` / `show`）が線形に遅くなる。 実際に
+2026-07-27 時点で refs 285 本（うち 279 本がマージ済み）まで膨らみ、
+`backlog board` が 12.7 秒（git サブプロセス 2131 回・約 44ms/ref）かかる
+状態になった（TASK-112。調査は `.outputs/claude/backlog-board-slowdown.md`）。
+
+そのため **1 タスクのマージが完了するたびに `deno task cleanup-branches --apply`
+を実行する**（`/agent-loop` 手順 5）。実装は `scripts/cleanup_branches.ts` で、
+`git fetch --prune` → `git worktree remove` / `git worktree prune` →
+`git branch -d` を 1 回で行い、`refsBefore` / `refsAfter` を含む JSON を返す。
+`refsAfter` がイテレーションをまたいで単調増加していないことが、後始末が
+効いていることの確認になる。
+
+複数の worktree が同時に存在する運用（mainagent のセッション worktree ＋ 実行中
+subagent の worktree）のため、**他セッションのものを誤って消さない**
+ことを最優先に設計している。`--force` / `-D` は使わず、git が拒否した削除は
+skipped として理由付きで報告する。加えて削除対象を次の条件で絞る:
+
+- loop が生成した名前のみ（ブランチ `task-<N>-*` / `worktree-agent-*`、 worktree
+  は `.claude/worktrees/` 配下）。人手の `feat/*`・`docs/*` ブランチ、
+  セッション worktree（`<repo>@feat-*`）、main worktree は対象外。
+- origin/main にマージ済みのブランチのみ。
+- どこかの worktree にチェックアウト中のブランチは対象外（同じ実行で削除する
+  worktree の分だけは解放されるものとして扱う）。
+- `locked` な worktree（実行中の subagent が保持）と自分自身の worktree は
+  対象外。
+- **tip が origin/main と同一のブランチは対象外**。着手直後でまだコミットが
+  無いタスクブランチは `git branch --merged origin/main` に載ってしまうため、
+  この条件が無いと他セッションが実装中のブランチを消す事故が起きる。
+
+この最後の条件は「main がまだ進んでいない間」しか効かない（別 PR のマージで main
+が進むと、コミットの無い in-flight ブランチも tip != origin/main になる）。
+ただし該当するのはコミットが 1 つも無いブランチだけなので失われる作業は無く、
+同名ブランチを作り直せば復帰できる。逆に `worktree-agent-*` はそもそも
+コミットを持たない足場ブランチなので、この条件により削除が 1
+イテレーション遅れる。いずれも steady state のブランチ数は「1
+イテレーションぶん」で頭打ちになり、単調増加はしない。
+
+判定ロジックは純粋関数（`planCleanup` / `parseWorktreeList` /
+`parseMergedBranches`）に切り出し、`scripts/cleanup_branches_test.ts` で
+ネットワーク・git 非依存の単体テストを持つ。
+
+#### `active_branch_days` の値（backlog/config.yml）
+
+`active_branch_days` は backlog.md がクロスブランチ走査の対象にするブランチの
+**コミット日時の新しさの窓**（日数）である。backlog.md 1.48.0 の実装では 次の 3
+か所で使われる:
+
+- `listRecentBranchTips(days)`:
+  `git for-each-ref refs/heads refs/remotes/origin` の結果を
+  `committerdate >= now - days` で絞る。走査対象ブランチ集合そのもの。
+- `listRecentRemoteBranches(days)`: リモートブランチ側の同じ絞り込み （board
+  の「Indexing N recent remote branches (last D days)」）。
+- `getBranchLastModifiedMap(...)`: ブランチごとの履歴走査に
+  `--since=<days>.days` を付ける深さ制限。
+
+値は **30 → 3** に変更した。根拠は実測で、origin/main にマージ済みの
+タスクブランチ 117 本について「ブランチ最初のコミット〜マージコミット」の
+生存時間を計測したところ、中央値 0.12 時間・95 パーセンタイル 0.69 時間・ 最大
+19.98 時間だった（1 日を超えたブランチは 1 本も無い）。走査に価値がある
+のは「まだマージされていない in-flight のブランチのタスク状態」だけなので、
+実測最大の約 3.6 倍にあたる 3 日あれば十分な余裕があり、これより長い窓は
+掃除漏れの ref を拾って board を遅くするだけになる。1 日未満に詰めることも
+できるが、週末や一晩の中断で in-flight のタスクが board から消えると
+かえって混乱するため 3 日を採る。なお `check_active_branches: false`
+（走査を完全に無効化）は board を 0.18 秒まで縮めるが、マージ前のタスク状態が
+board に出なくなるため採らない。
+
 ### 4.4 エスカレーション規約（人の介入は例外時のみ）
 
 エージェントは次のいずれかに該当する場合のみ、`needs-human` ラベル付きの GitHub
