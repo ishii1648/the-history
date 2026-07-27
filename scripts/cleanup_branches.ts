@@ -6,7 +6,7 @@
  * クロスブランチ走査（全ブランチに ls-tree / log / show）が線形に遅くなる（TASK-112）。
  *
  * 安全設計（他セッションのブランチ・worktree を誤って消さないための多重防御）:
- *   1. `--force` / `-D` を一切使わない。git が拒否したものは skipped として報告する
+ *   1. ブランチ削除に `-D` は使わない。git が拒否したものは skipped として報告する
  *   2. 削除対象は loop が生成した名前だけ（ブランチ: `task-<N>-*` / `worktree-agent-*`、
  *      worktree: `.claude/worktrees/` 配下）。人手のブランチ・セッション worktree は触らない
  *   3. origin/main にマージ済みのブランチのみ削除する
@@ -16,14 +16,26 @@
  *   6. tip が origin/main と同一のブランチは削除しない。着手直後でまだコミットが無い
  *      in-flight のタスクブランチが「マージ済み」に見えてしまうため
  *
+ * `git worktree remove --force` の扱い（TASK-118）:
+ *   subagent には「commit / push はしない」と指示しているため、mainagent がパッチを
+ *   取り出したあとの subagent worktree は未コミットの変更を抱えたまま終わる。つまり
+ *   dirty は異常ではなく常態であり、`git worktree remove` の dirty 拒否を最後の砦に
+ *   すると削除が一切進まない（TASK-112 の設計の欠陥）。
+ *
+ *   通常経路は mainagent 側で解決する（パッチ抽出直後に `git reset --hard` +
+ *   `git clean -fd` で worktree を元に戻す。`.claude/skills/agent-loop/SKILL.md` 手順 2）。
+ *   スクリプト側は取りこぼしの回収に徹し、`canForceRemoveWorktree` が真の worktree
+ *   ＝「loop が生成した使い捨ての足場」に限って `--force` の再試行を許す。成果は
+ *   mainagent がパッチとして取り出し済みで、worktree に残る変更は複製にすぎない。
+ *
  * 使い方:
  *   deno task cleanup-branches           # dry-run（計画を表示するだけ）
  *   deno task cleanup-branches --apply   # 実際に削除する
  *   deno task cleanup-branches --apply --no-fetch   # git fetch --prune を省略
  *
- * 結果は JSON 1 行で stdout に出力する:
- *   {"mode":"apply","worktrees":[...],"branches":[...],"skipped":[...],
- *    "refsBefore":20,"refsAfter":7}
+ * 結果は JSON 1 行で stdout に出力する（`forced` は --force で回収した worktree）:
+ *   {"mode":"apply","worktrees":[...],"forced":[...],"branches":[...],
+ *    "skipped":[...],"refsBefore":20,"refsAfter":7}
  */
 
 /** `git worktree list --porcelain` の 1 エントリ */
@@ -54,9 +66,19 @@ export interface SkippedItem {
   reason: string;
 }
 
-/** 後始末の計画（worktree は path、branch は名前） */
+/** 削除する worktree 1 件 */
+export interface WorktreeRemoval {
+  path: string;
+  /**
+   * 通常の `git worktree remove` が dirty で拒否されたとき `--force` で
+   * 再試行してよいか。`canForceRemoveWorktree` の判定結果。
+   */
+  force: boolean;
+}
+
+/** 後始末の計画（worktree は path + force、branch は名前） */
 export interface CleanupPlan {
-  worktrees: string[];
+  worktrees: WorktreeRemoval[];
   branches: string[];
   skipped: SkippedItem[];
 }
@@ -93,6 +115,32 @@ export function isAgentWorktreePath(path: string): boolean {
   const index = path.indexOf(AGENT_WORKTREE_SEGMENT);
   if (index < 0) return false;
   return path.slice(index + AGENT_WORKTREE_SEGMENT.length).length > 0;
+}
+
+/**
+ * `git worktree remove --force` を許してよい worktree か（純粋関数）。
+ *
+ * 許すのは「loop が生成した使い捨ての足場」だけ。次のいずれかに当たれば拒否する:
+ *   - main / bare worktree
+ *   - `.claude/worktrees/` 配下でない（＝人手のセッション worktree・他の checkout）
+ *   - 自分自身の worktree（実行中のこのプロセスの足元）
+ *   - locked（実行中の subagent が保持している）
+ *   - チェックアウト中が `worktree-agent-*` でない（detached や `task-N-*` は
+ *     loop の足場ではないので、未コミットの作業が失われうる）
+ *
+ * この条件が崩れると他セッションの作業を破壊する。緩めるときは
+ * `docs/development-style.md` 4.3.3 章と decision を必ず更新すること。
+ */
+export function canForceRemoveWorktree(
+  entry: WorktreeEntry,
+  currentWorktree: string,
+): boolean {
+  if (entry.isMain || entry.bare) return false;
+  if (!isAgentWorktreePath(entry.path)) return false;
+  if (entry.path === currentWorktree) return false;
+  if (entry.locked) return false;
+  if (entry.branch === null) return false;
+  return AGENT_BRANCH_PATTERN.test(entry.branch);
 }
 
 /** `git worktree list --porcelain` の出力を分解する（純粋関数） */
@@ -169,7 +217,7 @@ export function planCleanup(input: PlanInput): CleanupPlan {
   const { worktrees, branches, currentWorktree, mainCommit } = input;
   const skipped: SkippedItem[] = [];
 
-  const worktreesToRemove: string[] = [];
+  const worktreesToRemove: WorktreeRemoval[] = [];
   for (const entry of worktrees) {
     const skip = (reason: string) => {
       skipped.push({ kind: "worktree", name: entry.path, reason });
@@ -195,11 +243,14 @@ export function planCleanup(input: PlanInput): CleanupPlan {
       skip("prunable (handled by git worktree prune)");
       continue;
     }
-    worktreesToRemove.push(entry.path);
+    worktreesToRemove.push({
+      path: entry.path,
+      force: canForceRemoveWorktree(entry, currentWorktree),
+    });
   }
 
   // 同じ実行で削除する worktree が保持していたブランチは解放されるものとして扱う
-  const freedWorktrees = new Set(worktreesToRemove);
+  const freedWorktrees = new Set(worktreesToRemove.map((item) => item.path));
 
   const branchesToDelete: string[] = [];
   for (const entry of branches) {
@@ -303,15 +354,35 @@ async function main(args: string[]): Promise<number> {
   }
 
   const removedWorktrees: string[] = [];
-  for (const path of plan.worktrees) {
-    // --force は使わない。dirty な worktree は git が拒否し、skipped として残る
+  const forcedWorktrees: string[] = [];
+  for (const { path, force } of plan.worktrees) {
     const result = await git("worktree", "remove", path);
-    if (result.ok) removedWorktrees.push(path);
-    else {plan.skipped.push({
+    if (result.ok) {
+      removedWorktrees.push(path);
+      continue;
+    }
+    // subagent worktree は「パッチ抽出済みで dirty」が常態なので、loop の
+    // 使い捨て足場に限り --force で回収する（TASK-118）。それ以外は従来どおり
+    // git の拒否を尊重し、skipped に理由付きで残す。
+    if (!force) {
+      plan.skipped.push({
         kind: "worktree",
         name: path,
         reason: result.stderr,
-      });}
+      });
+      continue;
+    }
+    const forced = await git("worktree", "remove", "--force", path);
+    if (forced.ok) {
+      removedWorktrees.push(path);
+      forcedWorktrees.push(path);
+    } else {
+      plan.skipped.push({
+        kind: "worktree",
+        name: path,
+        reason: forced.stderr,
+      });
+    }
   }
   await git("worktree", "prune");
 
@@ -327,6 +398,7 @@ async function main(args: string[]): Promise<number> {
   console.log(JSON.stringify({
     mode: "apply",
     worktrees: removedWorktrees,
+    forced: forcedWorktrees,
     branches: deletedBranches,
     skipped: plan.skipped,
     refsBefore,

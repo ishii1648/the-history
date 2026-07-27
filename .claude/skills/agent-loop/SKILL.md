@@ -45,6 +45,21 @@ description: backlog の次タスクを決定的に選択し、実装から fina
      委譲し、mainagent がレビューで収束させる。並列化判定で並列可とした場合は
      分担表に従い subagent を並列に複数起動し、worktree isolation で衝突を
      避ける（成果物の conflict は PR で解消する）。
+   - **subagent の成果の取り込みと worktree の復元**: subagent には「commit /
+     push はしない。ファイル変更のみ行い報告する」と指示しているため、成果は
+     mainagent が worktree からパッチとして取り出してタスクブランチへ適用する。
+     取り出したら**その場で worktree を元の状態へ戻す**（`<wt>` = subagent の
+     worktree パス。`git worktree list` で確認できる）:
+     1. `git -C <wt> add -A`（untracked も差分に含める）
+     2. `git -C <wt> diff --binary --cached > <patch>` でパッチ化し、タスク
+        ブランチ側で `git apply <patch>` して内容をレビューする
+     3. **`git -C <wt> reset --hard HEAD && git -C <wt> clean -fd`**（`-x` は
+        付けない。ignored ファイルが残っていても `git worktree remove` は通る）
+   - この復元を省くと subagent worktree は未コミットの変更を抱えたまま残り、
+     手順 5 の `git worktree remove` が dirty 拒否で一切進まなくなる （TASK-118
+     の実測: 8 件すべて拒否・`worktree-agent-*` が 9 本残存）。 復元は「常態の
+     dirty」を消すためのものであり、取り出し済みのパッチの
+     複製を捨てるだけなので失われる成果は無い。
    - `deno fmt --check` / `deno lint` / `deno test` / `deno task build` を 全て
      green にしてから PR を作成する（タイトル・説明に TASK ID を明記）。
 3. **CI 監視とマージ**
@@ -131,8 +146,9 @@ description: backlog の次タスクを決定的に選択し、実装から fina
        ref の掃除）
      - subagent の worktree 削除（`git worktree remove` → `git worktree prune`）
      - マージ済みタスクブランチの削除（`git branch -d`）
-   - **他セッションのブランチ・worktree を消さないための多重防御**（`--force` と
-     `-D` は使わない。git が拒否したものはスキップして skipped に記録される）:
+   - **他セッションのブランチ・worktree を消さないための多重防御**（ブランチ
+     削除に `-D` は使わない。git が拒否したものはスキップして skipped に
+     記録される）:
      - 削除対象は loop が生成した名前のみ（ブランチ `task-<N>-*` /
        `worktree-agent-*`、worktree は `.claude/worktrees/` 配下）。人手の
        `feat/*`・`docs/*` ブランチやセッション worktree（`<repo>@feat-*`）は
@@ -143,10 +159,24 @@ description: backlog の次タスクを決定的に選択し、実装から fina
        削除しない。
      - tip が origin/main と同一のブランチは削除しない（着手直後でまだ
        コミットが無い in-flight のタスクブランチが「マージ済み」に見えるため）。
-   - 出力は JSON 1 行で `refsBefore` / `refsAfter` を含む。**`refsAfter` が
-     イテレーションをまたいで単調増加していないこと**を確認する。増えている
-     場合は `skipped` の理由を読み、loop の想定外にブランチが残っていないかを
-     調べる。
+   - **`--force` は取りこぼしの回収にだけ使う**（TASK-118）。手順 2 の復元を
+     済ませていれば `--force` なしで消える。復元し忘れ・異常終了で dirty な
+     まま残ったものを回収するため、通常の `git worktree remove` が拒否された
+     場合に限り、次を**すべて**満たす worktree だけ `--force` で再試行する
+     （`canForceRemoveWorktree`）:
+     - `.claude/worktrees/` 配下である
+     - `locked` でない（実行中の subagent が保持していない）
+     - 自分自身の worktree でない
+     - チェックアウト中のブランチが `worktree-agent-*` である
+   - ＝ loop が生成した使い捨ての足場だけが対象で、成果はパッチとして取り出し
+     済みなので失われるものは無い。agent worktree でも detached や `task-N-*`
+     がチェックアウトされている場合は `--force` の対象外とし、従来どおり git
+     の拒否を尊重して skipped に残す。
+   - 出力は JSON 1 行で `refsBefore` / `refsAfter` と、`--force` で回収した
+     worktree の一覧 `forced` を含む。**`refsAfter` がイテレーションをまたいで
+     単調増加していないこと**を確認する。増えている場合は `skipped` の理由を
+     読み、loop の想定外にブランチが残っていないかを調べる。`forced` が毎回
+     出る場合は手順 2 の worktree 復元が漏れているサインなので、そちらを直す。
    - 何が消えるか先に確かめたいときは `--apply` を外して dry-run
      （`deno task cleanup-branches`）で計画だけを出力する。ネットワークを
      使いたくない場合は `--no-fetch` を付ける。
