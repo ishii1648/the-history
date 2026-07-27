@@ -11,6 +11,18 @@
  * を提供する。
  */
 
+import { MOUNTAIN_HIT_LAYER_ID } from "./mountains.ts";
+import { PEAK_HIT_LAYER_ID, PEAK_LAYER_ID } from "./peaks.ts";
+
+/**
+ * 山岳系のレイヤー ID は本モジュールではなく mountains.ts / peaks.ts が定義し、
+ * ここでは再エクスポートするだけにする（TASK-100）。両モジュールは
+ * 「その層が何を描くか」の設計根拠（判定円の半径・記号の形）と ID を一体で
+ * 持っており、ID だけを picking.ts へ移すと根拠と定義が離れる。逆向きの
+ * 依存（mountains/peaks → picking）を作らないので循環にはならない。
+ */
+export { MOUNTAIN_HIT_LAYER_ID, PEAK_HIT_LAYER_ID, PEAK_LAYER_ID };
+
 /** 勢力圏ポリゴン（GeoJsonLayer）のレイヤー ID（TASK-5） */
 export const POWER_LAYER_ID = "powers";
 
@@ -130,10 +142,40 @@ export const RIVERS_HIT_LAYER_ID = "rivers-hit";
  * - 帯内でラインにも都市にも乗っていない位置は rivers-hit = 河川として扱われ、
  *   TASK-43 が意図した判定幅拡大は維持される
  */
+/**
+ * TASK-100: 山岳 3 層（山峰マーカー peaks / 山峰判定円 peaks-hit / 山脈判定円
+ * mountains-hit）を追加した。位置決めの原則は 2 つで、どちらも既存の並びから
+ * 導いたもの:
+ *
+ * 1. **可視の記号は透明の判定層より上**。rivers（可視ライン）・cities（可視
+ *    ドット）が cities-hit / rivers-hit より上にあるのと同じ理由で、可視記号
+ *    peaks（▲）は透明層 3 種より上に置く。「見えている記号の直上をクリック
+ *    したら必ずその記号」が保証される（TASK-49 / TASK-82 の設計を踏襲）。
+ *    可視記号どうしの順は 河川 > 都市 > 山峰。地形の注記（山岳）は年代ごとに
+ *    変わる主題（都市・河川）に譲るという TASK-97 / TASK-99 のラベル優先度の
+ *    方針を picking にもそのまま持ち込む。
+ * 2. **透明の判定層は「主題としての重み」の順**。cities-hit > peaks-hit >
+ *    mountains-hit > rivers-hit。rivers-hit を最下段に据え置くのは TASK-49 の
+ *    経緯そのもので、幅 14px の帯が点状の対象（都市ドット、いまは山峰・
+ *    山脈のアンカーも）を飲み込み、構造的に picking 不能にするため。
+ *
+ * **山岳 3 層はいずれも政治ポリゴン 4 層より上**に置く（AC #1/#2）。陸上は
+ * ほぼ全面が powers に覆われているので、下に置くことは「一度も拾えない」と
+ * 同義になる。それでも AC #3（勢力・都市・河川の picking を妨げない）が
+ * 成立するのは、山岳側の判定範囲が**面ではなく点まわりの固定 px 円**に
+ * 限定されているから（mountains.ts MOUNTAIN_HIT_LAYER_ID の設計判断。
+ * 山脈ポリゴンをそのまま pickable にしていたら、勢力のクリックを広範囲で
+ * 奪って AC #3 を壊していた）。実際に勢力から奪う面積は、山脈が半径
+ * MOUNTAIN_HIT_RADIUS_PX の円 17 個、山峰が半径 PEAK_HIT_RADIUS_PX の円で
+ * 現在のズーム段に出ている件数分だけになる。
+ */
 export const PICKING_PRIORITY: readonly string[] = [
   RIVERS_LAYER_ID,
   CITY_LAYER_ID,
+  PEAK_LAYER_ID,
   CITY_HIT_LAYER_ID,
+  PEAK_HIT_LAYER_ID,
+  MOUNTAIN_HIT_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
   HRE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
@@ -161,6 +203,25 @@ export function isCityPickLayerId(id: string | undefined): boolean {
 }
 
 /**
+ * layerId が山峰系（peaks 可視マーカー / peaks-hit 判定専用層）かを判定する
+ * （TASK-100）。両層は同一データ（PeakMarkerDatum）を持つため、
+ * ツールチップ/パネルの表示はどちらの pick でも同じ経路で扱える
+ * （isCityPickLayerId と同型）。
+ */
+export function isPeakPickLayerId(id: string | undefined): boolean {
+  return id === PEAK_LAYER_ID || id === PEAK_HIT_LAYER_ID;
+}
+
+/**
+ * layerId が山脈系かを判定する（TASK-100）。山脈は可視の記号を持たず
+ * 判定専用層（mountains-hit）1 枚だけなので候補は 1 つだが、河川・都市・
+ * 山峰と同じ形のヘルパーを置いて main.ts 側の分岐を揃える。
+ */
+export function isMountainPickLayerId(id: string | undefined): boolean {
+  return id === MOUNTAIN_HIT_LAYER_ID;
+}
+
+/**
  * クリック時の「カーソル直下に何も無い場合の近傍再ピック」
  * （main.ts resolveClickInfo の pickMultipleObjects、半径 PICKING_RADIUS_PX）
  * の候補として採用してよいレイヤーか（TASK-82）。
@@ -175,9 +236,17 @@ export function isCityPickLayerId(id: string | undefined): boolean {
  * rivers-hit を除外しないのは、河川が「細いライン + 全面を覆う powers」という
  * 構造上、合成された余裕（rivers.ts RIVER_CLICK_TOLERANCE_PX）を意図して
  * 残している既存設計（TASK-51）だから。
+ *
+ * TASK-100: 山峰・山脈の判定円（peaks-hit / mountains-hit）も同じ理由で除外
+ * する。どちらも「ホバーでもクリックでも直下 pick だけで拾える」ことを目的に
+ * 置いた層なので、再ピック半径が合成されるとクリックだけ
+ * PEAK_HIT_RADIUS_PX / MOUNTAIN_HIT_RADIUS_PX + PICKING_RADIUS_PX まで広がり、
+ * ホバーとの非対称が生まれる。とくに山脈は判定円が 18px と大きく、合成すると
+ * 24px になって勢力から奪う面積が 1.8 倍になる（AC #3 のコストが膨らむ）。
  */
 export function isNearCursorRepickable(id: string | undefined): boolean {
-  return id !== CITY_HIT_LAYER_ID;
+  return id !== CITY_HIT_LAYER_ID && id !== PEAK_HIT_LAYER_ID &&
+    id !== MOUNTAIN_HIT_LAYER_ID;
 }
 
 /**
@@ -238,9 +307,14 @@ export function selectPreferredPick<T extends { layerId: string }>(
  * 近傍河川の radius 再ピック（PICKING_PRIORITY で rivers > cities）が奪うと、
  * 河畔都市がクリック不能になるため。radius 再ピックは「直下が powers/HRE/空白
  * だった場合の近傍探索」に限定する。
+ *
+ * TASK-100: 山峰・山脈も同じ理由で確定扱いにする。アルプス周辺はローヌ川・
+ * ライン川・ドナウ川・ポー川が massif を貫くので、直下で山峰・山脈を拾えて
+ * いるのに近傍の河川（PICKING_PRIORITY 上位）へ奪われる状況が起きやすい。
  */
 export function isDirectPickFinal(id: string | undefined): boolean {
-  return isRiversPickLayerId(id) || isCityPickLayerId(id);
+  return isRiversPickLayerId(id) || isCityPickLayerId(id) ||
+    isPeakPickLayerId(id) || isMountainPickLayerId(id);
 }
 
 export function resolveClickPick<T extends { layer: { id: string } | null }>(

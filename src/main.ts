@@ -97,27 +97,38 @@ import {
 import { memoizeLatest } from "./memo.ts";
 import {
   filterVisibleMountainLabels,
+  MOUNTAIN_HIT_FILL_COLOR,
+  MOUNTAIN_HIT_RADIUS_PX,
+  MOUNTAIN_OUTLINE_LAYER_ID,
+  mountainHitData,
   mountainLabelAnchors,
   type MountainLabelDatum,
+  mountainOutlineColor,
+  mountainOutlineWidth,
+  mountainPickLabel,
   MOUNTAINS_DATA_URL,
+  toggleMountainSelection,
 } from "./mountains.ts";
 import {
   buildPeakLabelData,
   buildPeakMarkerData,
   filterVisiblePeaks,
+  PEAK_HIT_FILL_COLOR,
+  PEAK_HIT_RADIUS_PX,
   PEAK_LABEL_PIXEL_OFFSET,
-  PEAK_LAYER_ID,
   PEAK_MARKER_CHARACTER_SET,
-  PEAK_MARKER_COLOR,
   PEAK_MARKER_GLYPH,
-  PEAK_MARKER_SIZE_PX,
   peakEntries,
   type PeakEntry,
   type PeakLabelDatum,
   peakLabelText,
   peakLabelTexts,
+  peakMarkerColor,
   type PeakMarkerDatum,
+  peakMarkerSize,
+  peakPickLabel,
   PEAKS_DATA_URL,
+  togglePeakSelection,
 } from "./peaks.ts";
 import {
   filterVisibleRiverLabels,
@@ -206,9 +217,14 @@ import {
   HRE_LAYER_ID,
   isCityPickLayerId,
   isDirectPickFinal,
+  isMountainPickLayerId,
+  isPeakPickLayerId,
   isRiversPickLayerId,
   ITALY_FIEF_LAYER_ID,
   layerOrderMatchesPickingPriority,
+  MOUNTAIN_HIT_LAYER_ID,
+  PEAK_HIT_LAYER_ID,
+  PEAK_LAYER_ID,
   PICKING_PRIORITY,
   PICKING_RADIUS_PX,
   POWER_LAYER_ID,
@@ -494,6 +510,21 @@ let selectedRiverName: string | null = null;
 let hoveredRiverName: string | null = null;
 
 /**
+ * クリックで選択（強調）中の山脈名・山峰名（英語の元名。null は未選択）
+ * （TASK-100 AC #4）。河川と同じく「選択」と「ホバー」を独立に持ち、
+ * mountains.ts / peaks.ts の純粋関数で色・線幅・記号サイズへ変換する。
+ *
+ * 山脈と山峰を別々の状態にするのは、両者が別レイヤー（面の輪郭 / 点の記号）
+ * で別の強調表現を持つため。同時に強調されることはあり得る（モンブランを
+ * ホバーしたままアルプス山脈を選択している等）が、それぞれの表現が独立して
+ * いるので混乱しない。年代非依存なので年代切替では解除しない（AC #5）。
+ */
+let selectedMountainName: string | null = null;
+let hoveredMountainName: string | null = null;
+let selectedPeakName: string | null = null;
+let hoveredPeakName: string | null = null;
+
+/**
  * ホバー/クリック中の勢力の「宗主キー」（TASK-94。null は外枠なし）。
  * この宗主に属する全 feature（本体 + 従属）の union が勢力圏の外枠として
  * 描かれる。判定は suzerain_extent.ts の suzerainExtentKey に委ねる。
@@ -757,6 +788,17 @@ function buildPowerLayer(
 function pickedLabel(info: PickingInfo): string | null {
   const layerId = info.layer?.id;
   if (info.object === undefined || layerId === undefined) return null;
+  // TASK-100: 山岳は年代非依存の地形。ラベル整形（mountainPickLabel /
+  // peakPickLabel）は年を引数に取らない純粋関数なので、年代を切り替えても
+  // 同じ pick からは必ず同じ文字列が出る（AC #5）。
+  if (isMountainPickLayerId(layerId)) {
+    return mountainPickLabel(info.object as MountainLabelDatum, nameJa);
+  }
+  if (isPeakPickLayerId(layerId)) {
+    // peaks（可視 ▲）と peaks-hit（透明判定円）はデータが同一（PeakMarkerDatum）
+    // なので、どちらの pick でも同じ経路で「名称 標高m」を出せる
+    return peakPickLabel(info.object as PeakMarkerDatum, nameJa);
+  }
   if (isCityPickLayerId(layerId)) {
     // 都市は cityDisplayName で解決（Venice 等の勢力名衝突キーは都市訳を優先）
     // TASK-82: cities（可視ドット）と cities-hit（透明判定円）はデータが同一
@@ -812,6 +854,30 @@ function handlePickHover(info: PickingInfo): void {
       ? riverNameFor((info.object as Feature).properties)
       : null,
   );
+  // TASK-100: 山岳のホバー強調（山脈は輪郭・山峰は記号）。河川と同じく
+  // 「対象外の pick・picking なし」では null に倒れて強調が解除される。
+  applyTerrainHover(mountainNameFromPick(info), peakNameFromPick(info));
+}
+
+/**
+ * picking 結果から山脈名（英語の元名）を解決する（TASK-100）。
+ * 対象外レイヤー・picking なしは null。extentKeyFromPick / powerHighlightKeyFromPick
+ * と同型で、ホバー（直下 pick）とクリック（resolveClickInfo で選び直した pick）が
+ * 同じ経路を通ることを保証する。
+ */
+function mountainNameFromPick(info: PickingInfo): string | null {
+  if (info.object === undefined || !isMountainPickLayerId(info.layer?.id)) {
+    return null;
+  }
+  return (info.object as MountainLabelDatum).name;
+}
+
+/** picking 結果から山峰名（英語の元名）を解決する（TASK-100） */
+function peakNameFromPick(info: PickingInfo): string | null {
+  if (info.object === undefined || !isPeakPickLayerId(info.layer?.id)) {
+    return null;
+  }
+  return (info.object as PeakMarkerDatum).name;
 }
 
 /**
@@ -917,7 +983,26 @@ function handlePickClick(rawInfo: PickingInfo): void {
   // 同一規則）: 同一対象の再クリックで解除・別対象で移動・河川/都市/空クリック
   // （キー null）で解除。年代切替では yearSwitcher の applyFn が clear する。
   powerHighlight.click(powerHighlightKeyFromPick(info));
+  // TASK-100: 山岳のクリック強調（ホバーの無いタッチ操作でも成立させる）。
+  // 保持・解除規則は河川・勢力と同一（toggleMountainSelection /
+  // togglePeakSelection）。山岳以外のクリックはキーが null になり解除される。
+  applyTerrainSelection(
+    toggleMountainSelection(selectedMountainName, mountainNameFromPick(info)),
+    togglePeakSelection(selectedPeakName, peakNameFromPick(info)),
+  );
   const layerId = info.layer?.id;
+  if (isMountainPickLayerId(layerId) || isPeakPickLayerId(layerId)) {
+    // 山岳のクリックは河川の選択を解除する（都市・勢力のクリックと同じ扱い）。
+    // パネルは「選択が残っているとき」だけ更新する: 同じ対象の再クリックは
+    // 強調を解除する操作なので、そこでパネルだけ出続けると状態が食い違う
+    // （河川と同一規則）。
+    applyRiverSelection(null);
+    if (selectedMountainName !== null || selectedPeakName !== null) {
+      const label = pickedLabel(info);
+      if (label !== null) showInfoPanel(label);
+    }
+    return;
+  }
   if (isRiversPickLayerId(layerId) && info.object !== undefined) {
     const name = riverNameFor((info.object as Feature).properties);
     applyRiverSelection(toggleRiverSelection(selectedRiverName, name));
@@ -949,6 +1034,38 @@ function applyRiverSelection(next: string | null): void {
 function applyRiverHover(next: string | null): void {
   if (next === hoveredRiverName) return;
   hoveredRiverName = next;
+  renderLayers();
+}
+
+/**
+ * 山脈・山峰のホバー状態をまとめて更新し、変化があれば 1 度だけレイヤーを
+ * 再構築する（TASK-100）。山脈と山峰を 1 本の関数で扱うのは、両者が
+ * 同時に変化する（山峰から外れて山脈へ入る等）ときに renderLayers を
+ * 2 度呼ばないため。毎 mousemove で呼ばれるので、値が変化しない限り
+ * renderLayers() を呼ばない（applyRiverHover と同じ変化検知。TASK-50 の規律）。
+ */
+function applyTerrainHover(
+  nextMountain: string | null,
+  nextPeak: string | null,
+): void {
+  if (nextMountain === hoveredMountainName && nextPeak === hoveredPeakName) {
+    return;
+  }
+  hoveredMountainName = nextMountain;
+  hoveredPeakName = nextPeak;
+  renderLayers();
+}
+
+/** 山脈・山峰の選択状態をまとめて更新する（変化時のみ再構築。TASK-100） */
+function applyTerrainSelection(
+  nextMountain: string | null,
+  nextPeak: string | null,
+): void {
+  if (nextMountain === selectedMountainName && nextPeak === selectedPeakName) {
+    return;
+  }
+  selectedMountainName = nextMountain;
+  selectedPeakName = nextPeak;
   renderLayers();
 }
 
@@ -1154,6 +1271,80 @@ function buildMountainLabelLayer(): TextLayer<
 }
 
 /**
+ * 山脈の判定円層に渡すデータをメモ化する（TASK-100）。入力の anchors は
+ * memoizedMountainLabelData の安定参照なので、ズーム段が変わらない限り
+ * 同じ配列参照が deck.gl へ渡り、hover/selection だけの renderLayers 呼び出しでは
+ * ScatterplotLayer の属性再計算が走らない（TASK-50 の方針）。
+ */
+const memoizedMountainHitData = memoizeLatest(
+  (anchors: readonly MountainLabelDatum[], step: number) =>
+    mountainHitData(anchors, step),
+);
+
+/**
+ * 山脈の透明ヒット層（ScatterplotLayer）を生成する（TASK-100 AC #1）。
+ * 山脈名ラベルと同じアンカー（labels.ts labelAnchorFor = 山体内部で最も境界から
+ * 遠い点）へ、完全透明・MOUNTAIN_HIT_RADIUS_PX の円を置く判定専用レイヤー。
+ * 「面をそのまま pickable にしない」理由と半径の根拠は mountains.ts の
+ * MOUNTAIN_HIT_LAYER_ID / MOUNTAIN_HIT_RADIUS_PX を参照。
+ *
+ * data はズーム段でのみ変わり、年代・hover/selection には依存しない
+ * （山脈は年代非依存の地形。AC #5）。したがって updateTriggers はズーム段だけ。
+ */
+function buildMountainHitLayer(): ScatterplotLayer<MountainLabelDatum> {
+  const { data: anchors } = memoizedMountainLabelData(mountainsData, nameJa);
+  return new ScatterplotLayer<MountainLabelDatum>({
+    id: MOUNTAIN_HIT_LAYER_ID,
+    data: memoizedMountainHitData(anchors, zoomStep),
+    pickable: true,
+    getPosition: (d) => d.position,
+    radiusUnits: "pixels",
+    getRadius: MOUNTAIN_HIT_RADIUS_PX,
+    getFillColor: MOUNTAIN_HIT_FILL_COLOR,
+    stroked: false,
+    updateTriggers: { getPosition: [zoomStep] },
+  });
+}
+
+/**
+ * 山脈の強調輪郭（GeoJsonLayer）を生成する（TASK-100 AC #4）。
+ * ホバー/選択中の山脈だけをオリーブの線で囲い、それ以外は完全透明・線幅 0 で
+ * 描く（判定は mountains.ts の mountainOutlineColor / mountainOutlineWidth）。
+ *
+ * 塗り（filled: false）を持たないので、勢力・領邦のアクティブ塗り
+ * （power_highlight.ts）と面の表現がぶつからない。pickable: false なので
+ * PICKING_PRIORITY 外で、レイヤー順の整合検証では無視される（勢力圏の外枠
+ * hre-extent と同じ扱い）。data は年代非依存の mountainsData そのもの。
+ */
+function buildMountainOutlineLayer(): GeoJsonLayer {
+  return new GeoJsonLayer({
+    id: MOUNTAIN_OUTLINE_LAYER_ID,
+    data: mountainsData,
+    pickable: false,
+    filled: false,
+    stroked: true,
+    lineWidthUnits: "pixels",
+    lineJointRounded: true,
+    getLineColor: (f: Feature) =>
+      mountainOutlineColor(
+        f.properties,
+        selectedMountainName,
+        hoveredMountainName,
+      ),
+    getLineWidth: (f: Feature) =>
+      mountainOutlineWidth(
+        f.properties,
+        selectedMountainName,
+        hoveredMountainName,
+      ),
+    updateTriggers: {
+      getLineColor: [selectedMountainName, hoveredMountainName],
+      getLineWidth: [selectedMountainName, hoveredMountainName],
+    },
+  });
+}
+
+/**
  * ズームフィルタ済みの表示山峰をメモ化する（TASK-99）。peaksData は起動時に
  * 一度ロードされたあと年代・hover/selection に関わらず不変なので、
  * peakEntries（検証付き変換）は起動後 1 度だけ走る。ズーム段が変わったときだけ
@@ -1209,9 +1400,15 @@ const memoizedPeakCharacterSet = memoizeLatest(
  * 残るようにする。表示する山峰はラベル層と同じ filterVisiblePeaks の結果なので、
  * 記号と名前の出し入れは必ず一致する。
  *
- * 年代には一切依存しない（AC #5）。レイヤー順は hre-extent の直上・都市/河川の
- * 下（renderLayers）で、主題（都市ドット・河川ライン）を地形の記号が覆わない。
- * pickable: false（ホバー/クリック対象化は TASK-100 の範囲）。
+ * 年代には一切依存しない（AC #5）。レイヤー順は都市ドットの直下・都市の透明
+ * 判定円の直上（renderLayers。PICKING_PRIORITY から導出）で、主題（都市ドット・
+ * 河川ライン）を地形の記号が覆わない。
+ *
+ * TASK-100: pickable: true にし、ホバー/クリックで「名称 標高m」を出す。
+ * 可視記号を pickable にしておくことで、隣接する都市の透明判定円
+ * （cities-hit、9px）が重なっても「見えている ▲ の直上は必ずその山峰」が
+ * レイヤー順だけで保証される（都市ドットと rivers-hit の関係と同じ。TASK-49）。
+ * 記号の色とサイズは強調状態で変わる（peaks.ts peakMarkerColor / peakMarkerSize）。
  */
 function buildPeakMarkerLayer(): TextLayer<PeakMarkerDatum> {
   const entries = memoizedVisiblePeaks(
@@ -1221,16 +1418,50 @@ function buildPeakMarkerLayer(): TextLayer<PeakMarkerDatum> {
   return new TextLayer<PeakMarkerDatum>({
     id: PEAK_LAYER_ID,
     data: memoizedPeakMarkerData(entries),
-    pickable: false,
+    pickable: true,
     sizeUnits: "pixels",
     // フォント + クリーム halo（陰影・半透明塗りの上でも記号の輪郭が立つ）。
     // 衝突制御は含まない（labelLayerBaseProps ではなく描画スタイルのみ）
     ...labelTextStyleProps(),
     getText: () => PEAK_MARKER_GLYPH,
     getPosition: (d) => d.position,
-    getSize: PEAK_MARKER_SIZE_PX,
-    getColor: PEAK_MARKER_COLOR,
+    getSize: (d) => peakMarkerSize(d, selectedPeakName, hoveredPeakName),
+    getColor: (d) => peakMarkerColor(d, selectedPeakName, hoveredPeakName),
     characterSet: [...PEAK_MARKER_CHARACTER_SET],
+    updateTriggers: {
+      getPosition: [zoomStep],
+      getSize: [selectedPeakName, hoveredPeakName],
+      getColor: [selectedPeakName, hoveredPeakName],
+    },
+  });
+}
+
+/**
+ * 山峰マーカーの透明ヒット層（ScatterplotLayer）を生成する（TASK-100 AC #2）。
+ * cities-hit（TASK-82）と同型で、可視記号（▲）と同一データ
+ * （memoizedPeakMarkerData の安定参照）を完全透明・PEAK_HIT_RADIUS_PX の円で
+ * マーカーの直下に重ねる。
+ *
+ * これにより、ホバーでもクリックでも「カーソル直下 pick」だけで山峰を拾える
+ * （ホバー側に pickMultipleObjects を足さない = TASK-36 のコスト設計を維持）。
+ * ▲ のグリフは picking が不透明ピクセルにしか当たらず三角形の上端は 1〜2px しか
+ * 幅が無いため、記号だけを pickable にすると狙って外す位置が構造的に残る
+ * （根拠は peaks.ts PEAK_HIT_LAYER_ID）。
+ */
+function buildPeakHitLayer(): ScatterplotLayer<PeakMarkerDatum> {
+  const entries = memoizedVisiblePeaks(
+    memoizedPeakEntries(peaksData),
+    zoomStep,
+  );
+  return new ScatterplotLayer<PeakMarkerDatum>({
+    id: PEAK_HIT_LAYER_ID,
+    data: memoizedPeakMarkerData(entries),
+    pickable: true,
+    getPosition: (d) => d.position,
+    radiusUnits: "pixels",
+    getRadius: PEAK_HIT_RADIUS_PX,
+    getFillColor: PEAK_HIT_FILL_COLOR,
+    stroked: false,
     updateTriggers: { getPosition: [zoomStep] },
   });
 }
@@ -1666,6 +1897,10 @@ function renderLayers(): void {
     [CITY_HIT_LAYER_ID]: () => buildCityHitLayer(year),
     [RIVERS_LAYER_ID]: () => buildRiversLineLayer(),
     [RIVERS_HIT_LAYER_ID]: () => buildRiversHitLayer(),
+    // TASK-100: 山岳 3 層。いずれも年代に依存しない（AC #5）
+    [PEAK_LAYER_ID]: () => buildPeakMarkerLayer(),
+    [PEAK_HIT_LAYER_ID]: () => buildPeakHitLayer(),
+    [MOUNTAIN_HIT_LAYER_ID]: () => buildMountainHitLayer(),
   };
   const layers: Layer[] = [];
   // picking 優先順（PICKING_PRIORITY）の逆順 = 下→上の描画順で並べる
@@ -1681,11 +1916,14 @@ function renderLayers(): void {
     // 無視される（layerOrderMatchesPickingPriority の既存仕様）。
     if (id === HRE_LAYER_ID) {
       layers.push(buildSuzerainExtentLayer(year, base));
-      // TASK-99: 山峰マーカーは政治ポリゴン・勢力圏外枠の上、都市ドット・
-      // 河川ラインの下。地形の記号が主題（都市・河川）を覆わない位置で、
-      // 山脈名ラベルを配列の先頭に置いたのと同じ意味づけ。pickable: false の
-      // ため PICKING_PRIORITY 外の ID で、整合検証では無視される。
-      layers.push(buildPeakMarkerLayer());
+      // TASK-100: 山脈の強調輪郭は勢力圏の外枠と同じ層（政治ポリゴンの上・
+      // 都市ドット/河川ラインの下）に置く。輪郭どうしが同じ階層に並ぶことで
+      // 「臙脂の外縁 = 帝国範囲 / オリーブの外縁 = 山脈の範囲」が同じ土俵で
+      // 読み比べられる。pickable: false のため PICKING_PRIORITY 外の ID で、
+      // 整合検証では無視される（勢力圏の外枠と同じ扱い）。
+      // 山峰マーカー（peaks）は TASK-100 で pickable になったため
+      // PICKING_PRIORITY 由来のループ本体が積む（ここでは積まない）。
+      layers.push(buildMountainOutlineLayer());
     }
   }
   // TASK-77: ラベル層は overlaid オーバーレイ（別 canvas）へ載せる。

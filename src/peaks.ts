@@ -17,12 +17,46 @@
 import type { FeatureCollection, GeoJsonProperties } from "geojson";
 import type { LabelColor, LabelDatum } from "./labels.ts";
 import { MAX_ZOOM, MIN_ZOOM } from "./config.ts";
+import { MOUNTAIN_HIGHLIGHT_COLOR } from "./mountains.ts";
 
 /** 主要山峰 GeoJSON の配信 URL（scripts/build.ts のコピー先と一致させる契約） */
 export const PEAKS_DATA_URL = "/data/peaks.geojson";
 
 /** 山峰マーカー（ScatterplotLayer ではない。理由は PEAK_MARKER_GLYPH）のレイヤー ID */
 export const PEAK_LAYER_ID = "peaks";
+
+/**
+ * 山峰マーカーの透明ヒット層（ScatterplotLayer）のレイヤー ID（TASK-100）。
+ * 都市の cities-hit（TASK-82）と同型で、可視記号（▲）と同じ位置に完全透明の
+ * 円を重ね、ホバー・クリックとも直下 pick だけで一定の判定範囲を得る。
+ *
+ * 可視記号（PEAK_LAYER_ID）だけを pickable にしない理由: 山峰マーカーは
+ * TextLayer のグリフで、picking はグリフの不透明ピクセル（▲ の三角形の内側と
+ * SDF の縁取り）にしか当たらない。三角形は外接する矩形の半分しか面積が無く、
+ * 上部の頂点付近は 1〜2px の幅しかないため、記号を狙っても外れる位置が
+ * 構造的に残る。透明な円を重ねることでそれを埋める。
+ */
+export const PEAK_HIT_LAYER_ID = "peaks-hit";
+
+/**
+ * 山峰の判定円の半径（px）（TASK-100 AC #2）。
+ *
+ * 10px を採る根拠:
+ * - ▲（PEAK_MARKER_SIZE_PX = 11px の字形）の外接円半径は約 6px。これを覆い、
+ *   さらに「点の周りの見えない余白」を都市（cities.ts CITY_HIT_RADIUS_PX =
+ *   9px、可視ドット半径 3px に対して 3 倍）と同程度の比率で確保する。
+ * - 都市の 9px よりわずかに広いのは、可視記号自体が都市ドット（直径 6px +
+ *   白 stroke）より一回り大きいため。差を 1px に留めるのは、アルプス周辺で
+ *   山峰と都市の判定円が重なる領域をむやみに広げないため（重なった場合は
+ *   PICKING_PRIORITY で都市の判定円が優先される）。
+ */
+export const PEAK_HIT_RADIUS_PX = 10;
+
+/**
+ * 山峰の判定円の塗り色。完全透明（cities.ts CITY_HIT_FILL_COLOR と同型）で
+ * 見た目には一切出さない。
+ */
+export const PEAK_HIT_FILL_COLOR: LabelColor = [0, 0, 0, 0];
 
 /**
  * 山峰マーカーの記号（AC #2）。都市マーカーは半径 3px の丸ドット
@@ -65,6 +99,15 @@ export const PEAK_MARKER_SIZE_PX = 11;
  * （TASK-97）を山峰にもそのまま広げる。
  */
 export const PEAK_MARKER_COLOR: LabelColor = [39, 62, 47, 255];
+
+/**
+ * 強調（ホバー/クリック）中の山峰マーカーの字形サイズ（px）（TASK-100 AC #4）。
+ * 通常の PEAK_MARKER_SIZE_PX（11px）の約 1.4 倍。色だけで強調しないのは、
+ * 山峰が載るのは陰影（TASK-98）の掛かった山体で色相の判別が弱まる場所であり、
+ * 「大きさが変わる」ほうが確実に気付けるため（PEAK_MARKER_GLYPH で
+ * 「色だけの区別にしない」としたのと同じ理由）。
+ */
+export const PEAK_ACTIVE_MARKER_SIZE_PX = 15;
 
 /** マーカー層の characterSet（グリフ 1 種のみ。フォントアトラスは最小） */
 export const PEAK_MARKER_CHARACTER_SET: readonly string[] = [PEAK_MARKER_GLYPH];
@@ -150,6 +193,13 @@ export interface PeakMarkerDatum {
   name: string;
   /** マーカー座標 [lon, lat] */
   position: [number, number];
+  /**
+   * 標高（m）。不明は null（TASK-100）。ホバー/クリック時に「名称 + 標高」を
+   * 出す（AC #2）ため、pick された datum だけで表示を組み立てられるように
+   * マーカーデータへも持たせる。別テーブルを引くと、判定層（peaks-hit）と
+   * マーカー層で参照元がずれたときに静かに食い違う。
+   */
+  elevation: number | null;
 }
 
 /**
@@ -318,7 +368,83 @@ export function buildPeakMarkerData(
   return entries.map((entry) => ({
     name: entry.name,
     position: [entry.lon, entry.lat] as [number, number],
+    elevation: entry.elevation,
   }));
+}
+
+/**
+ * ホバーのツールチップ・クリックの情報パネルへ出す山峰のラベルを返す
+ * （純粋関数、TASK-100 AC #2/#6）。「名称 標高m」（標高不明なら名称のみ）。
+ *
+ * 地図上のラベル（peakLabelText）と違い**ズームに依存しない**: 地図ラベルは
+ * 衝突箱の幅を抑えるため PEAK_ELEVATION_LABEL_MIN_ZOOM 未満では標高を省くが、
+ * ツールチップ/パネルは衝突空間の外にあり、AC #2 が「名称と標高」を要求する。
+ *
+ * 引数に年を取らないことが、そのまま「年代を切り替えても内容が変わらない」
+ * （AC #5）の担保になっている（mountainPickLabel と同じ）。
+ */
+export function peakPickLabel(
+  d: { name: string; elevation: number | null },
+  ja: Record<string, string>,
+): string {
+  const name = peakDisplayName(d.name, ja);
+  const elevation = formatPeakElevation(d.elevation);
+  return elevation === null ? name : `${name} ${elevation}`;
+}
+
+/**
+ * クリックによる山峰選択の遷移（純粋関数、TASK-100 AC #4）。
+ * mountains.ts toggleMountainSelection・rivers.ts toggleRiverSelection と
+ * 同一規則（同一で解除・別で移動・対象外クリックで解除）。
+ */
+export function togglePeakSelection(
+  current: string | null,
+  clickedName: string | null,
+): string | null {
+  if (clickedName === null) return null;
+  return current === clickedName ? null : clickedName;
+}
+
+/**
+ * 山峰が強調状態（選択中またはホバー中）かを判定する（純粋関数）。
+ * mountains.ts isMountainActive と同型。
+ */
+export function isPeakActive(
+  name: string | null,
+  selected: string | null,
+  hovered: string | null,
+): boolean {
+  if (name === null) return false;
+  return name === selected || name === hovered;
+}
+
+/**
+ * 山峰マーカーの色を決める（純粋関数、TASK-100 AC #4）。強調時は山脈の輪郭と
+ * 同じオリーブ（mountains.ts MOUNTAIN_HIGHLIGHT_COLOR）にして「オリーブ =
+ * いま指している山岳」という記号性を山脈・山峰で共有する。
+ */
+export function peakMarkerColor(
+  d: { name: string },
+  selected: string | null,
+  hovered: string | null,
+): LabelColor {
+  return isPeakActive(d.name, selected, hovered)
+    ? MOUNTAIN_HIGHLIGHT_COLOR
+    : PEAK_MARKER_COLOR;
+}
+
+/**
+ * 山峰マーカーの字形サイズを決める（純粋関数、TASK-100 AC #4）。
+ * 色に加えて大きさも変える理由は PEAK_ACTIVE_MARKER_SIZE_PX を参照。
+ */
+export function peakMarkerSize(
+  d: { name: string },
+  selected: string | null,
+  hovered: string | null,
+): number {
+  return isPeakActive(d.name, selected, hovered)
+    ? PEAK_ACTIVE_MARKER_SIZE_PX
+    : PEAK_MARKER_SIZE_PX;
 }
 
 /**
