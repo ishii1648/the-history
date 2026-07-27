@@ -325,6 +325,116 @@ Deno.test("是正した宗主が同年代に勢力として実在する（TASK-1
   assertEquals(dangling, [], `同年代に存在しない宗主: ${dangling.join(", ")}`);
 });
 
+/**
+ * 名称の上書き（TASK-106 / 監査 §4）。
+ *
+ * propertyFixes は形状を触れないため、「その年代には存在しない勢力の名で
+ * 塗られている」「一公国の名で広域が塗られている」は NAME の上書きでしか
+ * 是正できない（decision-14 / decision-18 により分割・削除は不可）。
+ * 上書き先は上流（historical-basemaps）自身が使う語彙に限る。
+ */
+const EXPECTED_NAME_OVERRIDES: ReadonlyArray<{
+  year: number;
+  from: string;
+  to: string;
+  subjecto: string;
+  partof: string;
+  reason: string;
+}> = [
+  // A-5: ルーム・セルジューク朝は 1308 年に滅亡。1400 年のアナトリア中央部は
+  // カラマンほかのベイリク群（同年の上流に Beylik of Aydin が独立勢力として実在）
+  {
+    year: 1400,
+    from: "Seljuk Caliphate",
+    to: "Anatolian beyliks",
+    subjecto: "Anatolian beyliks",
+    partof: "Anatolian beyliks",
+    reason: "1308 年に滅亡した勢力名が 1400 年に残っている",
+  },
+  // B-7: 131 万 km² をオカ川中流域の一公国の名で塗っている。1200 年に上流自身が
+  // 使う総称 NAME へ寄せる。SUBJECTO は上流の値のまま（正規化は TASK-107）
+  {
+    year: 1279,
+    from: "Ryazan",
+    to: "Other Rus Principalities",
+    subjecto: "Mongol Empire",
+    partof: "Other Rus Principalities",
+    reason: "リャザンの規模ではない広域を代表名で塗っている",
+  },
+  {
+    year: 1300,
+    from: "Ryazan",
+    to: "Other Rus Principalities",
+    subjecto: "Khanate of the Golden Horde",
+    partof: "Other Rus Principalities",
+    reason: "リャザンの規模ではない広域を代表名で塗っている",
+  },
+];
+
+Deno.test("消滅済み・過大な勢力の NAME が上書きされている（TASK-106）", () => {
+  const wrong: string[] = [];
+  for (const expected of EXPECTED_NAME_OVERRIDES) {
+    const features = readBase(expected.year).features;
+    // 上書き前の名前は NAME / SUBJECTO / PARTOF のどこにも残らない
+    // （NAME だけ変えると宙に浮いた宗主・分裂した色キーになる）
+    for (const feature of features) {
+      const props = (feature.properties ?? {}) as Record<string, unknown>;
+      for (const key of ["NAME", "SUBJECTO", "PARTOF"] as const) {
+        if (props[key] === expected.from) {
+          wrong.push(
+            `${expected.year} ${key}=${expected.from} が残っている（${expected.reason}）`,
+          );
+        }
+      }
+    }
+    const renamed = features.filter(
+      (feature) => feature.properties?.NAME === expected.to,
+    );
+    if (renamed.length === 0) {
+      wrong.push(`${expected.year} ${expected.to}: 上書き後の feature が無い`);
+      continue;
+    }
+    for (const feature of renamed) {
+      const props = (feature.properties ?? {}) as Record<string, unknown>;
+      for (
+        const [key, want] of [
+          ["SUBJECTO", expected.subjecto],
+          ["PARTOF", expected.partof],
+        ] as const
+      ) {
+        if (props[key] !== want) {
+          wrong.push(
+            `${expected.year} ${expected.to}.${key}=${
+              JSON.stringify(props[key])
+            } (期待 ${JSON.stringify(want)})`,
+          );
+        }
+      }
+    }
+  }
+  assertEquals(wrong, [], `NAME の上書きが効いていない: ${wrong.join(", ")}`);
+});
+
+Deno.test("NAME の上書きが対象年代の外へ波及していない（TASK-106）", () => {
+  // 上書き前の名前が正しく使われている年代（1492 / 1500 の Ryazan は実体どおりの
+  // 15.0 万 / 2.0 万 km²、1279 / 1300 の Seljuk Caliphate は 1308 年の滅亡より前）
+  // まで巻き込むと、上流が持つ正しい帰属を失う。
+  const survivors: ReadonlyArray<{ year: number; name: string }> = [
+    { year: 1492, name: "Ryazan" },
+    { year: 1500, name: "Ryazan" },
+    { year: 1279, name: "Seljuk Caliphate" },
+    { year: 1300, name: "Seljuk Caliphate" },
+  ];
+  const lost: string[] = [];
+  for (const { year, name } of survivors) {
+    const exists = readBase(year).features.some(
+      (feature) => feature.properties?.NAME === name,
+    );
+    if (!exists) lost.push(`${year} ${name}`);
+  }
+  assertEquals(lost, [], `巻き込みで消えた勢力: ${lost.join(", ")}`);
+});
+
 Deno.test("NAME が無い feature は帰属プロパティを 1 つも持たない（TASK-102）", () => {
   // NAME 欠落 feature の扱い（AC#1）: 上流が NAME / ABBREVN / SUBJECTO / PARTOF
   // を全て空にしている＝どの勢力にも帰属させていない土地なので、名称を与えず

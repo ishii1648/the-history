@@ -44,6 +44,8 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Almohad Caliphate",
   "Almoravid dynasty",
   "Amu  Darya",
+  // TASK-106: 1400 年の Seljuk Caliphate（1308 年滅亡）を上書きした総称 NAME
+  "Anatolian beyliks",
   "Angevin Empire",
   "Anhalt",
   "Arabia",
@@ -557,6 +559,28 @@ Deno.test("主要国の日本語表記が期待どおり", () => {
   };
   for (const [name, ja] of Object.entries(expected)) {
     assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+});
+
+Deno.test("NAME を上書きした勢力の日本語表記が登録されている（TASK-106）", () => {
+  // propertyFixes で NAME を上書きした先（監査 §4）。日本語表記は英語 NAME を
+  // キーにするため、上書き先の訳が無いと画面には英語のまま出る（decision-6）。
+  const expected: Record<string, string> = {
+    // 1400: ルーム・セルジューク朝（1308 年滅亡）の代わりに置いた総称
+    "Anatolian beyliks": "アナトリア諸侯国（ベイリク）",
+    // 1279 / 1300: 131 万 km² を覆う Ryazan の代わりに置いた総称（1200 年に前例）
+    "Other Rus Principalities": "その他のルーシ諸公国",
+  };
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+  // 上書き前の名前は他年代でなお正しく使われるので訳を消さない
+  // （1492 / 1500 の Ryazan・1279 / 1300 の Seljuk Caliphate）
+  for (const name of ["Ryazan", "Seljuk Caliphate"]) {
+    assert(
+      typeof mapping[name] === "string" && mapping[name].length > 0,
+      `${name} の訳が失われている`,
+    );
   }
 });
 
