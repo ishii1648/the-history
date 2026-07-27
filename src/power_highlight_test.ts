@@ -13,6 +13,7 @@ import {
 import { FILL_ALPHA, hexToRgb } from "./powers.ts";
 import {
   CITY_LAYER_ID,
+  CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
@@ -67,16 +68,34 @@ Deno.test("powerHighlightKey: NAME を持たない feature は null", () => {
   assertEquals(powerHighlightKey(POWER_LAYER_ID, {}), null);
 });
 
-Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 4 層のみ（TASK-96 で伊諸侯領を追加）", () => {
+Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 5 層のみ（TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦を追加）", () => {
   assertEquals(
     [...POWER_HIGHLIGHT_LAYER_IDS].sort(),
     [
+      CLIOPATRIA_FIEF_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ].sort(),
   );
+});
+
+Deno.test("powerHighlightKey: Cliopatria 領邦も colorKeyFor と同一のキーで強調される（TASK-110）", () => {
+  // Cliopatria の properties は既存 fief と同型（NAME / SUBJECTO / PARTOF）で、
+  // SUBJECTO を持つものは HRE 領邦と同じ複合キーになる
+  assertEquals(
+    powerHighlightKey(CLIOPATRIA_FIEF_LAYER_ID, {
+      NAME: "Duchy of Bavaria",
+      SUBJECTO: "Holy Roman Empire",
+    }),
+    "Duchy of Bavaria|Holy Roman Empire",
+  );
+  assertEquals(
+    powerHighlightKey(CLIOPATRIA_FIEF_LAYER_ID, { NAME: "County of Toulouse" }),
+    "County of Toulouse",
+  );
+  assertEquals(powerHighlightKey(CLIOPATRIA_FIEF_LAYER_ID, {}), null);
 });
 
 Deno.test("powerHighlightKey: 伊諸侯領は NAME で強調され、親（base の教皇領・帝国）とは別キーになる（TASK-96 AC #3）", () => {

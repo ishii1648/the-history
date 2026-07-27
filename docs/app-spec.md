@@ -396,9 +396,31 @@ TASK-104 の 14 件（`propertyFixes` エントリは 15。A-4 が Blue / White 
 - **選択中 feature の出典（TASK-109）**: パネルには名前に加えて、その feature が
   属するデータセットの出典を出す。地図には出典もライセンスも確度も異なる系統が
   同時に載っている（base 勢力 = historical-basemaps / GPL-3.0、諸侯領 =
-  OpenHistoricalMap / CC0-1.0、河川・山岳 = Natural Earth / Public Domain、 都市
-  = Reba et al. / CC BY 4.0）ため、フッターの attribution（全体の帰属）
-  だけでは「いま見ているこの領域が何に由来するか」が分からない
+  OpenHistoricalMap / CC0-1.0 と Cliopatria / CC BY 4.0、河川・山岳 = Natural
+  Earth / Public Domain、 都市 = Reba et al. / CC BY 4.0）ため、フッターの
+  attribution（全体の帰属）だけでは「いま見ているこの領域が何に由来するか」が
+  分からない
+- **諸侯領の第 2 の出典（TASK-110、decision-26）**: OHM 由来の諸侯領には年代・
+  地域による大きな欠落があり（1000 / 1100 年のフランスはアキテーヌ公領も
+  トゥールーズ伯領も王領も無く王国一枚岩、1200〜1492 年の帝国はバイエルン公領が
+  一度も出ない）、`data/cliopatria_fiefs_flat_<year>.geojson`（Cliopatria / CC
+  BY 4.0）で埋める。**用途は「OHM の欠落を埋める補完」に限定**し、OHM が
+  同じ領邦を同じ年代で収録している場合は常に OHM を優先する（Cliopatria の
+  境界は 0.07 度平滑化で頂点密度が OHM の 1/4〜1/7）。同じ領邦が両方の出典で
+  描かれることはない
+  - レイヤーは独立させる。1 つの FeatureCollection に 2 出典を混ぜると、TASK-109
+    の出典パネルが読むトップレベル `metadata` が 2 出典・2 ライセンスを主張する
+    ことになり、CC BY 4.0 の帰属要件を満たせない
+  - Cliopatria
+    レイヤーには**仏諸侯領と帝国領邦が同居する**。ラベル色・境界線色は
+    出典ではなく系統の記号（臙脂 = 帝国域内の領邦・藍紫 = 諸侯領）なので、
+    レイヤー一律ではなく `SUBJECTO ?? PARTOF === "Holy Roman Empire"` で
+    **feature ごとに**出し分ける。そうしないと 1400 / 1492 年に Cliopatria
+    由来の バイエルンだけ藍紫・隣の OHM
+    由来領邦は臙脂という凡例の破れが同一画面に出る
+  - 充填後も残る空白（1200 年の帝国中核 507,304 km² = 帝国の 81.3% 等）は
+    `data/known-limitations.json` と `docs/data-inventory/README.md` §3.11 に
+    実測値つきで記録する
   - 出す行は **出典 / ライセンス / 境界 / コミット**の 4 つで、順序は
     `src/info.ts` の `sourceLines`（純粋関数）が決める。`sourceUrl` は独立の行に
     せず出典行のリンクにする（320px 幅のパネルで URL 行は 2〜3 行を食う）

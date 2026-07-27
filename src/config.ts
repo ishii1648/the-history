@@ -193,6 +193,38 @@ export const ITALY_FIEF_OVERLAY_YEARS: readonly number[] = [
 ];
 
 /**
+ * Cliopatria 由来の領邦オーバーレイ（cliopatria_fiefs_flat_<year>.geojson）が
+ * 存在する年代（昇順、TASK-110）。出典は Cliopatria / Seshat Global History
+ * Databank（CC BY 4.0、doi:10.5281/zenodo.14714684）。
+ *
+ * scripts/build-cliopatria-fiefs.ts の CLIOPATRIA_FIEF_YEARS と同値（src →
+ * scripts の import は行わない規約のため値を重複定義し、同値性は同スクリプトの
+ * テストで担保する）。既存の FRANCE_FIEF_OVERLAY_YEARS 等と同じ扱い。
+ *
+ * このレイヤーは既存 3 系統（OHM 由来）の置き換えではなく**欠落の補完**で、
+ * 収録するのは「OHM に該当リレーションが無いことを実測した領邦」だけ。
+ * 内訳は 1000/1100/1200 が仏のみ（王領・トゥールーズ伯領・アキテーヌ公領ほか）、
+ * 1279/1300 が仏 + 帝国、1400/1492 が帝国のみ（バイエルン公領・ブランデン
+ * ブルク・ボヘミア王国・ザクセン選帝侯領）。同じ領邦が OHM 側と両方に出る
+ * ことはないため、二重塗り・重複ラベルは構造的に生じない。
+ *
+ * 900 を持たないのは既存 3 系統と同じ理由（面として成立しない）で、1500 以降を
+ * 持たないのも同じ（base（europe_<year>）が主権国家を個別収録するため、
+ * オーバーレイは二重表示にしかならない）。1200 は仏のみ: Cliopatria は
+ * 1200 年の帝国を Holy Roman Empire 一枚岩でモデル化しており内部領邦が
+ * 0 件のため（この空白は data/known-limitations.json に残る）。
+ */
+export const CLIOPATRIA_FIEF_OVERLAY_YEARS: readonly number[] = [
+  1000,
+  1100,
+  1200,
+  1279,
+  1300,
+  1400,
+  1492,
+];
+
+/**
  * base 境界線オーバーレイ（base_outline_<year>.geojson）が存在する年代
  * （昇順、TASK-78/86/96）。諸侯領・領邦オーバーレイのいずれかがある年、すなわち
  * FRANCE_FIEF_OVERLAY_YEARS ∪ HRE_FIEF_OVERLAY_YEARS ∪ ITALY_FIEF_OVERLAY_YEARS。
@@ -201,6 +233,14 @@ export const ITALY_FIEF_OVERLAY_YEARS: readonly number[] = [
  * 持つため、オーバーレイがある年は base の輪郭がオーバーレイの内側を走らなくなる
  * （= 二重輪郭が消える）。scripts/build-fief-dedupe.ts の FIEF_DEDUPE_YEARS と
  * 同じ年集合で、fief-dedupe.json（ラベル抑制の被覆率表）も同じ年を持つ。
+ *
+ * TASK-110: CLIOPATRIA_FIEF_OVERLAY_YEARS はここへ加えない。年集合としては
+ * 既に完全な部分集合（1000〜1492）なので union に足しても値が変わらず、
+ * 「どの年に派生データがあるか」の意味は不変だから。一方で **union の中身**
+ * （何を差し引くか）には Cliopatria も入る必要があり、それは
+ * scripts/build-fief-dedupe.ts の入力に Cliopatria を足して
+ * base_outline_<year> / europe_flat_<year> を再生成することで満たす
+ * （データ側の担当）。部分集合であることは config_test.ts で固定する。
  */
 export const BASE_OUTLINE_YEARS: readonly number[] = [
   ...new Set([

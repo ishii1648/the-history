@@ -7,7 +7,8 @@
         "fiefs": [
           "data/france_fiefs_1000.geojson",
           "data/hre_fiefs_1000.geojson",
-          "data/italy_fiefs_1000.geojson"
+          "data/italy_fiefs_1000.geojson",
+          "data/cliopatria_fiefs_1000.geojson"
         ]
       },
       "1100": {
@@ -15,7 +16,8 @@
         "fiefs": [
           "data/france_fiefs_1100.geojson",
           "data/hre_fiefs_1100.geojson",
-          "data/italy_fiefs_1100.geojson"
+          "data/italy_fiefs_1100.geojson",
+          "data/cliopatria_fiefs_1100.geojson"
         ]
       },
       "1200": {
@@ -23,7 +25,8 @@
         "fiefs": [
           "data/france_fiefs_1200.geojson",
           "data/hre_fiefs_1200.geojson",
-          "data/italy_fiefs_1200.geojson"
+          "data/italy_fiefs_1200.geojson",
+          "data/cliopatria_fiefs_1200.geojson"
         ]
       },
       "1279": {
@@ -31,7 +34,8 @@
         "fiefs": [
           "data/france_fiefs_1279.geojson",
           "data/hre_fiefs_1279.geojson",
-          "data/italy_fiefs_1279.geojson"
+          "data/italy_fiefs_1279.geojson",
+          "data/cliopatria_fiefs_1279.geojson"
         ]
       },
       "1300": {
@@ -39,21 +43,24 @@
         "fiefs": [
           "data/france_fiefs_1300.geojson",
           "data/hre_fiefs_1300.geojson",
-          "data/italy_fiefs_1300.geojson"
+          "data/italy_fiefs_1300.geojson",
+          "data/cliopatria_fiefs_1300.geojson"
         ]
       },
       "1400": {
         "base": "data/europe_1400.geojson",
         "fiefs": [
           "data/hre_fiefs_1400.geojson",
-          "data/italy_fiefs_1400.geojson"
+          "data/italy_fiefs_1400.geojson",
+          "data/cliopatria_fiefs_1400.geojson"
         ]
       },
       "1492": {
         "base": "data/europe_1492.geojson",
         "fiefs": [
           "data/hre_fiefs_1492.geojson",
-          "data/italy_fiefs_1492.geojson"
+          "data/italy_fiefs_1492.geojson",
+          "data/cliopatria_fiefs_1492.geojson"
         ]
       }
     },
@@ -62,6 +69,7 @@
   },
   "years": {
     "1000": {
+      "Aragón": 0.0021,
       "Britany": 1,
       "Burgandy": 0.0234,
       "Croatia": 0.0281,
@@ -69,37 +77,39 @@
       "Duchy of Normandy": 1,
       "Duchy of Swabia": 0.969,
       "Dutchy of Benevento": 0.0607,
-      "Holy Roman Empire": 0.7116,
-      "Kingdom of France": 0.2491,
+      "Holy Roman Empire": 0.7158,
+      "Kingdom of France": 0.7846,
       "Magyars": 0.0025,
       "Poland": 0.0254,
       "Pomerania": 0.5523,
       "Venice": 0.8303
     },
     "1100": {
+      "Aragón": 0.0021,
       "Britany": 1,
       "Burgandy": 0.0736,
       "Corsica": 0.9983,
       "Denmark": 0.0072,
       "Duchy of Normandy": 1,
       "Dutchy of Benevento": 0.0299,
-      "Holy Roman Empire": 0.7224,
+      "Holy Roman Empire": 0.7257,
       "Hungary": 0.0036,
-      "Kingdom of France": 0.2616,
+      "Kingdom of France": 0.7842,
       "Papal States": 0.4708,
       "Poland": 0.295,
       "Prussians": 0.0535,
       "Venice": 0.5406
     },
     "1200": {
-      "Angevin Empire": 0.5313,
+      "Angevin Empire": 0.5348,
+      "Aragón": 0.0012,
       "Britany": 1,
       "Burgandy": 0.1043,
-      "Comté de Toulouse": 0.042,
+      "Comté de Toulouse": 0.5407,
       "Corsica": 0.9983,
       "Dutchy of Benevento": 0.0299,
-      "Holy Roman Empire": 0.1834,
-      "Kingdom of France": 0.4765,
+      "Holy Roman Empire": 0.1865,
+      "Kingdom of France": 0.7786,
       "Papal States": 0.4395,
       "Poland": 0.0755
     },
@@ -107,35 +117,39 @@
       "Britany": 1,
       "Corsica": 0.9983,
       "Denmark": 0.0019,
-      "English territory": 0.0322,
-      "France": 0.3134,
-      "Holy Roman Empire": 0.1664,
+      "English territory": 0.0747,
+      "France": 0.4261,
+      "Holy Roman Empire": 0.3084,
+      "Hungary": 0.0013,
       "Papal States": 0.0121,
-      "Poland": 0.0016,
+      "Poland": 0.0226,
       "Sardinia": 0.4997
     },
     "1300": {
       "Britany": 1,
       "Corsica": 0.9983,
       "Denmark": 0.0021,
-      "English territory": 0.0322,
-      "France": 0.3497,
-      "Holy Roman Empire": 0.1882,
-      "Papal States": 0.0137
+      "English territory": 0.0879,
+      "France": 0.4602,
+      "Holy Roman Empire": 0.3238,
+      "Hungary": 0.0176,
+      "Papal States": 0.0137,
+      "Poland": 0.1629
     },
     "1400": {
       "Corsica": 0.9983,
       "France": 0.0158,
-      "Holy Roman Empire": 0.27,
-      "Kingdom of Hungary": 0.0029,
-      "Papal States": 0.0137
+      "Holy Roman Empire": 0.4579,
+      "Kingdom of Hungary": 0.0039,
+      "Papal States": 0.0137,
+      "Poland-Lithuania": 0.0048
     },
     "1492": {
       "France": 0.0166,
-      "Holy Roman Empire": 0.2735,
-      "Imperial Hungary": 0.0033,
+      "Holy Roman Empire": 0.5058,
+      "Imperial Hungary": 0.0044,
       "Papal States": 0.1323,
-      "Poland-Lithuania": 0.003,
+      "Poland-Lithuania": 0.0056,
       "Swiss Confederation": 0.0976,
       "Venice": 0.0319
     }

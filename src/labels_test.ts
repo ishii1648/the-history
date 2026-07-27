@@ -9,6 +9,8 @@ import {
   COLLISION_SIZE_SCALE,
   FIEF_LABEL_COLOR,
   HRE_LABEL_COLOR,
+  HRE_SUZERAIN_NAME,
+  isHreSuzerainFeature,
   LABEL_COLLISION_FADE_CUTOFF,
   LABEL_COLLISION_INJECT_HOOK,
   LABEL_FONT_FAMILY,
@@ -25,6 +27,7 @@ import {
   MAX_LABEL_PRIORITY,
   MIN_LABEL_COLLISION_FADE_CUTOFF,
   MIN_LABEL_PRIORITY,
+  partitionFiefsBySuzerain,
   POWER_LABEL_SIZE_PX,
   RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
@@ -633,4 +636,70 @@ Deno.test("TASK-108: 既定 cutoff は中間フェードの帯を潰しつつ消
     matchRatio <= 0.95,
     `一致率換算 ${matchRatio.toFixed(3)} が厳しすぎる（ラベルが消えすぎる）`,
   );
+});
+
+// ---- 出典混在レイヤーの kind 判定（TASK-110）----
+
+Deno.test("isHreSuzerainFeature: SUBJECTO / PARTOF が神聖ローマ帝国の feature だけ true（TASK-110）", () => {
+  assert(
+    isHreSuzerainFeature({
+      NAME: "Duchy of Bavaria",
+      SUBJECTO: HRE_SUZERAIN_NAME,
+    }),
+  );
+  // SUBJECTO が無くても PARTOF で判定できる（既存 hre_fiefs は両方を持つ）
+  assert(
+    isHreSuzerainFeature({
+      NAME: "Kingdom of Bohemia",
+      PARTOF: HRE_SUZERAIN_NAME,
+    }),
+  );
+  // 仏諸侯領は宗主が帝国ではない（SUBJECTO 無し・または仏王）
+  assert(!isHreSuzerainFeature({ NAME: "County of Toulouse" }));
+  assert(
+    !isHreSuzerainFeature({
+      NAME: "Duchy of Aquitaine",
+      SUBJECTO: "Kingdom of France",
+    }),
+  );
+  assert(!isHreSuzerainFeature(null));
+});
+
+Deno.test("partitionFiefsBySuzerain: 出典混在レイヤーを帝国領邦（臙脂）と諸侯領（藍紫）へ分ける（TASK-110）", () => {
+  const square = { type: "Polygon", coordinates: [squareRing(0, 0, 1)] };
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      feature(square as Feature["geometry"], {
+        NAME: "Duchy of Bavaria",
+        SUBJECTO: HRE_SUZERAIN_NAME,
+      }),
+      feature(square as Feature["geometry"], { NAME: "County of Toulouse" }),
+      feature(square as Feature["geometry"], {
+        NAME: "Margraviate of Brandenburg",
+        PARTOF: HRE_SUZERAIN_NAME,
+      }),
+    ],
+  };
+  const { hre, fief } = partitionFiefsBySuzerain(fc);
+  assertEquals(
+    hre.features.map((f) => f.properties?.NAME),
+    ["Duchy of Bavaria", "Margraviate of Brandenburg"],
+  );
+  assertEquals(
+    fief.features.map((f) => f.properties?.NAME),
+    ["County of Toulouse"],
+  );
+  // 分割の目的は文字色（kind）の出し分け: 帝国領邦は臙脂・諸侯領は藍紫
+  assertEquals(labelColorFor({ kind: "hre" }), HRE_LABEL_COLOR);
+  assertEquals(labelColorFor({ kind: "fief" }), FIEF_LABEL_COLOR);
+});
+
+Deno.test("partitionFiefsBySuzerain: 空 FeatureCollection では両側とも空（未生成時の縮退。TASK-110）", () => {
+  const { hre, fief } = partitionFiefsBySuzerain({
+    type: "FeatureCollection",
+    features: [],
+  });
+  assertEquals(hre.features, []);
+  assertEquals(fief.features, []);
 });

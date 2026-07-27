@@ -17,6 +17,7 @@ import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
+import { CLIOPATRIA_FIEF_YEARS } from "./build-cliopatria-fiefs.ts";
 
 const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;
@@ -385,6 +386,12 @@ async function loadCollections(): Promise<FeatureCollection[]> {
     ...HRE_FIEF_YEARS.map((year) => `${DATA_DIR}/hre_fiefs_${year}.geojson`),
     ...ITALY_FIEF_YEARS.map((year) =>
       `${DATA_DIR}/italy_fiefs_${year}.geojson`
+    ),
+    // TASK-110: Cliopatria 由来の諸侯領・領邦。仏側は SUBJECTO を持たないので
+    // france_fiefs と同じ NAME キー、帝国側は SUBJECTO="Holy Roman Empire" を
+    // 持つので hre_fiefs と同じ複合キーになり、既存の色割当規則がそのまま効く。
+    ...CLIOPATRIA_FIEF_YEARS.map((year) =>
+      `${DATA_DIR}/cliopatria_fiefs_${year}.geojson`
     ),
   ];
   for (const path of optionalPaths) {

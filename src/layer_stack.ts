@@ -33,6 +33,7 @@ import {
   WATER_LAYER_ID,
 } from "./basemap.ts";
 import {
+  CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
@@ -47,9 +48,10 @@ import { APPROXIMATE_BORDER_LAYER_IDS } from "./approximate_borders.ts";
 export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
 
 /**
- * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 4 枚）。
- * 相対順（powers → italy-fiefs → france-fiefs → hre-powers）は同一 beforeId の
- * グループ内で deck レイヤー配列順が保たれるため従来と変わらない。
+ * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 5 枚）。
+ * 相対順（powers → cliopatria-fiefs → italy-fiefs → france-fiefs → hre-powers）
+ * は同一 beforeId のグループ内で deck レイヤー配列順が保たれるため従来と
+ * 変わらない。
  *
  * TASK-78 の base 境界線オーバーレイ（deck の base-outlines）は TASK-80 で
  * MapLibre の line レイヤー（approximate_borders.ts）へ移したため、ここには
@@ -60,12 +62,19 @@ export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
  * ジェノヴァ共和国・ピサ共和国は海岸線に沿った細長い領域で、base ポリゴンと
  * 同じくリグーリア海・ティレニア海へはみ出すため、外すと海上に塗りが露出する。
  *
+ * TASK-110: Cliopatria 由来の領邦も同じ扱いにする。むしろ既存 3 系統より
+ * 必要性が高い: Cliopatria は 0.07 度に平滑化された概略ジオメトリなので
+ * 海岸線の一致度が OHM 由来より低く（アキテーヌ公領・ガスコーニュ公領は
+ * ビスケー湾側、ブランデンブルクはバルト海側）、水面より上に置くと海への
+ * はみ出しがそのまま露出する。
+ *
  * hre-extent（帝国範囲の強調輪郭）は含めない: 常時表示ではなくトグルで出す
  * 強調記号であり、水面より下だと海側の輪郭が切れて「どこからどこまでが帝国か」の
  * 表現が壊れるため、従来どおり水面より上に残す。
  */
 export const UNDER_WATER_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
+  CLIOPATRIA_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -88,7 +97,8 @@ export const UNDER_WATER_LAYER_IDS: readonly string[] = [
  * moveLayer 213 回・順序は最後に deck が勝った状態のまま）。deck が自分で
  * 「概略境界の直下」へ入るようにすれば、何度再挿入されても同じ位置に落ち着く。
  *
- * 3 枚とも同じ値を返すことが必須（別グループへ分かれると相対順が崩れる）。
+ * UNDER_WATER_LAYER_IDS の全枚が同じ値を返すことが必須（別グループへ分かれると
+ * 相対順が崩れる）。
  *
  * @param layerId deck レイヤーの ID
  * @param styleLayerIds 現在の MapLibre スタイルのレイヤー ID 列
@@ -174,7 +184,7 @@ export const DECK_LAYER_GROUP_ID_PREFIX = "deck-layer-group-";
  * 無ければ undefined（deck 未登録・スタイル差し替え直後）。
  *
  * 探し方: beforeId 付きのグループ（`…-before:*`）は水面下へ回した政治ポリゴン
- * 専用で、UNDER_WATER_LAYER_IDS の 3 枚が同じ beforeId を共有するため最大 1 つ。
+ * 専用で、UNDER_WATER_LAYER_IDS の全枚が同じ beforeId を共有するため最大 1 つ。
  * 「今あるべき beforeId」から ID を組み立てるのではなく実在するものを探すのが
  * 重要で、そうしないと beforeId が古い（概略境界が追加される前に作られた
  * deck レイヤーが water を指したまま）状態を検出できない。beforeId 付きの

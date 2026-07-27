@@ -9,6 +9,7 @@ import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
+import { CLIOPATRIA_FIEF_YEARS } from "./build-cliopatria-fiefs.ts";
 
 const ENTRY = "src/main.ts";
 const DIST_DIR = "dist";
@@ -59,6 +60,7 @@ export function getDataCopyTargets(
   fiefYears: readonly number[] = [],
   hreFiefYears: readonly number[] = [],
   italyFiefYears: readonly number[] = [],
+  cliopatriaFiefYears: readonly number[] = [],
 ): Array<{ from: string; to: string }> {
   const targets: Array<{ from: string; to: string }> = [
     { from: "data/index.json", to: `${distDir}/data/index.json` },
@@ -133,11 +135,26 @@ export function getDataCopyTargets(
       to: `${distDir}/data/italy_fiefs_flat_${year}.geojson`,
     });
   }
-  // TASK-78/86/96: オーバーレイとの二重輪郭・二重ラベルを解消する派生データ
+  // TASK-110: Cliopatria 由来の諸侯領・領邦オーバーレイ
+  // （deno task build-cliopatria-fiefs で生成）。他の 3 系統と同じく、配信するのは
+  // 重なりを排他化した派生データ（cliopatria_fiefs_flat_<year>）で、ランタイムの
+  // 参照先（powers.ts cliopatriaFiefDataUrlFor）と一致させる。
+  for (const year of cliopatriaFiefYears) {
+    targets.push({
+      from: `data/cliopatria_fiefs_flat_${year}.geojson`,
+      to: `${distDir}/data/cliopatria_fiefs_flat_${year}.geojson`,
+    });
+  }
+  // TASK-78/86/96/110: オーバーレイとの二重輪郭・二重ラベルを解消する派生データ
   // （deno task build-fief-dedupe で生成）。オーバーレイがある年にしか存在しない
   // ため、いずれの年集合も空なら 1 件も含めない（対象外年の描画は従来のまま）。
   const outlineYears = [
-    ...new Set([...fiefYears, ...hreFiefYears, ...italyFiefYears]),
+    ...new Set([
+      ...fiefYears,
+      ...hreFiefYears,
+      ...italyFiefYears,
+      ...cliopatriaFiefYears,
+    ]),
   ].sort((a, b) => a - b);
   if (outlineYears.length > 0) {
     targets.push({
@@ -321,6 +338,7 @@ async function copyDataFiles(distDir: string): Promise<void> {
       FRANCE_FIEF_YEARS,
       HRE_FIEF_YEARS,
       ITALY_FIEF_YEARS,
+      CLIOPATRIA_FIEF_YEARS,
     )
   ) {
     await Deno.copyFile(from, to);

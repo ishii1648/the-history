@@ -3,9 +3,11 @@ import type { FeatureCollection } from "geojson";
 import {
   baseFillDataUrlFor,
   baseOutlineDataUrlFor,
+  cliopatriaFiefDataUrlFor,
   colorKeyFor,
   createBaseFillLoader,
   createBaseOutlineLoader,
+  createCliopatriaFiefOverlayLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
   createHreOverlayLoader,
@@ -19,6 +21,7 @@ import {
   fillColorFor,
   franceFiefDataUrlFor,
   hasBaseOutline,
+  hasCliopatriaFiefOverlay,
   hasFranceFiefOverlay,
   hasHreOverlay,
   hasItalyFiefOverlay,
@@ -31,6 +34,7 @@ import {
   type YearLayerData,
 } from "./powers.ts";
 import {
+  CLIOPATRIA_FIEF_OVERLAY_YEARS,
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_ALL_OVERLAY_YEARS,
   HRE_FIEF_OVERLAY_YEARS,
@@ -669,6 +673,7 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     outlines: EMPTY_FEATURE_COLLECTION,
     baseFill: EMPTY_FEATURE_COLLECTION,
     italyFiefs: EMPTY_FEATURE_COLLECTION,
+    cliopatriaFiefs: EMPTY_FEATURE_COLLECTION,
   });
   d1400.resolve({
     base: fakeCollection("F"),
@@ -677,6 +682,7 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     outlines: EMPTY_FEATURE_COLLECTION,
     baseFill: EMPTY_FEATURE_COLLECTION,
     italyFiefs: EMPTY_FEATURE_COLLECTION,
+    cliopatriaFiefs: EMPTY_FEATURE_COLLECTION,
   });
   await Promise.all([p1, p2]);
   assertEquals(applied, [{ year: 1500, hreCount: 1 }]);
@@ -1220,4 +1226,146 @@ Deno.test("createCombinedYearLoader は伊諸侯領ローダを省略しても�
   );
   const data = await loader.load(1200);
   assertEquals(data.italyFiefs, EMPTY_FEATURE_COLLECTION);
+});
+
+// ---- Cliopatria 由来の領邦オーバーレイ（TASK-110）----
+
+Deno.test("cliopatriaFiefDataUrlFor は Cliopatria 領邦オーバーレイ GeoJSON のパスを返す（TASK-110）", () => {
+  // 参照するのは flat（OHM 由来 3 系統との重なりを排他化した派生データ）。
+  // 生データ cliopatria_fiefs_<year> は派生データの入力で、配信もしない。
+  assertEquals(
+    cliopatriaFiefDataUrlFor(1000),
+    "/data/cliopatria_fiefs_flat_1000.geojson",
+  );
+  assertEquals(
+    cliopatriaFiefDataUrlFor(1492),
+    "/data/cliopatria_fiefs_flat_1492.geojson",
+  );
+});
+
+Deno.test("hasCliopatriaFiefOverlay は対象年（1000〜1492）のみ true を返す（TASK-110）", () => {
+  for (const year of CLIOPATRIA_FIEF_OVERLAY_YEARS) {
+    assert(hasCliopatriaFiefOverlay(year, CLIOPATRIA_FIEF_OVERLAY_YEARS));
+  }
+  // 900 は Cliopatria 側にも内部領邦が乏しく、1500 以降は base が担う
+  for (const year of [900, 1500, 1650, 1914]) {
+    assert(!hasCliopatriaFiefOverlay(year, CLIOPATRIA_FIEF_OVERLAY_YEARS));
+  }
+});
+
+Deno.test("createCliopatriaFiefOverlayLoader は非対象年で fetch せず空 FC を返す（二重表示回避。TASK-110 AC #4）", async () => {
+  const calls: string[] = [];
+  const loader = createCliopatriaFiefOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Duchy of Aquitaine")),
+    });
+  }, CLIOPATRIA_FIEF_OVERLAY_YEARS);
+  assertEquals(await loader.load(900), EMPTY_FEATURE_COLLECTION);
+  assertEquals(await loader.load(1500), EMPTY_FEATURE_COLLECTION);
+  assertEquals(calls, []);
+  assert(loader.has(1500));
+});
+
+Deno.test("createCliopatriaFiefOverlayLoader は対象年で cliopatria_fiefs_flat を fetch して返す（キャッシュあり）（TASK-110 AC #5）", async () => {
+  const calls: string[] = [];
+  const loader = createCliopatriaFiefOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Duchy of Aquitaine")),
+    });
+  }, CLIOPATRIA_FIEF_OVERLAY_YEARS);
+  assert(!loader.has(1000));
+  const fc = await loader.load(1000);
+  assertEquals(fc.features[0].properties?.NAME, "Duchy of Aquitaine");
+  assertEquals(calls, ["/data/cliopatria_fiefs_flat_1000.geojson"]);
+  await loader.load(1000);
+  assertEquals(calls, ["/data/cliopatria_fiefs_flat_1000.geojson"]);
+  assert(loader.has(1000));
+});
+
+Deno.test("createCliopatriaFiefOverlayLoader は未生成・取得失敗時に warn して空 FC を返す（base の表示は壊さない）（TASK-110）", async () => {
+  // データ側の生成前（cliopatria_fiefs_flat_* が存在しない）でもアプリが
+  // 起動し年代を切り替えられることを、この縮退契約で保証する
+  let count = 0;
+  const warns: string[] = [];
+  const loader = createCliopatriaFiefOverlayLoader(
+    (_url) => {
+      count++;
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      });
+    },
+    CLIOPATRIA_FIEF_OVERLAY_YEARS,
+    (msg) => warns.push(msg),
+  );
+  assertEquals(await loader.load(1000), EMPTY_FEATURE_COLLECTION);
+  assertEquals(warns.length, 1);
+  assert(!loader.has(1000));
+  // 失敗はキャッシュされず、次のロードで再試行される
+  await loader.load(1000);
+  assertEquals(count, 2);
+});
+
+Deno.test("createCombinedYearLoader は 4 系統のオーバーレイ（HRE 領邦・仏諸侯領・伊諸侯領・Cliopatria 領邦）を同時に返す（TASK-110）", async () => {
+  const calls: string[] = [];
+  const fetchFn = (url: string) => {
+    calls.push(url);
+    const name = url.includes("cliopatria_fiefs")
+      ? "Duchy of Aquitaine"
+      : url.includes("italy_fiefs")
+      ? "Republic of Florence"
+      : url.includes("france_fiefs")
+      ? "Normandy"
+      : url.includes("hre_fiefs")
+      ? "Duchy of Bavaria"
+      : "Kingdom of France";
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(name)),
+    });
+  };
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(
+      fetchFn,
+      HRE_ALL_OVERLAY_YEARS,
+      () => {},
+      HRE_FIEF_OVERLAY_YEARS,
+    ),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+    undefined,
+    undefined,
+    createItalyFiefOverlayLoader(fetchFn, ITALY_FIEF_OVERLAY_YEARS),
+    createCliopatriaFiefOverlayLoader(fetchFn, CLIOPATRIA_FIEF_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1000);
+  assertEquals(data.base.features[0].properties?.NAME, "Kingdom of France");
+  assertEquals(
+    data.cliopatriaFiefs.features[0].properties?.NAME,
+    "Duchy of Aquitaine",
+  );
+  assert(calls.includes("/data/cliopatria_fiefs_flat_1000.geojson"));
+});
+
+Deno.test("createCombinedYearLoader は Cliopatria ローダを省略しても従来どおり動く（後方互換・未生成時の縮退。TASK-110）", async () => {
+  const fetchFn = (url: string) =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(url)),
+    });
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.cliopatriaFiefs, EMPTY_FEATURE_COLLECTION);
 });

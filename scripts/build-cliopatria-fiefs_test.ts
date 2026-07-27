@@ -1,0 +1,429 @@
+import { assert, assertEquals } from "@std/assert";
+import area from "@turf/area";
+import { featureCollection } from "@turf/helpers";
+import intersect from "@turf/intersect";
+import type {
+  Feature,
+  FeatureCollection,
+  MultiPolygon,
+  Polygon,
+} from "geojson";
+import {
+  CLIOPATRIA_ARCHIVE_MEMBER,
+  CLIOPATRIA_ARCHIVE_SHA256,
+  CLIOPATRIA_ARCHIVE_URL,
+  CLIOPATRIA_EXCLUSIONS,
+  CLIOPATRIA_FIEF_YEARS,
+  CLIOPATRIA_FRANCE_FIEF_NAMES,
+  CLIOPATRIA_HRE_FIEF_NAMES,
+  CLIOPATRIA_NAME_OVERRIDES,
+  CLIOPATRIA_SOURCE_COMMIT,
+  CLIOPATRIA_SOURCE_DOI,
+  CLIOPATRIA_SOURCE_LICENSE,
+  cliopatriaExclusionReason,
+  type CliopatriaProperties,
+  cliopatriaRawPathFor,
+  containsYear,
+  fiefPropertiesOf,
+  isCompositeName,
+  selectForYear,
+} from "./build-cliopatria-fiefs.ts";
+
+/** テスト用の Cliopatria 生 properties を作る */
+function props(
+  over: Partial<CliopatriaProperties> = {},
+): CliopatriaProperties {
+  return {
+    Name: "County of Toulouse",
+    FromYear: 990,
+    ToYear: 1027,
+    Area: 21359,
+    Type: "POLITY",
+    Wikipedia: "County of Toulouse",
+    Wikidata: "Q1194109",
+    SeshatID: "fr_capetian_k_1",
+    Components: "",
+    MemberOf: "(Kingdom of France)",
+    ...over,
+  };
+}
+
+/** properties だけを持つダミー feature（selectForYear は幾何を見ない） */
+function feature(over: Partial<CliopatriaProperties> = {}): Feature {
+  return {
+    type: "Feature",
+    properties: props(over) as unknown as Record<string, unknown>,
+    geometry: { type: "Polygon", coordinates: [] },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// ピン留め（AC #2: コミット / DOI で固定されたソースから決定的に生成する）
+// ---------------------------------------------------------------------------
+
+Deno.test("ソースはコミット SHA とアーカイブの SHA-256 で二重にピン留めされる", () => {
+  assertEquals(CLIOPATRIA_SOURCE_COMMIT.length, 40);
+  assert(/^[0-9a-f]{40}$/.test(CLIOPATRIA_SOURCE_COMMIT));
+  assert(/^[0-9a-f]{64}$/.test(CLIOPATRIA_ARCHIVE_SHA256));
+  // 取得 URL がピン留めコミットを含む（ブランチ名や latest を指していない）
+  assert(
+    CLIOPATRIA_ARCHIVE_URL.includes(CLIOPATRIA_SOURCE_COMMIT),
+    "取得 URL がピン留めコミットを含まない",
+  );
+  assert(CLIOPATRIA_ARCHIVE_URL.endsWith(".zip"));
+  assert(CLIOPATRIA_ARCHIVE_MEMBER.endsWith(".geojson"));
+  // CC BY 4.0 の帰属で使う DOI とライセンス識別子
+  assertEquals(CLIOPATRIA_SOURCE_LICENSE, "CC BY 4.0");
+  assert(CLIOPATRIA_SOURCE_DOI.startsWith("10.5281/zenodo."));
+});
+
+// ---------------------------------------------------------------------------
+// 年代区間の選択規則（不規則な FromYear / ToYear を決定的に扱う）
+// ---------------------------------------------------------------------------
+
+Deno.test("年代区間は包含判定だけで採り、外挿も最近傍も行わない", () => {
+  // 実データの区間はスナップショット年をまたぐ形で不規則に切られている
+  assert(containsYear(props({ FromYear: 1279, ToYear: 1284 }), 1279));
+  assert(containsYear(props({ FromYear: 1294, ToYear: 1304 }), 1300));
+  assert(containsYear(props({ FromYear: 990, ToYear: 1146 }), 1000));
+  assert(containsYear(props({ FromYear: 990, ToYear: 1146 }), 1100));
+  // 端点は含む
+  assert(containsYear(props({ FromYear: 1000, ToYear: 1000 }), 1000));
+  // 区間外は採らない（近い区間へ寄せる救済をしない = 出典の主張を超えない）
+  assert(!containsYear(props({ FromYear: 1301, ToYear: 1400 }), 1300));
+  assert(!containsYear(props({ FromYear: 990, ToYear: 1002 }), 1100));
+});
+
+Deno.test("同じ領邦に複数の区間が当たったら最も狭い区間を採る（決定的）", () => {
+  const at1279 = { Name: "County of Foix" } as const;
+  const narrow = feature({ ...at1279, FromYear: 1279, ToYear: 1284, Area: 1 });
+  const wide = feature({ ...at1279, FromYear: 1200, ToYear: 1300, Area: 2 });
+  // 入力順に依らず同じ結果になること
+  const a = selectForYear([wide, narrow], 1279);
+  const b = selectForYear([narrow, wide], 1279);
+  assertEquals(a.length, 1);
+  assertEquals(JSON.stringify(a), JSON.stringify(b));
+  // 出力の properties は写像後の形（START_DATE / END_DATE）
+  assertEquals((a[0].properties as { START_DATE: string }).START_DATE, "1279");
+  assertEquals((a[0].properties as { END_DATE: string }).END_DATE, "1284");
+});
+
+Deno.test("selectForYear は NAME 昇順の決定的な並びを返す", () => {
+  const years = 1279;
+  const picked = selectForYear([
+    feature({ Name: "County of Foix", FromYear: 1279, ToYear: 1293 }),
+    feature({ Name: "County of Auvergne", FromYear: 1272, ToYear: 1332 }),
+    feature({ Name: "County of Armagnac", FromYear: 1279, ToYear: 1332 }),
+  ], years);
+  assertEquals(
+    picked.map((f) => (f.properties as { NAME: string }).NAME),
+    ["County of Armagnac", "County of Auvergne", "County of Foix"],
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 複合体・残余カテゴリの扱い（そのまま描くと巨大な塗りが既存レイヤーを覆う）
+// ---------------------------------------------------------------------------
+
+Deno.test("丸括弧で囲まれた名前は封臣を含む複合体として判定する", () => {
+  assert(isCompositeName("(Kingdom of France)"));
+  assert(isCompositeName("(Holy Roman Empire)"));
+  assert(
+    isCompositeName("(Allegiance of Duchy of Aquitaine to Kingdom of France)"),
+  );
+  assert(!isCompositeName("Kingdom of France"));
+  assert(!isCompositeName("County of Blôis"));
+});
+
+Deno.test("複合体・RELATION・残余カテゴリは許可リストに関わらず落ちる", () => {
+  // (Kingdom of France) は 1000 年で 420,259 km²、単独の Kingdom of France は
+  // 49,071 km²。複合体を描くと王国全体が 1 枚の塗りになり王領が読めなくなる。
+  assert(
+    cliopatriaExclusionReason(props({ Name: "(Kingdom of France)" })) !== null,
+  );
+  // RELATION は上位関係の複合体で、ジオメトリは関係先の合併と同一
+  assert(
+    cliopatriaExclusionReason(
+      props({
+        Type: "RELATION",
+        Name: "(Vassalage of Kingdom of Bohemia to Holy Roman Empire)",
+      }),
+    ) !== null,
+  );
+  // 残余カテゴリ（1279 年で 518,669 km²）は数百の領邦の寄せ集めで、
+  // 1 つの塗り・1 つのラベル・1 つの色で描くと事実に反する
+  assert(
+    cliopatriaExclusionReason(
+      props({ Name: "Holy Roman Empire Minor States" }),
+    ) !==
+      null,
+  );
+  // 許可リストに載る領邦は落ちない
+  assertEquals(cliopatriaExclusionReason(props()), null);
+  assertEquals(
+    cliopatriaExclusionReason(props({ Name: "Duchy of Bavaria" })),
+    null,
+  );
+});
+
+Deno.test("除外の分類は全て根拠テキストを持ち、除外理由はその分類から引く", () => {
+  for (const [key, reason] of Object.entries(CLIOPATRIA_EXCLUSIONS)) {
+    assert(reason.length > 0, `${key} の除外根拠が空`);
+  }
+  const reasons = new Set(Object.values(CLIOPATRIA_EXCLUSIONS));
+  for (
+    const name of [
+      "(Kingdom of France)",
+      "Holy Roman Empire Minor States",
+    ]
+  ) {
+    const reason = cliopatriaExclusionReason(props({ Name: name }));
+    assert(reason !== null && reasons.has(reason), `${name} の理由が分類外`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 適用範囲（許可リスト）: OHM の欠落だけを埋める
+// ---------------------------------------------------------------------------
+
+Deno.test("対象年は仏 1000〜1300 と帝国 1279〜1492 の和で昇順", () => {
+  assertEquals([...CLIOPATRIA_FIEF_YEARS].sort((a, b) => a - b), [
+    ...CLIOPATRIA_FIEF_YEARS,
+  ]);
+  assertEquals(CLIOPATRIA_FIEF_YEARS, [
+    1000,
+    1100,
+    1200,
+    1279,
+    1300,
+    1400,
+    1492,
+  ]);
+  // 許可リストが挙げる年は全て対象年に含まれる（生成されないファイルを指さない）
+  for (
+    const [name, years] of [
+      ...Object.entries(CLIOPATRIA_FRANCE_FIEF_NAMES),
+      ...Object.entries(CLIOPATRIA_HRE_FIEF_NAMES),
+    ]
+  ) {
+    assert(years.length > 0, `${name} の対象年が空`);
+    for (const year of years) {
+      assert(
+        CLIOPATRIA_FIEF_YEARS.includes(year),
+        `${name} の ${year} 年が対象年に無い`,
+      );
+    }
+  }
+});
+
+Deno.test("許可リストは仏と帝国で互いに素（同じ領邦が 2 つの帰属を持たない）", () => {
+  const france = new Set(Object.keys(CLIOPATRIA_FRANCE_FIEF_NAMES));
+  for (const name of Object.keys(CLIOPATRIA_HRE_FIEF_NAMES)) {
+    assert(!france.has(name), `${name} が仏・帝国の両方に載っている`);
+  }
+});
+
+Deno.test("帝国側は 1200 年を持たない（Cliopatria が帝国を一枚岩でモデル化するため）", () => {
+  for (const years of Object.values(CLIOPATRIA_HRE_FIEF_NAMES)) {
+    assert(!years.includes(1200), "帝国側の許可リストに 1200 年がある");
+    assert(
+      !years.includes(1000) && !years.includes(1100),
+      "帝国側 1000/1100 は OHM が担う",
+    );
+  }
+});
+
+Deno.test("仏側は 1400 / 1492 を持たない（base のフランス勢力が実態に一致する年代）", () => {
+  for (const years of Object.values(CLIOPATRIA_FRANCE_FIEF_NAMES)) {
+    assert(!years.includes(1400) && !years.includes(1492));
+  }
+});
+
+Deno.test("許可リストの年は Cliopatria 側の区間で有効な年だけを挙げる", () => {
+  // AC #5 の対象。実測した区間（タスク説明の実測値）と一致すること
+  assertEquals(CLIOPATRIA_HRE_FIEF_NAMES["Duchy of Bavaria"], [
+    1279,
+    1300,
+    1400,
+    1492,
+  ]);
+  assertEquals(CLIOPATRIA_FRANCE_FIEF_NAMES["County of Toulouse"], [
+    1000,
+    1100,
+    1200,
+  ]);
+  // 王領（domaine royal）。1279 / 1300 の Cliopatria "Kingdom of France" は
+  // 206,111 / 242,840 km² と王国規模になり base のフランス勢力と重複するため採らない
+  assertEquals(CLIOPATRIA_FRANCE_FIEF_NAMES["Kingdom of France"], [
+    1000,
+    1100,
+    1200,
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// properties の写像（既存 fief と同型 + Cliopatria 固有の出所）
+// ---------------------------------------------------------------------------
+
+Deno.test("仏諸侯領の properties は france_fiefs と同型（SUBJECTO を持たない）", () => {
+  const mapped = fiefPropertiesOf(props(), 1000);
+  assertEquals(mapped.NAME, "County of Toulouse");
+  assertEquals(mapped.START_DATE, "0990");
+  assertEquals(mapped.END_DATE, "1027");
+  assertEquals(mapped.SUBJECTO, undefined);
+  assertEquals(mapped.PARTOF, undefined);
+  // 出所（feature 単位で Cliopatria まで辿れる）
+  assertEquals(mapped.CLIOPATRIA_SESHAT_ID, "fr_capetian_k_1");
+  assertEquals(mapped.WIKIDATA, "Q1194109");
+});
+
+Deno.test("帝国領邦の properties は hre_fiefs と同型（SUBJECTO / PARTOF を持つ）", () => {
+  const mapped = fiefPropertiesOf(
+    props({ Name: "Duchy of Bavaria", MemberOf: "(Holy Roman Empire)" }),
+    1279,
+  );
+  assertEquals(mapped.NAME, "Duchy of Bavaria");
+  assertEquals(mapped.SUBJECTO, "Holy Roman Empire");
+  assertEquals(mapped.PARTOF, "Holy Roman Empire");
+});
+
+Deno.test("王領は上流の Kingdom of France と別名にして base の王国と取り違えない", () => {
+  // 上流の Name は "Kingdom of France" だが、この feature が指すのは王領
+  // （複合体 "(Kingdom of France)" が王国全体を別に持つ）。base の勢力名と
+  // 同じ NAME を使うと色キー・ラベル・パネルが王国と衝突する。
+  assertEquals(
+    CLIOPATRIA_NAME_OVERRIDES["Kingdom of France"],
+    "Royal Domain of France",
+  );
+  const mapped = fiefPropertiesOf(props({ Name: "Kingdom of France" }), 1000);
+  assertEquals(mapped.NAME, "Royal Domain of France");
+  // 上流の名前は追跡できるよう残す
+  assertEquals(mapped.CLIOPATRIA_NAME, "Kingdom of France");
+});
+
+Deno.test("START_DATE / END_DATE は 4 桁ゼロ詰めで既存 fief の表記に揃う", () => {
+  const mapped = fiefPropertiesOf(props({ FromYear: 990, ToYear: 1002 }), 1000);
+  assertEquals(mapped.START_DATE, "0990");
+  assertEquals(mapped.END_DATE, "1002");
+});
+
+// ---------------------------------------------------------------------------
+// 生成物（ネットワーク非依存。生成済みファイルを読む）
+// ---------------------------------------------------------------------------
+
+async function readCollection(path: string): Promise<
+  FeatureCollection & { metadata?: Record<string, unknown> }
+> {
+  return JSON.parse(await Deno.readTextFile(path)) as
+    & FeatureCollection
+    & { metadata?: Record<string, unknown> };
+}
+
+/** ポリゴン系ジオメトリを持つ feature だけを取り出す */
+function polygonalFeatures(
+  fc: FeatureCollection,
+): Feature<Polygon | MultiPolygon>[] {
+  return fc.features.filter((f) =>
+    f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon"
+  ) as Feature<Polygon | MultiPolygon>[];
+}
+
+Deno.test("生成物は対象年ぶん存在し、metadata がピン留めを保持する", async () => {
+  for (const year of CLIOPATRIA_FIEF_YEARS) {
+    const fc = await readCollection(cliopatriaRawPathFor(year));
+    assert(fc.features.length > 0, `${year} 年の feature が 0 件`);
+    assertEquals(fc.metadata?.year, year);
+    assertEquals(fc.metadata?.commit, CLIOPATRIA_SOURCE_COMMIT);
+    assertEquals(fc.metadata?.license, CLIOPATRIA_SOURCE_LICENSE);
+    assertEquals(fc.metadata?.archiveSha256, CLIOPATRIA_ARCHIVE_SHA256);
+  }
+});
+
+Deno.test("生成物の feature は許可リストの領邦だけで、その年に許可された年である", async () => {
+  for (const year of CLIOPATRIA_FIEF_YEARS) {
+    const fc = await readCollection(cliopatriaRawPathFor(year));
+    for (const f of fc.features) {
+      const upstream = f.properties?.CLIOPATRIA_NAME as string;
+      const allowed = CLIOPATRIA_FRANCE_FIEF_NAMES[upstream] ??
+        CLIOPATRIA_HRE_FIEF_NAMES[upstream];
+      assert(allowed !== undefined, `${year}: ${upstream} が許可リストに無い`);
+      assert(
+        allowed.includes(year),
+        `${year}: ${upstream} がこの年に許可されていない`,
+      );
+    }
+  }
+});
+
+Deno.test("AC #5: 1000 / 1100 年にアキテーヌ・トゥールーズ・王領が入る", async () => {
+  for (const year of [1000, 1100]) {
+    const names = new Set(
+      (await readCollection(cliopatriaRawPathFor(year))).features.map((f) =>
+        f.properties?.NAME as string
+      ),
+    );
+    for (
+      const name of [
+        "Duchy of Aquitaine",
+        "County of Toulouse",
+        "Royal Domain of France",
+      ]
+    ) {
+      assert(names.has(name), `${year} 年に ${name} が無い`);
+    }
+  }
+});
+
+Deno.test("AC #4: 配信する flat は他の 3 系統・base 塗りと二重に塗らない", async () => {
+  // 「二重塗りが無い」を目視ではなくデータで担保する。既存レイヤー同士の残存
+  // 重なり（座標丸め由来）は 1000〜1492 の全年・全組み合わせで最大 0.074 km²
+  // なので、その 100 倍を上限にしても「幾何的に排他化されている」ことしか
+  // 通らない。実測の最大は 1000 / 1100 年の County of Vermandois ×
+  // Duchy of Lower Lotharingia の 1.83 km²（くびれ解消の副作用。
+  // scripts/build-fief-flat.ts の unpinch の解説を参照）。
+  const LIMIT_KM2 = 8;
+  const offenders: string[] = [];
+  for (const year of CLIOPATRIA_FIEF_YEARS) {
+    const clio = polygonalFeatures(
+      await readCollection(`data/cliopatria_fiefs_flat_${year}.geojson`),
+    );
+    for (
+      const other of [
+        `france_fiefs_flat_${year}`,
+        `hre_fiefs_flat_${year}`,
+        `italy_fiefs_flat_${year}`,
+        `europe_flat_${year}`,
+      ]
+    ) {
+      let fc: FeatureCollection;
+      try {
+        fc = await readCollection(`data/${other}.geojson`);
+      } catch {
+        continue; // その年に存在しないレイヤー
+      }
+      let total = 0;
+      for (const a of clio) {
+        for (const b of polygonalFeatures(fc)) {
+          const overlap = intersect(featureCollection([a, b]));
+          if (overlap === null) continue;
+          total += area(overlap) / 1e6;
+        }
+      }
+      if (total > LIMIT_KM2) {
+        offenders.push(`${year} × ${other}: ${total.toFixed(3)} km²`);
+      }
+    }
+  }
+  assertEquals(offenders, []);
+});
+
+Deno.test("AC #5: 1279〜1492 年の帝国にバイエルン公領が入る", async () => {
+  for (const year of [1279, 1300, 1400, 1492]) {
+    const names = new Set(
+      (await readCollection(cliopatriaRawPathFor(year))).features.map((f) =>
+        f.properties?.NAME as string
+      ),
+    );
+    assert(names.has("Duchy of Bavaria"), `${year} 年にバイエルン公領が無い`);
+  }
+});

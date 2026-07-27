@@ -52,6 +52,11 @@ import {
   PEAKS_SOURCE_REPO,
 } from "./build-peaks.ts";
 import { CITIES_SOURCE_COMMIT, CITIES_SOURCE_REPO } from "./build-cities.ts";
+import {
+  CLIOPATRIA_SOURCE_COMMIT,
+  CLIOPATRIA_SOURCE_HOMEPAGE,
+  CLIOPATRIA_SOURCE_LICENSE,
+} from "./build-cliopatria-fiefs.ts";
 
 /**
  * 境界の確からしさの区分（AC #3）。
@@ -84,7 +89,16 @@ import { CITIES_SOURCE_COMMIT, CITIES_SOURCE_REPO } from "./build-cities.ts";
  * 4. modernGeneralized … 現代の自然地物を縮尺相当に簡略化した線・面
  *    （Natural Earth の河川・山脈）。そもそも歴史的境界ではなく、当時の流路とも
  *    限らないことを明示する。
+ * 5. digitizedFromMapImages … 既存の歴史地図の**画像**をトレース・自動抽出して
+ *    得た境界（Cliopatria / TASK-110）。3 の reconstructed と分けるのは、区分の
+ *    違いを裏づける情報がデータ側にあるため: Cliopatria は 2014 年に手描きされた
+ *    地図画像群から Python で自動抽出し 0.07 度（およそ 7.8 km）で平滑化した
+ *    もので、論文自身が「境界は必然的に概略で解釈の余地がある」「過去に遡るほど
+ *    不確かさが増す」と明記している。実測でも頂点密度は OHM の 1/4〜1/7
+ *    （1000 年の Duchy of Aquitaine が 69 頂点、OHM の 1200 年版が 330 頂点）で、
+ *    領域ごとに存続期間付きで作図された 3 とは確からしさの根拠が違う。
  *
+
  * 点データ（山峰・都市）には付けない。線も面も持たないため「境界の確からしさ」を
  * 語れる対象が無く、無理に区分を与えると位置の精度と取り違えられる。
  *
@@ -96,6 +110,8 @@ export const BORDER_PRECISION = {
   simplifiedTreaty: "概略（出典は確定境界を含むが、簡略化により数 km の近似）",
   reconstructed: "史料に基づく復元（概略。測量された境界ではない）",
   modernGeneralized: "現代地形の簡略化（歴史的境界ではない）",
+  digitizedFromMapImages:
+    "史料地図のデジタイズ（概略。手描き地図の自動抽出を 0.07 度で平滑化）",
 } as const;
 
 /** 境界の確からしさの区分の値 */
@@ -207,6 +223,20 @@ export const DATA_ATTRIBUTIONS = {
    * 「識別子 + データセット名」の長い表記で、パネルの 1 行には向かないため）。
    * 両者の整合は build-attribution_test.ts が startsWith で見張る。
    */
+  /**
+   * OHM の欠落を埋める第 2 の領邦データ（CC BY 4.0・TASK-110 / decision-26）。
+   * sourceUrl は DOI ではなく GitHub リポジトリにする: 取得は同リポジトリの
+   * コミット SHA でピン留めしており、パネルの commit がその URL から辿れる
+   * （historicalBasemaps / citiesReba と同じ「repo + commit」の組）。CC BY 4.0 の
+   * 帰属で求められる書誌情報と DOI はフッターの attribution が担う。
+   */
+  cliopatria: {
+    source: "Cliopatria (Seshat Global History Databank)",
+    sourceUrl: CLIOPATRIA_SOURCE_HOMEPAGE,
+    license: CLIOPATRIA_SOURCE_LICENSE,
+    commit: CLIOPATRIA_SOURCE_COMMIT,
+    borderPrecision: BORDER_PRECISION.digitizedFromMapImages,
+  },
   citiesReba: {
     source:
       "Historical Urban Population (Reba, Reitsma & Seto 2016; Chandler 系列)",
@@ -230,6 +260,7 @@ const FILE_PATTERNS: readonly (readonly [RegExp, DatasetKey])[] = [
   [/^europe_flat_\d+\.geojson$/, "historicalBasemaps"],
   [/^base_outline_\d+\.geojson$/, "historicalBasemaps"],
   [/^(?:france|hre|italy)_fiefs_(?:flat_)?\d+\.geojson$/, "openHistoricalMap"],
+  [/^cliopatria_fiefs_(?:flat_)?\d+\.geojson$/, "cliopatria"],
   [/^hre_\d+\.geojson$/, "ethHreTerritories"],
   [/^rivers\.geojson$/, "naturalEarthRivers"],
   [/^mountains\.geojson$/, "naturalEarthMountains"],

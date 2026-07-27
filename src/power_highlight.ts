@@ -18,6 +18,7 @@ import type { GeoJsonProperties } from "geojson";
 import { colorKeyFor, fillColorFor, type Rgba } from "./powers.ts";
 import { type LabelColor, labelColorFor, type LabelDatum } from "./labels.ts";
 import {
+  CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
@@ -25,15 +26,21 @@ import {
 } from "./picking.ts";
 
 /**
- * アクティブ強調の対象になるレイヤー（政治ポリゴンの 4 層）。
+ * アクティブ強調の対象になるレイヤー（政治ポリゴンの 5 層）。
  * 河川・都市・判定専用層・ラベル層は対象外（それぞれ固有の強調表現を持つか、
  * そもそも「国土の広がり」を持たない）。
+ *
+ * TASK-110: Cliopatria 由来の領邦も同じ扱い。強調キーは colorKeyFor と同一
+ * （NAME、SUBJECTO があれば NAME|SUBJECTO）なので、出典が違っても同じ領邦の
+ * 飛び地は 1 つの面として光る。出典の違いは情報パネルの出典行（TASK-109）が
+ * 開示するので、強調表現の側で区別を作る必要はない。
  */
 export const POWER_HIGHLIGHT_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
   HRE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
+  CLIOPATRIA_FIEF_LAYER_ID,
 ];
 
 /**

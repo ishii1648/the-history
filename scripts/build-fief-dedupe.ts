@@ -43,6 +43,10 @@
 import area from "@turf/area";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { serializeWithAttribution } from "./build-attribution.ts";
+import {
+  CLIOPATRIA_FIEF_YEARS,
+  cliopatriaRawPathFor,
+} from "./build-cliopatria-fiefs.ts";
 import difference from "@turf/difference";
 import { featureCollection, lineString } from "@turf/helpers";
 import intersect from "@turf/intersect";
@@ -401,11 +405,26 @@ export function italyFiefsPathFor(year: number): string {
 }
 
 /**
- * その年に存在するオーバーレイの入力パスを全て返す（純粋関数、TASK-86/96）。
+ * Cliopatria 由来の諸侯領・領邦（TASK-110）の入力パス。
+ *
+ * 年集合は src/config.ts ではなく scripts 側の CLIOPATRIA_FIEF_YEARS を参照する
+ * （src → scripts の import を行わない規約の下で、表示側の定数と本パイプラインの
+ * 定数が別々に育つのを避けるため。両者の同値は build-cliopatria-fiefs_test.ts で
+ * 担保する）。
+ */
+export function cliopatriaFiefsPathFor(year: number): string {
+  return cliopatriaRawPathFor(year);
+}
+
+/**
+ * その年に存在するオーバーレイの入力パスを全て返す（純粋関数、TASK-86/96/110）。
  * 被覆率も境界線の切り出しも「その年に描かれるオーバーレイ全体」に対する判定
  * なので、仏諸侯領・HRE 領邦・伊諸侯領が揃う年（1000〜1300）は 3 件を返す。
+ * TASK-110 の Cliopatria 由来オーバーレイも同じ扱いで足す: これを外すと
+ * 1400 / 1492 のバイエルン公領などの下に base 塗りが残り、半透明が二重に
+ * 重なって濃くなる（AC #4 の二重塗り）。
  *
- * 参照するのは flat（重なり解消済み）ではなく OHM 由来の生データ: union を取る
+ * 参照するのは flat（重なり解消済み）ではなく生データ: union を取る
  * 以上どちらでも結果は同じで、生データの方が入力として素直なため
  * （flat は「どちらのレイヤーが塗るか」を決めたもので、union は変わらない）。
  */
@@ -415,6 +434,9 @@ export function fiefsPathsFor(year: number): string[] {
   if (HRE_FIEF_OVERLAY_YEARS.includes(year)) paths.push(hreFiefsPathFor(year));
   if (ITALY_FIEF_OVERLAY_YEARS.includes(year)) {
     paths.push(italyFiefsPathFor(year));
+  }
+  if (CLIOPATRIA_FIEF_YEARS.includes(year)) {
+    paths.push(cliopatriaFiefsPathFor(year));
   }
   return paths;
 }

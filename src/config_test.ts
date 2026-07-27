@@ -3,6 +3,7 @@ import {
   BASE_OUTLINE_YEARS,
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
+  CLIOPATRIA_FIEF_OVERLAY_YEARS,
   FALLBACK_STYLE_URL,
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_ALL_OVERLAY_YEARS,
@@ -244,6 +245,62 @@ Deno.test("ITALY_FIEF_OVERLAY_YEARS は 900 と近世（1500 以降）を含ま�
 Deno.test("ITALY_FIEF_OVERLAY_YEARS は AC #1/#2 の対象年（1100・1200）を含む（TASK-96）", () => {
   assert(ITALY_FIEF_OVERLAY_YEARS.includes(1100));
   assert(ITALY_FIEF_OVERLAY_YEARS.includes(1200));
+});
+
+// ---- Cliopatria 由来の領邦オーバーレイ（TASK-110）----
+
+Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は中世〜近世初頭の 7 年代である（TASK-110）", () => {
+  assertEquals([...CLIOPATRIA_FIEF_OVERLAY_YEARS], [
+    1000,
+    1100,
+    1200,
+    1279,
+    1300,
+    1400,
+    1492,
+  ]);
+});
+
+Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS の部分集合（TASK-110）", () => {
+  const sorted = [...CLIOPATRIA_FIEF_OVERLAY_YEARS].sort((a, b) => a - b);
+  assertEquals([...CLIOPATRIA_FIEF_OVERLAY_YEARS], sorted);
+  assertEquals(
+    new Set(CLIOPATRIA_FIEF_OVERLAY_YEARS).size,
+    CLIOPATRIA_FIEF_OVERLAY_YEARS.length,
+  );
+  for (const year of CLIOPATRIA_FIEF_OVERLAY_YEARS) {
+    assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
+});
+
+Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は 900 と近世（1500 以降）を含まない（TASK-110）", () => {
+  // 900 は Cliopatria 側にも内部領邦が乏しく、1500 以降は base が主権国家を
+  // 個別収録するため（既存 3 系統と同じ「二重表示を作らない」規則）
+  assert(!CLIOPATRIA_FIEF_OVERLAY_YEARS.includes(900));
+  for (const year of CLIOPATRIA_FIEF_OVERLAY_YEARS) {
+    assert(year < 1500, `${year} は近世（base が担う年代）`);
+  }
+});
+
+Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は AC #5 の対象年（1000/1100 の仏・1279〜1492 の帝国）を含む（TASK-110）", () => {
+  for (const year of [1000, 1100, 1279, 1300, 1400, 1492]) {
+    assert(
+      CLIOPATRIA_FIEF_OVERLAY_YEARS.includes(year),
+      `${year} は AC #5 の目視確認対象`,
+    );
+  }
+});
+
+Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は BASE_OUTLINE_YEARS の部分集合（既存の派生 base を再生成せずに済む）（TASK-110）", () => {
+  // base_outline_* / europe_flat_* は OHM 由来 3 系統の union で生成済み。
+  // Cliopatria の対象年がその年集合を超えると派生データの無い年が生じるため、
+  // 部分集合であることをここで固定する（超えたらデータ側の再生成が必要）。
+  for (const year of CLIOPATRIA_FIEF_OVERLAY_YEARS) {
+    assert(
+      BASE_OUTLINE_YEARS.includes(year),
+      `${year} の base_outline / europe_flat が存在しない`,
+    );
+  }
 });
 
 Deno.test("BASE_OUTLINE_YEARS は 3 系統のオーバーレイ年代の和集合で昇順・重複なし（TASK-86/96）", () => {

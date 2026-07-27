@@ -1,9 +1,11 @@
 ---
 id: TASK-110
 title: Cliopatria（CC BY 4.0）を第2の領邦データソースとして採用し OHM 欠落年代の空白を埋める
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-27 13:34'
+updated_date: '2026-07-27 18:36'
 labels:
   - 'area:scripts'
   - 'area:data'
@@ -86,3 +88,59 @@ Cliopatria の Duchy of Aquitaine は 69 頂点、OHM 版（1200 年）は 330 �
 - [ ] #7 採用する場合: CC BY 4.0 の帰属要件を満たす出典表記がフッターの attribution に追加されている
 - [ ] #8 deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## 位置づけ
+
+TASK-88 が「空白を埋める唯一の整合的な道は出典のあるデータの獲得」と記録し
+（decision-18 で県ポリゴン合成を却下）、その別タスクとして起票されたもの。
+**採用可否と適用範囲の判断（AC #1）が本体**で、採用するなら実装まで行う。
+
+起票時に実データをダウンロードして充填内容を実測済み（タスク説明参照）。
+判断材料は揃っているので、残る判断は主に次の 3 点。
+
+1. **適用範囲**: 仏諸侯領に限るか、帝国領邦（バイエルン・ブランデンブルク・
+   ボヘミア・ザクセン）まで広げるか
+2. **年代区間の選択規則**: `FromYear`/`ToYear` が不規則（1279 年は
+   [1279-1284]、1300 年は [1294-1304]、Duchy of Brittany は [990-1146]）。
+   スナップショット年に対しどの区間を採るかを**決定的に**決める必要がある
+3. **複合体・残余カテゴリの扱い**: 丸括弧付き feature（例:
+   `(Kingdom of France)` = 封臣を含む王国全体）や
+   `Holy Roman Empire Minor States` をそのまま描くと巨大な塗りが既存レイヤーを
+   覆う
+
+## データ契約（サブ作業をまたぐ唯一の取り決め）
+
+- 生成物: `data/cliopatria_fiefs_<year>.geojson` と、アプリが読む派生
+  `data/cliopatria_fiefs_flat_<year>.geojson`
+  （**TASK-109 の教訓: アプリが読むのは flat の方。metadata は両方に載せる**）
+- properties: 既存 fief（`france_fiefs_*` 等）と同型
+- `metadata`: TASK-109 の契約に従う。`source` = Cliopatria を示す名、
+  `license` = `CC BY 4.0`、`commit` に GitHub SHA か DOI、`borderPrecision` は
+  データ側が決める（論文自身が「境界は必然的に概略で解釈の余地がある」と
+  明記しているのでそれを反映する）
+- 配信 URL の定数と対象年代の配列を `src/` から参照できる形で公開する
+
+## 並列化判定（タスク内）
+
+**並列化する（subagent 2 本を worktree isolation で起動）**。上の契約を先に
+確定したことで、生成側と表示側が互いのファイルに触れずに進められるため
+（TASK-99 / TASK-109 で機能した形）。
+
+| 担当 | 触るファイル | 成果物 |
+| --- | --- | --- |
+| A: データ + 判断 | `scripts/` / `data/` / `docs/data-inventory/` / `backlog/decisions/` | 採用可否の decision（AC #1）・生成スクリプトとテスト（AC #2）・排他化（AC #4 のデータ側）・残る空白の記録（AC #6） |
+| B: 表示 | `src/` / `index.html`（attribution のみ） | レイヤー追加・picking・重ね順（AC #3・#4 の表示側）・CC BY 4.0 の帰属表記（AC #7） |
+
+`docs/app-spec.md` は**両者とも触らない**（mainagent が統合時に書く）。
+実機確認（AC #4・#5）は統合後に mainagent が行う。
+
+**TASK-109 の教訓を両者に渡す**: アプリが実際にロードするのは派生ファイルで、
+元ファイルにだけ metadata があっても出典表示は成立しない。
+
+## タスク間並列
+
+なし（`next-tasks` が TASK-110 の単独集合を返した）。
+<!-- SECTION:PLAN:END -->

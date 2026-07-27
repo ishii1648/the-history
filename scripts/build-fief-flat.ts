@@ -79,6 +79,11 @@ import { cleanFeatureCollection, formatCleanStats } from "./clean-polygons.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
+import {
+  CLIOPATRIA_FIEF_YEARS,
+  cliopatriaRawPathFor,
+} from "./build-cliopatria-fiefs.ts";
+import { removePinchPoints } from "./build-hre-fiefs.ts";
 
 /** 生成対象年。諸侯領オーバーレイが存在する年と同一 */
 export const FIEF_FLAT_YEARS: readonly number[] = FRANCE_FIEF_YEARS;
@@ -93,6 +98,13 @@ export const HRE_FIEF_FLAT_YEARS: readonly number[] = HRE_FIEF_YEARS;
  * 対象年と同一。
  */
 export const ITALY_FIEF_FLAT_YEARS: readonly number[] = ITALY_FIEF_YEARS;
+
+/**
+ * Cliopatria 由来の諸侯領・領邦（TASK-110）の生成対象年。
+ * build-cliopatria-fiefs.ts の対象年と同一。
+ */
+export const CLIOPATRIA_FIEF_FLAT_YEARS: readonly number[] =
+  CLIOPATRIA_FIEF_YEARS;
 
 /**
  * 重なりを解消するとき「どちら側のジオメトリを削るか」の方針（TASK-86）。
@@ -496,6 +508,11 @@ export function italyFlatPathFor(year: number): string {
   return `data/italy_fiefs_flat_${year}.geojson`;
 }
 
+/** 出力（Cliopatria 由来・重なり解消済み）のパス（TASK-110） */
+export function cliopatriaFlatPathFor(year: number): string {
+  return `data/cliopatria_fiefs_flat_${year}.geojson`;
+}
+
 /** *_flat_<year>.geojson に埋め込むメタデータ */
 export interface FiefFlatMetadata {
   generatedBy: string;
@@ -549,6 +566,45 @@ function cleanFlat(fc: FeatureCollection, label: string): FeatureCollection {
   const line = formatCleanStats(stats);
   if (line !== null) console.log(line);
   return cleaned;
+}
+
+/**
+ * 1 点で接触するリング（くびれ）を解いた FeatureCollection を返す（TASK-110）。
+ *
+ * difference の交点を COORD_PRECISION へ丸めると、近接した 2 頂点が同一座標へ
+ * 潰れて「穴が外環に 1 点で触れる」形が生まれることがある（実測では Cliopatria
+ * 由来の County of Vermandois が 1000 / 1100 年に該当し、[3.64753,50.04648] を
+ * 2 回通る）。面としては正しいので clean-polygons.ts の
+ * normalizeSelfIntersections では解けないが、@turf/kinks は自己交差として
+ * 検出するため data/ 全体の「自己交差ゼロ」不変条件
+ * （scripts/clean-polygons_test.ts）を破る。build-hre-fiefs.ts が同種のくびれに
+ * 対して持つ removePinchPoints を、派生データ側でもそのまま使う。
+ *
+ * 他の 3 系統（仏・伊・帝国）には適用しない: いずれも実データでくびれが
+ * 発生しておらず、通すと丸め由来の無用な差分が出るため。
+ *
+ * 副作用: くびれの頂点を落とすと、その頂点で切れていた「相手レイヤーの切り欠き」の
+ * 先端が塞がり、差し引いたはずの面がごく僅かに戻る。実測で残るのは
+ * 1000 / 1100 年の County of Vermandois × Duchy of Lower Lotharingia の
+ * 1.83 km²（Vermandois 17,404 km² の 0.01%、差し渡し約 1.3 km）1 件だけで、
+ * 最大ズーム z8 でも数ピクセルにしかならない。戻った分をもう一度差し引くと
+ * 同じ位置にくびれが再生して自己交差ゼロの不変条件を満たせなくなるため
+ * （2 巡させても収束しないことを実測で確認）、ここでは自己交差ゼロを優先する。
+ */
+function unpinch(fc: FeatureCollection): FeatureCollection {
+  let removed = 0;
+  const features = fc.features.map((feature) => {
+    if (!isPolygonal(feature)) return feature;
+    const result = removePinchPoints(
+      feature.geometry as Polygon | MultiPolygon,
+    );
+    if (result.removed === 0 || result.geometry === null) return feature;
+    removed += result.removed;
+    return { ...feature, geometry: result.geometry };
+  });
+  if (removed === 0) return fc;
+  console.log(`  くびれ（1 点接触）を解消: ${removed} 頂点`);
+  return { ...fc, features };
 }
 
 function logResolutions(resolutions: readonly OverlapResolution[]): void {
@@ -686,10 +742,78 @@ async function buildHreFiefFlat(): Promise<void> {
   }
 }
 
+/**
+ * Cliopatria 由来の諸侯領・領邦の flat 化（TASK-110 / decision-26）。
+ * 仏・伊・帝国の 3 系統より **後** に実行する。
+ *
+ * 削り方針は "keep-smaller"（帝国・伊と同じ）。Cliopatria の許可リストには
+ * 王領（1200 年で 37,024 km²）とその内側に入りうる伯領が同居するため、
+ * 「小さい側 = より個別性の高い情報」を丸ごと残す方が地図の読み取りに合う。
+ *
+ * レイヤーをまたぐ重なりは **常に Cliopatria 側から差し引く**（他の 3 系統は
+ * 差し引かない）。理由は 2 つ:
+ * - Cliopatria の境界は 2014 年の手描き地図画像を自動抽出し 0.07 度で平滑化した
+ *   もので、OHM の個別リレーション（存続期間付きで作図された復元）より 4〜7 倍
+ *   粗い。同じ土地に両方の主張があるときは細かい側の形を残す方が情報が多い。
+ * - Cliopatria は「OHM の欠落を埋める補完」として採っている（decision-26）ので、
+ *   OHM がある場所では下がるのが役割そのもの。
+ * 同じ重なりを両側から削ると土地が誰にも塗られない隙間になるため、削る側は
+ * 必ず一方だけにする（buildHreFiefFlat と同じ原則）。
+ */
+async function buildCliopatriaFiefFlat(): Promise<void> {
+  for (const year of CLIOPATRIA_FIEF_FLAT_YEARS) {
+    const raw = await readCollection(cliopatriaRawPathFor(year));
+    const resolved = resolveOverlaps(raw, console.warn, "keep-smaller");
+    const externalPaths = [
+      ...(FIEF_FLAT_YEARS.includes(year) ? [flatPathFor(year)] : []),
+      ...(ITALY_FIEF_FLAT_YEARS.includes(year) ? [italyFlatPathFor(year)] : []),
+      ...(HRE_FIEF_FLAT_YEARS.includes(year) ? [hreFlatPathFor(year)] : []),
+    ];
+    const externals = await Promise.all(externalPaths.map(readCollection));
+    const subtracted = externals.length === 0
+      ? { fc: resolved.fc, removals: [] as ExternalRemoval[] }
+      : subtractOverlay(
+        resolved.fc,
+        externals.flatMap((c) => c.features),
+      );
+    const unpinched = unpinch(subtracted.fc);
+    const metadata: FiefFlatMetadata = {
+      generatedBy: "scripts/build-fief-flat.ts",
+      input: cliopatriaRawPathFor(year),
+      year,
+      cutPolicy: "keep-smaller",
+      containmentCoverageThreshold: CONTAINMENT_COVERAGE_THRESHOLD,
+      minOverlapAreaM2: MIN_OVERLAP_AREA_M2,
+      sliverAreaLimitM2: SLIVER_AREA_LIMIT_M2,
+      resolutions: resolved.resolutions,
+      ...(externalPaths.length === 0 ? {} : {
+        externalInputs: externalPaths,
+        externalRemovals: subtracted.removals,
+      }),
+    };
+    const outPath = cliopatriaFlatPathFor(year);
+    const json = serializeWithAttribution(outPath, {
+      ...cleanFlat(unpinched, outPath),
+      metadata,
+    });
+    await Deno.writeTextFile(outPath, json);
+    console.log(
+      `${outPath}: ${json.length} bytes, features=${unpinched.features.length}, 解消=${resolved.resolutions.length} 件, 他レイヤー差引=${subtracted.removals.length} 件`,
+    );
+    logResolutions(resolved.resolutions);
+    for (const r of subtracted.removals) {
+      console.log(
+        `  他オーバーレイ  ${r.cutName} -= ${r.externalName} (${r.overlapKm2} km²)`,
+      );
+    }
+  }
+}
+
 async function main(): Promise<void> {
   await buildFranceFiefFlat();
   await buildItalyFiefFlat();
   await buildHreFiefFlat();
+  await buildCliopatriaFiefFlat();
 }
 
 if (import.meta.main) {

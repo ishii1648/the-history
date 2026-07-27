@@ -6,22 +6,23 @@
 
 ## 1. データソース一覧
 
-| 対象                       | ファイル                                                                                                                          | 出典                                                                                                                                                                                                                                           | ライセンス                                                             | カバー年代                                          |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
-| 国・勢力ポリゴン           | `data/europe_<year>.geojson` × 20                                                                                                 | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) @ `62d8f1a03a71`                                                                                                                                             | GPL-3.0                                                                | 全 20 年代                                          |
-| 都市                       | `data/cities.json`                                                                                                                | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得    | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                                          |
-| 諸侯領土（HRE 領邦）       | `data/hre_<year>.geojson` × 5                                                                                                     | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                          | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ               |
-| 諸侯領土（HRE 領邦・中世） | `data/hre_fiefs_<year>.geojson` × 7                                                                                               | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                           | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
-| 諸侯領土（伊諸侯領・中世） | `data/italy_fiefs_<year>.geojson` × 7                                                                                             | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                           | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
-| 諸侯領土（仏諸侯領）       | `data/france_fiefs_<year>.geojson` × 5                                                                                            | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                           | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
-| 二重表示の解消（派生）     | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 7・`data/europe_flat_<year>.geojson` × 7                            | `scripts/build-fief-dedupe.ts` が `europe_<year>` と 3 系統のオーバーレイ（`france_fiefs_<year>` / `hre_fiefs_<year>` / `italy_fiefs_<year>`）の union から生成（§3.5）                                                                        | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
-| 諸侯領の重なり解消（派生） | `data/france_fiefs_flat_<year>.geojson` × 5・`data/hre_fiefs_flat_<year>.geojson` × 7・`data/italy_fiefs_flat_<year>.geojson` × 7 | `scripts/build-fief-flat.ts` が各系統の生データから生成（§3.6）。アプリが実際に配信・描画するのはこちら                                                                                                                                        | CC0 1.0（各生データの派生）                                            | 仏 1000〜1300 / 帝・伊 1000〜1492                   |
-| 日本語表記                 | `data/name-ja.json`                                                                                                               | 本リポジトリで手当て（勢力名・都市名・領邦名・山脈名・山峰名の対訳 1136 件）                                                                                                                                                                   | —                                                                      | —                                                   |
-| 勢力色                     | `data/colors.json`                                                                                                                | `scripts/build-colors.ts` が NAME から決定的に生成（473 キー）                                                                                                                                                                                 | —                                                                      | —                                                   |
-| 年代解説                   | `data/notes.json`                                                                                                                 | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                         | —                                                                      | 全 20 年代                                          |
-| 河川                       | `data/rivers.geojson`                                                                                                             | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                       | Public Domain (Natural Earth)                                          | 年代共通                                            |
-| 山脈                       | `data/mountains.geojson`                                                                                                          | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_geography_regions_polys.geojson`（`FEATURECLA = Range/mtn` のみ・山脈名ラベル用・年代非依存、§3.9）                        | Public Domain (Natural Earth)                                          | 年代共通                                            |
-| 山峰                       | `data/peaks.geojson`                                                                                                              | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_10m_geography_regions_elevation_points.geojson`（`featurecla = mountain` の主要 26 峰・標高付きマーカー用・年代非依存、§3.10） | Public Domain (Natural Earth)                                          | 年代共通                                            |
+| 対象                        | ファイル                                                                                                                          | 出典                                                                                                                                                                                                                                                                                                     | ライセンス                                                             | カバー年代                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 国・勢力ポリゴン            | `data/europe_<year>.geojson` × 20                                                                                                 | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) @ `62d8f1a03a71`                                                                                                                                                                                                       | GPL-3.0                                                                | 全 20 年代                                                   |
+| 都市                        | `data/cities.json`                                                                                                                | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得                                                              | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                                                   |
+| 諸侯領土（HRE 領邦）        | `data/hre_<year>.geojson` × 5                                                                                                     | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                                                                                    | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ                        |
+| 諸侯領土（HRE 領邦・中世）  | `data/hre_fiefs_<year>.geojson` × 7                                                                                               | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                                                                                     | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ          |
+| 諸侯領土（伊諸侯領・中世）  | `data/italy_fiefs_<year>.geojson` × 7                                                                                             | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                                                                                     | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ          |
+| 諸侯領土（仏諸侯領）        | `data/france_fiefs_<year>.geojson` × 5                                                                                            | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                                                                                     | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ                        |
+| 二重表示の解消（派生）      | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 7・`data/europe_flat_<year>.geojson` × 7                            | `scripts/build-fief-dedupe.ts` が `europe_<year>` と 3 系統のオーバーレイ（`france_fiefs_<year>` / `hre_fiefs_<year>` / `italy_fiefs_<year>`）の union から生成（§3.5）                                                                                                                                  | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ          |
+| 諸侯領の重なり解消（派生）  | `data/france_fiefs_flat_<year>.geojson` × 5・`data/hre_fiefs_flat_<year>.geojson` × 7・`data/italy_fiefs_flat_<year>.geojson` × 7 | `scripts/build-fief-flat.ts` が各系統の生データから生成（§3.6）。アプリが実際に配信・描画するのはこちら                                                                                                                                                                                                  | CC0 1.0（各生データの派生）                                            | 仏 1000〜1300 / 帝・伊 1000〜1492                            |
+| 諸侯領土（Cliopatria 補完） | `data/cliopatria_fiefs_<year>.geojson` × 7                                                                                        | Cliopatria (Seshat Global History Databank) — Bennett, J., Mutch, E., Chalstrey, E. et al. (2025) _Scientific Data_、DOI 10.5281/zenodo.14714684。[Seshat-Global-History-Databank/cliopatria](https://github.com/Seshat-Global-History-Databank/cliopatria) @ `ad28a691b7c07c1fca89d0e0636d324667d2a258` | CC BY 4.0                                                              | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ（§3.11） |
+| 日本語表記                  | `data/name-ja.json`                                                                                                               | 本リポジトリで手当て（勢力名・都市名・領邦名・山脈名・山峰名の対訳 1136 件）                                                                                                                                                                                                                             | —                                                                      | —                                                            |
+| 勢力色                      | `data/colors.json`                                                                                                                | `scripts/build-colors.ts` が NAME から決定的に生成（473 キー）                                                                                                                                                                                                                                           | —                                                                      | —                                                            |
+| 年代解説                    | `data/notes.json`                                                                                                                 | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                                                                                   | —                                                                      | 全 20 年代                                                   |
+| 河川                        | `data/rivers.geojson`                                                                                                             | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                                                                                 | Public Domain (Natural Earth)                                          | 年代共通                                                     |
+| 山脈                        | `data/mountains.geojson`                                                                                                          | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_geography_regions_polys.geojson`（`FEATURECLA = Range/mtn` のみ・山脈名ラベル用・年代非依存、§3.9）                                                                                  | Public Domain (Natural Earth)                                          | 年代共通                                                     |
+| 山峰                        | `data/peaks.geojson`                                                                                                              | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_10m_geography_regions_elevation_points.geojson`（`featurecla = mountain` の主要 26 峰・標高付きマーカー用・年代非依存、§3.10）                                                           | Public Domain (Natural Earth)                                          | 年代共通                                                     |
 
 > ライセンス上の注意: HRE 領邦データ（CC BY-NC-SA 4.0）は GPL-3.0 派生の
 > `europe_<year>.geojson`
@@ -62,6 +63,7 @@ metadata も 追従する。既存の `metadata`（諸侯領のビルド診断�
 | `rivers.geojson` / `mountains.geojson`                               | Natural Earth                                                          | Public Domain (Natural Earth) | `ca96624a56bd…`                                | 現代地形の簡略化（歴史的境界ではない）           |
 | `peaks.geojson`                                                      | Natural Earth                                                          | Public Domain (Natural Earth) | `ca96624a56bd…`                                | なし（点データ）                                 |
 | `cities.json`                                                        | Historical Urban Population (Reba, Reitsma & Seto 2016; Chandler 系列) | CC BY 4.0                     | `808ff2b4a279…`                                | なし（点データ）                                 |
+| `cliopatria_fiefs_*`（raw・flat とも）                               | Cliopatria (Seshat Global History Databank)                            | CC BY 4.0                     | `ad28a691b7c0…`                                | 史料地図のデジタイズ（概略。§3.11）              |
 
 `license` はビルド定数の値をそのまま使う（表記を整えるために書き写すと、定数を
 変えたときに追従漏れが起きるため）。例外は `cities.json` で、定数
@@ -72,7 +74,7 @@ metadata も 追従する。既存の `metadata`（諸侯領のビルド診断�
 commit / file / url）はそのまま残し、契約のキーを持つ `metadata`
 を別に足している。
 
-#### 境界の確からしさの区分（4 区分）とその根拠
+#### 境界の確からしさの区分（5 区分）とその根拠
 
 区分は「境界がどう決まったか」で分ける。これより細かく分けても、区分の違いを
 裏づける情報がデータ側に無い（例: 諸侯領 1 件ごとの典拠の質は OHM のタグからは
@@ -105,6 +107,17 @@ commit / file / url）はそのまま残し、契約のキーを持つ `metadata
 4. **現代地形の簡略化（歴史的境界ではない）** — Natural Earth
    の河川・山脈。そもそも
    歴史的境界ではなく、当時の流路とも限らないことを明示する。
+5. **史料地図のデジタイズ（概略。手描き地図の自動抽出を 0.07 度で平滑化）** —
+   Cliopatria（§3.11・TASK-110）。3 と分けるのは、区分の違いを裏づける情報が
+   データ側にあるため: Cliopatria は 2014 年に手描きされた歴史地図の**画像**群を
+   Python で自動抽出し 0.07 度（およそ 7.8 km）で平滑化したもので、論文自身が
+   「境界は必然的に概略で解釈の余地がある」「過去に遡るほど不確かさが増す」と
+   明記している。実測でも頂点密度は OHM の 1/4〜1/7（1000 年の Duchy of
+   Aquitaine が 69 頂点、OHM の 1200 年版が 330
+   頂点）で、領域ごとに存続期間付きで作図された 3
+   とは確からしさの根拠が違う。なお粗さの向き自体は TASK-80 の
+   「頂点密度が低い区間ほどにじませて薄く描く」表現と整合しており、TASK-88 が
+   県合成を却下した理由（周囲の 4 倍シャープになる）とは逆になる。
 
 区分 1 と 2 の切り分けは定数ではなくファイルの中身から決める
 （`basePrecisionOf`）。上流の `BORDERPRECISION` の実測分布（`europe_<year>` の
@@ -130,9 +143,10 @@ TASK-80 の「採用データは全 feature の `BORDERPRECISION` が 1」とい
 **最後**に流す: データを再生成したら必ず実行する。
 
 ```
-build-data / build-hre / build-*-fiefs / build-rivers / build-mountains /
-build-peaks / build-cities  →  build-fief-flat  →  build-fief-dedupe
-                                                 →  build-attribution（最後）
+build-data / build-hre / build-*-fiefs / build-cliopatria-fiefs /
+build-rivers / build-mountains / build-peaks / build-cities
+  →  build-fief-flat  →  build-fief-dedupe  →  build-colors
+                                            →  build-attribution（最後）
 ```
 
 - 独立した最終段にしているのは、(1) 各取得スクリプトに配ると
@@ -845,6 +859,157 @@ NE の英語 `name` には元データの ASCII 化による欠落がある（`G
 Galdhøpiggen・`Hvannadalshnkur` = Hvannadalshnúkur）。表示は日本語名なので
 地図には影響しないが、`data/name-ja.json` のキーは NE の綴りのまま揃える
 （山脈と同じく生成物の `name` が唯一の突合キーのため）。
+
+### 3.11 諸侯領土（Cliopatria 由来 `cliopatria_fiefs_<year>.geojson`、TASK-110）
+
+`deno task build-cliopatria-fiefs`（`scripts/build-cliopatria-fiefs.ts`）が
+Cliopatria から生成する、**OHM
+の欠落を埋めるためだけの補完データ**（decision-26）。
+アプリが配信・描画するのは重なりを排他化した
+`cliopatria_fiefs_flat_<year>.geojson`（§3.6 と同じ派生）。
+
+| 項目             | 値                                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 出典             | Cliopatria (Seshat Global History Databank)。Bennett, J., Mutch, E., Chalstrey, E. et al. (2025) _Scientific Data_、DOI `10.5281/zenodo.14714684`           |
+| ライセンス       | CC BY 4.0                                                                                                                                                   |
+| ピン留め         | GitHub `Seshat-Global-History-Databank/cliopatria` @ `ad28a691b7c07c1fca89d0e0636d324667d2a258`（v0.2.0）+ アーカイブの SHA-256 `d01ae3a2…`（44,231,317 B） |
+| 元ファイル       | `cliopatria.geojson.zip` 内の `cliopatria_polities_only.geojson`（165,608,072 B・13,765 feature）                                                           |
+| 対象年           | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492                                                                                                              |
+| 境界の確からしさ | 「史料地図のデジタイズ（概略。手描き地図の自動抽出を 0.07 度で平滑化）」（§1.1 の区分 5）                                                                   |
+
+#### 生成規則（決定的である根拠）
+
+1. **構造的な除外**（`cliopatriaExclusionReason`）:
+   `Type = RELATION`（上位関係の
+   複合体）・名前が丸括弧で囲まれた複合体・`… Minor States`（残余カテゴリ）。
+2. **許可リスト**（`CLIOPATRIA_FRANCE_FIEF_NAMES` /
+   `CLIOPATRIA_HRE_FIEF_NAMES`）: 「上流の Name → 収録する年」の静的な対応表。
+   OHM が同じ領邦を同じ年代で収録している場合は載せない。
+3. **年代区間の選択**: `FromYear <= year <= ToYear` の**包含判定だけ**。区間外の
+   年へ近い区間を寄せる救済（最近傍・外挿）はしない。同じ名前に複数の区間が
+   当たったら最も狭い区間 → `FromYear` が小さい方 → `Area` が大きい方の順で
+   一意に決まる。
+4. **語彙の上書き**: 上流の `Kingdom of France`（= 王の直轄領。Cliopatria は
+   王国全体を複合体 `(Kingdom of France)` として別に持つ）だけ `NAME` を
+   `Royal Domain of France` に読み替える。ジオメトリには触れず、上流の名前は
+   `CLIOPATRIA_NAME` に残す。
+
+`FromYear` / `ToYear` は不規則で（1279 年は `[1279-1284]`、1300 年は
+`[1294-1304]`、Duchy of Brittany は `[990-1146]`）、包含判定はこの不規則さを
+そのまま受ける。区間が無い年は「出典がその年について何も言っていない」ことなので
+空白のままにする（decision-14 の本旨）。
+
+#### properties
+
+| プロパティ                | 内容                                                                        |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `NAME`                    | 表示名。仏諸侯領は `france_fiefs_*` と、帝国領邦は `hre_fiefs_*` と同じ扱い |
+| `SUBJECTO` / `PARTOF`     | 帝国領邦のみ `Holy Roman Empire`（仏諸侯領は持たない）                      |
+| `START_DATE` / `END_DATE` | 採った区間の `FromYear` / `ToYear`（4 桁ゼロ詰め）                          |
+| `CLIOPATRIA_NAME`         | 上流の `Name`（`NAME` を上書きした場合の追跡用）                            |
+| `CLIOPATRIA_SESHAT_ID`    | 上流の `SeshatID`                                                           |
+| `CLIOPATRIA_AREA_KM2`     | 上流が申告する面積（本パイプラインは再計算しない）                          |
+| `WIKIDATA` / `WIKIPEDIA`  | 上流の同名フィールド                                                        |
+| `SNAPSHOT_YEAR`           | どのスナップショット年のために選ばれた区間か                                |
+
+#### 収録した領邦（年代別）
+
+|   年 | 件数 | 領邦                                                                                                                                                                                                                                              |
+| ---: | ---: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1000 |   10 | 王領 49,071 km² / アキテーヌ公領 106,377 / ガスコーニュ公領 40,078 / ルエルグ伯領 27,863 / シャンパーニュ伯領 25,321 / トゥールーズ伯領 21,359 / フランドル伯領 19,129 / ヴェルマンドワ伯領 17,404 / ブロワ伯領 11,241 / ヴェクサン伯領 4,286     |
+| 1100 |    8 | アキテーヌ公領 141,788 / トゥールーズ伯領 52,864 / ブロワ伯領 32,981 / シャンパーニュ伯領 25,276 / 王領 21,966 / ヴェルマンドワ伯領 19,332 / フランドル伯領 17,591 / ヌヴェール伯領 12,490                                                        |
+| 1200 |    7 | トゥールーズ伯領 52,816 / 王領 37,024 / ヴェルマンドワ伯領 19,510 / ヌヴェール伯領 12,467 / フランドル伯領 9,229 / ブロワ伯領 7,796 / ブーローニュ伯領 684                                                                                        |
+| 1279 |    9 | ボヘミア王国 80,824 / ブランデンブルク辺境伯領 41,413 / バイエルン公領 35,323 / オーヴェルニュ伯領 19,408 / アキテーヌ公領 9,626 / ペリゴール伯領 8,547 / ブロワ伯領 8,090 / アルマニャック伯領 6,985 / フォワ伯領 4,515                          |
+| 1300 |   10 | ボヘミア王国 107,598 / ブランデンブルク辺境伯領 41,413 / バイエルン公領 35,301 / オーヴェルニュ伯領 19,408 / ヌヴェール伯領 13,355 / アキテーヌ公領 9,626 / フォワ伯領 8,648 / ペリゴール伯領 8,547 / アルマニャック伯領 6,985 / ブロワ伯領 3,658 |
+| 1400 |    3 | ボヘミア王国 106,361 / バイエルン公領 47,598 / ブランデンブルク辺境伯領 41,923                                                                                                                                                                    |
+| 1492 |    4 | ボヘミア王国 128,617 / ブランデンブルク選帝侯領 42,293 / バイエルン公領 36,100 / ザクセン選帝侯領 34,252                                                                                                                                          |
+
+面積は上流が申告する値（`CLIOPATRIA_AREA_KM2`）で、排他化前・クリップ前のもの。
+
+#### 充填の効果（base 勢力に対する諸侯領オーバーレイの被覆率）
+
+| 年   | base 勢力         | 面積 (km²) | OHM のみ | ＋Cliopatria |    残る空白 |
+| ---- | ----------------- | ---------: | -------: | -----------: | ----------: |
+| 1000 | Kingdom of France |    462,579 |    24.9% |    **78.5%** |      99,628 |
+| 1100 | Kingdom of France |    464,523 |    26.2% |    **78.4%** |     100,251 |
+| 1200 | Kingdom of France |    231,770 |    47.7% |    **77.9%** |      51,316 |
+| 1200 | Comté de Toulouse |     90,755 |     4.2% |    **54.1%** |      41,683 |
+| 1279 | France            |    393,610 |    31.3% |    **42.6%** |     225,892 |
+| 1300 | France            |    393,610 |    35.0% |    **46.0%** |     212,487 |
+| 1200 | Holy Roman Empire |    623,652 |    18.3% |        18.7% | **507,304** |
+| 1279 | Holy Roman Empire |    884,038 |    16.7% |    **30.9%** |     611,237 |
+| 1300 | Holy Roman Empire |    919,619 |    18.8% |    **32.4%** |     621,879 |
+| 1400 | Holy Roman Empire |    919,619 |    27.0% |    **45.8%** |     498,504 |
+| 1492 | Holy Roman Empire |    851,313 |    27.3% |    **50.6%** |     420,756 |
+
+#### 適用後も残る空白（TASK-110 AC #6）
+
+| 空白                             | 実測値                                                                                                | 理由                                                                                                                                                                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1200 年の帝国中核                | **507,304 km²（帝国の 81.3%）**。1200 年だけ被覆率が 18.3% → 18.7% とほぼ動かない                     | OHM は部族大公領（バイエルン・ザクセン・フランケン・チューリンゲン）を 1100〜1180 で終了させ、Cliopatria は 1200 年の帝国を `Holy Roman Empire` 879,279 km² の一枚岩でモデル化して内部領邦が 0 件。どちらにも材料が無い |
+| 1200 / 1279 年のザクセン後継領邦 | OHM の `Duchy of Saxe-Wittenberg` は 1300 年から、Cliopatria の `Electorate of Saxony` は 1385 年から | 1180 年のゲルンハウゼン裁定による解体後、その間の期間に該当する面がどちらにも無い。1400 年は OHM 側（`Electorate of Saxony(-Wittenberg)`）、1492 年は Cliopatria 側（34,252 km²）が担う                                 |
+| ブルボン（Bourbon）              | Cliopatria の `House of Bourbon` は 1385 年以降のみ（1400 年 14,496 km² / 1492 年 43,379 km²）        | 1000〜1300 年の区間が Cliopatria にも無い。仏諸侯領オーバーレイは 1300 年までなので、結局どの年代でも表示されない                                                                                                       |
+| ガスコーニュ公領（1279 以降）    | Cliopatria の収録は `[990-1017]` のみ                                                                 | OHM も 1214 年で切れる                                                                                                                                                                                                  |
+| 1279 / 1300 年のトゥールーズ伯領 | Cliopatria の収録は `[1188-1205]` で終わる                                                            | 1271 年の王領併合を反映しており、伯領としての面はもう存在しない                                                                                                                                                         |
+| 1279 / 1300 年のフランス         | 225,892 km²（57.4%）/ 212,487 km²（54.0%）                                                            | 王領（Cliopatria では王国規模になるため不採用）とブルゴーニュ以外の中部・南部に、どちらの出典にも領邦が無い                                                                                                             |
+
+#### 収録を見送った対象と根拠
+
+分類とその根拠は `scripts/build-cliopatria-fiefs.ts` の `CLIOPATRIA_EXCLUSIONS`
+にコードとして記録している。要点は decision-26 の「却下した選択肢」を参照。
+
+| 分類                               | 例                                                                                                         | 主な理由                                                                                                                                     |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 複合体（丸括弧付き）               | `(Kingdom of France)` 1000 年 420,259 km²（王領 49,071 km² の 8.6 倍）                                     | 封臣を全て飲み込んだ 1 枚のポリゴンで、王国全体が 1 色に潰れる                                                                               |
+| `Type = RELATION`                  | `(Vassalage of Kingdom of Bohemia to Holy Roman Empire)` 1400 年 1,035,034 km²                             | 領域ではなく関係を表す feature。ジオメトリは帝国複合体と同一                                                                                 |
+| 残余カテゴリ                       | `Holy Roman Empire Minor States` 1279 年 518,669 / 1300 年 555,409 / 1400 年 458,794 / 1492 年 343,299 km² | 数百の小領邦の袋。補ったバイエルン等を丸ごと覆う                                                                                             |
+| 主権国家                           | Holy Roman Empire / Kingdom of England / Crown of Castile / Kingdom of Hungary                             | base（`europe_<year>`）が担う                                                                                                                |
+| 家門（所領の集合体）               | House of Habsburg / Ascania / Wittelsbach / Luxembourg / Valois-Anjou / Capetian House of Anjou            | 1279 年の House of Wittelsbach 17,892 km² は同年の Duchy of Bavaria 35,323 km² と重なる                                                      |
+| 帝国側なのに仏の member になるもの | Kingdom of Arles / Dauphiné                                                                                | アルル王国（帝国）側。`build-france-fiefs.ts` の同種の除外と揃える                                                                           |
+| OHM が収録済み                     | 1400 年の Electorate of Saxony / 1200 年の County of Champagne / 1279 年以降の County of Flanders          | 同じ領邦を 2 つの出典で二重に描かない。OHM を常に優先する                                                                                    |
+| 名前と土地が一致しない             | County of Touraine（1279 / 1300 年とも bbox 0.90〜2.60E・45.56〜46.55N）                                   | トゥール（0.69E・47.39N）を 1 度も含まずリムーザン〜マルシュ地方を覆う。OHM の County of La Marche と 7,272 km²（この feature の 73%）重なる |
+
+#### 排他化（§3.6 の流用）と二重塗りの実測
+
+`scripts/build-fief-flat.ts` の `resolveOverlaps`（削り方針 `keep-smaller`）と
+`subtractOverlay` をそのまま使う。レイヤーをまたぐ重なりは**常に Cliopatria 側
+から差し引く**（他の 3 系統は削らない）。Cliopatria の境界が 4〜7 倍粗いことと、
+「OHM の欠落を埋める補完」という役割そのものが理由。
+
+`build-fief-dedupe.ts`（§3.5）の union にも Cliopatria を加えている。外すと 1400
+/ 1492 年のバイエルン公領などの下に base 塗り（`europe_flat_<year>`）が
+残り、半透明が二重に重なって濃くなる。
+
+排他化後に残る重なりの実測（全年・`cliopatria_fiefs_flat_<year>` ×
+`{france,hre,italy}_fiefs_flat_<year>` / `europe_flat_<year>`）は **最大 0.034
+km²** で、既存レイヤー同士の残存（座標丸め由来、0.004〜0.074 km²）と同水準。
+例外は 1000 / 1100 年の County of Vermandois × Duchy of Lower Lotharingia の
+**1.83 km²**（Vermandois 17,404 km² の 0.01%、差し渡し約 1.3 km）1 件だけで、
+これは丸めで生じた「1 点接触のくびれ」を解いた副作用。戻った分をもう一度
+差し引くと同じ位置にくびれが再生して `data/` 全体の自己交差ゼロの不変条件を
+満たせなくなるため、自己交差ゼロを優先している（`build-fief-flat.ts` の
+`unpinch` の解説）。この不変条件は `scripts/build-cliopatria-fiefs_test.ts`
+の「AC #4」テストが上限 8 km² で 見張る。
+
+#### base 輪郭への影響
+
+Cliopatria を union に加えたことで、`base_outline_1200` からトゥールーズ伯領
+北縁の直線（`[1.02662,44.57724]`〜`[2.62675,44.77639]`）が切り出された。同区間の
+境界は諸侯領側の輪郭が描くようになったためで、TASK-78 の二重輪郭解消・TASK-86 の
+Burgandy ↔ HRE と同じ扱い。
+
+#### 再生成
+
+```sh
+deno task build-cliopatria-fiefs   # 44 MB の取得。SHA-256 を検証してから使う
+deno task build-fief-flat          # cliopatria_fiefs_flat_<year> を作る
+deno task build-fief-dedupe        # base_outline / europe_flat を作り直す
+deno task build-colors             # 新しい NAME に色を割り当てる
+deno task build-attribution        # 最後（出典キーの付与）
+```
+
+`CLIOPATRIA_ARCHIVE` 環境変数にローカルの zip を指すと取得を省略できる（検証は
+同じように行う）。
 
 ## 4. 年代別サマリ
 
