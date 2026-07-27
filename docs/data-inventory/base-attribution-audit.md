@@ -112,6 +112,53 @@ F は A と**同じ 29 件**になった。NAME が同じなら色キーの揺�
 | B-6 | 1000〜1400  | `Bulgar Khanate` の名称                                                                                                                        | ブルガリアは 913 年にシメオン 1 世がツァーリを称して以降は帝国（ツァーリ国）。「Khanate」は 864 年のキリスト教化以前の呼称                                                                                                                                                  | 英語 NAME は上流のまま維持し、`data/name-ja.json` の表示名を「ブルガール・ハン国」から年代に即した表記へ改める（decision-6: データは英語のまま、表示層で日本語化）                              |
 | B-7 | 1279 / 1300 | Ryazan が全ルーシを覆う                                                                                                                        | 面積 131 万 km²・bbox (21.4, 47.4)-(46.0, 62.2) で、オカ川中流域の一公国であるリャザンの規模ではない。上流が「その他のルーシ諸公国」を代表名で塗っている（1200 年には `Other Rus Principalities` という NAME の前例がある）                                                 | 形状は変えられないため、NAME を `Other Rus Principalities` に寄せる案と known-limitations 明記案の二択。§4 と同じ「名称上書きの是非」の判断が要る → §4.1 で `Other Rus Principalities` へ上書き |
 
+### 3.1 判断の結果（TASK-107: B-1〜B-4 の 4 系統を採用・B-5 は現状維持）
+
+TASK-107 で **B-1 / B-2 / B-3 / B-4 の 4 系統をすべて採用**した。採否の基準・
+波及の実測は decision-25 に記録している。判定は史実の当否ではなく次の 2 条件の
+連言で行った（確度 B は史実だけでは決まらないため）。
+
+1. 宗主名がその年代に勢力として存在しない（宙に浮いた宗主）
+2. 上流自身が隣接年代で別の表記を使っている
+
+B-5 は 1. を満たさない（`Ottoman Empire` は同年に `NAME` として実在する）ので
+監査どおり対応しない。B-6 は表示名の話（`name-ja.json`）、B-7 は TASK-106 で
+処理済み。
+
+| #   | 年代        | 対象                                                         | 是正後                                         |
+| --- | ----------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| B-1 | 1279        | `Ilkhanate`                                                  | 独立（1300 年の上流表記に合わせる）            |
+| B-1 | 1279 / 1300 | `Khanate of the Golden Horde`                                | 独立                                           |
+| B-1 | 1279        | `Other Rus Principalities`（TASK-106 で `Ryazan` から改名）  | `Khanate of the Golden Horde`（1300 年に前例） |
+| B-1 | 1279        | `Seljuk Caliphate`                                           | `Ilkhanate`（1243 年ケセ・ダグ以降の従属）     |
+| B-1 | 1400        | `Moldova` の `PARTOF`（監査表には無い同種の宙に浮いた宗主）  | 自己参照                                       |
+| B-2 | 1100        | `Armenia`                                                    | `Seljuk Empire`                                |
+| B-3 | 1650 / 1700 | `Spain`                                                      | 独立（1600 / 1715 年の上流表記に合わせる）     |
+| B-3 | 1650 / 1700 | `Milan` / `Franche-Comté` / `Naples` / `Sicily` / `Sardinia` | `Spain`                                        |
+| B-4 | 1800        | `Hanover`                                                    | 独立（1715 / 1783 / 1815 年に合わせる）        |
+
+実測した実害と波及:
+
+- 着手前の実測で、複数年代に現れる `NAME` のうち **30 件**の色キーが年代間で
+  揺れていた。是正後は **27 件**。Spain（11 年代）・Hanover（4 年代）・
+  Ilkhanate / Khanate of the Golden Horde（2 年代）は全年代で同色になった。
+- とくに 1279 年は `Ilkhanate` / `Khanate of the Golden Horde` /
+  `Other Rus Principalities` / `Seljuk Caliphate` の 4 勢力が同一の `#d194b5`
+  （`Mongol Empire` 従属色）で、互いに区別できない状態だった。
+- `data/colors.json` の差分は **+7 キー / -12 キー / 7 色入れ替え**。ベース名
+  から `Spanish Habsburg` と `Mongol Empire` が消え
+  `Khanate of the Golden
+  Horde`
+  が加わるため、決定的プロービング（decision-5）の玉突きで無関係な 7
+  勢力の色が動いた。TASK-106 と同じ既知の副作用。
+- 目視確認（ヘッドレス CDP で変更前後のスクリーンショットを取得しピクセル差分を
+  計測）では、変更対象外の年代（1600 / 1715 / 1815）の差分が 0 px であることを
+  確認した。
+
+補足: `Franche-Comté` は 1678 年のナイメーヘン条約でフランス領になるため、
+上流が 1700 年もスペイン帰属で持っているのは確度 A 相当の年代ずれだが、監査 §2
+が挙げていない別件のため TASK-107 は表記の正規化に留めた。
+
 ## 4. 単独で判断が要る 2 件（名称の上書き）
 
 `propertyFixes` は properties の上書きしかできず、**ポリゴンを消す・分ける・
@@ -236,10 +283,10 @@ decision-19（宗主補正は歴史的に明白な関係に限る）に従い、
 
 | 手段                                                             | 対象                                                  | 件数 |
 | ---------------------------------------------------------------- | ----------------------------------------------------- | ---: |
-| `propertyFixes`（`SUBJECTO`/`PARTOF` の上書き）                  | A-1〜A-4・A-6〜A-15、B-1・B-2（採用時）               |   16 |
+| `propertyFixes`（`SUBJECTO`/`PARTOF` の上書き）                  | A-1〜A-4・A-6〜A-15、B-1・B-2（TASK-107 で採用）      |   16 |
 | `propertyFixes`（`NAME` の上書き。TASK-106 で採用・decision-23） | A-5（1400 Seljuk Caliphate）・B-7（1279/1300 Ryazan） |    2 |
 | `name-ja.json` の表示名見直し                                    | B-6（Bulgar Khanate = ツァーリ国）                    |    1 |
-| 配色の再生成を伴う正規化（単独タスク）                           | B-3（Spanish Habsburg）・B-4（Hanover）               |    2 |
+| 配色の再生成を伴う正規化（TASK-107 で採用・decision-25）         | B-3（Spanish Habsburg）・B-4（Hanover）               |    2 |
 | `known-limitations.json` に明記                                  | §6 の 4 項目（B-5 を含む。TASK-105 で実装済み）       |    4 |
 | 対応しない                                                       | §5 の確度 C 全件、検出器 B の残余                     |    — |
 

@@ -90,20 +90,20 @@
     {
       "years": [1700],
       "name": "Naples",
-      "set": { "SUBJECTO": "Spanish Habsburg" },
-      "note": "TASK-104 / 監査 A-10。1700 年 11 月のカルロス 2 世死去時点でナポリはスペイン領であり、オーストリアの占領は 1707 年、承認は 1713 年のユトレヒト条約。上流の 1700 年の値は 1715 年と完全に一致しており（形状も同一）、後年の帰属がそのまま入り込んでいる。同年の Milan / Franche-Comté と同じ SUBJECTO=Spanish Habsburg に揃える。PARTOF はその 2 勢力と同じく自己参照のまま残す。Spanish Habsburg という表記自体の正規化（同年に NAME として存在しない）は監査 B-3 の別タスク。"
+      "set": { "SUBJECTO": "Spain" },
+      "note": "TASK-104 / 監査 A-10。1700 年 11 月のカルロス 2 世死去時点でナポリはスペイン領であり、オーストリアの占領は 1707 年、承認は 1713 年のユトレヒト条約。上流の 1700 年の値は 1715 年と完全に一致しており（形状も同一）、後年の帰属がそのまま入り込んでいる。同年の Milan / Franche-Comté と同じスペイン王領に揃える。PARTOF はその 2 勢力と同じく自己参照のまま残す。宗主名は TASK-104 の時点では上流の表記に合わせて Spanish Habsburg にしていたが、TASK-107 / 監査 B-3 でその表記自体を Spain へ正規化したため、ここも Spain に揃えた。"
     },
     {
       "years": [1700],
       "name": "Sardinia",
-      "set": { "SUBJECTO": "Spanish Habsburg" },
-      "note": "TASK-104 / 監査 A-11。サルデーニャは 1708 年にオーストリアが占領、1713 年のユトレヒト条約で承認され、1720 年にサヴォイアへ移譲された。1700 年はスペイン領なので、同年の Milan / Franche-Comté と同じ SUBJECTO=Spanish Habsburg に揃える（PARTOF は自己参照のまま）。"
+      "set": { "SUBJECTO": "Spain" },
+      "note": "TASK-104 / 監査 A-11。サルデーニャは 1708 年にオーストリアが占領、1713 年のユトレヒト条約で承認され、1720 年にサヴォイアへ移譲された。1700 年はスペイン領なので、同年の Milan / Franche-Comté と同じ宗主に揃える（PARTOF は自己参照のまま）。宗主名は TASK-107 / 監査 B-3 で Spanish Habsburg → Spain に正規化した。"
     },
     {
       "years": [1700],
       "name": "Sicily",
-      "set": { "SUBJECTO": "Spanish Habsburg" },
-      "note": "TASK-104 / 監査 A-12。シチリアがサヴォイア領だったのは 1713 年のユトレヒト条約から 1720 年のハーグ条約までで、1700 年はスペイン領。上流の SUBJECTO=Savoy-Piedmont は 1715 年の配置が入り込んだもの。同年の Milan / Franche-Comté と同じ SUBJECTO=Spanish Habsburg に揃える（PARTOF は自己参照のまま）。"
+      "set": { "SUBJECTO": "Spain" },
+      "note": "TASK-104 / 監査 A-12。シチリアがサヴォイア領だったのは 1713 年のユトレヒト条約から 1720 年のハーグ条約までで、1700 年はスペイン領。上流の SUBJECTO=Savoy-Piedmont は 1715 年の配置が入り込んだもの。同年の Milan / Franche-Comté と同じ宗主に揃える（PARTOF は自己参照のまま）。宗主名は TASK-107 / 監査 B-3 で Spanish Habsburg → Spain に正規化した。"
     },
     {
       "years": [1800],
@@ -138,9 +138,85 @@
       "name": "Ryazan",
       "set": {
         "NAME": "Other Rus Principalities",
+        "SUBJECTO": "Khanate of the Golden Horde",
         "PARTOF": "Other Rus Principalities"
       },
-      "note": "TASK-106 / 監査 B-7・§4。面積約 131 万 km²・bbox (21.36, 47.38)-(46.04, 62.21) で、キエフ・ガーリチ＝ヴォルィーニ・ヴラジーミル＝スーズダリを含むルーシ全域（ノヴゴロドを除く）を覆っており、オカ川中流域の一公国であるリャザンの規模ではない。上流自身が 1200 年に同種の広がりを Other Rus Principalities として収録しているので、その語彙へ寄せる。1492 年（約 15.0 万 km²）・1500 年（約 2.0 万 km²）にはオカ川中流域に実体どおりの Ryazan があり、そちらは正しいので対象外。放置すると 131 万 km² と 15 万 km² が同一勢力・同一色として繋がって見える。SUBJECTO は上流の値（1279 = Mongol Empire、1300 = Khanate of the Golden Horde）のままにする。モンゴル帝国宗主表記の正規化は監査 B-1 = TASK-107 の担当で、本エントリは名称だけを扱う。PARTOF は上書き前の名前の自己参照だったので NAME に合わせて書き換える。ABBREVN（1279 = \"Riazan\" / 1300 = \"Ryazan\"）は Seljuk Caliphate のエントリと同じ理由で上流の記録として残す。"
+      "note": "TASK-106 / 監査 B-7・§4。面積約 131 万 km²・bbox (21.36, 47.38)-(46.04, 62.21) で、キエフ・ガーリチ＝ヴォルィーニ・ヴラジーミル＝スーズダリを含むルーシ全域（ノヴゴロドを除く）を覆っており、オカ川中流域の一公国であるリャザンの規模ではない。上流自身が 1200 年に同種の広がりを Other Rus Principalities として収録しているので、その語彙へ寄せる。1492 年（約 15.0 万 km²）・1500 年（約 2.0 万 km²）にはオカ川中流域に実体どおりの Ryazan があり、そちらは正しいので対象外。放置すると 131 万 km² と 15 万 km² が同一勢力・同一色として繋がって見える。SUBJECTO は当初 TASK-106 では上流の値（1279 = Mongol Empire、1300 = Khanate of the Golden Horde）のままにしていたが、TASK-107 / 監査 B-1 で 1279 の Mongol Empire を同年に実在する Khanate of the Golden Horde へ正規化した。applyPropertyFixes は上書き前の NAME で対象を選ぶ（build-data.ts: props.NAME !== fix.name で判定）ため、NAME=Other Rus Principalities を名指しする別エントリでは 1279 に当たらない。そのため宗主の是正も本エントリに同居させている。1300 は元から同値なので実質 1279 だけの変更。PARTOF は上書き前の名前の自己参照だったので NAME に合わせて書き換える。ABBREVN（1279 = \"Riazan\" / 1300 = \"Ryazan\"）は Seljuk Caliphate のエントリと同じ理由で上流の記録として残す。"
+    },
+    {
+      "years": [1279],
+      "name": "Ilkhanate",
+      "set": { "SUBJECTO": "Ilkhanate", "PARTOF": "Ilkhanate" },
+      "note": "TASK-107 / 監査 B-1。モンゴル帝国は 1260〜64 年のトルイ家内戦で分裂しており、Mongol Empire は本データのどの年代にも NAME として存在しない（1279 / 1300 / 1400 の SUBJECTO / PARTOF にだけ現れる宙に浮いた宗主）。宗主キー（suzerain_extent.ts resolveSuzerainKey）としては本体の無い外枠を、色キー（powers.ts colorKeyFor）としては実在しない勢力の従属色を生む。上流自身が 1300 年の Ilkhanate を独立表記にしているので、1279 をそれに揃える。厳密にはアバカ（在位 1265〜82）はクビライから即位の承認を受けており大ハーンの名目的宗主権をなお認めていたが、名目的宗主権を従属として描かない扱いは decision-19 と TASK-104 の A-3（ノヴゴロド）・A-4（ブルー／ホワイト・ホルド）で確立済み。"
+    },
+    {
+      "years": [1279, 1300],
+      "name": "Khanate of the Golden Horde",
+      "set": {
+        "SUBJECTO": "Khanate of the Golden Horde",
+        "PARTOF": "Khanate of the Golden Horde"
+      },
+      "note": "TASK-107 / 監査 B-1。ジョチ・ウルスは 1262 年のベルケ＝フレグ戦争でイル・ハン朝と交戦し、メングー・ティムール（在位 1266〜80）が自らの名で貨幣を発行して事実上独立していた。1279 年に大ハーンの宗主下として描く根拠は乏しい。1300 年は 1294 年のクビライ死で名目的統一も終わったあとで、同じ 1300 年の Ilkhanate を上流が独立表記にしている（年内での不整合）。Mongol Empire は本データのどの年代にも NAME として存在しないため、宗主として残すと外枠に本体が無い。両年を独立（自己参照）に統一する。"
+    },
+    {
+      "years": [1279],
+      "name": "Seljuk Caliphate",
+      "set": { "SUBJECTO": "Ilkhanate", "PARTOF": "Ilkhanate" },
+      "note": "TASK-107 / 監査 B-1。ルーム・セルジューク朝は 1243 年のケセ・ダグの戦いで敗れて以来モンゴルの従属国で、1256 年のフレグ西征以後はイル・ハン朝が直接の宗主（1277 年のバイバルス来襲後はペルヴァーネ処刑を経てイル・ハン朝の直轄統治が強まる）。上流の SUBJECTO=Mongol Empire は同年に実在しない宗主なので、同年に NAME として実在し実際の宗主でもある Ilkhanate へ寄せる。1300 年の Seljuk Caliphate は上流が独立表記で、こちらは対象外（1308 年の滅亡までの名目的存続）。1400 年の同名 feature は TASK-106 で Anatolian beyliks へ改名済み。"
+    },
+    {
+      "years": [1400],
+      "name": "Moldova",
+      "set": { "PARTOF": "Moldova" },
+      "note": "TASK-107 / 監査 B-1 の派生（監査表には載っていないが同じ宙に浮いた宗主）。1400 年の Moldova は SUBJECTO=Moldova（独立）なのに PARTOF だけが Mongol Empire を指しており、1400 年にモンゴル帝国は勢力として存在しない（同年の Blue Horde / White Horde は TASK-104 A-4 で独立へ是正済み）。史実でもモルダヴィアは 1387 年にペトル 1 世がポーランド王へ臣従しており、モンゴルの従属ではない。PARTOF は描画には使われない（build-data.ts resolveName の NAME 空時フォールバックのみ）が、SUBJECTO と食い違ったまま残すと後続の監査で誤検出の元になるため自己参照へ揃える。"
+    },
+    {
+      "years": [1100],
+      "name": "Armenia",
+      "set": { "SUBJECTO": "Seljuk Empire" },
+      "note": "TASK-107 / 監査 B-2。この feature は bbox (41.01, 36.78)-(46.91, 41.12)・面積約 11.7 万 km² でヴァン湖・セヴァン湖を含む大アルメニアであり、キリキア・アルメニアではない。東ローマは 1045 年にアニ王国を併合したが 1064 年にアルプ・アルスラーンがアニを攻略し、1071 年のマンジケルトの戦い以後は東部アナトリア全域を失っている。1100 年（アレクシオス 1 世）の東ローマの版図はこの範囲に届かないので、上流の SUBJECTO=Byzantine Empire は成り立たない。1100 年の当地はシャッダード朝（アニ）・サルトゥク朝（エルズルム）・アフラト（ヴァン）のシャー・アルメン朝といった大セルジューク朝の従属アミールが分立しており、その上位宗主である Seljuk Empire は同年に NAME として実在する（bbox (37.03, 34.00)-(58.23, 40.06)、この feature に隣接）。誰を宗主とするかにアミール分立という解釈幅があるため監査は確度 B としたが、東ローマでないことは明白で、独立（自己参照）に戻すと 1064 年に失われたアルメニア王権を復活させてしまうため、実在する上位宗主を採る。1000 年（アニ王国は独立）・1200 年（上流が独立表記）は対象外。PARTOF は A-2（1100 年 Bulgar Khanate）と同じく自己参照のまま残す。"
+    },
+    {
+      "years": [1650, 1700],
+      "name": "Spain",
+      "set": { "SUBJECTO": "Spain", "PARTOF": "Spain" },
+      "note": "TASK-107 / 監査 B-3。Spanish Habsburg は王朝名であって勢力名ではなく、本データのどの年代にも NAME として存在しない。上流は同じスペイン王を 1530 / 1600 年は Spain、1650 / 1700 年は Spanish Habsburg、1715 年以降は再び Spain と呼び分けており、色キー（powers.ts colorKeyFor = NAME|SUBJECTO）が Spain と Spain|Spanish Habsburg の間で揺れる。実測では 1600 年 #77c598 → 1650 / 1700 年 #b0d194 → 1715 年 #77c598 と、20 年代のうち 2 年代だけスペインの色が変わっていた。加えて Spain 自身が自分の王朝に従属する形になり、宗主キー（suzerain_extent.ts）でも本体の無い Spanish Habsburg の外枠が引かれる。上流自身の語彙である Spain へ寄せて全年代で独立表記に統一する。ハプスブルク朝とブルボン朝の区別は勢力名 NAME ではなく王朝の別なので、宗主フィールドで表す対象ではない（表示名は name-ja.json の担当・decision-6）。"
+    },
+    {
+      "years": [1650, 1700],
+      "name": "Milan",
+      "set": { "SUBJECTO": "Spain" },
+      "note": "TASK-107 / 監査 B-3。ミラノ公国は 1540 年にカール 5 世が息子フェリペ（のちのフェリペ 2 世）へ授封して以来スペイン王の領で、1714 年のラシュタット条約でオーストリアへ移る（1715 年の SUBJECTO=Austrian Empire は正しい）。宗主の実体は変えず、王朝名 Spanish Habsburg を同年に実在する勢力名 Spain へ置き換えるだけの正規化。PARTOF は上流が自己参照で持つのでそのまま。"
+    },
+    {
+      "years": [1650, 1700],
+      "name": "Franche-Comté",
+      "set": { "SUBJECTO": "Spain" },
+      "note": "TASK-107 / 監査 B-3。フランシュ＝コンテはブルゴーニュ継承（1493 年サンリス条約）以来スペイン王の領。Milan と同じく王朝名を勢力名へ置き換えるだけの正規化で、宗主の実体は変えない。なお 1678 年のナイメーヘン条約でフランス領となるため 1700 年のスペイン帰属は史実と食い違うが、これは監査 §3 が挙げていない別件（確度 A 相当の年代ずれ）で、本タスクは表記の正規化に留める。PARTOF は上流が自己参照で持つのでそのまま。"
+    },
+    {
+      "years": [1650],
+      "name": "Naples",
+      "set": { "SUBJECTO": "Spain", "PARTOF": "Naples" },
+      "note": "TASK-107 / 監査 B-3。ナポリ王国は 1504 年のガリリャーノ川の戦い以降アラゴン＝スペイン王の領で、副王が統治した。宗主の実体は変えず王朝名 Spanish Habsburg を Spain へ正規化する。PARTOF も上流は Spanish Habsburg にしているが、同年の Milan / Franche-Comté と 1700 年の同勢力に合わせて自己参照へ揃える（王朝名の文字列を残さない）。1700 年分は TASK-104 A-10 のエントリが担当する。"
+    },
+    {
+      "years": [1650],
+      "name": "Sicily",
+      "set": { "SUBJECTO": "Spain", "PARTOF": "Sicily" },
+      "note": "TASK-107 / 監査 B-3。シチリア王国は 1412 年のカスペの妥協以降アラゴン王家の領で、1479 年の合同以後はスペイン王の領。Naples と同じく王朝名 Spanish Habsburg を Spain へ正規化し、PARTOF は自己参照へ揃える。1700 年分は TASK-104 A-12 のエントリが担当する。"
+    },
+    {
+      "years": [1650],
+      "name": "Sardinia",
+      "set": { "SUBJECTO": "Spain", "PARTOF": "Sardinia" },
+      "note": "TASK-107 / 監査 B-3。サルデーニャは 1420 年のアルボレア裁判領購入でアラゴンの征服が完了し、1479 年の合同以降スペイン王の領（TASK-104 A-15 が 1530 / 1600 年の独立表記を Spain へ是正済み）。1650 年だけ王朝名 Spanish Habsburg になっていたのを Spain へ揃え、1530 / 1600 / 1700 年と同じ表記にする。PARTOF も同様に自己参照へ揃える。1700 年分は TASK-104 A-11 のエントリが担当する。"
+    },
+    {
+      "years": [1800],
+      "name": "Hanover",
+      "set": { "SUBJECTO": "Hanover" },
+      "note": "TASK-107 / 監査 B-4。1714 年のジョージ 1 世即位から 1837 年のヴィクトリア女王即位（サリカ法によりハノーファーはエルンスト・アウグストへ）までの英国とハノーファーは同君連合であり、ハノーファー選帝侯領（1814 年以降は王国）は帝国等族として独自の主権を持つ。従属関係ではないので SUBJECTO=UK は成り立たない。decision-19 は「アンジュー帝国のような複合勢力は補正しない」としており、同君連合を従属として描くのは方針と整合しない。上流も同君連合中の 1715 / 1783 / 1815 年は独立表記にしていて、1800 年だけが例外（同じ体制下で表記が揺れている）。色キーも Hanover（1715 / 1783 / 1815 = #adcda2）と Hanover|UK（1800 = #94d1a6）の間で揺れる。1800 年を他年代に揃えて独立にする。PARTOF は既に自己参照。監査 B-5（アルジェ／チュニスのオスマン名目宗主権）が「対応しない」なのと扱いが違うのは、B-5 が実在した名目的宗主権でどちらの表記も一理あるのに対し、同君連合はそもそも宗主 - 従属関係ではないため。なお同年の SUBJECTO=UK は Kingdom of Ireland と United Kingdom 自身にも付いており、United Kingdom|UK という自己参照の表記ゆれが残る（NAME は United Kingdom）。これは宗主関係の誤りではなく略号の表記ゆれ（renames の担当領域）なので本タスクでは触らない。"
     }
   ]
 }
