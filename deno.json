@@ -26,6 +26,7 @@
     "extract-dem": "deno run --allow-net=s3.amazonaws.com --allow-read --allow-write scripts/extract-dem.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
     "next-tasks": "deno run --allow-read scripts/next_tasks.ts",
+    "cleanup-branches": "deno run --allow-run=git scripts/cleanup_branches.ts",
     "serve": "deno run --allow-net --allow-read --allow-run=lsof,ps scripts/serve.ts",
     "verify:smoke": "deno run -A scripts/verify/cdp.ts scripts/verify/checks/smoke.ts",
     "test": "deno test --allow-read=data --allow-env=NODE_ENV",
