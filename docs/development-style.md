@@ -155,10 +155,67 @@ bug 群の中で働く余地が生まれる（4.2.1 章）。
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `area:docs`         | `docs/`                                                                                                                                    |
 | `area:workflow`     | `.claude/`・`CLAUDE.md`・backlog 運用                                                                                                      |
-| `area:scripts`      | `scripts/`                                                                                                                                 |
-| `area:data`         | `data/`                                                                                                                                    |
+| `area:scripts-*`    | `scripts/` 配下（下の細分化表を参照。粗い `area:scripts` は使わない）                                                                      |
+| `area:data-*`       | `data/` 配下（下の細分化表を参照。粗い `area:data` は使わない）                                                                            |
 | `area:src-main`     | `src/main.ts`・`index.html`・`app.css` の UI 統合部。UI 系タスクの大半は ここに触るため、`src-main` を持つタスク同士は互いに衝突扱いとする |
 | `area:src-<module>` | `src/` 配下の独立モジュール（例: `area:src-labels`、`area:src-powers`）                                                                    |
+
+**`scripts/` の細分化**（`src-<module>` と同じくモジュール単位で切る）:
+
+| area                    | 対応パスの目安                                                                                                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `area:scripts-base`     | `scripts/build-data.ts`・`scripts/build-hre.ts`・`scripts/clean-polygons.ts`・`scripts/base-properties_test.ts`（base 勢力・Roller HRE の生成と検証）                                   |
+| `area:scripts-fiefs`    | `scripts/build-france-fiefs.ts`・`build-hre-fiefs.ts`・`build-italy-fiefs.ts`・`build-cliopatria-fiefs.ts`・`build-fief-dedupe.ts`・`build-fief-flat.ts`・`clean-polygons.ts`           |
+| `area:scripts-features` | `scripts/build-rivers.ts`・`build-mountains.ts`・`build-peaks.ts`・`build-cities.ts`・`audit-rivers.ts`（河川・山脈・山峰・都市）                                                       |
+| `area:scripts-meta`     | `scripts/build-colors.ts`・`build-attribution.ts`・`audit-attribution.ts`・`name-ja_test.ts`・`known-limitations-json_test.ts`・`notes-json_test.ts`                                    |
+| `area:scripts-build`    | `scripts/build.ts`・`extract-pmtiles.ts`・`extract-dem.ts`（ビルド統合エントリとベースマップ素材取得）。`build.ts` は全パイプラインのハブなので `src-main` と同様に同士は衝突扱いとする |
+| `area:scripts-loop`     | `scripts/next_task.ts`・`next_tasks.ts`・`cleanup_branches.ts`（backlog / agent-loop 支援ツール）                                                                                       |
+| `area:scripts-verify`   | `scripts/serve.ts`・`scripts/verify/`（ローカル配信と headless 動作確認ハーネス）                                                                                                       |
+
+**`data/` の細分化**（生成元パイプラインと 1 対 1 に対応させる）:
+
+| area                 | 対応パスの目安                                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `area:data-base`     | `data/europe_<year>.geojson`・`europe_flat_<year>.geojson`・`base_outline_<year>.geojson`・`hre_<year>.geojson`・`index.json`・`name-overrides.json` |
+| `area:data-fiefs`    | `data/<region>_fiefs_<year>.geojson`・`<region>_fiefs_flat_<year>.geojson`（`hre_fiefs_*` を含む）・`fief-dedupe.json`                               |
+| `area:data-features` | `data/rivers.geojson`・`mountains.geojson`・`peaks.geojson`・`cities.json`                                                                           |
+| `area:data-meta`     | `data/colors.json`・`name-ja.json`・`notes.json`・`known-limitations.json`                                                                           |
+
+細分化の運用ルール:
+
+- **領域名は `<ディレクトリ>-<パイプライン>` で決める。** 新しい領域を足すのは
+  「既存のどの領域にも属さないファイル群が生まれたとき」に限り、1 ファイルごとの
+  領域は作らない（判断コストが上がり、ラベル漏れで false parallel を招く）。
+- **`scripts-*` と `data-*` は同名サフィックスが対になる。** `scripts-base` が
+  `data-base` を、`scripts-fiefs` が `data-fiefs` を生成する、という対応で
+  覚える（`scripts-build` / `scripts-loop` / `scripts-verify` は生成物を持たない
+  ため対になる `data-*` がない）。「どのパイプラインを触るか」を一度決めれば
+  両方のラベルが決まる。
+- **複数領域に載るファイルは両方の表に現れる**（例: `clean-polygons.ts` は base
+  と fiefs の両パイプラインが import する共有ジオメトリ補正）。そのファイルを
+  **変更する**タスクは該当する area を両方付ける。呼び出すだけなら不要。
+- **粗い `area:scripts` / `area:data` は使わない。** `scripts/` や `data/`
+  全体に 及ぶ変更は、該当する細分化 area
+  を複数併記する。粗いラベルと細分化ラベルが 混在すると `next-tasks`
+  は文字列一致で衝突を見るため交差せず、実際には
+  衝突するタスクが並列に選ばれてしまう。
+
+**細分化の根拠（実測）:** 調査
+（`.outputs/claude/agent-loop-parallelism-investigation.md`、2026-07-27）で
+`next-tasks` が area 衝突を理由にスキップした延べ 17 回のうち `area:scripts` 5・
+`area:data` 4 は、実ファイルの競合ではなくラベル粒度だけの問題だった（`scripts/`
+は 40 以上、`data/` は 89 ファイルに物理的に分かれているのに粗いラベル 1 個で
+束ねていた）。過去 32 判定機会の反実仮想再生では、この 2 領域の細分化だけで並列
+成立が 6/32（19%）→ 11/32（34%）に増える。上の区分は恣意的に決めたものではなく、
+`origin/main` の全マージ PR で `scripts/` `data/` のどのファイルが同一 PR 内で
+一緒に変更されたかから導いた（例: `next_task.ts` / `next_tasks.ts` /
+`cleanup_branches.ts` はビルドパイプラインと一度も同時に変更されていない一方、
+`build-fief-dedupe.ts` と `build-fief-flat.ts` は 4 PR で同時に変更されている。
+`rivers` / `mountains` / `peaks` / `cities` の生成物が
+`europe_*`・`base_outline_*`・ `*_fiefs_*` と同一 PR で変更されたのは、全
+feature に出典プロパティを付与した TASK-109 の 1 回だけ）。
+
+area ラベル全体の運用:
 
 - area の付与はタスク作成時に行い、既存タスクの整備時にも追記する（backlog CLI
   の `--add-label` を使い、既存ラベルを消さない）。
