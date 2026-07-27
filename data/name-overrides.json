@@ -29,6 +29,99 @@
       "name": "English territory",
       "set": { "SUBJECTO": "England", "PARTOF": "England" },
       "note": "大陸に残るイングランド王の所領（ギュイエンヌ等）。上流は 1279 で SUBJECTO=England なのに 1300 / 1400 では自己参照になっており、colorKeyFor のキーが English territory|England と English territory の間で揺れて年代切替で配色が変わる。実体はイングランド王領なので England 側に揃える。"
+    },
+    {
+      "years": [1100, 1200],
+      "name": "Burgandy",
+      "set": {
+        "SUBJECTO": "Holy Roman Empire",
+        "PARTOF": "Holy Roman Empire"
+      },
+      "note": "TASK-104 / 監査 A-1。ブルグント（アルル）王国は 1032 年に王ルドルフ 3 世が没して神聖ローマ皇帝コンラート 2 世が王位を継承し、以後は帝国の構成王国。上流は 1100 / 1200 を独立（自己参照）にしている。この feature の bbox (5.27, 43.76)-(8.49, 48.03)・面積約 6.8 万 km² はローヌ＝ソーヌ川流域からジュラ・プロヴァンスに広がるアルル王国の域で、フランス王の封臣であるブルゴーニュ公領（ディジョン周辺）ではないため、宗主は帝国が正しい。1000 年は 1032 年より前なので独立表記のままとし、対象外。上流は 1000 年で SUBJECTO / PARTOF を同値に揃えて持つので、ここでも両方を書き換える。"
+    },
+    {
+      "years": [1100],
+      "name": "Bulgar Khanate",
+      "set": { "SUBJECTO": "Byzantine Empire" },
+      "note": "TASK-104 / 監査 A-2。第一次ブルガリア帝国は 1018 年にバシレイオス 2 世がオフリドを陥として併合し、1185 年の第二次ブルガリア帝国成立まで東ローマ領。上流は 1100 を独立（自己参照）にしている。1200 / 1300 年の独立表記は 1185 年より後なので正しく、対象外。PARTOF は 1200 / 1300 年と同じ自己参照のまま残す（配色 powers.ts colorKeyFor と外枠 suzerain_extent.ts resolveSuzerainKey が見るのは SUBJECTO で、宗主の是正は SUBJECTO だけで足りる）。"
+    },
+    {
+      "years": [1279, 1400],
+      "name": "Novgorod",
+      "set": { "SUBJECTO": "Novgorod", "PARTOF": "Novgorod" },
+      "note": "TASK-104 / 監査 A-3。ノヴゴロド共和国はジョチ・ウルスへの貢納（1259 年の戸口調査受け入れ）はあったが直接支配は受けておらず、1478 年のモスクワ大公国による併合まで共和国として存続した。上流は 1279 / 1400 で SUBJECTO=Mongol Empire（1400 は PARTOF も同値）としているが、1300 年は独立表記であり年代間で不整合。名目的な宗主権は decision-19 の「歴史的に明白な関係」に当たらないため、1300 年に合わせて独立（自己参照）へ統一する。"
+    },
+    {
+      "years": [1400],
+      "name": "Blue Horde",
+      "set": { "SUBJECTO": "Blue Horde", "PARTOF": "Blue Horde" },
+      "note": "TASK-104 / 監査 A-4。モンゴル帝国は 1260〜64 年のトルイ家内戦で分裂し、1294 年のクビライ死で名目的な統一も終わっているため、1400 年に宗主として存在しない（同年に Mongol Empire は NAME としても不在で、宙に浮いた宗主になっていた）。ブルー・ホルドはジョチ・ウルスの翼であり、独立（自己参照）へ統一する。1492 / 1500 年の White Horde が同じ扱い。"
+    },
+    {
+      "years": [1400],
+      "name": "White Horde",
+      "set": { "SUBJECTO": "White Horde", "PARTOF": "White Horde" },
+      "note": "TASK-104 / 監査 A-4。Blue Horde と同じく、1400 年時点でモンゴル帝国は宗主として存在しない（1260〜64 年の分裂、1294 年のクビライ死）。上流自身も 1492 / 1500 年の White Horde を独立表記にしているので、1400 年をそれに揃える。"
+    },
+    {
+      "years": [1900],
+      "name": "Iceland",
+      "set": { "SUBJECTO": "Denmark", "PARTOF": "Denmark" },
+      "note": "TASK-104 / 監査 A-6。アイスランドは 1380 年以降デンマーク王の統治下にあり、1904 年の内政自治を経て 1918 年に主権国家となる。1900 年時点では自治すら得ておらず、上流の独立表記は誤り。1880 年が SUBJECTO / PARTOF ともに Denmark で正しいので、それに揃える。"
+    },
+    {
+      "years": [1914],
+      "name": "Iceland",
+      "set": { "SUBJECTO": "Denmark", "PARTOF": "Denmark" },
+      "note": "TASK-104 / 監査 A-7。アイスランドの主権回復は 1918 年 12 月 1 日（デンマークとの同君連合としてのアイスランド王国成立）で、1914 年時点ではなおデンマーク王国の一部。1880 年の Denmark 表記に揃える。1900 年とは根拠年が異なる（1900 は自治権獲得 1904 年より前）ため、エントリを分ける。"
+    },
+    {
+      "years": [1900],
+      "name": "Greenland",
+      "set": { "SUBJECTO": "Denmark", "PARTOF": "Denmark" },
+      "note": "TASK-104 / 監査 A-8。グリーンランドは 1721 年のハンス・エーゲデ入植以来デンマークの植民地で、1814 年のキール条約でノルウェーから分離してデンマーク領として残った。1900 年の独立表記は誤りで、1880 年の SUBJECTO / PARTOF = Denmark に揃える。"
+    },
+    {
+      "years": [1900],
+      "name": "Algeria",
+      "set": { "SUBJECTO": "France", "PARTOF": "France" },
+      "note": "TASK-104 / 監査 A-9。アルジェリアは 1830 年のフランス侵攻に始まり、1848 年に本国の県（départements）へ編入された。1900 年の独立表記は誤りで、1880 年は Algeria (FR)（SUBJECTO=France）、1914 年は SUBJECTO / PARTOF ともに France。1914 年に合わせて両方を France にする。"
+    },
+    {
+      "years": [1700],
+      "name": "Naples",
+      "set": { "SUBJECTO": "Spanish Habsburg" },
+      "note": "TASK-104 / 監査 A-10。1700 年 11 月のカルロス 2 世死去時点でナポリはスペイン領であり、オーストリアの占領は 1707 年、承認は 1713 年のユトレヒト条約。上流の 1700 年の値は 1715 年と完全に一致しており（形状も同一）、後年の帰属がそのまま入り込んでいる。同年の Milan / Franche-Comté と同じ SUBJECTO=Spanish Habsburg に揃える。PARTOF はその 2 勢力と同じく自己参照のまま残す。Spanish Habsburg という表記自体の正規化（同年に NAME として存在しない）は監査 B-3 の別タスク。"
+    },
+    {
+      "years": [1700],
+      "name": "Sardinia",
+      "set": { "SUBJECTO": "Spanish Habsburg" },
+      "note": "TASK-104 / 監査 A-11。サルデーニャは 1708 年にオーストリアが占領、1713 年のユトレヒト条約で承認され、1720 年にサヴォイアへ移譲された。1700 年はスペイン領なので、同年の Milan / Franche-Comté と同じ SUBJECTO=Spanish Habsburg に揃える（PARTOF は自己参照のまま）。"
+    },
+    {
+      "years": [1700],
+      "name": "Sicily",
+      "set": { "SUBJECTO": "Spanish Habsburg" },
+      "note": "TASK-104 / 監査 A-12。シチリアがサヴォイア領だったのは 1713 年のユトレヒト条約から 1720 年のハーグ条約までで、1700 年はスペイン領。上流の SUBJECTO=Savoy-Piedmont は 1715 年の配置が入り込んだもの。同年の Milan / Franche-Comté と同じ SUBJECTO=Spanish Habsburg に揃える（PARTOF は自己参照のまま）。"
+    },
+    {
+      "years": [1800],
+      "name": "Mecklenburg-Strelitz",
+      "set": { "SUBJECTO": "Mecklenburg-Strelitz" },
+      "note": "TASK-104 / 監査 A-13。メクレンブルク＝シュトレーリッツは 1701 年のハンブルク協定による分割以来の主権公国（1815 年に大公国）で、英国への従属関係は無い。英国との関わりは 1761 年にシャーロット王妃を輩出したことのみで、同君連合ですらない。上流も 1783 / 1815 年は独立表記なので、1800 年をそれに揃える。PARTOF は既に自己参照。"
+    },
+    {
+      "years": [1000],
+      "name": "Suomi",
+      "set": { "SUBJECTO": "Suomi" },
+      "note": "TASK-104 / 監査 A-14。上流の SUBJECTO=\"Suom\" は末尾が切り詰められた異常値（同じ feature の NAME / ABBREVN / PARTOF はいずれも Suomi）。TASK-102 で扱った Lombardy.SUBJECTO=\"3\" と同種のデータ不整合で、史実判断を伴わない綴りの是正。"
+    },
+    {
+      "years": [1530, 1600],
+      "name": "Sardinia",
+      "set": { "SUBJECTO": "Spain" },
+      "note": "TASK-104 / 監査 A-15。サルデーニャは 1324 年からアラゴンが征服を進め、1420 年のアルボレア裁判領購入で完了、1479 年のカスティーリャ＝アラゴン合同以降はスペイン王の領となる。上流の 1530 / 1600 年の独立表記は誤りで、1650 年は Spanish Habsburg。1530 / 1600 年は同年に NAME=Spain が存在するため、宙に浮いた宗主にならない Spain を宗主にする（PARTOF は自己参照のまま）。1400 年はアルボレア裁判領がなお島の大半を保持しており確度 B として対象外。"
     }
   ]
 }

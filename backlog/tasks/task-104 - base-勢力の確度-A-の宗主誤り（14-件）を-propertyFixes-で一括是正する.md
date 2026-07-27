@@ -1,9 +1,11 @@
 ---
 id: TASK-104
 title: base 勢力の確度 A の宗主誤り（14 件）を propertyFixes で一括是正する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-26 19:25'
+updated_date: '2026-07-26 19:31'
 labels:
   - bug
   - 'area:scripts'
@@ -28,3 +30,15 @@ TASK-103 の横断監査（docs/data-inventory/base-attribution-audit.md）で�
 - [ ] #3 再生成（deno task build 系）後も修正が保たれ、下流派生（colors / europe_flat 等）の整合が維持される
 - [ ] #4 deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. TASK-103 の監査ドキュメント（docs/data-inventory/base-attribution-audit.md）の確度 A・propertyFixes 方針 14 件を name-overrides.json の propertyFixes に年号付き note とともに追加する（TASK-102 の既存機構。新機構は作らない）。
+2. TDD: 14 件の SUBJECTO/PARTOF 期待値の回帰テストを先に追加し、現行データで red を確認 → fixes 適用 + 再生成で green。
+3. 下流派生（colors / europe_flat / base_outline / fief-dedupe）の再生成と整合維持。配色変化（決定的プロービング）は既知の性質として許容し、主要年代の見た目を CDP で確認。
+4. 全チェック green → PR → CI → finalization → マージ。
+
+並列化判定（タスク内）: 見送り（理由: 単一テーブルへの追加と再生成の直列フロー。単一 subagent に委譲）。
+タスク間並列: なし（next-tasks 単独集合）。
+<!-- SECTION:PLAN:END -->

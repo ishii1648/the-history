@@ -127,6 +127,204 @@ Deno.test("English territory の色キーが年代間で一貫する（TASK-102�
   );
 });
 
+/**
+ * 確度 A（明確な誤り）と判定した宗主の期待値（TASK-104）。
+ *
+ * 根拠は docs/data-inventory/base-attribution-audit.md §2（TASK-103 の監査）。
+ * `partof` は上流が誤った宗主名を PARTOF にも入れていた場合、または隣接年代の
+ * 同一勢力が SUBJECTO / PARTOF を揃えて持つ場合のみ指定する（1700 年の
+ * イタリア諸邦は同年の Milan / Franche-Comté に合わせて PARTOF は自己参照の
+ * まま残す）。
+ */
+const EXPECTED_ATTRIBUTIONS: ReadonlyArray<{
+  year: number;
+  name: string;
+  subjecto: string;
+  partof?: string;
+  reason: string;
+}> = [
+  // A-1: 1032 年にブルグント（アルル）王国は皇帝コンラート 2 世が継承
+  {
+    year: 1100,
+    name: "Burgandy",
+    subjecto: "Holy Roman Empire",
+    partof: "Holy Roman Empire",
+    reason: "1032 年に帝国の構成王国",
+  },
+  {
+    year: 1200,
+    name: "Burgandy",
+    subjecto: "Holy Roman Empire",
+    partof: "Holy Roman Empire",
+    reason: "1032 年に帝国の構成王国",
+  },
+  // A-2: 1018 年にバシレイオス 2 世が第一次ブルガリア帝国を併合
+  {
+    year: 1100,
+    name: "Bulgar Khanate",
+    subjecto: "Byzantine Empire",
+    reason: "1018〜1185 年は東ローマ領",
+  },
+  // A-3: ノヴゴロド共和国はジョチ・ウルスの直接支配を受けていない
+  {
+    year: 1279,
+    name: "Novgorod",
+    subjecto: "Novgorod",
+    partof: "Novgorod",
+    reason: "貢納のみで直接支配は受けない",
+  },
+  {
+    year: 1400,
+    name: "Novgorod",
+    subjecto: "Novgorod",
+    partof: "Novgorod",
+    reason: "1478 年のモスクワ併合まで存続",
+  },
+  // A-4: モンゴル帝国は 1260〜64 年に分裂し 1400 年に宗主として存在しない
+  {
+    year: 1400,
+    name: "Blue Horde",
+    subjecto: "Blue Horde",
+    partof: "Blue Horde",
+    reason: "1400 年にモンゴル帝国は存在しない",
+  },
+  {
+    year: 1400,
+    name: "White Horde",
+    subjecto: "White Horde",
+    partof: "White Horde",
+    reason: "1400 年にモンゴル帝国は存在しない",
+  },
+  // A-6 / A-7: アイスランドの主権回復は 1918 年
+  {
+    year: 1900,
+    name: "Iceland",
+    subjecto: "Denmark",
+    partof: "Denmark",
+    reason: "1380 年以降デンマーク王の統治下",
+  },
+  {
+    year: 1914,
+    name: "Iceland",
+    subjecto: "Denmark",
+    partof: "Denmark",
+    reason: "主権回復は 1918 年",
+  },
+  // A-8: 1814 年キール条約以降グリーンランドはデンマーク領
+  {
+    year: 1900,
+    name: "Greenland",
+    subjecto: "Denmark",
+    partof: "Denmark",
+    reason: "1814 年キール条約でデンマーク領",
+  },
+  // A-9: 1848 年にアルジェリアはフランス本国の県へ編入
+  {
+    year: 1900,
+    name: "Algeria",
+    subjecto: "France",
+    partof: "France",
+    reason: "1830 年侵攻・1848 年に本国の県へ編入",
+  },
+  // A-10〜A-12: ユトレヒト条約（1713 年）後の配置が 1700 年に入り込んでいる
+  {
+    year: 1700,
+    name: "Naples",
+    subjecto: "Spanish Habsburg",
+    reason: "オーストリア占領は 1707 年",
+  },
+  {
+    year: 1700,
+    name: "Sardinia",
+    subjecto: "Spanish Habsburg",
+    reason: "オーストリア占領は 1708 年",
+  },
+  {
+    year: 1700,
+    name: "Sicily",
+    subjecto: "Spanish Habsburg",
+    reason: "サヴォイア領は 1713〜1720 年",
+  },
+  // A-13: メクレンブルク＝シュトレーリッツは 1701 年以来の主権公国
+  {
+    year: 1800,
+    name: "Mecklenburg-Strelitz",
+    subjecto: "Mecklenburg-Strelitz",
+    reason: "英国との関係は同君連合ですらない",
+  },
+  // A-14: 上流の値が切り詰められた異常値
+  {
+    year: 1000,
+    name: "Suomi",
+    subjecto: "Suomi",
+    reason: 'SUBJECTO="Suom" は切り詰め',
+  },
+  // A-15: 1479 年のカスティーリャ＝アラゴン合同以降スペイン王の領
+  {
+    year: 1530,
+    name: "Sardinia",
+    subjecto: "Spain",
+    reason: "1420 年にアラゴンが征服を完了",
+  },
+  {
+    year: 1600,
+    name: "Sardinia",
+    subjecto: "Spain",
+    reason: "1420 年にアラゴンが征服を完了",
+  },
+];
+
+Deno.test("確度 A と判定した宗主の誤りが是正されている（TASK-104）", () => {
+  const wrong: string[] = [];
+  for (const expected of EXPECTED_ATTRIBUTIONS) {
+    const features = readBase(expected.year).features.filter(
+      (feature) => feature.properties?.NAME === expected.name,
+    );
+    if (features.length === 0) {
+      wrong.push(`${expected.year} ${expected.name}: feature が無い`);
+      continue;
+    }
+    for (const feature of features) {
+      const props = (feature.properties ?? {}) as Record<string, unknown>;
+      const checks: Array<[string, string]> = [
+        ["SUBJECTO", expected.subjecto],
+      ];
+      if (expected.partof !== undefined) {
+        checks.push(["PARTOF", expected.partof]);
+      }
+      for (const [key, want] of checks) {
+        if (props[key] !== want) {
+          wrong.push(
+            `${expected.year} ${expected.name}.${key}=${
+              JSON.stringify(props[key])
+            } (期待 ${JSON.stringify(want)} / ${expected.reason})`,
+          );
+        }
+      }
+    }
+  }
+  assertEquals(wrong, [], `是正されていない帰属: ${wrong.join(", ")}`);
+});
+
+Deno.test("是正した宗主が同年代に勢力として実在する（TASK-104）", () => {
+  // 宗主キー（suzerain_extent.ts resolveSuzerainKey）の union で外枠を描くため、
+  // 宗主名が同年代の NAME に無いと「宙に浮いた宗主」になり、その勢力を選んでも
+  // 外枠が出ない。1700 年の Spanish Habsburg だけは上流が同年の Milan /
+  // Franche-Comté / Spain にも使っている表記で、正規化は B-3 の別タスク扱い。
+  const dangling: string[] = [];
+  for (const expected of EXPECTED_ATTRIBUTIONS) {
+    if (expected.subjecto === expected.name) continue; // 独立（自己参照）
+    if (expected.subjecto === "Spanish Habsburg") continue;
+    const exists = readBase(expected.year).features.some(
+      (feature) => feature.properties?.NAME === expected.subjecto,
+    );
+    if (!exists) {
+      dangling.push(`${expected.year} ${expected.name} → ${expected.subjecto}`);
+    }
+  }
+  assertEquals(dangling, [], `同年代に存在しない宗主: ${dangling.join(", ")}`);
+});
+
 Deno.test("NAME が無い feature は帰属プロパティを 1 つも持たない（TASK-102）", () => {
   // NAME 欠落 feature の扱い（AC#1）: 上流が NAME / ABBREVN / SUBJECTO / PARTOF
   // を全て空にしている＝どの勢力にも帰属させていない土地なので、名称を与えず

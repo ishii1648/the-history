@@ -295,23 +295,40 @@ Deno
 配下に付け替えるのも不正確なこと。公はフランス王へ臣従礼を行う立場ではあったが名目に
 留まるため、`suzerains` による宗主補正（`Britany` → `France`）とは扱いを分ける。
 
-### 4.5 上流 properties の異常是正（TASK-102）
+### 4.5 上流 properties の異常是正（TASK-102 / TASK-104）
 
 上流の properties には、文字化け・列ずれと思われる異常値・年代間で揺れる
-`SUBJECTO` が混ざる。生成物を直接直すと再生成で失われるため、
+`SUBJECTO`・史実と食い違う宗主が混ざる。生成物を直接直すと再生成で失われるため、
 `data/name-overrides.json` の `propertyFixes`（`renames` / `suzerains` と同じ
 ファイル）に年代付きで宣言し、`scripts/build-data.ts` の `applyPropertyFixes`
-が当てる。対象 feature はリネーム適用後の `NAME` で指定する。
+が当てる。対象 feature はリネーム適用後の `NAME` で指定する。機構は TASK-102
+で導入し、TASK-104 で史実の宗主是正（下表の 4 行目）まで対象を広げた。エントリは
+計 18（TASK-102 の 3 + TASK-104 の 15）。
 
-| 年代        | NAME                | 上書き                         | 根拠                                                                                                                                        |
-| ----------- | ------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1100        | `Aragón`            | `PARTOF`                       | 置換文字（U+FFFD）への文字化け。同 feature の `NAME` / `ABBREVN` / `SUBJECTO` は正しい綴り                                                  |
-| 1783        | `Lombardy`          | `SUBJECTO` / `BORDERPRECISION` | `SUBJECTO="3"` / `BORDERPRECISION=0` の列ずれ。1650〜1800 の他年代は `SUBJECTO=Lombardy` / `BORDERPRECISION=3`                              |
-| 1300 / 1400 | `English territory` | `SUBJECTO` / `PARTOF`          | 大陸に残るイングランド王の所領。1279 は `England` 配下なのに 1300 / 1400 は自己参照で、`colorKeyFor` のキーが年代で揺れて配色が変わっていた |
+| 年代        | NAME                | 上書き                         | 根拠                                                                                                                                                                                                                                                                               |
+| ----------- | ------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1100        | `Aragón`            | `PARTOF`                       | 置換文字（U+FFFD）への文字化け。同 feature の `NAME` / `ABBREVN` / `SUBJECTO` は正しい綴り                                                                                                                                                                                         |
+| 1783        | `Lombardy`          | `SUBJECTO` / `BORDERPRECISION` | `SUBJECTO="3"` / `BORDERPRECISION=0` の列ずれ。1650〜1800 の他年代は `SUBJECTO=Lombardy` / `BORDERPRECISION=3`。この行は列ずれの是正に留め、1714 年以降のオーストリア領ロンバルディアという史実の付け替えは行っていない                                                            |
+| 1300 / 1400 | `English territory` | `SUBJECTO` / `PARTOF`          | 大陸に残るイングランド王の所領。1279 は `England` 配下なのに 1300 / 1400 は自己参照で、`colorKeyFor` のキーが年代で揺れて配色が変わっていた                                                                                                                                        |
+| 1000〜1914  | 確度 A の 14 件     | `SUBJECTO` / `PARTOF`          | TASK-103 の横断監査で「明確な誤り」と判定した宗主（TASK-104）。年号付きの根拠は `docs/data-inventory/base-attribution-audit.md` §2 の A-1〜A-4・A-6〜A-15 と、各エントリの `note` を参照。A-5（1400 `Seljuk Caliphate`）は `NAME` の上書き可否の判断が要るため TASK-106 で別途扱う |
 
-上書きは「上流の入力ミスを直す」範囲に留め、史実に基づく宗主の付け替え（例: 1714
-年以降のオーストリア領ロンバルディア）はここでは行わない。それは `suzerains`
-の担当で、decision-19 の「歴史的に明白な関係に限る」判断が要るため。
+TASK-104 の 14 件（`propertyFixes` エントリは 15。A-4 が Blue / White Horde の 2
+エントリに分かれるため）は `Burgandy` 1100 / 1200（1032 年に帝国の構成王国）・
+`Bulgar Khanate` 1100（1018 年に東ローマ併合）・`Novgorod` 1279 / 1400 と
+`Blue Horde` / `White Horde` 1400（1260〜64 年に分裂した `Mongol Empire`
+が宗主として残っている）・`Iceland` 1900 / 1914 と `Greenland` 1900（デンマーク
+領）・`Algeria` 1900（1848 年にフランス本国へ編入）・`Naples` / `Sardinia` /
+`Sicily` 1700（1713 年ユトレヒト条約後の帰属が混入）・`Mecklenburg-Strelitz`
+1800（英国への従属は無い）・`Suomi` 1000（`SUBJECTO="Suom"` の切り詰め）・
+`Sardinia` 1530 / 1600（1479 年以降スペイン王領）。
+
+`propertyFixes` と `suzerains` の棲み分けは「上流の値をどう扱うか」で決まる
+（TASK-103 の監査 §7）。**上流が持っている値が誤っている**（文字化け・列ずれ・
+史実と食い違う宗主）場合はビルド時の `propertyFixes` で正す。**上流がその関係
+そのものを欠いている**場合、つまりデータに無い封建関係を足す場合はランタイム側の
+`suzerains`（decision-19、`Britany` → `France`）が担当する。前者は元データの誤り
+の訂正、後者は元データへの追加なので、後者だけが decision-19 の「歴史的に明白な
+関係に限る」判断を要する。
 
 空の `SUBJECTO` / `PARTOF`（上流は独立勢力をこれと自己参照の 2
 通りで持っている）は、切り出しの後に `normalizeSubjectProps` が `NAME`
