@@ -81,6 +81,21 @@ Protomaps 配布の既成 PMTiles を使用する（`map-rendering-research.md` 
   から作る常時表示のラベル層、TASK-97）で補う。年代に依らない地形なので
   年代スナップショットとは独立の 1 ファイルにし、表示するズーム段は Natural
   Earth の `MIN_LABEL` から決める
+- 山脈（面）に加えて主要な**山峰（点）**を `data/peaks.geojson`（Natural Earth
+  10m の標高点、TASK-99）から描く。山脈名が「どのあたりが山地か」を示すのに
+  対し、山峰は「どこが頂か」を示す。年代非依存の 1 ファイルという扱いは
+  河川・山脈と同じ。マーカーは都市（半径 3px の赤い丸ドット）と取り違えないよう
+  **`▲` グリフ**（`src/peaks.ts` の `PEAK_MARKER_GLYPH`、深緑 + クリーム halo）
+  で描く。`ScatterplotLayer` は円しか描けず、`IconLayer` は新しいレイヤー
+  クラスと画像バイトをバンドルに足すため、既に 4 層が使っている `TextLayer` に
+  記号を描かせる方が安い。マーカー層は衝突フィルタに参加させない（名前が
+  衝突で間引かれても頂の位置は残す。都市ドットと同じ扱い）
+- 山峰の表示件数は `SCALERANK` 由来のズーム段（`peakMinZoom`）で絞る。実測で
+  z4=2 件（モンブラン・エルブルス）・z6=22 件・z8=26 件。標高の併記
+  （`モンブラン 4807m`）は **z7
+  以上**に限る（`PEAK_ELEVATION_LABEL_MIN_ZOOM`）。 標高を足すとラベル幅が約 2.2
+  倍になり、衝突ボックス（2.8 倍）と掛け合わさって
+  周囲の勢力名・都市名を落としてしまうため、広域では名称のみにする
 - 陰影の強さ（`HILLSHADE_LAYER` の paint、TASK-98）は「勢力ポリゴン（alpha
   128）の塗り越しでアルプス・ピレネー・カルパティアの骨格が読める」ことを
   基準に決める。`hillshade-exaggeration` はズーム補間
@@ -164,8 +179,8 @@ R2）に配置する。
     塗りが切れる位置が定義上一致する
   - 上記 3 層の相対順（内水面 → 政治ポリゴン → 海洋 → 海岸線）は
     `layer_stack.ts` の `waterStackIsValid` が描画ごとに検証する
-  - ラベル 4 層（山脈名・勢力名・河川名・都市名）だけは interleaved ではなく
-    overlaid の別オーバーレイに載せる。`beforeId` で interleaved
+  - ラベル 5 層（山脈名・山峰名・勢力名・河川名・都市名）だけは interleaved
+    ではなく overlaid の別オーバーレイに載せる。`beforeId` で interleaved
     のレイヤーグループが分かれると `CollisionFilterExtension`
     の衝突マップが先行グループのパスで壊れ、ラベルが全滅するため。ラベルは
     `pickable: false` かつ常に最前面なので、picking・見た目への影響はない
