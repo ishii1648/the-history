@@ -9,17 +9,21 @@ import {
   COLLISION_SIZE_SCALE,
   FIEF_LABEL_COLOR,
   HRE_LABEL_COLOR,
+  LABEL_COLLISION_FADE_CUTOFF,
+  LABEL_COLLISION_INJECT_HOOK,
   LABEL_FONT_FAMILY,
   LABEL_FONT_SETTINGS,
   LABEL_OUTLINE_COLOR,
   LABEL_OUTLINE_WIDTH,
   LABEL_SDF_RADIUS,
   labelAnchorFor,
+  labelCollisionCutoffInject,
   labelColorFor,
   labelPriorityFor,
   labelTextFor,
   labelTextStyleProps,
   MAX_LABEL_PRIORITY,
+  MIN_LABEL_COLLISION_FADE_CUTOFF,
   MIN_LABEL_PRIORITY,
   POWER_LABEL_SIZE_PX,
   RIVER_LABEL_COLOR,
@@ -550,5 +554,83 @@ Deno.test("COLLISION_SIZE_SCALE は TASK-54 値 2.6 以上・上限 4 以内", (
   assert(
     COLLISION_SIZE_SCALE <= 4,
     `sizeScale=${COLLISION_SIZE_SCALE} は上限 4 以内のはず`,
+  );
+});
+
+// ---- TASK-108: 衝突フェードの二値化（半透明ゴーストの除去） ----
+// CollisionFilterExtension は衝突判定を 0/1 ではなく pow(一致数/25, 2.2) の
+// 連続値（collision_fade）で返し、color.a に乗算する。負けかけたラベルは
+// 中途半端な alpha で描かれ続け、しかも SDF の halo は outlineColor の alpha を
+// そのまま使う（vColor.a に依存しない）ため「文字が薄れて白い輪郭だけ残る」。
+// 対策は色ではなく **ジオメトリの破棄** で行う（inject 先は
+// DECKGL_FILTER_GL_POSITION）。
+
+Deno.test("TASK-108: cutoff inject は GL_POSITION フックだけを対象にする", () => {
+  const inject = labelCollisionCutoffInject();
+  assertEquals(Object.keys(inject), [LABEL_COLLISION_INJECT_HOOK]);
+  assertEquals(LABEL_COLLISION_INJECT_HOOK, "vs:DECKGL_FILTER_GL_POSITION");
+  // 色フックには触らない（halo の alpha は outlineColor 由来で vColor.a に
+  // 依存しないため、color.a を 0 にしてもゴーストの輪郭は消えない）
+  assert(!("vs:DECKGL_FILTER_COLOR" in inject));
+});
+
+Deno.test("TASK-108: cutoff inject は fade を破棄/完全表示の二択へ倒す", () => {
+  const glsl = labelCollisionCutoffInject()[LABEL_COLLISION_INJECT_HOOK];
+  // collision モジュールが collision_fade を計算し終えた後に効く前提
+  assert(glsl.includes("collision.enabled"), glsl);
+  assert(
+    glsl.includes(`collision_fade < ${LABEL_COLLISION_FADE_CUTOFF}`),
+    glsl,
+  );
+  // 負けた側はクリップ空間の外へ飛ばして完全に消す（halo ごと消える）
+  assert(glsl.includes("position = vec4(0.0, 0.0, 2.0, 1.0);"), glsl);
+  // 勝った側は fade を 1.0 に戻し、後段の color.a *= collision_fade を無効化する
+  assert(glsl.includes("collision_fade = 1.0;"), glsl);
+  assert(glsl.includes("collision_fade = 0.0;"), glsl);
+});
+
+Deno.test("TASK-108: cutoff は GLSL float リテラルとして埋め込まれる", () => {
+  // "1" のような int リテラルは float との比較でコンパイルエラーになる
+  const glsl = labelCollisionCutoffInject(1)[LABEL_COLLISION_INJECT_HOOK];
+  const m = glsl.match(/collision_fade < ([0-9.]+)/);
+  assert(m !== null, glsl);
+  assert(m[1].includes("."), `float リテラルでない: ${m[1]}`);
+  assertEquals(Number(m[1]), 1);
+});
+
+Deno.test("TASK-108: cutoff は (0, 1] にクランプされる", () => {
+  const cutoffOf = (v: number): number => {
+    const glsl = labelCollisionCutoffInject(v)[LABEL_COLLISION_INJECT_HOOK];
+    return Number(glsl.match(/collision_fade < ([0-9.]+)/)![1]);
+  };
+  // 0 以下は deck.gl 自身の discard 閾値まで（完全に無効化はさせない）
+  assertEquals(cutoffOf(0), MIN_LABEL_COLLISION_FADE_CUTOFF);
+  assertEquals(cutoffOf(-1), MIN_LABEL_COLLISION_FADE_CUTOFF);
+  // 1 超は 1（fade=1.0 の完全勝利以外を全部消す上限）
+  assertEquals(cutoffOf(2), 1);
+  // 非有限値は既定値へフォールバック
+  assertEquals(cutoffOf(NaN), LABEL_COLLISION_FADE_CUTOFF);
+});
+
+Deno.test("TASK-108: 既定 cutoff は中間フェードの帯を潰しつつ消しすぎない", () => {
+  assert(
+    LABEL_COLLISION_FADE_CUTOFF > MIN_LABEL_COLLISION_FADE_CUTOFF,
+    "既定値が deck.gl の discard 閾値と同じでは二値化にならない",
+  );
+  assert(
+    LABEL_COLLISION_FADE_CUTOFF <= 1,
+    "既定値は 1 以下（fade=1.0 の完全勝利は必ず残す）",
+  );
+  // AC #4: fade は pow(一致率, 2.2) なので、cutoff=0.5 は一致率 約 0.73 に相当。
+  // 一致率 0.5（アンカー近傍の半分を奪われた状態）で消えると中小勢力ラベルが
+  // 消えすぎるため、生の一致率換算で 0.5 を下回らせない。
+  const matchRatio = LABEL_COLLISION_FADE_CUTOFF ** (1 / 2.2);
+  assert(
+    matchRatio >= 0.5,
+    `一致率換算 ${matchRatio.toFixed(3)} が緩すぎる（中途半端な描画が残る）`,
+  );
+  assert(
+    matchRatio <= 0.95,
+    `一致率換算 ${matchRatio.toFixed(3)} が厳しすぎる（ラベルが消えすぎる）`,
   );
 });

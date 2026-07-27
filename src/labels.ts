@@ -335,6 +335,100 @@ export function labelTextStyleProps(): {
  */
 export const COLLISION_SIZE_SCALE = 2.8;
 
+/**
+ * 衝突フェードの二値化 GLSL を差し込むシェーダフック（TASK-108）。
+ *
+ * 色（vs:DECKGL_FILTER_COLOR）ではなく頂点位置のフックを使うのが要点。
+ * TextLayer の SDF フラグメントシェーダは
+ * `color = mix(sdf.outlineColor, vColor, inFill)` として halo 部分の alpha を
+ * **outlineColor 側**（LABEL_OUTLINE_COLOR の alpha = 255）から取るため、
+ * vColor.a を 0 にしてもクリーム色の輪郭だけが不透明のまま残る。これが
+ * TASK-108 の「文字が消えて白っぽい輪郭だけ残る」の正体なので、消すときは
+ * ジオメトリごとクリップ空間の外へ飛ばす必要がある。
+ */
+export const LABEL_COLLISION_INJECT_HOOK = "vs:DECKGL_FILTER_GL_POSITION";
+
+/**
+ * 衝突フェード cutoff の下限（TASK-108）。@deck.gl/extensions 9.3.7 の
+ * collision モジュールが自前でジオメトリを捨てる閾値（collision_fade < 0.0001）
+ * と同値。これ未満に設定しても deck.gl 既定の挙動と区別が付かないため、
+ * ここでクランプして「二値化が効いていないのに効いているつもり」を防ぐ。
+ */
+export const MIN_LABEL_COLLISION_FADE_CUTOFF = 0.0001;
+
+/**
+ * 衝突フェードを二値化する閾値（TASK-108）。
+ *
+ * `CollisionFilterExtension` は衝突判定を 0/1 ではなく
+ * `pow(アンカー近傍 5x5 px の一致率, 2.2)` の連続値（collision_fade）で返し、
+ * それを色の alpha に乗算する（ちらつき低減のための意図的なフェード）。
+ * 優先度の高いラベルの衝突ボックスがアンカー近傍を部分的に覆っている
+ * **静止状態**では、負けた側がこの中途半端な alpha で描かれ続ける。
+ *
+ * 0.5 は `pow(x, 2.2)` の圧縮を戻すと生の一致率 約 0.73 に相当する
+ * （0.5 ** (1/2.2) ≈ 0.729）。アンカー近傍 25 px のうち 19 px 以上を自分で
+ * 取れていれば残す、という水準。完全勝利（一致率 1.0 → fade 1.0）のラベルは
+ * 必ず残るので、衝突していないラベルの表示は従来と変わらない（AC #4）。
+ * priority 設計・COLLISION_SIZE_SCALE には一切触れないため、層をまたいだ
+ * 相対的な表示優先も従来どおり（AC #5）。
+ *
+ * 実機（1400 / 1492 × zoom 5.5 / 6.5 / 7.5、北ドイツ）で 0.25 も試した。
+ * 0.25 ではさらに 3 件（トルン帝国修道院領・ハノーファー・リューベック）が
+ * 不透明で残り、いずれも重なりは起きなかった。一方で、本当に潰れていた
+ * ゴースト（ホルシュタイン＝ピンネベルク伯領など）は全て fade < 0.25 で、
+ * どちらの値でも同じく消える。つまり 0.25〜0.5 の帯は「衝突ボックス
+ * （2.8 倍）の縁がアンカーを掠めただけで、実グリフは離れている」ケースに
+ * 対応する。差が小さい以上、未検証のビューで「実際に重なるラベルを
+ * 不透明で復活させる」危険が小さい 0.5 を採る。緩めたいときはこの定数を
+ * 下げれば足りる（GLSL 側は 1 箇所で参照している）。
+ */
+export const LABEL_COLLISION_FADE_CUTOFF = 0.5;
+
+/**
+ * 数値を GLSL の float リテラル文字列にする。整数値でも小数点を必ず含める
+ * （`collision_fade < 1` は float と int の比較になりコンパイルできない）。
+ */
+function glslFloat(n: number): string {
+  return Number.isInteger(n) ? n.toFixed(1) : String(n);
+}
+
+/**
+ * 衝突フェードを二値化する GLSL inject を組み立てる（純粋関数、TASK-108）。
+ *
+ * `collision` シェーダモジュールが `collision_fade` を計算した**後**に走る前提で、
+ * - cutoff 未満: クリップ空間の外へ飛ばして完全に消す（halo ごと消える）
+ * - cutoff 以上: `collision_fade` を 1.0 に戻し、後段の
+ *   `color.a *= collision_fade` を無効化して本来の不透明度で描く
+ * のいずれかに倒す。「読める」か「出ない」かの二択になり、中途半端に潰れた
+ * 半透明ゴーストが残らない（AC #1〜#3）。
+ *
+ * `collision.enabled` が false のとき（衝突マップ描画パス）は何もしない。
+ * 衝突マップは従来どおり全ラベルのボックスを priority 順に描くので、
+ * どのラベルが勝つかの判定自体は一切変えていない。
+ *
+ * cutoff は (MIN_LABEL_COLLISION_FADE_CUTOFF, 1] にクランプし、非有限値は
+ * 既定値へフォールバックする。
+ */
+export function labelCollisionCutoffInject(
+  cutoff: number = LABEL_COLLISION_FADE_CUTOFF,
+): Record<typeof LABEL_COLLISION_INJECT_HOOK, string> {
+  const raw = Number.isFinite(cutoff) ? cutoff : LABEL_COLLISION_FADE_CUTOFF;
+  const clamped = Math.min(1, Math.max(MIN_LABEL_COLLISION_FADE_CUTOFF, raw));
+  return {
+    [LABEL_COLLISION_INJECT_HOOK]: `
+  // TASK-108: collision_fade（0..1 の連続値）を二値化し、半透明ゴーストを無くす
+  if (collision.enabled) {
+    if (collision_fade < ${glslFloat(clamped)}) {
+      position = vec4(0.0, 0.0, 2.0, 1.0);
+      collision_fade = 0.0;
+    } else {
+      collision_fade = 1.0;
+    }
+  }
+`,
+  };
+}
+
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */
 function stringProp(props: GeoJsonProperties, key: string): string | null {
   const v = props?.[key];

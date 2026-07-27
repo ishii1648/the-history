@@ -171,6 +171,22 @@ R2）に配置する。
     `pickable: false` かつ常に最前面なので、picking・見た目への影響はない
   - 河川・河川ヒット層・都市マーカー・都市ヒット層・勢力圏の外枠
     （`hre-extent`）は従来どおり水面より上（interleaved 側）
+  - **衝突フェードの二値化（TASK-108）**: `CollisionFilterExtension`
+    は衝突判定を 0/1 ではなく
+    `pow(アンカー近傍 5x5 px の一致率, 2.2)`（`collision_fade`）の
+    連続値で返し、色の alpha に乗算する。ちらつき低減を狙った deck.gl 側の設計
+    だが、優先度の高いラベルの衝突ボックスがアンカー近傍を部分的に覆っている
+    **静止状態**では、負けた側が中途半端な alpha で描かれ続ける。さらに
+    TextLayer の SDF は halo の alpha を `outlineColor`（不透明なクリーム）から
+    取り `vColor.a` に依存しないため、「文字だけ薄れて白っぽい輪郭が残る」
+    判読不能なゴーストになる。`src/label_collision.ts` の
+    `LabelCollisionCutoffExtension` を `CollisionFilterExtension` の**後ろ**に
+    置いてこれを二値化し、`LABEL_COLLISION_FADE_CUTOFF`（0.5 = 生の一致率 約
+    0.73）未満はジオメトリごとクリップ空間の外へ飛ばして halo ごと消し、 以上は
+    `collision_fade` を 1.0 に戻して本来の不透明度で描く。ラベルは
+    「読める」か「出ない」かの二択になる。衝突マップの描画パス
+    （`collision.enabled == false`）には介入しないので、どのラベルが勝つかの
+    判定・層をまたいだ表示優先・`COLLISION_SIZE_SCALE` は従来のまま
 
 ### 3.4 配信キャッシュ制御
 
