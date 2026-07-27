@@ -122,6 +122,25 @@
       "name": "Sardinia",
       "set": { "SUBJECTO": "Spain" },
       "note": "TASK-104 / 監査 A-15。サルデーニャは 1324 年からアラゴンが征服を進め、1420 年のアルボレア裁判領購入で完了、1479 年のカスティーリャ＝アラゴン合同以降はスペイン王の領となる。上流の 1530 / 1600 年の独立表記は誤りで、1650 年は Spanish Habsburg。1530 / 1600 年は同年に NAME=Spain が存在するため、宙に浮いた宗主にならない Spain を宗主にする（PARTOF は自己参照のまま）。1400 年はアルボレア裁判領がなお島の大半を保持しており確度 B として対象外。"
+    },
+    {
+      "years": [1400],
+      "name": "Seljuk Caliphate",
+      "set": {
+        "NAME": "Anatolian beyliks",
+        "SUBJECTO": "Anatolian beyliks",
+        "PARTOF": "Anatolian beyliks"
+      },
+      "note": "TASK-106 / 監査 A-5・§4。ルーム・セルジューク朝は 1308 年にメスード 2 世が没して滅亡しており、1400 年に存在しない勢力名が約 23.8 万 km²（bbox (32.20, 35.97)-(41.48, 42.04) = コンヤ〜スィヴァス〜エルズィンジャンのアナトリア中央〜東部）を覆っている。この範囲の実体は 14 世紀を通じてカラマン・エレトナ（カーディー・ブルハーネッディーン）・ドゥルカディル・ラマザンといったベイリク（トルコ系諸侯国）の割拠で、上流自身も同じ 1400 年に Beylik of Aydin を独立勢力として収録している。総称 NAME は上流の語彙（Cuman Khanates / Celtic kingdoms / Other Rus Principalities / Baltic Tribes）にある表現なので、Anatolian beyliks へ寄せる。1279 / 1300 年の Seljuk Caliphate は 1308 年より前なので対象外。バヤズィト 1 世が 1398 年にカラマン・スィヴァスを併合し 1402 年のアンカラの戦いでティムールが諸侯を復活させたため、厳密には 1400 年ちょうどの中西部はオスマン占領下だが、上流は同年のオスマンをアナトリア西部までしか描いておらず、上書きで形状の帰属まで変えることはしない（形状の限界は known-limitations の base-extinct-or-overbroad-powers に明記）。NAME だけを変えると自己参照だった SUBJECTO / PARTOF が宙に浮いた宗主になり色キー（powers.ts colorKeyFor）も分裂するため、3 つ同時に書き換える。ABBREVN（\"Seljuk Turks\"）は上流の記録として残す。表示・色・外枠のいずれも参照せず（build-data.ts resolveName が NAME 空のときだけ見るフォールバック）、上流がこのポリゴンを何と呼んでいたかを追える方が有用なため。"
+    },
+    {
+      "years": [1279, 1300],
+      "name": "Ryazan",
+      "set": {
+        "NAME": "Other Rus Principalities",
+        "PARTOF": "Other Rus Principalities"
+      },
+      "note": "TASK-106 / 監査 B-7・§4。面積約 131 万 km²・bbox (21.36, 47.38)-(46.04, 62.21) で、キエフ・ガーリチ＝ヴォルィーニ・ヴラジーミル＝スーズダリを含むルーシ全域（ノヴゴロドを除く）を覆っており、オカ川中流域の一公国であるリャザンの規模ではない。上流自身が 1200 年に同種の広がりを Other Rus Principalities として収録しているので、その語彙へ寄せる。1492 年（約 15.0 万 km²）・1500 年（約 2.0 万 km²）にはオカ川中流域に実体どおりの Ryazan があり、そちらは正しいので対象外。放置すると 131 万 km² と 15 万 km² が同一勢力・同一色として繋がって見える。SUBJECTO は上流の値（1279 = Mongol Empire、1300 = Khanate of the Golden Horde）のままにする。モンゴル帝国宗主表記の正規化は監査 B-1 = TASK-107 の担当で、本エントリは名称だけを扱う。PARTOF は上書き前の名前の自己参照だったので NAME に合わせて書き換える。ABBREVN（1279 = \"Riazan\" / 1300 = \"Ryazan\"）は Seljuk Caliphate のエントリと同じ理由で上流の記録として残す。"
     }
   ]
 }
