@@ -42,6 +42,7 @@
 
 import area from "@turf/area";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import { serializeWithAttribution } from "./build-attribution.ts";
 import difference from "@turf/difference";
 import { featureCollection, lineString } from "@turf/helpers";
 import intersect from "@turf/intersect";
@@ -468,7 +469,9 @@ async function main(): Promise<void> {
 
     const outlines = outlinesOutsideFiefs(base, fiefUnion);
     const outlinePath = outlinePathFor(year);
-    const json = JSON.stringify(outlines);
+    // TASK-109: アプリがロードするのはこの派生ファイルなので、入力 base の出典
+    // （historical-basemaps / GPL-3.0 / 境界の確からしさ）を必ず載せて書き出す
+    const json = serializeWithAttribution(outlinePath, outlines);
     await Deno.writeTextFile(outlinePath, json);
     console.log(
       `${outlinePath}: ${json.length} bytes, lines=${outlines.features.length}`,
@@ -482,7 +485,7 @@ async function main(): Promise<void> {
     const cleanLine = formatCleanStats(stats);
     if (cleanLine !== null) console.log(`  ${cleanLine}`);
     const fillPath = baseFillPathFor(year);
-    const fillJson = JSON.stringify(cleanedFill);
+    const fillJson = serializeWithAttribution(fillPath, cleanedFill);
     await Deno.writeTextFile(fillPath, fillJson);
     console.log(
       `${fillPath}: ${fillJson.length} bytes, features=${cleanedFill.features.length}（完全被覆で除外=${

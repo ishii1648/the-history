@@ -60,7 +60,12 @@ import {
   type Rgba,
   type YearDataLoader,
 } from "./powers.ts";
-import { displayLabel, tooltipPlacement } from "./info.ts";
+import {
+  displayLabel,
+  type SourceLine,
+  sourceLines,
+  tooltipPlacement,
+} from "./info.ts";
 import {
   EMPTY_FIEF_DEDUPE_TABLE,
   excludeSuppressedFeatures,
@@ -823,6 +828,50 @@ function pickedLabel(info: PickingInfo): string | null {
 }
 
 /**
+ * FeatureCollection / cities.json が持つ非標準トップレベルの `metadata` を
+ * 型を緩めて取り出す（TASK-109）。GeoJSON の型定義に `metadata` は無く、
+ * cities.json は GeoJSON ですらないため、読み出しはここ 1 箇所に閉じ込める。
+ * データが未ロード・metadata 未付与ならそのまま undefined になり、
+ * 呼び出し側（sourceLines）が空の出典行に倒す。
+ */
+function collectionMetadata(data: unknown): unknown {
+  return (data as { metadata?: unknown } | null | undefined)?.metadata;
+}
+
+/**
+ * picking 結果から、その feature が属するデータセットの `metadata` を解決する
+ * （TASK-109）。pickedLabel と同じレイヤー ID の分岐で、ラベルと出典が必ず
+ * 同じデータ由来になるようにする。metadata の中身は解釈せず、整形は info.ts の
+ * sourceLines（純粋関数）に委ねる。
+ *
+ * 対象外レイヤー・picking なし・未ロードは undefined = 出典欄を出さない。
+ */
+function pickedMetadata(info: PickingInfo): unknown {
+  const layerId = info.layer?.id;
+  if (layerId === undefined) return undefined;
+  if (isMountainPickLayerId(layerId)) return collectionMetadata(mountainsData);
+  if (isPeakPickLayerId(layerId)) return collectionMetadata(peaksData);
+  if (isCityPickLayerId(layerId)) return collectionMetadata(citiesData);
+  if (isRiversPickLayerId(layerId)) return collectionMetadata(riversData);
+  if (currentView === null) return undefined;
+  if (layerId === POWER_LAYER_ID) {
+    // TASK-92 の派生 base（baseFill）を塗っている年は、picking もその FC を
+    // 返す。派生物は base から切り出しただけで出典は同じなので、派生側に
+    // metadata が無ければ base のものへフォールバックする。
+    const fill = powerFillDataFor(currentView.base, currentView.baseFill);
+    return collectionMetadata(fill) ?? collectionMetadata(currentView.base);
+  }
+  if (layerId === HRE_LAYER_ID) return collectionMetadata(currentView.hre);
+  if (layerId === FRANCE_FIEF_LAYER_ID) {
+    return collectionMetadata(currentView.fiefs);
+  }
+  if (layerId === ITALY_FIEF_LAYER_ID) {
+    return collectionMetadata(currentView.italyFiefs);
+  }
+  return undefined;
+}
+
+/**
  * Deck レベルのホバー処理（TASK-24 AC #3）。最前面の picking 結果 1 件だけを
  * 受け取るため、河川ライン上では河川名、勢力ポリゴン上では勢力ラベル、
  * どちらも無ければ非表示、が一意に決まる（rivers が powers のホバーを阻害しない）。
@@ -999,7 +1048,9 @@ function handlePickClick(rawInfo: PickingInfo): void {
     applyRiverSelection(null);
     if (selectedMountainName !== null || selectedPeakName !== null) {
       const label = pickedLabel(info);
-      if (label !== null) showInfoPanel(label);
+      if (label !== null) {
+        showInfoPanel(label, sourceLines(pickedMetadata(info)));
+      }
     }
     return;
   }
@@ -1008,7 +1059,9 @@ function handlePickClick(rawInfo: PickingInfo): void {
     applyRiverSelection(toggleRiverSelection(selectedRiverName, name));
     if (selectedRiverName !== null) {
       const label = pickedLabel(info);
-      if (label !== null) showInfoPanel(label);
+      if (label !== null) {
+        showInfoPanel(label, sourceLines(pickedMetadata(info)));
+      }
     }
     return;
   }
@@ -1016,7 +1069,7 @@ function handlePickClick(rawInfo: PickingInfo): void {
   // picking があれば整形済みラベル（都市名/勢力名）をパネルへ出す（TASK-27）
   applyRiverSelection(null);
   const label = pickedLabel(info);
-  if (label !== null) showInfoPanel(label);
+  if (label !== null) showInfoPanel(label, sourceLines(pickedMetadata(info)));
 }
 
 /** 河川の選択状態を更新し、変化があればレイヤーを再構築して反映する */
@@ -2080,7 +2133,10 @@ function buildLabelLayer(
 // モジュールスコープの関数を参照し、DOM 配線は 1 度だけ行う。
 let showTooltip: (label: string, x: number, y: number) => void = () => {};
 let hideTooltip: () => void = () => {};
-let showInfoPanel: (label: string) => void = () => {};
+let showInfoPanel: (label: string, sources: SourceLine[]) => void = () => {};
+
+/** クリックパネルの出典欄（TASK-109）を包む要素の class 名 */
+const INFO_PANEL_SOURCE_CLASS = "info-panel-source";
 
 /**
  * ホバーツールチップとクリックパネルの DOM を配線する（TASK-7, app-spec §5.2）。
@@ -2124,14 +2180,51 @@ function setupInfoUI(): void {
   hideTooltip = () => {
     tooltip.hidden = true;
   };
-  showInfoPanel = (label) => {
+  // TASK-109: 出典欄（見出し + 値の定義リスト）。index.html には置かず、
+  // 名前 1 行だけだった従来のパネル DOM に対して 1 度だけ足す。行の中身は
+  // sourceLines（純粋関数）が決めた配列をそのまま写すだけにする。
+  const panelSource = document.createElement("dl");
+  panelSource.className = INFO_PANEL_SOURCE_CLASS;
+  panelSource.hidden = true;
+  panel.appendChild(panelSource);
+
+  showInfoPanel = (label, sources) => {
     panelLabel.textContent = label;
+    panelSource.replaceChildren(...sources.flatMap(sourceLineNodes));
+    // 出典 metadata を持たないデータ（rivers / cities / mountains 等）では
+    // 行が 0 件になるので、罫線ごと出典欄を畳んで従来の 1 行パネルに戻す
+    panelSource.hidden = sources.length === 0;
     panel.hidden = false;
   };
 
   panelClose.addEventListener("click", () => {
     panel.hidden = true;
   });
+}
+
+/**
+ * 出典行 1 件を dt（見出し）+ dd（値）の 2 ノードにする（TASK-109）。
+ * href があればリンクにし、無ければただのテキストにする。metadata 由来の
+ * 文字列は textContent / href で入れるだけで、HTML としては解釈しない。
+ */
+function sourceLineNodes(line: SourceLine): Node[] {
+  const dt = document.createElement("dt");
+  dt.className = `${INFO_PANEL_SOURCE_CLASS}-label`;
+  dt.textContent = line.label;
+  const dd = document.createElement("dd");
+  dd.className = `${INFO_PANEL_SOURCE_CLASS}-value`;
+  if (line.href === undefined) {
+    dd.textContent = line.value;
+  } else {
+    const a = document.createElement("a");
+    a.href = line.href;
+    a.target = "_blank";
+    // 新規タブへ開く外部リンクの定石（opener 経由の書き換え・リファラ漏れ防止）
+    a.rel = "noopener noreferrer";
+    a.textContent = line.value;
+    dd.appendChild(a);
+  }
+  return [dt, dd];
 }
 
 setupInfoUI();

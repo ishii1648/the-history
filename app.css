@@ -87,14 +87,33 @@ body {
    縦位置で分離されており衝突しない）。
    TASK-40: クリーム地の羊皮紙 + 焦茶の二重罫 + 対角の渦巻き装飾で古地図風に。 */
 .info-panel {
+  /* TASK-109: 出典欄が付いてパネルが縦に伸びるようになったため、
+     .popover-card（TASK-117）と同じ「外形に対する高さ上限 + 自前スクロール」の
+     設計をこちらにも入れる。box-sizing を content-box のままにすると実際の
+     高さが上限 + padding 24px + border 4px になり、下端が計算より外へ出る。
+     上限は「画面高 - 上下の固定オフセット（top 16px + 下端に残す 16px）」。
+     dvh はモバイルの URL バーを除いた実表示高さ（未対応ブラウザは vh 版へ）。 */
+  box-sizing: border-box;
   position: absolute;
   top: 16px;
   right: 16px;
   z-index: 20;
-  display: flex;
+  /* 1 行目 = ラベル + 閉じるボタン、2 行目 = 出典欄（全幅）。従来の flex 1 行を
+     grid 2 列に置き換えることで、index.html の子要素の並び（label → button）を
+     変えずに出典欄を下段へ回せる */
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   max-width: min(320px, calc(100% - 32px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  /* 端まで読んだあとのスクロールが背後の地図へ伝播しないようにする */
+  overscroll-behavior: contain;
+  /* 羊皮紙の意匠を壊さない控えめなスクロールバー（.popover-card と同じ） */
+  scrollbar-width: thin;
+  scrollbar-color: var(--frame) transparent;
   padding: 12px 16px;
   background: var(--parchment);
   border: 2px solid var(--frame);
@@ -147,8 +166,45 @@ body {
   line-break: strict;
 }
 
+/* TASK-109: 選択中 feature の出典（データセット名・ライセンス・境界の確からしさ・
+   ピン留めコミット）。行の構成は info.ts の sourceLines が決め、ここは
+   「見出し | 値」の 2 列に流し込むだけ。出典 metadata を持たないデータでは
+   main.ts が hidden にするため、罫線ごと消えて従来の 1 行パネルに戻る。
+   フッターの attribution（TASK-26）が全体の帰属、こちらが選択中 feature の
+   出典という役割分担なので、文字は本文より一段落として従属を示す */
+.info-panel-source {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 8px;
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--brass);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.info-panel-source[hidden] {
+  display: none;
+}
+
+.info-panel-source-label {
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.info-panel-source-value {
+  margin: 0;
+  /* URL やライセンス識別子が幅 320px のパネルからはみ出さないようにする
+     （.info-panel-label と同じ折り返し規則） */
+  overflow-wrap: anywhere;
+}
+
+.info-panel-source-value a {
+  color: var(--wax);
+}
+
 .info-panel-close {
-  flex: 0 0 auto;
   width: 24px;
   height: 24px;
   border: 1px solid var(--frame);

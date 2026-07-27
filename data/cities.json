@@ -27414,5 +27414,11 @@
     "commit": "808ff2b4a279013f58621a3696cb9c28058c6af1",
     "file": "chandler.csv",
     "url": "https://raw.githubusercontent.com/fasiha/Historical-Urban-Population-Growth-Data/808ff2b4a279013f58621a3696cb9c28058c6af1/chandler.csv"
+  },
+  "metadata": {
+    "source": "Historical Urban Population (Reba, Reitsma & Seto 2016; Chandler 系列)",
+    "sourceUrl": "https://github.com/fasiha/Historical-Urban-Population-Growth-Data",
+    "license": "CC BY 4.0",
+    "commit": "808ff2b4a279013f58621a3696cb9c28058c6af1"
   }
 }
