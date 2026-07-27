@@ -557,6 +557,61 @@ export function buildLabelData(
 }
 
 /**
+ * 神聖ローマ帝国を宗主とする feature が SUBJECTO / PARTOF に持つ名称
+ * （TASK-110）。base（europe_*）・hre_fiefs_* いずれもこの綴りで統一されている。
+ */
+export const HRE_SUZERAIN_NAME = "Holy Roman Empire";
+
+/**
+ * feature の宗主が神聖ローマ帝国かを判定する純粋関数（TASK-110）。
+ *
+ * なぜ必要か: TASK-110 で追加した Cliopatria 由来のオーバーレイは、1 枚の
+ * レイヤーに**仏諸侯領（トゥールーズ伯領・アキテーヌ公領・王領）と帝国領邦
+ * （バイエルン公領・ブランデンブルク・ボヘミア王国）の両方**を載せる
+ * （出典が同じなので分けない）。ところが本アプリのラベル色は出典ではなく
+ * **系統**を表す記号で、臙脂 = 帝国域内の領邦・藍紫 = 諸侯領と決まっている
+ * （TASK-30 AC #1 / TASK-71 AC #1）。レイヤー単位で kind を固定すると、
+ * 1400/1492 年に Cliopatria 由来のバイエルンだけが藍紫、OHM 由来の隣接領邦は
+ * 臙脂という、同じ画面内で凡例が破れた状態になる。feature 単位で宗主を見て
+ * kind を決めることで、出典が変わっても凡例の意味が変わらない。
+ *
+ * SUBJECTO を先に見るのは TASK-94 の宗主補正（name-overrides.json suzerains）が
+ * 書き換えるのが SUBJECTO だから。欠けていれば PARTOF へ倒す。
+ */
+export function isHreSuzerainFeature(properties: GeoJsonProperties): boolean {
+  const suzerain = properties?.SUBJECTO ?? properties?.PARTOF;
+  return suzerain === HRE_SUZERAIN_NAME;
+}
+
+/**
+ * 出典混在オーバーレイ（TASK-110 の Cliopatria）の FeatureCollection を、
+ * 帝国領邦（kind="hre" = 臙脂）と諸侯領（kind="fief" = 藍紫）の 2 つへ分ける
+ * 純粋関数。feature の並び・properties・ジオメトリはそのまま保つ。
+ *
+ * `metadata`（TASK-109 の出典）は引き継がない: 用途がラベルデータの生成に
+ * 限られ、出典パネルは分割前の FeatureCollection（main.ts の currentView）を
+ * 直接読むため。ここで metadata を複製すると「同じ出典の FC が 3 つある」
+ * 状態になり、どれが正か曖昧になる。
+ *
+ * 空 FC（オーバーレイ非対象年・取得失敗・データ未生成）では両側とも空になり、
+ * ラベルが 1 件も出ない従来表示へ素直に縮退する。
+ */
+export function partitionFiefsBySuzerain(
+  fc: FeatureCollection,
+): { hre: FeatureCollection; fief: FeatureCollection } {
+  const hre: Feature[] = [];
+  const fief: Feature[] = [];
+  for (const feature of fc.features) {
+    if (isHreSuzerainFeature(feature.properties)) hre.push(feature);
+    else fief.push(feature);
+  }
+  return {
+    hre: { type: "FeatureCollection", features: hre },
+    fief: { type: "FeatureCollection", features: fief },
+  };
+}
+
+/**
  * 全ラベルテキストに現れる文字の重複なし配列を返す（純粋関数）。
  * TextLayer の characterSet に渡し、Württemberg の ü などデフォルトの
  * ASCII セットに無い文字もグリフを生成させる。

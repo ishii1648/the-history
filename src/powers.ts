@@ -179,6 +179,38 @@ export function hasItalyFiefOverlay(
 }
 
 /**
+ * Cliopatria 由来の領邦オーバーレイ GeoJSON の配信 URL を返す（純粋関数、
+ * TASK-110）。出典は Cliopatria / Seshat Global History Databank
+ * （CC BY 4.0、doi:10.5281/zenodo.14714684）。
+ *
+ * 参照先は生データ（cliopatria_fiefs_<year>、生成は
+ * scripts/build-cliopatria-fiefs.ts）ではなく、既存 3 系統の OHM 由来
+ * オーバーレイおよび Cliopatria 内部の重なりを排他化した派生データ
+ * cliopatria_fiefs_flat_<year>（生成は scripts/build-fief-flat.ts）。
+ * 理由は franceFiefDataUrlFor / italyFiefDataUrlFor と同じで、半透明
+ * （FILL_ALPHA）の塗りが二重に重ならないようにするため。Cliopatria は
+ * 「名前を丸括弧で囲んだ複合体 feature」（封臣を含む王国全体）を持ち、
+ * 内側の単独 feature と完全に重なるので、排他化なしでは巨大な塗りが
+ * 既存レイヤーを覆う。
+ */
+export function cliopatriaFiefDataUrlFor(year: number): string {
+  return `/data/cliopatria_fiefs_flat_${year}.geojson`;
+}
+
+/**
+ * 指定年に Cliopatria 領邦オーバーレイが存在するか（純粋関数、TASK-110）。
+ * 対象年は config.CLIOPATRIA_FIEF_OVERLAY_YEARS。判定規則は hasHreOverlay /
+ * hasFranceFiefOverlay / hasItalyFiefOverlay と同一だが、呼び出し側で
+ * 「どのオーバーレイの話か」を取り違えないよう別名で公開する。
+ */
+export function hasCliopatriaFiefOverlay(
+  year: number,
+  overlayYears: readonly number[],
+): boolean {
+  return overlayYears.includes(year);
+}
+
+/**
  * base 境界線オーバーレイ GeoJSON の配信 URL を返す（純粋関数、TASK-78）。
  * 中身は base 勢力ポリゴンの環を諸侯領 union の外側だけに切り出した LineString
  * 群（生成は scripts/build-fief-dedupe.ts）。諸侯領オーバーレイ対象年に限り、
@@ -404,6 +436,29 @@ export function createItalyFiefOverlayLoader(
 }
 
 /**
+ * Cliopatria 領邦オーバーレイ用のローダを作る（TASK-110）。
+ * 既存 3 系統と同じ機構（createOverlayLoader）に載せることで、
+ * - 非対象年（900・1500 以降）は fetch せず空 FC を返し、base の主権国家
+ *   ポリゴンと二重表示にならないことを構造的に保証する
+ * - 取得失敗・**データ未生成**（cliopatria_fiefs_flat_* がまだ無い環境）は
+ *   reject せず warn + 空 FC に落ちるので、年代切替も base の表示も壊れない
+ *   （河川・山脈・諸侯領と同じ縮退契約）
+ */
+export function createCliopatriaFiefOverlayLoader(
+  fetchFn: FetchLike,
+  overlayYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    overlayYears,
+    cliopatriaFiefDataUrlFor,
+    "Cliopatria 領邦オーバーレイ",
+    warnFn,
+  );
+}
+
+/**
  * base 境界線オーバーレイ用のローダを作る（TASK-78）。
  * HRE 領邦・諸侯領オーバーレイと同じ機構（createOverlayLoader）に載せるため、
  * 非対象年は fetch せず空 FC、取得失敗は warn + 空 FC になる。空 FC のときは
@@ -472,6 +527,11 @@ export interface YearLayerData {
    * FeatureCollection（非対象年・取得失敗時は空）
    */
   italyFiefs: FeatureCollection;
+  /**
+   * Cliopatria 由来の領邦オーバーレイ（cliopatria_fiefs_flat_*、1000〜1492。
+   * TASK-110）の FeatureCollection（非対象年・取得失敗・未生成時は空）
+   */
+  cliopatriaFiefs: FeatureCollection;
 }
 
 /** base + hre + fiefs をまとめてロードする複合ローダ */
@@ -491,8 +551,9 @@ export interface CombinedYearLoader {
  * 落ちるため、ここでは特別扱いしない。
  *
  * fiefLoader（TASK-71）・outlineLoader（TASK-78）・baseFillLoader（TASK-92）・
- * italyFiefLoader（TASK-96）は任意（それ以前の呼び出しと後方互換）。省略時は
- * それぞれ常に空 FC になり、従来どおりの挙動になる。
+ * italyFiefLoader（TASK-96）・cliopatriaFiefLoader（TASK-110）は任意
+ * （それ以前の呼び出しと後方互換）。省略時はそれぞれ常に空 FC になり、
+ * 従来どおりの挙動になる。
  */
 export function createCombinedYearLoader(
   baseLoader: YearDataLoader,
@@ -501,6 +562,7 @@ export function createCombinedYearLoader(
   outlineLoader?: YearDataLoader,
   baseFillLoader?: YearDataLoader,
   italyFiefLoader?: YearDataLoader,
+  cliopatriaFiefLoader?: YearDataLoader,
 ): CombinedYearLoader {
   return {
     has: (year) =>
@@ -508,9 +570,18 @@ export function createCombinedYearLoader(
       (fiefLoader === undefined || fiefLoader.has(year)) &&
       (outlineLoader === undefined || outlineLoader.has(year)) &&
       (baseFillLoader === undefined || baseFillLoader.has(year)) &&
-      (italyFiefLoader === undefined || italyFiefLoader.has(year)),
+      (italyFiefLoader === undefined || italyFiefLoader.has(year)) &&
+      (cliopatriaFiefLoader === undefined || cliopatriaFiefLoader.has(year)),
     async load(year) {
-      const [base, hre, fiefs, outlines, baseFill, italyFiefs] = await Promise
+      const [
+        base,
+        hre,
+        fiefs,
+        outlines,
+        baseFill,
+        italyFiefs,
+        cliopatriaFiefs,
+      ] = await Promise
         .all([
           baseLoader.load(year),
           hreLoader.load(year),
@@ -521,8 +592,18 @@ export function createCombinedYearLoader(
             Promise.resolve(EMPTY_FEATURE_COLLECTION),
           italyFiefLoader?.load(year) ??
             Promise.resolve(EMPTY_FEATURE_COLLECTION),
+          cliopatriaFiefLoader?.load(year) ??
+            Promise.resolve(EMPTY_FEATURE_COLLECTION),
         ]);
-      return { base, hre, fiefs, outlines, baseFill, italyFiefs };
+      return {
+        base,
+        hre,
+        fiefs,
+        outlines,
+        baseFill,
+        italyFiefs,
+        cliopatriaFiefs,
+      };
     },
   };
 }

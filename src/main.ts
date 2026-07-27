@@ -44,6 +44,7 @@ import {
   colorKeyFor,
   createBaseFillLoader,
   createBaseOutlineLoader,
+  createCliopatriaFiefOverlayLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
   createHreOverlayLoader,
@@ -51,6 +52,7 @@ import {
   createYearDataLoader,
   createYearSwitcher,
   EMPTY_FEATURE_COLLECTION,
+  hasCliopatriaFiefOverlay,
   hasFranceFiefOverlay,
   hasHreOverlay,
   hasItalyFiefOverlay,
@@ -81,10 +83,12 @@ import {
   CITY_LABEL_SIZE_PX,
   COLLISION_SIZE_SCALE,
   FIEF_LABEL_COLOR,
+  isHreSuzerainFeature,
   type LabelDatum,
   labelTextStyleProps,
   MOUNTAIN_LABEL_COLOR,
   MOUNTAIN_LABEL_SIZE_PX,
+  partitionFiefsBySuzerain,
   POWER_LABEL_SIZE_PX,
   RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
@@ -176,6 +180,7 @@ import {
   BASE_OUTLINE_YEARS,
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
+  CLIOPATRIA_FIEF_OVERLAY_YEARS,
   DEM_PMTILES_URL,
   FALLBACK_STYLE_URL,
   FRANCE_FIEF_OVERLAY_YEARS,
@@ -218,6 +223,7 @@ import {
 import {
   CITY_HIT_LAYER_ID,
   CITY_LAYER_ID,
+  CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   isCityPickLayerId,
@@ -464,6 +470,16 @@ const dataLoader = createCombinedYearLoader(
   withOverrides(
     createItalyFiefOverlayLoader((url) => fetch(url), ITALY_FIEF_OVERLAY_YEARS),
   ),
+  // TASK-110: Cliopatria 由来の領邦（cliopatria_fiefs_flat_*、1000〜1492）。
+  // OHM に該当リレーションが無い領邦だけを収録する補完データで、既存 3 系統と
+  // 同じ機構に載せる。ファイル未生成・取得失敗は warn + 空 FC に落ちるため、
+  // データ側の生成前でもアプリは従来どおり動く（縮退契約）。
+  withOverrides(
+    createCliopatriaFiefOverlayLoader(
+      (url) => fetch(url),
+      CLIOPATRIA_FIEF_OVERLAY_YEARS,
+    ),
+  ),
 );
 
 /**
@@ -600,6 +616,10 @@ let currentView:
     baseFill: FeatureCollection;
     /** TASK-96: 中世イタリア諸侯領（非対象年・取得失敗時は空 FC） */
     italyFiefs: FeatureCollection;
+    /**
+     * TASK-110: Cliopatria 由来の領邦（非対象年・取得失敗・未生成時は空 FC）
+     */
+    cliopatriaFiefs: FeatureCollection;
   }
   | null = null;
 
@@ -721,7 +741,10 @@ function buildPowerLayer(
   id: string,
   year: number,
   data: FeatureCollection,
-  lineColor: Rgba = LINE_COLOR,
+  // TASK-110: 定数だけでなく feature 単位のアクセサも受ける。Cliopatria 由来の
+  // レイヤーは仏諸侯領と帝国領邦を同居させるため、境界線の記号（藍紫 = 諸侯領の
+  // 区画 / 白 = base と同じ線）を feature ごとに選ぶ必要がある。
+  lineColor: Rgba | ((feature: Feature) => Rgba) = LINE_COLOR,
   lineWidth: number = LINE_WIDTH_PX,
   stroked: boolean = true,
 ): GeoJsonLayer {
@@ -817,11 +840,14 @@ function pickedLabel(info: PickingInfo): string | null {
   }
   if (
     layerId === POWER_LAYER_ID || layerId === HRE_LAYER_ID ||
-    layerId === FRANCE_FIEF_LAYER_ID || layerId === ITALY_FIEF_LAYER_ID
+    layerId === FRANCE_FIEF_LAYER_ID || layerId === ITALY_FIEF_LAYER_ID ||
+    layerId === CLIOPATRIA_FIEF_LAYER_ID
   ) {
     // TASK-71/96: フランス諸侯領・イタリア諸侯領は SUBJECTO を持たないため
     // displayLabel は NAME の日本語表記（称号付き）をそのまま返す
     // （宗主国込み表記にはならない）
+    // TASK-110: Cliopatria 由来の領邦は SUBJECTO を持つものがあり、その場合は
+    // HRE 領邦と同じく「宗主国込み」の表記になる（displayLabel の既存規則）
     return displayLabel(feature.properties, overrides.renames, nameJa);
   }
   return null;
@@ -867,6 +893,12 @@ function pickedMetadata(info: PickingInfo): unknown {
   }
   if (layerId === ITALY_FIEF_LAYER_ID) {
     return collectionMetadata(currentView.italyFiefs);
+  }
+  // TASK-110: Cliopatria 由来の領邦だけが別出典（CC BY 4.0）。レイヤーを
+  // 分けてあるので、この 1 行で AC #3（クリックで出典が出て OHM 由来と
+  // 区別できる）が成立する。metadata の中身は解釈せず sourceLines に委ねる。
+  if (layerId === CLIOPATRIA_FIEF_LAYER_ID) {
+    return collectionMetadata(currentView.cliopatriaFiefs);
   }
   return undefined;
 }
@@ -1906,6 +1938,7 @@ function renderLayers(): void {
   if (currentView === null) return;
   const { year, base, hre, fiefs, outlines, baseFill, italyFiefs } =
     currentView;
+  const { cliopatriaFiefs } = currentView;
   // TASK-80: base の境界線は全年代とも MapLibre の概略境界レイヤー
   // （approximate-borders-*、syncApproximateBorders）が描くため、powers の
   // stroke は常に止める（TASK-78 は諸侯領オーバーレイ対象年だけ止めていた）。
@@ -1944,6 +1977,20 @@ function renderLayers(): void {
         year,
         italyFiefs,
         FIEF_LINE_COLOR,
+        FIEF_LINE_WIDTH_PX,
+      ),
+    // TASK-110: Cliopatria 由来の領邦。OHM に該当リレーションが無い領邦だけを
+    // 収録した補完データで、既存 3 系統と同じ buildPowerLayer に載せる
+    // （非対象年・未生成時は空 FC なので実質非表示）。境界線色だけは feature 単位で
+    // 決める: このレイヤーは仏諸侯領と帝国領邦を同居させるため、レイヤー一律に
+    // すると凡例（藍紫 = 諸侯領の区画 / 白 = 帝国領邦・base と同じ線）が破れる。
+    [CLIOPATRIA_FIEF_LAYER_ID]: () =>
+      buildPowerLayer(
+        CLIOPATRIA_FIEF_LAYER_ID,
+        year,
+        cliopatriaFiefs,
+        (f: Feature) =>
+          isHreSuzerainFeature(f.properties) ? LINE_COLOR : FIEF_LINE_COLOR,
         FIEF_LINE_WIDTH_PX,
       ),
     [CITY_LAYER_ID]: () => buildCityMarkerLayer(year),
@@ -1986,7 +2033,7 @@ function renderLayers(): void {
   const labelLayers: Layer[] = [
     buildMountainLabelLayer(),
     buildPeakLabelLayer(),
-    buildLabelLayer(year, base, hre, fiefs, italyFiefs),
+    buildLabelLayer(year, base, hre, fiefs, italyFiefs, cliopatriaFiefs),
     buildRiverLabelLayer(),
     buildCityLabelLayer(year),
   ];
@@ -2044,6 +2091,7 @@ const memoizedPowerLabelData = memoizeLatest(
     hre: FeatureCollection,
     fiefs: FeatureCollection,
     italyFiefs: FeatureCollection,
+    cliopatriaFiefs: FeatureCollection,
     ja: Record<string, string>,
     dedupe: FiefDedupeTable,
   ) => {
@@ -2059,6 +2107,7 @@ const memoizedPowerLabelData = memoizeLatest(
       base,
       suppressedPowerNames(dedupe, year),
     );
+    const cliopatriaLabelGroups = partitionFiefsBySuzerain(cliopatriaFiefs);
     const data = [
       ...buildLabelData(labeledBase, ja, "base"),
       ...buildLabelData(hre, ja, "hre"),
@@ -2067,6 +2116,12 @@ const memoizedPowerLabelData = memoizeLatest(
       // 二重ラベルは fief-dedupe.json の被覆率が抑制する（1100 年以降の
       // Corsica は被覆率 0.9983 で抑制側に入る）。
       ...buildLabelData(italyFiefs, ja, "fief"),
+      // TASK-110: Cliopatria 由来は 1 枚のレイヤーに仏諸侯領と帝国領邦が同居
+      // するため、kind をレイヤー一律ではなく宗主で決める（labels.ts
+      // partitionFiefsBySuzerain）。こうしないと 1400/1492 年に Cliopatria 由来の
+      // バイエルンだけ藍紫・隣の OHM 由来領邦は臙脂、という凡例の破れが出る。
+      ...buildLabelData(cliopatriaLabelGroups.hre, ja, "hre"),
+      ...buildLabelData(cliopatriaLabelGroups.fief, ja, "fief"),
     ];
     return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
   },
@@ -2078,6 +2133,7 @@ function buildLabelLayer(
   hre: FeatureCollection,
   fiefs: FeatureCollection,
   italyFiefs: FeatureCollection,
+  cliopatriaFiefs: FeatureCollection,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
   // TextLayer は 1 枚のまま・衝突制御（共有空間・priority）も従来どおり。
   const { data, characterSet } = memoizedPowerLabelData(
@@ -2086,6 +2142,7 @@ function buildLabelLayer(
     hre,
     fiefs,
     italyFiefs,
+    cliopatriaFiefs,
     nameJa,
     fiefDedupe,
   );
@@ -2506,6 +2563,7 @@ const yearSwitcher = createYearSwitcher(
       outlines: data.outlines,
       baseFill: data.baseFill,
       italyFiefs: data.italyFiefs,
+      cliopatriaFiefs: data.cliopatriaFiefs,
     };
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
@@ -3162,6 +3220,40 @@ map.on("load", () => {
   };
 };
 
+// TASK-110: ヘッドレス CDP 検証用に Cliopatria 由来の領邦オーバーレイの表示
+// 状態を公開する（__getItalyFiefDebug と同型の読み取り専用フック）。
+// AC #5（1000/1100 年のアキテーヌ公領・トゥールーズ伯領・王領、1279〜1492 年の
+// バイエルン公領）は labels の内容で、AC #3（出典が OHM 由来と区別できる）は
+// source の内容で確認できる。hreLabels / fiefLabels を分けて返すのは、
+// 凡例（臙脂 = 帝国領邦 / 藍紫 = 諸侯領）の出し分けが宗主どおりに効いて
+// いるかを canvas を見ずに突き合わせるため。
+(globalThis as unknown as {
+  __getCliopatriaFiefDebug?: () => {
+    year: number;
+    overlay: boolean;
+    featureCount: number;
+    source: unknown;
+    hreLabels: string[];
+    fiefLabels: string[];
+  };
+}).__getCliopatriaFiefDebug = () => {
+  const year = yearSwitcher.currentYear() ?? INITIAL_YEAR;
+  const cliopatriaFiefs = currentView?.cliopatriaFiefs ??
+    EMPTY_FEATURE_COLLECTION;
+  const groups = partitionFiefsBySuzerain(cliopatriaFiefs);
+  return {
+    year,
+    overlay: hasCliopatriaFiefOverlay(year, CLIOPATRIA_FIEF_OVERLAY_YEARS),
+    featureCount: cliopatriaFiefs.features.length,
+    // TASK-109 の出典 metadata（source / license / sourceUrl …）をそのまま返す。
+    // 情報パネルに出るのと同じ値なので、AC #3 の「OHM 由来と区別できる」を
+    // 出典行の生成前の段階で確認できる。
+    source: collectionMetadata(cliopatriaFiefs),
+    hreLabels: buildLabelData(groups.hre, nameJa, "hre").map((d) => d.text),
+    fiefLabels: buildLabelData(groups.fief, nameJa, "fief").map((d) => d.text),
+  };
+};
+
 // TASK-80: ヘッドレス CDP 検証用に概略境界（MapLibre line レイヤー）の状態を
 // 公開する（__getCityDebug と同じ読み取り専用フック）。canvas のピクセルからは
 // 「どの区間がどの段で描かれているか」を数えられないため、段ごとの run 数と
@@ -3277,6 +3369,9 @@ map.on("load", () => {
       ),
       [ITALY_FIEF_LAYER_ID]: countActive(
         currentView?.italyFiefs ?? EMPTY_FEATURE_COLLECTION,
+      ),
+      [CLIOPATRIA_FIEF_LAYER_ID]: countActive(
+        currentView?.cliopatriaFiefs ?? EMPTY_FEATURE_COLLECTION,
       ),
     },
     // TASK-94: 外枠の対象（宗主キー）と、その外枠に含まれる base feature の

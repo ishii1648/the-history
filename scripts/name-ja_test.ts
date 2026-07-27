@@ -30,7 +30,7 @@ import { ADOPTED_PEAK_NAMES } from "./build-peaks.ts";
 // データ変更時は下記コマンドで再生成して手動更新する運用とする。
 //
 // 再生成コマンド（リポジトリルートで実行）:
-//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')+glob.glob('data/italy_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
+//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')+glob.glob('data/italy_fiefs_*.geojson')+glob.glob('data/cliopatria_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
 const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Abbasid Caliphate",
   "Abdelouadides",
@@ -111,16 +111,24 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "County of Alençon",
   "County of Angoulême",
   "County of Anjou",
+  // TASK-110: 以下 11 件は Cliopatria（CC BY 4.0）由来の諸侯領
+  // （data/cliopatria_fiefs_*.geojson）。OHM に該当リレーションが無い領邦を
+  // 補うために採ったもので、上流の Name をそのまま NAME に使っている。
+  "County of Armagnac",
   "County of Artois",
   "County of Asti",
+  "County of Auvergne",
   "County of Bar",
   "County of Bentheim",
+  "County of Blôis",
+  "County of Boulogne",
   "County of Castell",
   "County of Champagne",
   "County of Drenthe",
   "County of East Frisia",
   "County of Falkenstein",
   "County of Flanders",
+  "County of Foix",
   "County of Guastalla",
   "County of Henneberg-Schleusingen",
   "County of Hohenlohe",
@@ -136,12 +144,15 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "County of Moers",
   "County of Montbéliard",
   "County of Nantes",
+  "County of Nevers",
   "County of Perche",
   "County of Pitigliano",
   "County of Poitou",
   "County of Ponthieu",
+  "County of Périgord",
   "County of Ravensberg",
   "County of Rietberg",
+  "County of Rouergue",
   "County of Santa Fiora",
   "County of Schaumburg",
   "County of Schaunberg",
@@ -149,8 +160,11 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "County of Spiegelberg",
   "County of Sponheim",
   "County of Tecklenburg",
+  "County of Toulouse",
   "County of Tours",
   "County of Vendôme",
+  "County of Vermandois",
+  "County of Vexin",
   "County/Principality of Neuchâtel",
   "Crimean Khanate",
   "Croatia",
@@ -328,6 +342,8 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Mamluke Sultanate",
   "March of Cham",
   "March of Meissen",
+  // TASK-110: Cliopatria 由来（1279 / 1300 / 1400 年のブランデンブルク）
+  "Margraviate of Brandenburg",
   "March of Montferrat",
   "March of Tuscany",
   "March of Verona",
@@ -427,6 +443,10 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Republic of the Seven Zenden",
   "Rhine",
   "Romania",
+  // TASK-110: Cliopatria の "Kingdom of France"（= 王の直轄領）を base の
+  // フランス王国と取り違えないよう読み替えた NAME
+  // （scripts/build-cliopatria-fiefs.ts の CLIOPATRIA_NAME_OVERRIDES）
+  "Royal Domain of France",
   "Russia",
   "Russian Empire",
   "Ryazan",

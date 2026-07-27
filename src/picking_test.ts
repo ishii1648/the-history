@@ -2,6 +2,7 @@ import { assert, assertEquals } from "@std/assert";
 import {
   CITY_HIT_LAYER_ID,
   CITY_LAYER_ID,
+  CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   isCityPickLayerId,
@@ -26,7 +27,7 @@ import {
 
 // ---- PICKING_PRIORITY ----
 
-Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明判定層（都市 > 山峰 > 山脈 > 河川）> 領邦 3 系統 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82, TASK-96, TASK-100）", () => {
+Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明判定層（都市 > 山峰 > 山脈 > 河川）> 領邦 4 系統 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82, TASK-96, TASK-100, TASK-110）", () => {
   assertEquals(
     [...PICKING_PRIORITY],
     [
@@ -40,6 +41,7 @@ Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明�
       HRE_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
+      CLIOPATRIA_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ],
   );
@@ -47,11 +49,12 @@ Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明�
 
 // ---- 山岳（TASK-100）----
 
-Deno.test("PICKING_PRIORITY: 山岳 3 層はすべて政治ポリゴン 4 層より上（勢力の上に載る）（TASK-100 AC #1/#2）", () => {
+Deno.test("PICKING_PRIORITY: 山岳 3 層はすべて政治ポリゴン 5 層より上（勢力の上に載る）（TASK-100 AC #1/#2、TASK-110 で Cliopatria を追加）", () => {
   const political = [
     HRE_LAYER_ID,
     FRANCE_FIEF_LAYER_ID,
     ITALY_FIEF_LAYER_ID,
+    CLIOPATRIA_FIEF_LAYER_ID,
     POWER_LAYER_ID,
   ];
   for (
@@ -240,6 +243,73 @@ Deno.test("layerOrderMatchesPickingPriority: 3 系統のオーバーレイを含
       POWER_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
+      HRE_LAYER_ID,
+    ]),
+  );
+});
+
+// ---- Cliopatria 由来の領邦（TASK-110）----
+
+Deno.test("PICKING_PRIORITY: cliopatria-fiefs は powers より優先される（オーバーレイがベースの上）（TASK-110 AC #3/#4）", () => {
+  const cliopatriaIndex = PICKING_PRIORITY.indexOf(CLIOPATRIA_FIEF_LAYER_ID);
+  const powerIndex = PICKING_PRIORITY.indexOf(POWER_LAYER_ID);
+  assert(cliopatriaIndex !== -1);
+  assert(cliopatriaIndex < powerIndex);
+});
+
+Deno.test("PICKING_PRIORITY: cliopatria-fiefs は OHM 由来 3 系統すべてに劣後する（重なりが残っても OHM 側が拾える）（TASK-110 AC #4）", () => {
+  const cliopatriaIndex = PICKING_PRIORITY.indexOf(CLIOPATRIA_FIEF_LAYER_ID);
+  for (
+    const ohm of [HRE_LAYER_ID, FRANCE_FIEF_LAYER_ID, ITALY_FIEF_LAYER_ID]
+  ) {
+    assert(
+      PICKING_PRIORITY.indexOf(ohm) < cliopatriaIndex,
+      `${ohm} は cliopatria-fiefs より優先されなければならない`,
+    );
+  }
+});
+
+Deno.test("PICKING_PRIORITY: 既存 3 系統の相対順は TASK-110 で変わらない", () => {
+  const overlays = [HRE_LAYER_ID, FRANCE_FIEF_LAYER_ID, ITALY_FIEF_LAYER_ID];
+  const indices = overlays.map((id) => PICKING_PRIORITY.indexOf(id));
+  assert(indices[0] < indices[1]);
+  assert(indices[1] < indices[2]);
+});
+
+Deno.test("renderOrderFromPickingPriority: cliopatria-fiefs は powers の上・italy-fiefs の下に描画される（TASK-110）", () => {
+  const order = renderOrderFromPickingPriority(PICKING_PRIORITY);
+  assert(
+    order.indexOf(POWER_LAYER_ID) < order.indexOf(CLIOPATRIA_FIEF_LAYER_ID),
+  );
+  assert(
+    order.indexOf(CLIOPATRIA_FIEF_LAYER_ID) <
+      order.indexOf(ITALY_FIEF_LAYER_ID),
+  );
+});
+
+Deno.test("layerOrderMatchesPickingPriority: 4 系統のオーバーレイを含む実際の描画順が整合する（TASK-110）", () => {
+  assert(
+    layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      CLIOPATRIA_FIEF_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
+      HRE_LAYER_ID,
+      "hre-extent",
+      RIVERS_HIT_LAYER_ID,
+      CITY_HIT_LAYER_ID,
+      CITY_LAYER_ID,
+      RIVERS_LAYER_ID,
+      "power-labels",
+    ]),
+  );
+  // Cliopatria を OHM 由来の層より上へ入れ替えると不整合として検出される
+  assert(
+    !layerOrderMatchesPickingPriority([
+      POWER_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
+      CLIOPATRIA_FIEF_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
     ]),
   );
@@ -491,6 +561,7 @@ Deno.test("renderOrderFromPickingPriority: 描画順（下→上）は優先順�
     renderOrderFromPickingPriority(PICKING_PRIORITY),
     [
       POWER_LAYER_ID,
+      CLIOPATRIA_FIEF_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,

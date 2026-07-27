@@ -64,6 +64,35 @@ export const FRANCE_FIEF_LAYER_ID = "france-fiefs";
  */
 export const ITALY_FIEF_LAYER_ID = "italy-fiefs";
 
+/**
+ * Cliopatria 由来の領邦オーバーレイのレイヤー ID（TASK-110）。出典は
+ * Cliopatria / Seshat Global History Databank（CC BY 4.0、
+ * doi:10.5281/zenodo.14714684）で、既存 3 系統（OHM / Roller）とは別出典。
+ *
+ * なぜ既存レイヤーへ合流させず独立レイヤーにするのか（ITALY_FIEF_LAYER_ID の
+ * 判断をそのまま踏襲する）:
+ * - **出典の粒度が feature ではなくレイヤーだから**。TASK-109 の出典パネルは
+ *   FeatureCollection のトップレベル `metadata` を読む（main.ts
+ *   pickedMetadata）。OHM 由来の FC へ Cliopatria の feature を混ぜると、
+ *   1 つの metadata が 2 つの出典・2 つのライセンスを同時に主張することになり、
+ *   AC #3（クリックで出典が表示され OHM 由来と区別できる）が成立しない。
+ *   CC BY 4.0 の帰属要件は「どの表示物がその著作物か」を示せることが前提なので、
+ *   ここは分離が必須であって設計の好みではない。
+ * - 年集合・地域も既存レイヤーと食い違う（仏 1000〜1300 / 伊 1000〜1492 に対し
+ *   Cliopatria は仏と帝国の混在で 1000〜1492）。どれへ合流させてもレイヤー ID が
+ *   実態を偽る。
+ *
+ * PICKING_PRIORITY 上の位置は powers の直上（既存 3 系統の下）。Cliopatria は
+ * 「OHM に該当リレーションが無い領邦だけ」を収録する補完データで、同じ領邦が
+ * 両方に出ることはない（TASK-110 のデータ設計）。さらに
+ * scripts/build-fief-flat.ts が幾何的に排他化するため、同一ピクセルを 2 枚が
+ * 覆うことは通常ない。それでも最下段に置くのは、境界不一致による微小重なりが
+ * 残った場合に「頂点密度が 4〜7 倍高い OHM 側が拾える」方が望ましいから
+ * （Cliopatria は 2014 年の手描き地図を自動抽出した 0.07 度平滑化データで、
+ * 論文自身が境界を概略と明記している）。既存 3 系統の相対順は動かさない。
+ */
+export const CLIOPATRIA_FIEF_LAYER_ID = "cliopatria-fiefs";
+
 /** 主要都市マーカー（ScatterplotLayer）のレイヤー ID（TASK-27） */
 export const CITY_LAYER_ID = "cities";
 
@@ -123,10 +152,11 @@ export const RIVERS_HIT_LAYER_ID = "rivers-hit";
 
 /**
  * picking の優先順（先頭が最優先）: 河川 > 都市 > 都市ヒット層 > 河川ヒット層 >
- * HRE 領邦 > 仏諸侯領 > 伊諸侯領 > 勢力（AC #4、TASK-49 で rivers-hit を cities
- * より劣後させ都市 picking の遮蔽を解消、TASK-71 で france-fiefs を powers の上に
- * 追加、TASK-82 で cities-hit を cities と rivers-hit の間に追加、TASK-96 で
- * italy-fiefs を powers の直上に追加）。
+ * HRE 領邦 > 仏諸侯領 > 伊諸侯領 > Cliopatria 領邦 > 勢力（AC #4、TASK-49 で
+ * rivers-hit を cities より劣後させ都市 picking の遮蔽を解消、TASK-71 で
+ * france-fiefs を powers の上に追加、TASK-82 で cities-hit を cities と
+ * rivers-hit の間に追加、TASK-96 で italy-fiefs を powers の直上に追加、
+ * TASK-110 で cliopatria-fiefs を powers の直上に追加）。
  * pickable なレイヤーだけを含む（ラベル系レイヤーは
  * pickable: false のため picking に関与せず、このリストにも含めない）。
  *
@@ -180,6 +210,7 @@ export const PICKING_PRIORITY: readonly string[] = [
   HRE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
+  CLIOPATRIA_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 ];
 
