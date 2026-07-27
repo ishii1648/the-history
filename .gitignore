@@ -4,3 +4,6 @@ dist/
 data/dem-tiles/
 # TASK-58: scripts/verify/checks の実行時に生成されるスクリーンショット
 scripts/verify/checks/.smoke-screenshot.png
+# TASK-117: popover-overflow チェックの実行時に生成されるスクリーンショット
+scripts/verify/checks/.popover-known-limitations.png
+scripts/verify/checks/.popover-footer.png
