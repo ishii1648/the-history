@@ -8,6 +8,7 @@ import {
   MOUNTAIN_LABEL_LAYER_ID,
   OVERLAID_LAYER_IDS,
   overlaySplitIsValid,
+  PEAK_LABEL_LAYER_ID,
   politicalFillGroupId,
   RIVER_LABEL_LAYER_ID,
   UNDER_WATER_LAYER_IDS,
@@ -19,6 +20,7 @@ import {
   APPROXIMATE_BORDER_LAYER_IDS,
   approximateBorderLayerId,
 } from "./approximate_borders.ts";
+import { PEAK_LAYER_ID } from "./peaks.ts";
 import {
   buildBasemapStyle,
   COASTLINE_LAYER_ID,
@@ -324,13 +326,30 @@ Deno.test("水面レイヤー id がスタイルに無い場合は beforeId な�
 // オーバーレイ（deck 専用 canvas）へ移して衝突判定を interleaved のグループ
 // 分割から切り離す。
 
-Deno.test("overlaid 側に載せるのはラベル 4 層のみ（TASK-97 で山脈名を追加）", () => {
+Deno.test("overlaid 側に載せるのはラベル 5 層のみ（TASK-97 で山脈名・TASK-99 で山峰名を追加）", () => {
   assertEquals(OVERLAID_LAYER_IDS, [
     MOUNTAIN_LABEL_LAYER_ID,
+    PEAK_LABEL_LAYER_ID,
     LABEL_LAYER_ID,
     RIVER_LABEL_LAYER_ID,
     CITY_LABEL_LAYER_ID,
   ]);
+});
+
+Deno.test("山峰マーカーは interleaved 側・山峰名ラベルは overlaid 側（TASK-99）", () => {
+  // マーカー（記号）は地図に interleave する。pickable ではないため
+  // PICKING_PRIORITY には含めず（TASK-100 でホバー対象化する余地は残す）、
+  // 水面より下へも回さない（都市マーカーと同じ扱い）
+  assert(!OVERLAID_LAYER_IDS.includes(PEAK_LAYER_ID));
+  assert(!PICKING_PRIORITY.includes(PEAK_LAYER_ID));
+  assert(!UNDER_WATER_LAYER_IDS.includes(PEAK_LAYER_ID));
+  assertEquals(underWaterBeforeId(PEAK_LAYER_ID, realStyleLayerIds), undefined);
+  // ラベルは勢力名・都市名と同一の衝突空間（overlaid の 1 オーバーレイ）へ
+  assert(!PICKING_PRIORITY.includes(PEAK_LABEL_LAYER_ID));
+  assertEquals(
+    underWaterBeforeId(PEAK_LABEL_LAYER_ID, realStyleLayerIds),
+    undefined,
+  );
 });
 
 Deno.test("山脈名ラベルは picking に関与せず、水面より上に描かれる（TASK-97）", () => {

@@ -6,21 +6,22 @@
 
 ## 1. データソース一覧
 
-| 対象                       | ファイル                                                                                                                          | 出典                                                                                                                                                                                                                                        | ライセンス                                                             | カバー年代                                          |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
-| 国・勢力ポリゴン           | `data/europe_<year>.geojson` × 20                                                                                                 | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) @ `62d8f1a03a71`                                                                                                                                          | GPL-3.0                                                                | 全 20 年代                                          |
-| 都市                       | `data/cities.json`                                                                                                                | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得 | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                                          |
-| 諸侯領土（HRE 領邦）       | `data/hre_<year>.geojson` × 5                                                                                                     | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                       | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ               |
-| 諸侯領土（HRE 領邦・中世） | `data/hre_fiefs_<year>.geojson` × 7                                                                                               | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
-| 諸侯領土（伊諸侯領・中世） | `data/italy_fiefs_<year>.geojson` × 7                                                                                             | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
-| 諸侯領土（仏諸侯領）       | `data/france_fiefs_<year>.geojson` × 5                                                                                            | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                        | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
-| 二重表示の解消（派生）     | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 7・`data/europe_flat_<year>.geojson` × 7                            | `scripts/build-fief-dedupe.ts` が `europe_<year>` と 3 系統のオーバーレイ（`france_fiefs_<year>` / `hre_fiefs_<year>` / `italy_fiefs_<year>`）の union から生成（§3.5）                                                                     | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
-| 諸侯領の重なり解消（派生） | `data/france_fiefs_flat_<year>.geojson` × 5・`data/hre_fiefs_flat_<year>.geojson` × 7・`data/italy_fiefs_flat_<year>.geojson` × 7 | `scripts/build-fief-flat.ts` が各系統の生データから生成（§3.6）。アプリが実際に配信・描画するのはこちら                                                                                                                                     | CC0 1.0（各生データの派生）                                            | 仏 1000〜1300 / 帝・伊 1000〜1492                   |
-| 日本語表記                 | `data/name-ja.json`                                                                                                               | 本リポジトリで手当て（勢力名・都市名・領邦名の対訳 1093 件）                                                                                                                                                                                | —                                                                      | —                                                   |
-| 勢力色                     | `data/colors.json`                                                                                                                | `scripts/build-colors.ts` が NAME から決定的に生成（473 キー）                                                                                                                                                                              | —                                                                      | —                                                   |
-| 年代解説                   | `data/notes.json`                                                                                                                 | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                      | —                                                                      | 全 20 年代                                          |
-| 河川                       | `data/rivers.geojson`                                                                                                             | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                    | Public Domain (Natural Earth)                                          | 年代共通                                            |
-| 山脈                       | `data/mountains.geojson`                                                                                                          | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_geography_regions_polys.geojson`（`FEATURECLA = Range/mtn` のみ・山脈名ラベル用・年代非依存、§3.9）                     | Public Domain (Natural Earth)                                          | 年代共通                                            |
+| 対象                       | ファイル                                                                                                                          | 出典                                                                                                                                                                                                                                           | ライセンス                                                             | カバー年代                                          |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
+| 国・勢力ポリゴン           | `data/europe_<year>.geojson` × 20                                                                                                 | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) @ `62d8f1a03a71`                                                                                                                                             | GPL-3.0                                                                | 全 20 年代                                          |
+| 都市                       | `data/cities.json`                                                                                                                | Historical Urban Population（Chandler / Reba, Reitsma & Seto 2016, DOI 10.7927/H4ZG6QBX）を [fasiha/Historical-Urban-Population-Growth-Data](https://github.com/fasiha/Historical-Urban-Population-Growth-Data) @ `808ff2b4a279` 経由で取得    | CC BY 4.0 (Historical Urban Population, v1; Reba, Reitsma & Seto 2016) | 全 20 年代                                          |
+| 諸侯領土（HRE 領邦）       | `data/hre_<year>.geojson` × 5                                                                                                     | Roller, R. "Spatio-temporal data on territories of the Holy Roman Empire", ETH Zürich（DOI 10.3929/ethz-b-000472583）                                                                                                                          | CC BY-NC-SA 4.0                                                        | 1500 / 1530 / 1600 / 1650 / 1700 のみ               |
+| 諸侯領土（HRE 領邦・中世） | `data/hre_fiefs_<year>.geojson` × 7                                                                                               | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                           | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
+| 諸侯領土（伊諸侯領・中世） | `data/italy_fiefs_<year>.geojson` × 7                                                                                             | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                           | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
+| 諸侯領土（仏諸侯領）       | `data/france_fiefs_<year>.geojson` × 5                                                                                            | [OpenHistoricalMap](https://www.openhistoricalmap.org/)（Overpass API `https://overpass-api.openhistoricalmap.org/api/interpreter`）                                                                                                           | CC0 1.0                                                                | 1000 / 1100 / 1200 / 1279 / 1300 のみ               |
+| 二重表示の解消（派生）     | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 7・`data/europe_flat_<year>.geojson` × 7                            | `scripts/build-fief-dedupe.ts` が `europe_<year>` と 3 系統のオーバーレイ（`france_fiefs_<year>` / `hre_fiefs_<year>` / `italy_fiefs_<year>`）の union から生成（§3.5）                                                                        | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ |
+| 諸侯領の重なり解消（派生） | `data/france_fiefs_flat_<year>.geojson` × 5・`data/hre_fiefs_flat_<year>.geojson` × 7・`data/italy_fiefs_flat_<year>.geojson` × 7 | `scripts/build-fief-flat.ts` が各系統の生データから生成（§3.6）。アプリが実際に配信・描画するのはこちら                                                                                                                                        | CC0 1.0（各生データの派生）                                            | 仏 1000〜1300 / 帝・伊 1000〜1492                   |
+| 日本語表記                 | `data/name-ja.json`                                                                                                               | 本リポジトリで手当て（勢力名・都市名・領邦名・山脈名・山峰名の対訳 1136 件）                                                                                                                                                                   | —                                                                      | —                                                   |
+| 勢力色                     | `data/colors.json`                                                                                                                | `scripts/build-colors.ts` が NAME から決定的に生成（473 キー）                                                                                                                                                                                 | —                                                                      | —                                                   |
+| 年代解説                   | `data/notes.json`                                                                                                                 | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                         | —                                                                      | 全 20 年代                                          |
+| 河川                       | `data/rivers.geojson`                                                                                                             | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_rivers_lake_centerlines.geojson`（主要河川オーバーレイ・年代非依存）                                                       | Public Domain (Natural Earth)                                          | 年代共通                                            |
+| 山脈                       | `data/mountains.geojson`                                                                                                          | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_50m_geography_regions_polys.geojson`（`FEATURECLA = Range/mtn` のみ・山脈名ラベル用・年代非依存、§3.9）                        | Public Domain (Natural Earth)                                          | 年代共通                                            |
+| 山峰                       | `data/peaks.geojson`                                                                                                              | [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) @ `ca96624a56bd` の `geojson/ne_10m_geography_regions_elevation_points.geojson`（`featurecla = mountain` の主要 26 峰・標高付きマーカー用・年代非依存、§3.10） | Public Domain (Natural Earth)                                          | 年代共通                                            |
 
 > ライセンス上の注意: HRE 領邦データ（CC BY-NC-SA 4.0）は GPL-3.0 派生の
 > `europe_<year>.geojson`
@@ -631,6 +632,93 @@ properties は `name`（NE の `NAME`、英語）/ `scalerank` / `min_label` の
 `ATLAS MOUNTAINS`（49%）と `ATLAS SAHARIEN`（46%）を残すのは、マグリブが地図に
 本体ごと映り（都市マーカーのアルジェ・チュニスと同じ範囲）陰影も見えるため。
 `MIN_CLIP_AREA_RATIO = 0.4` はこの 2 件とザグロス（14%）の間に閾値を置いた値。
+
+### 3.10 山峰（`peaks.geojson`、TASK-99）
+
+Natural Earth 10m `geography_regions_elevation_points` を、河川・山脈と同じ
+ピン留めコミット `ca96624a56bd`（Public Domain）から取得し、EUROPE_BBOX
+内の点に絞った年代非依存の 1 ファイル（`scripts/build-peaks.ts`）。山峰も
+全年代で同一の地形なので年代スナップショットとは独立させる。
+
+properties は `name`（NE の `name`、英語）/ `elevation`（m）/ `scalerank` の 3
+つだけに間引き、日本語表記は他と同じく `data/name-ja.json` で引く（値は NE の
+`name_ja`）。このレイヤーの properties キーは**小文字**で、山脈が使う 50m
+`geography_regions_polys` の大文字キーとは異なる。
+
+日本語表記は NE の `name_ja` をそのまま採るのを原則とするが、**1 件だけ手を
+入れている**: `Djebel Chelia` は NE が「ドジュベル・シェリア山」としているが、
+同じアラビア語 جبل（jabal）を含む `Jebel Tidirhine` は「ジェベル・ティディリーヌ
+山」で、同一データ内で同じ語の音写が割れる。日本語表記の慣用に沿う後者へ寄せて
+「ジェベル・シェリア山」とした。語尾の「山」の有無（モンブラン／マッターホルンは
+付けず、エトナ山／ベン・ネビス山は付ける）は日本語側の慣用が山ごとに割れるため
+統一せず NE のままとする。
+
+NE の英語 `name` には ASCII 化の取りこぼしがある（`Galdhpiggen` =
+Galdhøpiggen、`Hvannadalshnkur` = Hvannadalshnúkur）。表示に出るのは日本語名
+なので地図の見た目には影響しないが、`name-ja.json` のキーは突合キーとして NE
+の綴りのまま揃える。
+
+**収録条件**: `featurecla = mountain` かつ `name` を持ち、
+`scalerank <= 6`（`MAX_PEAK_SCALERANK`）**または** `elevation >= 4600 m`
+（`MIN_PEAK_ELEVATION_M`）。EUROPE_BBOX 内の名前付き `mountain` は 99 件
+あり、そのうち 26 件が残る。
+
+- `scalerank <= 6`: EUROPE_BBOX 内の scalerank は 2/3/6/7/9 の 5 段しかなく
+  （実測 2=1・3=1・6=20・7=25・9=52 件）、7 まで広げると 47 件でアルプス〜
+  バルカンのラベルが密集する。scalerank は標高ではなく「低ズームでも出す価値の
+  ある地物か」の格付けなので、ヴェスヴィオ（1,281 m）やベン・ネビス（1,343 m）
+  のように標高順では落ちる歴史的な目印がこの帯で拾える。
+- `elevation >= 4600 m`: NE の scalerank は標高と一致せず、モンテ・ローザ
+  （4,634 m）・シュハラ（5,200 m）・アララト（5,137 m）が scalerank 9、
+  サバラン（4,814 m）が 7 に落ちている。scalerank 7 以下を標高降順に並べると
+  5,200 / 5,137 / 4,814 / 4,634 / 4,494 / 4,466 / 4,274 …で、4,634 と 4,494 の
+  間の 140 m がこの帯で最も広い空き（他は 14〜63 m 刻み）。閾値をその空きに
+  置くことで、上流の標高がわずかに更新されても収録集合が揺れない。
+
+**収録した 26 峰**（`ADOPTED_PEAK_NAMES`。標高は NE の `elevation`、座標は
+生成物の丸め後）:
+
+| SCALERANK | NAME                     | 日本語                         | 標高 m | 経度, 緯度          |
+| --------: | ------------------------ | ------------------------------ | -----: | ------------------- |
+|         2 | Gora Elbrus              | エルブルス山                   |  5,642 | 42.4392, 43.35517   |
+|         6 | Mount Damavand           | ダマーヴァンド山               |  5,610 | 52.10902, 35.95519  |
+|         9 | Gora Shkhara             | シュハラ山                     |  5,200 | 43.1, 43.00001      |
+|         9 | Mount Ararat             | アララト山                     |  5,137 | 44.29996, 39.7001   |
+|         7 | Sabalon Kuh              | サバロン山                     |  4,814 | 47.82202, 38.25509  |
+|         3 | Mont Blanc               | モンブラン                     |  4,807 | 6.86504, 45.83368   |
+|         9 | Monte Rosa               | モンテ・ローザ                 |  4,634 | 7.86999, 45.94003   |
+|         6 | Matterhorn               | マッターホルン                 |  4,478 | 7.72958, 45.93817   |
+|         6 | Grossglockner            | グロースグロックナー山         |  3,798 | 12.69533, 47.07471  |
+|         6 | Monte Etna               | エトナ山                       |  3,322 | 14.99514, 37.75512  |
+|         6 | Musala                   | ムサラ山                       |  2,925 | 23.58683, 42.17982  |
+|         6 | Mount Olympus            | オリンポス山                   |  2,917 | 22.35012, 40.08325  |
+|         6 | Moldoveanu               | モルドベアヌ山                 |  2,543 | 24.74769, 45.60846  |
+|         6 | Galdhpiggen              | ガルフピッゲン                 |  2,469 | 8.31268, 61.63648   |
+|         6 | Jebel Tidirhine          | ジェベル・ティディリーヌ山     |  2,456 | -4.51181, 34.83021  |
+|         6 | Djebel Chelia            | ジェベル・シェリア山           |  2,326 | 6.66648, 35.33336   |
+|         6 | Lalla Khedidja           | ララ・ケディジャ               |  2,308 | 4.22909, 36.4571    |
+|         6 | Kebnekaise               | ケブネカイセ                   |  2,111 | 18.50452, 67.90602  |
+|         6 | Hvannadalshnkur          | クヴァンナダルスフニュークル   |  2,110 | -16.65093, 64.03889 |
+|         6 | Oksskolten               | オクスコルテン山               |  1,916 | 14.3374, 66.0245    |
+|         6 | Gora Yamantau            | ヤマンタウ山                   |  1,638 | 58.11719, 54.24349  |
+|         6 | Gora Konzhakovskiy Kamen | コンジャコフスキー・カーメン山 |  1,569 | 59.13449, 59.63278  |
+|         6 | Ben Nevis                | ベン・ネビス山                 |  1,343 | -5.00499, 56.797    |
+|         6 | Vesuvio                  | ヴェスヴィオ山                 |  1,281 | 14.43337, 40.81672  |
+|         6 | Snowdon                  | スノードン山                   |  1,085 | -4.09481, 53.07254  |
+|         6 | Carrauntoohil            | キャラントゥール山             |  1,038 | -9.74272, 51.99897  |
+
+**収録しなかったもの**:
+
+| 対象                                                                                | 理由                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spot elevation` 5 件 / `depression` 1 件（カスピ海沿岸低地 -28 m）                 | `featurecla` が山峰でなく、いずれも `name` 欠損。ラベルを持てずマーカーとして意味を成さない（`PEAK_FEATURECLA = mountain`）                           |
+| Gora Tebulosmta 4,494 m / Bazar Dyuzi 4,466 m / Finsteraarhorn 4,274 m など         | scalerank 7 以下かつ標高が閾値未満。いずれも山脈の最高峰は既にマーカーがある（コーカサス＝エルブルス / アルプス＝モンブラン）ので山域の情報は落ちない |
+| scalerank 9 の低山（Rock of Gibraltar 426 m・Vaalserberg 321 m・Møllehøj 171 m 等） | 地図上の目印として弱く、収録すると 15〜30 件の目安を大きく超えてラベルが密集する                                                                      |
+
+NE の英語 `name` には元データの ASCII 化による欠落がある（`Galdhpiggen` =
+Galdhøpiggen・`Hvannadalshnkur` = Hvannadalshnúkur）。表示は日本語名なので
+地図には影響しないが、`data/name-ja.json` のキーは NE の綴りのまま揃える
+（山脈と同じく生成物の `name` が唯一の突合キーのため）。
 
 ## 4. 年代別サマリ
 

@@ -19,6 +19,7 @@ import {
   LABEL_LAYER_ID,
   MOUNTAIN_LABEL_LAYER_ID,
   overlaySplitIsValid,
+  PEAK_LABEL_LAYER_ID,
   politicalFillGroupId,
   RIVER_LABEL_LAYER_ID,
   underWaterBeforeId,
@@ -100,6 +101,24 @@ import {
   type MountainLabelDatum,
   MOUNTAINS_DATA_URL,
 } from "./mountains.ts";
+import {
+  buildPeakLabelData,
+  buildPeakMarkerData,
+  filterVisiblePeaks,
+  PEAK_LABEL_PIXEL_OFFSET,
+  PEAK_LAYER_ID,
+  PEAK_MARKER_CHARACTER_SET,
+  PEAK_MARKER_COLOR,
+  PEAK_MARKER_GLYPH,
+  PEAK_MARKER_SIZE_PX,
+  peakEntries,
+  type PeakEntry,
+  type PeakLabelDatum,
+  peakLabelText,
+  peakLabelTexts,
+  type PeakMarkerDatum,
+  PEAKS_DATA_URL,
+} from "./peaks.ts";
 import {
   filterVisibleRiverLabels,
   RIVER_HIT_LINE_COLOR,
@@ -442,6 +461,12 @@ let riversData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
 let mountainsData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
 
 /**
+ * 主要山峰 GeoJSON（TASK-99。山脈と同じく年代非依存なので起動時に 1 度ロード）。
+ * 失敗・未生成時は空のまま山峰なしで継続する（河川・山脈と同じ縮退方針）。
+ */
+let peaksData: FeatureCollection = EMPTY_FEATURE_COLLECTION;
+
+/**
  * 主要都市データ（TASK-27。起動時に 1 度ロード）。
  * 取得失敗・未生成時は空のまま都市なしで継続する（colors.json 等と同様）。
  */
@@ -454,7 +479,8 @@ let citiesData: CitiesData = { years: {} };
  * （applyRiverHover と同じ変化検知パターン。小数ズームの連続変化
  * = 毎フレームの再構築を避ける。TASK-50 の無駄な再構築回避方針）。
  * 表示件数の段階は都市が cities.ts の visibleCityRankLimit、山脈名が
- * mountains.ts の mountainLabelMinZoom で決める（同じ整数段を共有する）。
+ * mountains.ts の mountainLabelMinZoom、山峰が peaks.ts の peakMinZoom で
+ * 決める（同じ整数段を共有する）。
  */
 let zoomStep = Math.floor(initialState.zoom);
 
@@ -1128,6 +1154,136 @@ function buildMountainLabelLayer(): TextLayer<
 }
 
 /**
+ * ズームフィルタ済みの表示山峰をメモ化する（TASK-99）。peaksData は起動時に
+ * 一度ロードされたあと年代・hover/selection に関わらず不変なので、
+ * peakEntries（検証付き変換）は起動後 1 度だけ走る。ズーム段が変わったときだけ
+ * filterVisiblePeaks が新しい配列を返し、下流（マーカー/ラベル）のメモ化キーに
+ * なる（cities.ts の memoizedVisibleCityEntries と同型）。
+ */
+const memoizedPeakEntries = memoizeLatest(
+  (fc: FeatureCollection) => peakEntries(fc),
+);
+const memoizedVisiblePeaks = memoizeLatest(
+  (entries: readonly PeakEntry[], zoomStep: number) =>
+    filterVisiblePeaks(entries, zoomStep),
+);
+
+/** 山峰マーカーデータをメモ化する（入力は memoizedVisiblePeaks の安定参照） */
+const memoizedPeakMarkerData = memoizeLatest(
+  (entries: readonly PeakEntry[]) => buildPeakMarkerData(entries),
+);
+
+/**
+ * 山峰名ラベルのデータをメモ化する（TASK-99）。入力はズームフィルタ済みの
+ * 安定参照なので、hover/selection だけの renderLayers 呼び出しでは同じ配列
+ * 参照が deck.gl へ渡り続ける（TASK-50 の方針）。
+ */
+const memoizedPeakLabelData = memoizeLatest(
+  (entries: readonly PeakEntry[], ja: Record<string, string>) =>
+    buildPeakLabelData(entries, ja),
+);
+
+/**
+ * 山峰名ラベルの characterSet をメモ化する（TASK-99）。「現在のズームで表示中の
+ * 山峰」ではなく**全山峰**の名称のみ版・標高併記版の両方から作る
+ * （peakLabelTexts）。ズーム段が変わって表示件数やテキストの内容（標高の併記）が
+ * 変わってもフォントアトラスを作り直さないための契約で、河川・山脈ラベルと
+ * 同じ扱い。
+ */
+const memoizedPeakCharacterSet = memoizeLatest(
+  (entries: readonly PeakEntry[], ja: Record<string, string>) =>
+    characterSetFrom(peakLabelTexts(buildPeakLabelData(entries, ja))),
+);
+
+/**
+ * 主要山峰マーカーの層を生成する（TASK-99 AC #1/#2/#4/#5）。
+ *
+ * 都市マーカー（ScatterplotLayer の丸ドット）と違い TextLayer に ▲ のグリフを
+ * 描かせる。形で都市と区別するための選択で、根拠は peaks.ts の
+ * PEAK_MARKER_GLYPH に詳述（deck.gl の ScatterplotLayer は丸しか描けず、
+ * PolygonLayer は固定 px の記号を作れず、IconLayer は画像デコードの失敗経路と
+ * バンドル増を伴う）。
+ *
+ * CollisionFilterExtension は**付けない**（labelLayerBaseProps を spread しない
+ * のはそのため）。間引きの対象はラベルだけにして、ラベルが競り負けても記号は
+ * 残るようにする。表示する山峰はラベル層と同じ filterVisiblePeaks の結果なので、
+ * 記号と名前の出し入れは必ず一致する。
+ *
+ * 年代には一切依存しない（AC #5）。レイヤー順は hre-extent の直上・都市/河川の
+ * 下（renderLayers）で、主題（都市ドット・河川ライン）を地形の記号が覆わない。
+ * pickable: false（ホバー/クリック対象化は TASK-100 の範囲）。
+ */
+function buildPeakMarkerLayer(): TextLayer<PeakMarkerDatum> {
+  const entries = memoizedVisiblePeaks(
+    memoizedPeakEntries(peaksData),
+    zoomStep,
+  );
+  return new TextLayer<PeakMarkerDatum>({
+    id: PEAK_LAYER_ID,
+    data: memoizedPeakMarkerData(entries),
+    pickable: false,
+    sizeUnits: "pixels",
+    // フォント + クリーム halo（陰影・半透明塗りの上でも記号の輪郭が立つ）。
+    // 衝突制御は含まない（labelLayerBaseProps ではなく描画スタイルのみ）
+    ...labelTextStyleProps(),
+    getText: () => PEAK_MARKER_GLYPH,
+    getPosition: (d) => d.position,
+    getSize: PEAK_MARKER_SIZE_PX,
+    getColor: PEAK_MARKER_COLOR,
+    characterSet: [...PEAK_MARKER_CHARACTER_SET],
+    updateTriggers: { getPosition: [zoomStep] },
+  });
+}
+
+/**
+ * 山峰名ラベルの TextLayer を生成する（TASK-99 AC #1/#3/#4/#5）。
+ *
+ * 衝突制御は勢力名・都市名・河川名・山脈名と同一空間で、priority は山脈帯の
+ * 下半分（peaks.ts の帯設計）。密集地帯では山峰名が山脈名より先に間引かれ、
+ * 勢力名・都市名の可読性を損なわない（AC #3）。重なりの解消に
+ * COLLISION_SIZE_SCALE を触らないのは decision-21 のとおりで、密度の調整は
+ * priority とズーム出し分け（peakMinZoom）だけで行う。
+ *
+ * 標高の併記は高ズーム（peaks.ts PEAK_ELEVATION_LABEL_MIN_ZOOM）でだけ行う。
+ * 併記するとラベル幅が約 2.2 倍になり、同じ場所の勢力名・都市名を巻き込んで
+ * 潰すため（根拠は同定数のコメント）。pickable: false（TASK-100 の範囲外）。
+ */
+function buildPeakLabelLayer(): TextLayer<
+  PeakLabelDatum,
+  CollisionFilterExtensionProps<PeakLabelDatum>
+> {
+  const allEntries = memoizedPeakEntries(peaksData);
+  const data = memoizedPeakLabelData(
+    memoizedVisiblePeaks(allEntries, zoomStep),
+    nameJa,
+  );
+  return new TextLayer<
+    PeakLabelDatum,
+    CollisionFilterExtensionProps<PeakLabelDatum>
+  >({
+    // フォント・クリーム halo・衝突制御は共通 base props
+    ...labelLayerBaseProps(),
+    id: PEAK_LABEL_LAYER_ID,
+    data,
+    pickable: false,
+    getText: (d) => peakLabelText(d, zoomStep),
+    getPosition: (d) => d.position,
+    // サイズ・文字色は山脈名ラベルと同一（12px の苔緑）。山峰は「山脈の中の
+    // 1 点」で同じ地形の注記なので、新しい色を足して記号性を薄めるより、
+    // 「緑 = 地形」（TASK-97）をそのまま共有する方が読み手の負荷が小さい。
+    // 都市（濃茶）・勢力（濃グレー/臙脂/藍紫）・河川（水色）との区別は従来どおり
+    getSize: MOUNTAIN_LABEL_SIZE_PX,
+    getColor: MOUNTAIN_LABEL_COLOR,
+    // マーカー（▲）を覆わないよう少し上へずらす（都市ラベルと同じ向き）
+    getPixelOffset: [...PEAK_LABEL_PIXEL_OFFSET],
+    // 日本語名（モンブラン 等）と標高併記（4807m）のグリフを両方含む
+    characterSet: memoizedPeakCharacterSet(allEntries, nameJa),
+    // ズーム段が変わると表示対象と標高併記の有無が変わる
+    updateTriggers: { getText: [zoomStep], getPosition: [zoomStep] },
+  });
+}
+
+/**
  * 河川の透明ヒットライン層（GeoJsonLayer）を生成する（TASK-43）。
  * rivers と同一データ（riversData）を完全透明・RIVER_HIT_LINE_WIDTH_PX（14px）
  * で描画する判定専用レイヤー。PICKING_PRIORITY 上は cities より劣後（TASK-49）
@@ -1523,13 +1679,22 @@ function renderLayers(): void {
     // 挿入する（領邦の塗りの上に輪郭が乗り、都市マーカー・河川は隠さない）。
     // pickable: false のため PICKING_PRIORITY 外の ID で、整合検証では
     // 無視される（layerOrderMatchesPickingPriority の既存仕様）。
-    if (id === HRE_LAYER_ID) layers.push(buildSuzerainExtentLayer(year, base));
+    if (id === HRE_LAYER_ID) {
+      layers.push(buildSuzerainExtentLayer(year, base));
+      // TASK-99: 山峰マーカーは政治ポリゴン・勢力圏外枠の上、都市ドット・
+      // 河川ラインの下。地形の記号が主題（都市・河川）を覆わない位置で、
+      // 山脈名ラベルを配列の先頭に置いたのと同じ意味づけ。pickable: false の
+      // ため PICKING_PRIORITY 外の ID で、整合検証では無視される。
+      layers.push(buildPeakMarkerLayer());
+    }
   }
   // TASK-77: ラベル層は overlaid オーバーレイ（別 canvas）へ載せる。
-  // 順序は描画順（山脈名 → 勢力名 → 河川名 → 都市名）で、TASK-97 の山脈名は
-  // 地形の注記なので最下段に置く（表示の取捨は配列順ではなく priority が決める）。
+  // 順序は描画順（山脈名 → 山峰名 → 勢力名 → 河川名 → 都市名）で、TASK-97 の
+  // 山脈名・TASK-99 の山峰名は地形の注記なので最下段に置く（表示の取捨は
+  // 配列順ではなく priority が決める）。
   const labelLayers: Layer[] = [
     buildMountainLabelLayer(),
+    buildPeakLabelLayer(),
     buildLabelLayer(year, base, hre, fiefs, italyFiefs),
     buildRiverLabelLayer(),
     buildCityLabelLayer(year),
@@ -2358,6 +2523,26 @@ async function loadMountains(): Promise<void> {
 }
 
 /**
+ * peaks.geojson（主要山峰の Point）を取得する（TASK-99）。
+ * 失敗・未生成時は空 FeatureCollection のまま山峰なしで継続する
+ * （河川・山脈と同じ縮退方針）。形の検証は表示時の peakEntries が行うため、
+ * ここでは丸ごと保持する。
+ */
+async function loadPeaks(): Promise<void> {
+  try {
+    const res = await fetch(PEAKS_DATA_URL);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    peaksData = await res.json() as FeatureCollection;
+  } catch (error) {
+    console.warn(
+      `peaks.geojson の取得に失敗しました。山峰なしで継続します: ${
+        String(error)
+      }`,
+    );
+  }
+}
+
+/**
  * cities.json（年 → 主要都市配列）を取得する（TASK-27）。
  * 失敗・未生成時は空のまま都市なしで継続する（colors.json 等と同様）。
  * 形の検証は表示時の cityEntriesForYear が行うため、ここでは丸ごと保持する。
@@ -2414,6 +2599,8 @@ async function initPowerLayer(): Promise<void> {
       loadRivers(),
       // TASK-97: mountains.geojson も初期描画前に揃え、初回から山脈名を重ねる
       loadMountains(),
+      // TASK-99: peaks.geojson も同様に揃え、初回から山峰マーカーを重ねる
+      loadPeaks(),
       loadCities(),
       loadNotes(),
       loadKnownLimitations(),
@@ -2491,6 +2678,47 @@ map.on("load", () => {
     screen: visible.map((d) => {
       const point = map.project(d.position);
       return { name: d.name, x: point.x, y: point.y };
+    }),
+  };
+};
+
+// TASK-99: ヘッドレス CDP 検証用に山峰マーカー/ラベルの表示状態を公開する
+// （__getMountainLabelDebug と同じ読み取り専用フック）。AC #4（ズーム出し分け）は
+// visible の増減で、AC #9（陰影の山地との位置一致）は screen の座標を
+// スクリーンショットと突き合わせて確認する。text はそのズーム段で実際に描く
+// 文字列（標高併記の有無を含む）。
+(globalThis as unknown as {
+  __getPeakDebug?: () => {
+    zoomStep: number;
+    totalPeaks: number;
+    visible: {
+      name: string;
+      text: string;
+      elevation: number | null;
+      priority: number;
+      x: number;
+      y: number;
+    }[];
+  };
+}).__getPeakDebug = () => {
+  const allEntries = memoizedPeakEntries(peaksData);
+  const labels = memoizedPeakLabelData(
+    memoizedVisiblePeaks(allEntries, zoomStep),
+    nameJa,
+  );
+  return {
+    zoomStep,
+    totalPeaks: allEntries.length,
+    visible: labels.map((d) => {
+      const point = map.project(d.position);
+      return {
+        name: d.name,
+        text: peakLabelText(d, zoomStep),
+        elevation: d.elevation,
+        priority: d.priority,
+        x: point.x,
+        y: point.y,
+      };
     }),
   };
 };

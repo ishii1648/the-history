@@ -238,6 +238,13 @@ export const CITY_LABEL_LAYER_ID = "city-labels";
 export const MOUNTAIN_LABEL_LAYER_ID = "mountain-labels";
 
 /**
+ * 山峰名ラベル（TextLayer）のレイヤー ID（TASK-99）。山峰マーカー（peaks、
+ * peaks.ts PEAK_LAYER_ID）は記号なので interleaved 側に残し、名前のラベルだけを
+ * ここへ載せる（衝突空間はラベル 5 層で共有する）。
+ */
+export const PEAK_LABEL_LAYER_ID = "peak-labels";
+
+/**
  * interleaved ではなく overlaid オーバーレイ（deck 専用 canvas）に載せる
  * レイヤーの ID（TASK-77）。
  *
@@ -260,6 +267,11 @@ export const MOUNTAIN_LABEL_LAYER_ID = "mountain-labels";
  * CollisionFilterExtension の priority（mountains.ts の帯設計）が決めるので、
  * 位置を変えても見た目は変わらない。
  *
+ * TASK-99: 山峰名ラベル（peak-labels）も同様に overlaid 側へ。勢力名・都市名と
+ * 同一の衝突空間に入れることが AC #3（山峰ラベルが他のラベルと重なって
+ * 読めなくならない）の前提なので、ここに載せる以外の選択肢は無い。並びは
+ * 山脈名の直後（地形の注記どうしを隣接させる）。
+ *
  * ラベル 4 層は pickable: false で picking に一切関与せず（PICKING_PRIORITY に
  * 含まれない）、描画順も常に最前面のため、overlaid オーバーレイ（地図 canvas の
  * 上に重ねる deck 専用 canvas。コンテナは pointer-events: none なので地図操作を
@@ -271,6 +283,7 @@ export const MOUNTAIN_LABEL_LAYER_ID = "mountain-labels";
  */
 export const OVERLAID_LAYER_IDS: readonly string[] = [
   MOUNTAIN_LABEL_LAYER_ID,
+  PEAK_LABEL_LAYER_ID,
   LABEL_LAYER_ID,
   RIVER_LABEL_LAYER_ID,
   CITY_LABEL_LAYER_ID,

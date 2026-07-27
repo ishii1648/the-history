@@ -3,6 +3,7 @@ import nameJa from "../data/name-ja.json" with { type: "json" };
 import nameOverrides from "../data/name-overrides.json" with { type: "json" };
 import citiesData from "../data/cities.json" with { type: "json" };
 import { ADOPTED_MOUNTAIN_NAMES } from "./build-mountains.ts";
+import { ADOPTED_PEAK_NAMES } from "./build-peaks.ts";
 
 // data/europe_*.geojson（全 20 年代）・data/hre_*.geojson（Roller 由来の 5 年代 +
 // TASK-85/86 の中世 HRE 領邦 hre_fiefs_* 7 年代。再生成コマンドの glob
@@ -722,6 +723,30 @@ Deno.test("主要山脈の日本語表記が登録されている（TASK-97 AC #
   assertEquals(offenders, []);
 });
 
+Deno.test("主要山峰の日本語表記が登録されている（TASK-99 AC #1）", () => {
+  // 値は NE（10m elevation points）の name_ja をそのまま採る。山脈
+  // （ADOPTED_MOUNTAIN_NAMES）と違い「〜山脈」のような語尾の統一規約は置かない。
+  // 日本語の慣用が山ごとに割れている（モンブラン / マッターホルン＝「山」を
+  // 付けない、エトナ山 / ベン・ネビス山＝付ける）ため、統一すると慣用から
+  // 外れた表記になってしまう。
+  const expected: Record<string, string> = {
+    "Mont Blanc": "モンブラン",
+    "Matterhorn": "マッターホルン",
+    "Grossglockner": "グロースグロックナー山",
+    "Monte Rosa": "モンテ・ローザ",
+    "Gora Elbrus": "エルブルス山",
+    "Monte Etna": "エトナ山",
+  };
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+  // 収録した山峰は全て日本語表記を持つ（英語のまま出るものが無い）
+  const missing = ADOPTED_PEAK_NAMES.filter(
+    (name) => typeof mapping[name] !== "string" || mapping[name] === "",
+  );
+  assertEquals(missing, []);
+});
+
 Deno.test("TASK-55 で消えた手書き都市訳が復元されている（TASK-61）", () => {
   // TASK-55 の選定変更で選外となった都市の手書き訳が name-ja.json から
   // 削除された。訳辞書は採用状況に依存せず保持できるため、削除された
@@ -761,6 +786,10 @@ function expectedNames(): Set<string> {
   // ADOPTED_MOUNTAIN_NAMES が唯一の定義元で、生成時に実データと突き合わせる
   // （不一致なら build-mountains が fail する）ため静的リストの二重管理にならない。
   for (const name of ADOPTED_MOUNTAIN_NAMES) names.add(name);
+  // TASK-99: 山峰名（data/peaks.geojson の name）。山脈と同じ理由で
+  // scripts/build-peaks.ts の ADOPTED_PEAK_NAMES を唯一の定義元とする
+  // （生成時に実データと突き合わせ、不一致なら build-peaks が fail する）。
+  for (const name of ADOPTED_PEAK_NAMES) names.add(name);
   const overrides = nameOverrides as { renames: Record<string, string> };
   for (const renamed of Object.values(overrides.renames)) names.add(renamed);
   const cities = citiesData as { years: Record<string, { name: string }[]> };
