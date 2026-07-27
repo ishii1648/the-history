@@ -279,16 +279,47 @@ body {
    （TASK-40 のクリーム地カード）。padding・font-size・line-height の差分は
    各クラス（.footer-content 等）側に残す */
 .popover-card {
+  /* TASK-117: 高さ上限の計算に使う 2 つの余白。
+     --popover-bottom-gap = カード下端からビューポート下端までの距離。
+       既定値はⓘ attribution のアンカー: .app-footer の bottom 6px
+       + トグル 28px（.corner-toggle-btn）+ 吹き出しの隙間 6px = 40px。
+       アンカー位置が違うポップオーバーは自分側でこの変数を上書きする。
+     --popover-top-gap = ビューポート上端に残す余白。左右の 8px（左下ボタンの
+       left: 8px）と揃えて画面端に貼り付いて見えないようにする。 */
+  --popover-bottom-gap: 40px;
+  --popover-top-gap: 8px;
+  /* TASK-117: max-height / max-width を padding・border 込みの外形に対する上限
+     として効かせる。content-box のままだと実際の高さが上限 + padding 18px +
+     border 2px になり、上端が計算より外へ出る（実測 top=-12px）。
+     max-width の calc(100vw - 32px) が横方向にはみ出さない上限になる副次効果も
+     ある（カードは padding の分だけ細くなる） */
+  box-sizing: border-box;
   position: absolute;
   left: 0;
   bottom: calc(100% + 6px);
   width: max-content;
   max-width: min(46ch, calc(100vw - 32px));
+  /* TASK-117: 中身（既知の制限の項目数など）が増えても上端がビューポートから
+     出ないよう、カード自身をスクロールコンテナにする。上限は
+     「カード下端から画面上端までに使える高さ」= 画面高 - 下端オフセット - 上端余白。
+     max-width の min(...) と同じく、内容が上限に届かない場合は従来どおり
+     内容なりの高さになる（attribution は短いので見た目は変わらない）。
+     dvh はモバイルの URL バーを除いた実表示高さ。未対応ブラウザは直前の vh 版に
+     フォールバックする */
+  max-height: calc(100vh - var(--popover-bottom-gap) - var(--popover-top-gap));
+  max-height: calc(100dvh - var(--popover-bottom-gap) - var(--popover-top-gap));
+  overflow-y: auto;
+  /* 端まで読んだあとのスクロールが背後の地図へ伝播しないようにする */
+  overscroll-behavior: contain;
   background: var(--parchment);
   border: 1px solid var(--frame);
   border-radius: 5px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
   color: var(--ink);
+  /* 羊皮紙の意匠を壊さない控えめなスクロールバー（細身・焦茶のつまみ・地は透明）。
+     macOS の overlay scrollbar ではスクロール中のみ現れるため実質無装飾に見える */
+  scrollbar-width: thin;
+  scrollbar-color: var(--frame) transparent;
 }
 
 .popover-card[hidden] {
@@ -304,7 +335,12 @@ body {
   position: absolute;
   left: 8px;
   bottom: 6px;
-  z-index: 5;
+  /* TASK-117: タイムライン（z-index: 10）より前面。展開したポップオーバーは上へ
+     伸びてタイムラインの帯（左端の垂直中央。実測で y≈150〜665 まで届く）と重なり、
+     下に潜ると本文が読めないため。折りたたみ時の当たり判定は 28px の丸ボタン
+     だけで、タイムラインの帯とは重ならないので操作の邪魔にならない。
+     解説パネル（15）・情報パネル（20）より下は維持する */
+  z-index: 11;
   font-family: var(--font-serif);
 }
 
@@ -335,7 +371,9 @@ body {
   position: absolute;
   left: 8px;
   bottom: 40px;
-  z-index: 6;
+  /* TASK-117: attribution（11）のすぐ上・タイムライン（10）より前面。理由は
+     .app-footer の z-index コメントと同じ */
+  z-index: 12;
   font-family: var(--font-serif);
 }
 
@@ -354,6 +392,10 @@ body {
    attribution-content と同系の羊皮紙カードに統一
    （カードの意匠は .popover-card に共通化。TASK-53） */
 .known-limitations-content {
+  /* TASK-117: このカードのアンカーは attribution より 34px 高い位置にある
+     （.known-limitations の bottom 40px + トグル 28px + 吹き出しの隙間 6px = 74px）。
+     .popover-card の高さ上限がこの分だけ低くなるよう既定値を上書きする */
+  --popover-bottom-gap: 74px;
   padding: 9px 12px;
   font-size: 12px;
   line-height: 1.5;
