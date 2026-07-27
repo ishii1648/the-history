@@ -73,6 +73,7 @@ import type {
   MultiPolygon,
   Polygon,
 } from "geojson";
+import { serializeWithAttribution } from "./build-attribution.ts";
 import { COORD_PRECISION } from "./build-data.ts";
 import { cleanFeatureCollection, formatCleanStats } from "./clean-polygons.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
@@ -576,7 +577,10 @@ async function buildFranceFiefFlat(): Promise<void> {
       resolutions,
     };
     const outPath = flatPathFor(year);
-    const json = JSON.stringify({ ...cleanFlat(fc, outPath), metadata });
+    const json = serializeWithAttribution(outPath, {
+      ...cleanFlat(fc, outPath),
+      metadata,
+    });
     await Deno.writeTextFile(outPath, json);
     console.log(
       `${outPath}: ${json.length} bytes, features=${fc.features.length}, 解消=${resolutions.length} 件`,
@@ -614,7 +618,10 @@ async function buildItalyFiefFlat(): Promise<void> {
       resolutions,
     };
     const outPath = italyFlatPathFor(year);
-    const json = JSON.stringify({ ...cleanFlat(fc, outPath), metadata });
+    const json = serializeWithAttribution(outPath, {
+      ...cleanFlat(fc, outPath),
+      metadata,
+    });
     await Deno.writeTextFile(outPath, json);
     console.log(
       `${outPath}: ${json.length} bytes, features=${fc.features.length}, 解消=${resolutions.length} 件`,
@@ -662,7 +669,7 @@ async function buildHreFiefFlat(): Promise<void> {
       }),
     };
     const outPath = hreFlatPathFor(year);
-    const json = JSON.stringify({
+    const json = serializeWithAttribution(outPath, {
       ...cleanFlat(subtracted.fc, outPath),
       metadata,
     });

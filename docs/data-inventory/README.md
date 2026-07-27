@@ -36,6 +36,132 @@
 > `hre_<year>.geojson`（§3.3）**で、年代は重複しない。統一しない理由は §3.7
 > の「Roller データとの統一の是非」を参照。
 
+### 1.1 パネルへ出す出典情報（`metadata`）と境界の確からしさ（TASK-109）
+
+クリック情報パネルは「選択した feature が属する FeatureCollection の
+`metadata`」を
+読んで出典を表示する。そのため配信する全データファイル（`cities.json` を含む）が
+次のキーを持つ。値は**各ビルドスクリプトの定数だけ**から組み立てており
+（`scripts/build-attribution.ts` の `DATA_ATTRIBUTIONS`）、出典が変われば
+metadata も 追従する。既存の `metadata`（諸侯領のビルド診断・flat
+化の解消記録など）は温存し、 下記のキーだけを足す。
+
+| キー              | 意味                       | 無い場合                 |
+| ----------------- | -------------------------- | ------------------------ |
+| `source`          | パネルに出すデータセット名 | —（必ずある）            |
+| `sourceUrl`       | 取得元 URL                 | —（必ずある）            |
+| `license`         | ライセンス識別子           | —（必ずある）            |
+| `commit`          | ピン留めコミット           | ピン留めが無ければ省略   |
+| `borderPrecision` | 境界の確からしさの区分     | 線・面を持たなければ省略 |
+
+| データ系統                                                           | `source`                                                               | `license`                     | `commit`                                       | `borderPrecision`                                |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------- | ------------------------------------------------ |
+| `europe_<year>` / `europe_flat_<year>` / `base_outline_<year>`       | historical-basemaps (aourednik)                                        | GPL-3.0                       | `62d8f1a03a71…`                                | 概略（年代で 2 区分。下記）                      |
+| `france_fiefs_*` / `hre_fiefs_*` / `italy_fiefs_*`（raw・flat とも） | OpenHistoricalMap                                                      | CC0-1.0                       | なし（Overpass の生クエリ）                    | 史料に基づく復元（概略。測量された境界ではない） |
+| `hre_<year>`（1500〜1700）                                           | Territories of the Holy Roman Empire (Roller, ETH Zürich)              | CC BY-NC-SA 4.0               | なし（Shapefile の bitstream UUID でピン留め） | 史料に基づく復元（概略。測量された境界ではない） |
+| `rivers.geojson` / `mountains.geojson`                               | Natural Earth                                                          | Public Domain (Natural Earth) | `ca96624a56bd…`                                | 現代地形の簡略化（歴史的境界ではない）           |
+| `peaks.geojson`                                                      | Natural Earth                                                          | Public Domain (Natural Earth) | `ca96624a56bd…`                                | なし（点データ）                                 |
+| `cities.json`                                                        | Historical Urban Population (Reba, Reitsma & Seto 2016; Chandler 系列) | CC BY 4.0                     | `808ff2b4a279…`                                | なし（点データ）                                 |
+
+`license` はビルド定数の値をそのまま使う（表記を整えるために書き写すと、定数を
+変えたときに追従漏れが起きるため）。例外は `cities.json` で、定数
+`CITIES_SOURCE_LICENSE` が「識別子 +
+データセット名」の長い表記なので先頭の識別子
+（`CC BY 4.0`）だけをパネルに出し、両者の整合をテストが `startsWith` で見張る。
+`cities.json` は GeoJSON ではないため、従来の `source`（description / repo /
+commit / file / url）はそのまま残し、契約のキーを持つ `metadata`
+を別に足している。
+
+#### 境界の確からしさの区分（4 区分）とその根拠
+
+区分は「境界がどう決まったか」で分ける。これより細かく分けても、区分の違いを
+裏づける情報がデータ側に無い（例: 諸侯領 1 件ごとの典拠の質は OHM のタグからは
+分からない）。線も面も持たない点データ（山峰・都市）には**付けない**。「境界の
+確からしさ」を語れる対象が無く、無理に区分を与えるとマーカー位置の精度と
+取り違えられるため。
+
+1. **概略（出典が全境界を概略と宣言）** — historical-basemaps 由来で、全 feature
+   の `BORDERPRECISION` が 1 = approximate のファイル。TASK-80
+   が境界をにじませて描く
+   根拠そのもの（`src/approximate_borders.ts`）。区間ごとの粗さの違い（長い直線ほど
+   概略）は同タスクの 3 段の描画が担うので、metadata
+   では出典の宣言をそのまま伝える。
+2. **概略（出典は確定境界を含むが、簡略化により数 km の近似）** — 同じ
+   historical-basemaps でも `BORDERPRECISION` に 2（moderately precise）や
+   3（determined by international
+   law）を含むファイル。上流の宣言をそのまま「正確」と 伝えてはいけない:
+   本パイプラインは simplify のトレランス 0.005〜0.1 度 （およそ 0.5〜11
+   km）で頂点を間引き、座標も 5 桁へ丸めてから配信するため、条約で
+   確定した境界でも地図上の線は数 km 規模の近似になる。TASK-80 のにじみ描画も
+   年代を問わず全年に掛かる（`src/main.ts` の
+   `memoizedApproximateBorderData`）ので、 「描かれている線は概略」という点は 1
+   と変わらない。**違うのは概略になった理由だけ**で、 それを明示するための区分。
+3. **史料に基づく復元（概略。測量された境界ではない）** —
+   領域ごとに存続期間付きで 作図された復元。OHM の諸侯領（`start_date` /
+   `end_date` を持つ個別リレーション）と ETH Zürich（Roller）の HRE 領邦。base
+   の一括スナップショットより典拠は個別だが、
+   測量境界ではないので「概略」であること自体は変わらない。文言に「概略」を残して
+   TASK-80 の全体注記と矛盾させない。
+4. **現代地形の簡略化（歴史的境界ではない）** — Natural Earth
+   の河川・山脈。そもそも
+   歴史的境界ではなく、当時の流路とも限らないことを明示する。
+
+区分 1 と 2 の切り分けは定数ではなくファイルの中身から決める
+（`basePrecisionOf`）。上流の `BORDERPRECISION` の実測分布（`europe_<year>` の
+feature 数）は次のとおりで、年代で宣言が変わるため：
+
+| 年代                 | 分布（値: 件数）                  |
+| -------------------- | --------------------------------- |
+| 900〜1530（12 年代） | 1: 50〜93（全件が 1）             |
+| 1600                 | 1: 71 / 3: 2                      |
+| 1650 / 1700 / 1715   | 1: 3〜5 / 3: 61〜79               |
+| 1783〜1914（7 年代） | 3: 55〜106（1880 のみ 2 が 1 件） |
+
+TASK-80 の「採用データは全 feature の `BORDERPRECISION` が 1」という説明は、
+**この地図が主対象とする中世〜近世前半（900〜1530）では実データどおり**で、1600
+年 以降は上流の宣言が 3 へ移る。混在するファイル（1600 年の
+71:2）は「宣言が割れたら 理由を明示する側へ倒す」規則で区分 2
+を採り、過大な精度を主張しない。
+
+#### 生成と追従漏れの検出
+
+出典の付与は
+`deno task build-attribution`（ネットワーク不要）で行う。パイプラインの
+**最後**に流す: データを再生成したら必ず実行する。
+
+```
+build-data / build-hre / build-*-fiefs / build-rivers / build-mountains /
+build-peaks / build-cities  →  build-fief-flat  →  build-fief-dedupe
+                                                 →  build-attribution（最後）
+```
+
+- 独立した最終段にしているのは、(1) 各取得スクリプトに配ると
+  `build-attribution.ts` が全取得スクリプトの定数を import する一方で全取得
+  スクリプトが `build-attribution.ts` を import する循環になり、定数の初期化順に
+  依存して壊れるため、(2) OHM の諸侯領は Overpass
+  の生クエリ由来でピン留めが無く、
+  出典を足すためだけに再取得すると無関係な差分が出るため。
+- ただし**アプリが実際にロードする派生ファイル**（`*_fiefs_flat_<year>` /
+  `europe_flat_<year>` / `base_outline_<year>`）は、生成元の
+  `build-fief-flat.ts` / `build-fief-dedupe.ts` 自身が
+  `serializeWithAttribution` を通して出典を載せる。 これらは自前の `metadata`
+  で上書き保存するため、載せ直さないと再生成のたびに
+  出典が落ちてパネルの出典欄が空になる。
+- `scripts/build-attribution_test.ts` が (a) 全データファイルの `metadata`
+  と定数の 一致、(b) `src/powers.ts` 等の URL
+  定数から辿った**ランタイムがロードする全ファイル**に `source` / `sourceUrl` /
+  `license` があること、(c) `dist` へ配信する全データ
+  ファイルが出典を持つか意図的な除外リスト（`UNATTRIBUTED_DATA_FILES`）に載ること、
+  (d) 「出典が全境界を概略と宣言」を名乗るファイルの `BORDERPRECISION` が実際に
+  1 だけであることを検証する。定数を変えて生成物を更新し忘れると (a) が落ちる。
+
+出典を持たせないファイルと理由（`UNATTRIBUTED_DATA_FILES`）:
+`index.json`（年代一覧・ feature を持たない）、`colors.json`（NAME
+から決定的に生成・外部出典なし）、 `name-overrides.json` / `name-ja.json` /
+`notes.json` / `known-limitations.json`
+（本リポジトリで手当てした定義・テキスト）、`fief-dedupe.json`（被覆率表・座標を
+持たない）。
+
 ## 2. 「ヨーロッパ」の範囲（本インベントリの絞り込み基準）
 
 元データ `europe_<year>.geojson` はヨーロッパ bbox（西経 25°〜東経 60°、北緯
