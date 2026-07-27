@@ -60,7 +60,7 @@ import {
   type Rgba,
   type YearDataLoader,
 } from "./powers.ts";
-import { displayLabel } from "./info.ts";
+import { displayLabel, tooltipPlacement } from "./info.ts";
 import {
   EMPTY_FIEF_DEDUPE_TABLE,
   excludeSuppressedFeatures,
@@ -1862,15 +1862,26 @@ function setupInfoUI(): void {
     return;
   }
 
-  // カーソルとツールチップが重ならないよう少しずらす（px）
-  const OFFSET_X = 12;
-  const OFFSET_Y = 12;
-
+  // TASK-111: カーソル近傍への配置は tooltipPlacement（純粋関数）に委ね、ここは
+  // 実測サイズの取得と style への反映だけを行う。hidden のままでは
+  // getBoundingClientRect が 0 を返すので、先に表示してから測る。折り返し後の
+  // 実寸が要るため、textContent の更新より後に測ることも必須。測る前に left/top を
+  // 原点へ戻すのは、絶対配置の shrink-to-fit 幅が「左端から親の右端まで」の
+  // 余白に依存し、前回の右寄り座標のままだと本来より狭く折り返された幅を
+  // 測ってしまうため（配置後は left + width <= viewport なので再折り返しは起きない）。
   showTooltip = (label, x, y) => {
     tooltip.textContent = label;
-    tooltip.style.left = `${x + OFFSET_X}px`;
-    tooltip.style.top = `${y + OFFSET_Y}px`;
+    tooltip.style.left = "0px";
+    tooltip.style.top = "0px";
     tooltip.hidden = false;
+    const rect = tooltip.getBoundingClientRect();
+    const { left, top } = tooltipPlacement(
+      { x, y },
+      { width: rect.width, height: rect.height },
+      { width: globalThis.innerWidth, height: globalThis.innerHeight },
+    );
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
   };
   hideTooltip = () => {
     tooltip.hidden = true;

@@ -1,5 +1,10 @@
 import { assertEquals } from "@std/assert";
-import { displayLabel } from "./info.ts";
+import {
+  displayLabel,
+  TOOLTIP_OFFSET_X,
+  TOOLTIP_OFFSET_Y,
+  tooltipPlacement,
+} from "./info.ts";
 
 Deno.test("displayLabel は SUBJECTO が NAME と異なれば「NAME — SUBJECTO 領」を返す", () => {
   assertEquals(
@@ -127,5 +132,90 @@ Deno.test("displayLabel は ja を省略すると従来どおり英語で整形�
       Castille: "Castile",
     }),
     "Granada — Castile 領",
+  );
+});
+
+// --- tooltipPlacement（TASK-111） ---
+
+Deno.test("tooltipPlacement は余白が足りていればカーソルの右下へ +12/+12 で置く", () => {
+  assertEquals(
+    tooltipPlacement(
+      { x: 100, y: 100 },
+      { width: 200, height: 40 },
+      { width: 1000, height: 800 },
+    ),
+    { left: 100 + TOOLTIP_OFFSET_X, top: 100 + TOOLTIP_OFFSET_Y },
+  );
+});
+
+Deno.test("tooltipPlacement は右端にちょうど収まる場合はフリップしない", () => {
+  // left(=788) + width(200) == viewport.width(1000) → はみ出していないので右下のまま
+  assertEquals(
+    tooltipPlacement(
+      { x: 776, y: 100 },
+      { width: 200, height: 40 },
+      { width: 1000, height: 800 },
+    ),
+    { left: 788, top: 112 },
+  );
+});
+
+Deno.test("tooltipPlacement は右端でカーソルの左側へフリップする", () => {
+  // 900 + 12 + 200 = 1112 > 1000 → left = 900 - 12 - 200
+  assertEquals(
+    tooltipPlacement(
+      { x: 900, y: 100 },
+      { width: 200, height: 40 },
+      { width: 1000, height: 800 },
+    ),
+    { left: 688, top: 112 },
+  );
+});
+
+Deno.test("tooltipPlacement は下端でカーソルの上側へフリップする", () => {
+  // 780 + 12 + 40 = 832 > 800 → top = 780 - 12 - 40
+  assertEquals(
+    tooltipPlacement(
+      { x: 100, y: 780 },
+      { width: 200, height: 40 },
+      { width: 1000, height: 800 },
+    ),
+    { left: 112, top: 728 },
+  );
+});
+
+Deno.test("tooltipPlacement は右下の角で水平・垂直の両方をフリップする", () => {
+  assertEquals(
+    tooltipPlacement(
+      { x: 900, y: 780 },
+      { width: 200, height: 40 },
+      { width: 1000, height: 800 },
+    ),
+    { left: 688, top: 728 },
+  );
+});
+
+Deno.test("tooltipPlacement はフリップしても収まらない狭い viewport では 0 へクランプする", () => {
+  // 幅・高さとも viewport より大きい → 右下も左上も収まらないので原点へ寄せる
+  assertEquals(
+    tooltipPlacement(
+      { x: 10, y: 10 },
+      { width: 300, height: 200 },
+      { width: 250, height: 150 },
+    ),
+    { left: 0, top: 0 },
+  );
+});
+
+Deno.test("tooltipPlacement はフリップ後に左（上）へはみ出す場合も viewport 内へクランプする", () => {
+  // 右へ置けず（190+12+180 > 200）フリップすると 190-12-180 = -2 で左へ出る
+  // → 0 へクランプ。縦は右端フリップの影響を受けず通常配置のまま
+  assertEquals(
+    tooltipPlacement(
+      { x: 190, y: 10 },
+      { width: 180, height: 40 },
+      { width: 200, height: 800 },
+    ),
+    { left: 0, top: 22 },
   );
 });

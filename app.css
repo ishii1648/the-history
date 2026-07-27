@@ -43,13 +43,19 @@ body {
 }
 
 /* TASK-7: ホバーツールチップ（app-spec §5.2）。カーソル近傍に追従表示する。
-   TASK-40: 羊皮紙トーンへ統一（クリーム地・焦茶インク・セリフ体） */
+   TASK-40: 羊皮紙トーンへ統一（クリーム地・焦茶インク・セリフ体）
+   TASK-111: 長い日本語ラベル（「領邦名 — 宗主名 領」）が枠外へあふれていた。
+   displayLabel の連結でラベル長に上限は無いので、幅を広げる方向ではなく
+   white-space: nowrap を外して折り返しを許す。幅は指定せず絶対配置の
+   shrink-to-fit に任せ（短いラベルは従来どおり小さいまま）、上限だけ
+   max-width で与える。狭い画面では枠ごと画面外へ出ないよう viewport 幅にも
+   従わせる（24px は左右のマージン相当）。 */
 .info-tooltip {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 20;
-  max-width: 260px;
+  max-width: min(260px, calc(100vw - 24px));
   padding: 4px 9px;
   background: var(--parchment);
   border: 1px solid var(--frame);
@@ -59,7 +65,14 @@ body {
   font-family: var(--font-serif);
   font-size: 14px;
   line-height: 1.3;
-  white-space: nowrap;
+  /* 日本語は任意位置で折り返せるが、長いラテン文字の連続（英語 NAME の
+     フォールバック表示）は単語境界が無いと 1 語で max-width を超える。
+     overflow-wrap: anywhere で最後の手段としてどこでも折る（break-word と違い
+     shrink-to-fit の最小幅計算にも効くので、幅も内容に合わせて縮む）。 */
+  overflow-wrap: anywhere;
+  /* 行頭に来られない文字（長音符「ー」・小書き仮名・句読点）で折らせない。
+     既定の normal だと「神聖ロ／ーマ帝国」のように長音符が行頭へ落ちる。 */
+  line-break: strict;
   /* ツールチップ自身がホバー判定を奪わないようにする */
   pointer-events: none;
 }
@@ -127,6 +140,11 @@ body {
   font-size: 15px;
   font-weight: 700;
   line-height: 1.35;
+  /* TASK-111: ツールチップと同じ文字列を表示するため折り返し規則も揃える
+     （パネルは nowrap を持たず元から折り返すので、はみ出しの修正ではなく
+     同じラベルが両者で同じ位置で折れるようにするための指定）。 */
+  overflow-wrap: anywhere;
+  line-break: strict;
 }
 
 .info-panel-close {
