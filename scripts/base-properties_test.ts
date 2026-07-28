@@ -11,9 +11,13 @@
  */
 
 import { assert, assertEquals } from "@std/assert";
-import type { FeatureCollection } from "geojson";
+import type { Feature, FeatureCollection } from "geojson";
 import { SNAPSHOT_YEARS } from "../src/config.ts";
 import { colorKeyFor } from "../src/powers.ts";
+import {
+  containingSuzerainKey,
+  parseSuzerainOverrides,
+} from "../src/suzerain_extent.ts";
 
 /** 上流データの帰属プロパティ（NAME を解決するときの候補と同じ並び） */
 const ATTRIBUTION_KEYS = ["NAME", "ABBREVN", "SUBJECTO", "PARTOF"] as const;
@@ -759,6 +763,187 @@ Deno.test("確度 B の正規化が対象外の年代・勢力へ波及してい
     }
   }
   assertEquals(changed, [], `巻き込みで変わった帰属: ${changed.join(", ")}`);
+});
+
+/**
+ * base が帝国ポリゴンに一括で含めて塗っていた仏封土・ロマーニャの是正
+ * （TASK-124）。
+ *
+ * 1279 / 1300 年の上流 base には Artois・Saint-Pol・Flanders・リミニに当たる
+ * feature が存在せず、一帯は単一の Holy Roman Empire MultiPolygon の内側に
+ * ある。propertyFixes は properties の上書きしかできない（decision-20）ため、
+ * まず BASE_FIEF_SPLITS（TASK-101 の機構）が OHM 由来の同名区画 ∩ 帝国
+ * ポリゴンを base から切り出し、その後段の propertyFixes が宗主
+ * （SUBJECTO / PARTOF）を宣言する。ここでは生成物側でその結果を固定する。
+ */
+const EXPECTED_CARVED_ATTRIBUTIONS: ReadonlyArray<{
+  year: number;
+  name: string;
+  subjecto: string;
+  partof: string;
+  reason: string;
+}> = [
+  // アルトワ伯領: 1180 年にイザベル・ド・エノーの持参領として王領入りし、
+  // 1237 年にロベール 1 世へ与えられたフランス王家の所領
+  {
+    year: 1279,
+    name: "County of Artois",
+    subjecto: "France",
+    partof: "France",
+    reason: "1237 年以降フランス王家の所領（帝国領ではない）",
+  },
+  {
+    year: 1300,
+    name: "County of Artois",
+    subjecto: "France",
+    partof: "France",
+    reason: "1237 年以降フランス王家の所領（帝国領ではない）",
+  },
+  // サンポル伯領: アルトワ・ピカルディ境界のフランス王の封土
+  {
+    year: 1279,
+    name: "Counts of Saint-Pol",
+    subjecto: "France",
+    partof: "France",
+    reason: "フランス王の封土（帝国側に移るのは 1493 年以降）",
+  },
+  {
+    year: 1300,
+    name: "Counts of Saint-Pol",
+    subjecto: "France",
+    partof: "France",
+    reason: "フランス王の封土（帝国側に移るのは 1493 年以降）",
+  },
+  // フランドル伯領: 伯領本体（スヘルデ川以西）はフランス王の封土
+  {
+    year: 1279,
+    name: "County of Flanders",
+    subjecto: "France",
+    partof: "France",
+    reason:
+      "843 年ヴェルダン条約以来スヘルデ川以西は西フランク＝フランス王の封土",
+  },
+  {
+    year: 1300,
+    name: "County of Flanders",
+    subjecto: "France",
+    partof: "France",
+    reason:
+      "843 年ヴェルダン条約以来スヘルデ川以西は西フランク＝フランス王の封土",
+  },
+  // リミニ領主領: 1278 年にルドルフ 1 世がロマーニャの帝国権を教皇へ譲渡済み
+  {
+    year: 1300,
+    name: "Lordship of Rimini",
+    subjecto: "Papal States",
+    partof: "Papal States",
+    reason: "1278 年にロマーニャの帝国権は教皇ニコラウス 3 世へ譲渡済み",
+  },
+];
+
+Deno.test("帝国塗りだった仏封土・リミニが base で是正されている（TASK-124）", () => {
+  const wrong: string[] = [];
+  for (const expected of EXPECTED_CARVED_ATTRIBUTIONS) {
+    const features = readBase(expected.year).features.filter(
+      (feature) => feature.properties?.NAME === expected.name,
+    );
+    if (features.length === 0) {
+      wrong.push(`${expected.year} ${expected.name}: feature が無い`);
+      continue;
+    }
+    for (const feature of features) {
+      const props = (feature.properties ?? {}) as Record<string, unknown>;
+      for (
+        const [key, want] of [
+          ["SUBJECTO", expected.subjecto],
+          ["PARTOF", expected.partof],
+        ] as const
+      ) {
+        if (props[key] !== want) {
+          wrong.push(
+            `${expected.year} ${expected.name}.${key}=${
+              JSON.stringify(props[key])
+            } (期待 ${JSON.stringify(want)} / ${expected.reason})`,
+          );
+        }
+      }
+    }
+    // 宗主キー（suzerain_extent.ts）の union で外枠を描くため、宗主が同年代の
+    // NAME に無いと「宙に浮いた宗主」になる（TASK-104 の同名テストと同じ規律）
+    const exists = readBase(expected.year).features.some(
+      (feature) => feature.properties?.NAME === expected.subjecto,
+    );
+    if (!exists) {
+      wrong.push(
+        `${expected.year} ${expected.name} → ${expected.subjecto}: 宗主が同年代に存在しない`,
+      );
+    }
+  }
+  assertEquals(wrong, [], `是正されていない帰属: ${wrong.join(", ")}`);
+});
+
+Deno.test("諸侯領オーバーレイの外枠が包含 base から正しい宗主へ解決する（TASK-124）", () => {
+  // バグの症状そのもの（Artois 等をホバーすると帝国の外枠が出る）を、実際の
+  // ランタイム経路（containingSuzerainKey = 宗主補正 > 宣言 SUBJECTO > 包含
+  // base 勢力）で固定する。オーバーレイ側は SUBJECTO を持たないため、切り出した
+  // base feature が包含判定で当たらない限り帝国へ戻る。
+  const overrides = parseSuzerainOverrides(
+    JSON.parse(Deno.readTextFileSync("data/name-overrides.json")),
+  );
+  const cases: ReadonlyArray<{
+    year: number;
+    path: string;
+    name: string;
+    key: string;
+  }> = [
+    ...[1279, 1300].flatMap((year) => [
+      {
+        year,
+        path: `data/france_fiefs_flat_${year}.geojson`,
+        name: "County of Artois",
+        key: "France",
+      },
+      {
+        year,
+        path: `data/france_fiefs_flat_${year}.geojson`,
+        name: "Counts of Saint-Pol",
+        key: "France",
+      },
+      {
+        year,
+        path: `data/france_fiefs_flat_${year}.geojson`,
+        name: "County of Flanders",
+        key: "France",
+      },
+    ]),
+    {
+      year: 1300,
+      path: "data/italy_fiefs_flat_1300.geojson",
+      name: "Lordship of Rimini",
+      key: "Papal States",
+    },
+  ];
+  const wrong: string[] = [];
+  for (const { year, path, name, key } of cases) {
+    const base = readBase(year);
+    const fiefs = JSON.parse(
+      Deno.readTextFileSync(path),
+    ) as FeatureCollection;
+    const fief = fiefs.features.find((f) => f.properties?.NAME === name);
+    if (fief === undefined) {
+      wrong.push(`${year} ${name}: オーバーレイに feature が無い`);
+      continue;
+    }
+    const resolved = containingSuzerainKey(fief as Feature, base, overrides);
+    if (resolved !== key) {
+      wrong.push(
+        `${year} ${name} -> ${JSON.stringify(resolved)} (期待 ${
+          JSON.stringify(key)
+        })`,
+      );
+    }
+  }
+  assertEquals(wrong, [], `外枠の宗主キーが誤っている: ${wrong.join(", ")}`);
 });
 
 Deno.test("NAME が無い feature は帰属プロパティを 1 つも持たない（TASK-102）", () => {

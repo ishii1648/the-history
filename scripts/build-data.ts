@@ -3,11 +3,12 @@
  * - historical-basemaps の world_<year>.geojson × 20 年代を取得（コミット固定）
  * - ヨーロッパ bbox でクリップし、空ジオメトリになった feature を除去
  * - NAME の表記ゆれ・null を name-overrides.json で補正
- * - 上流 properties の異常（文字化け・列ずれの異常値・年代間で揺れる SUBJECTO）を
- *   name-overrides.json の propertyFixes で上書きし、空の SUBJECTO / PARTOF を
- *   NAME（＝独立勢力）に寄せて正規化する（TASK-102）
- * - 上流が王国領に一括で含めている半独立の封土を、諸侯領オーバーレイの区画で
- *   切り出して独立 feature にする（BASE_FIEF_SPLITS、TASK-101）
+ * - 上流が王国領・帝国領に一括で含めている封土を、諸侯領オーバーレイの区画で
+ *   切り出して独立 feature にする（BASE_FIEF_SPLITS、TASK-101 / TASK-124）
+ * - 上流 properties の異常（文字化け・列ずれの異常値・年代間で揺れる SUBJECTO・
+ *   誤った宗主）を name-overrides.json の propertyFixes で上書きし、空の
+ *   SUBJECTO / PARTOF を NAME（＝独立勢力）に寄せて正規化する（TASK-102。
+ *   切り出した封土 feature にも届くよう、上書きは切り出しの後段に置く）
  * - simplify + 座標丸め + ポリゴンのクリーンアップ（自己交差の解消・微小破片の除去、
  *   scripts/clean-polygons.ts）で 1 ファイル SIZE_LIMIT_BYTES 以下に収める
  * - data/europe_<year>.geojson × 20 と data/index.json を生成する
@@ -310,7 +311,9 @@ export interface BaseFiefSplit {
    * 切り出した feature に与える SUBJECTO。NAME と同じ値（自己参照）なら
    * 独立勢力の扱いになり、色キー（powers.ts colorKeyFor）はオーバーレイと同じ
    * NAME 単独キー、表示ラベル（info.ts displayLabel）は NAME のみ、勢力圏の
-   * 外枠（suzerain_extent.ts）は自分だけを囲う。
+   * 外枠（suzerain_extent.ts）は自分だけを囲う。別勢力名（TASK-124 の
+   * France / Papal States）なら従属の扱いになり、色キーは複合キー
+   * "NAME|SUBJECTO"、外枠は宗主の union に含まれる。
    */
   subjecto: string;
   /** 切り出しに使うオーバーレイ GeoJSON のパス */
@@ -339,15 +342,72 @@ export interface BaseFiefSplit {
  * - 独立扱いにすると色キーがオーバーレイと同じ `Duchy of Normandy` になり、base の
  *   塗りと諸侯領オーバーレイの色が一致する（colors.json に新キーも増えない）。
  */
-export const BASE_FIEF_SPLITS: readonly BaseFiefSplit[] = [1000, 1100].map(
-  (year) => ({
+export const BASE_FIEF_SPLITS: readonly BaseFiefSplit[] = [
+  ...[1000, 1100].map((year): BaseFiefSplit => ({
     year,
     fromName: "Kingdom of France",
     fiefName: "Duchy of Normandy",
     subjecto: "Duchy of Normandy",
     fiefPath: `data/france_fiefs_flat_${year}.geojson`,
-  }),
-);
+  })),
+  /**
+   * ## 帝国ポリゴンからの仏封土・リミニの切り出し（TASK-124）
+   *
+   * 上流の 1279 / 1300 年 base は、アルトワ伯領・サンポル伯領・フランドル
+   * 伯領（史実ではいずれもフランス王の封土）とリミニ（1278 年にルドルフ 1 世が
+   * ロマーニャの帝国権を教皇ニコラウス 3 世へ譲渡済み）を、単一の
+   * Holy Roman Empire MultiPolygon に含めて塗っている。該当地域に独立の
+   * feature が存在しないため propertyFixes（properties の上書きのみ・
+   * decision-20）では届かず、まずここで OHM 由来の同名区画 ∩ 帝国ポリゴンを
+   * 切り出して feature を立てる。宗主（SUBJECTO / PARTOF = France /
+   * Papal States）の宣言と年号付きの根拠は data/name-overrides.json の
+   * propertyFixes 側に置き、「形状の出所は OHM（decision-18）・帰属の是正は
+   * propertyFixes（decision-20）」という既存の分担を保つ（subjecto は
+   * 切り出し直後から正しい宗主にしておき、後段の propertyFixes が PARTOF を
+   * 含めて確定させる）。
+   *
+   * ノルマンディー（独立 = 自己参照）と違い宗主を France にするのは、これらが
+   * 「王の実効支配が及ばない半独立の封土」ではなく「上流が誤って帝国側に
+   * 塗った王の封土」だから。SUBJECTO=France により勢力圏の外枠
+   * （suzerain_extent.ts）はフランス王国の union に含まれ、諸侯領オーバーレイの
+   * ホバーも包含判定（containingSuzerainKey）でフランスの外枠に解決する。
+   *
+   * リミニは italy_fiefs に feature がある 1300 年のみ。1279 年の
+   * ロマーニャ一帯も同じ根拠（1278 年譲渡）で帝国塗りは誤りだが、切り出しに
+   * 使える出典付きの区画が無く（decision-14 / decision-18: 出典を持たない
+   * 座標は合成しない）、known-limitations に明記して残す。
+   */
+  ...[1279, 1300].flatMap((year): BaseFiefSplit[] => [
+    {
+      year,
+      fromName: "Holy Roman Empire",
+      fiefName: "County of Artois",
+      subjecto: "France",
+      fiefPath: `data/france_fiefs_flat_${year}.geojson`,
+    },
+    {
+      year,
+      fromName: "Holy Roman Empire",
+      fiefName: "Counts of Saint-Pol",
+      subjecto: "France",
+      fiefPath: `data/france_fiefs_flat_${year}.geojson`,
+    },
+    {
+      year,
+      fromName: "Holy Roman Empire",
+      fiefName: "County of Flanders",
+      subjecto: "France",
+      fiefPath: `data/france_fiefs_flat_${year}.geojson`,
+    },
+  ]),
+  {
+    year: 1300,
+    fromName: "Holy Roman Empire",
+    fiefName: "Lordship of Rimini",
+    subjecto: "Papal States",
+    fiefPath: "data/italy_fiefs_flat_1300.geojson",
+  },
+];
 
 /** ポリゴン系ジオメトリを持つ feature か */
 function isPolygonal(
@@ -592,21 +652,23 @@ async function main(): Promise<void> {
     const raw = await fetchFeatureCollection(year);
     const clipped = clipToBbox(raw, EUROPE_BBOX);
     const named = applyNameOverrides(clipped, overrides);
-    // TASK-102: 個別の異常（文字化け・列ずれ・年代間で揺れる SUBJECTO）を先に
-    // 当ててから、残った空の SUBJECTO / PARTOF を一律で NAME に寄せる
-    // （normalizeSubjectProps、下の切り出しの後）。順序を逆にすると、直すべき
-    // 空値が正規化で先に埋まって上書きが素通りする。
+    // 切り出しは simplify の前に行い、王国側の残余と封土が同じ座標列から
+    // 同じトレランスで簡略化されるようにする
+    const split = await applyBaseFiefSplits(named, year);
+    // TASK-102: 個別の異常（文字化け・列ずれ・年代間で揺れる SUBJECTO）は
+    // 正規化（normalizeSubjectProps）より先に当てる。順序を逆にすると、直すべき
+    // 空値が正規化で先に埋まって上書きが素通りする。切り出しより後に置くのは、
+    // TASK-124 で切り出した封土 feature（County of Artois 等）にも propertyFixes
+    // が届くようにするため（切り出し前には対象 feature が存在しない）。上流由来の
+    // feature の NAME は切り出しで変わらないので、既存エントリの挙動は変わらない。
     const fixed = applyPropertyFixes(
-      named,
+      split,
       year,
       overrides.propertyFixes ?? [],
     );
-    // 切り出しは simplify の前に行い、王国側の残余と封土が同じ座標列から
-    // 同じトレランスで簡略化されるようにする
-    const split = await applyBaseFiefSplits(fixed, year);
-    // 正規化は切り出しの後。TASK-101 が立てる封土 feature も通し、
+    // 正規化は切り出し・上書きの後。TASK-101 が立てる封土 feature も通し、
     // 「SUBJECTO / PARTOF が空の feature は出力に残らない」を段の位置で保証する
-    const normalized = normalizeSubjectProps(split);
+    const normalized = normalizeSubjectProps(fixed);
     const { fc, tolerance, size, cleanStats } = shrinkToLimit(
       normalized,
       SIZE_LIMIT_BYTES,
