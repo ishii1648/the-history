@@ -4,13 +4,13 @@
  *   `area:<領域>` ラベルでファイル衝突リスクを判定し、同時に着手してよいタスク集合を返す
  * - 選定規則:
  *   1. 候補 = status が "To Do" かつ dependencies が全て終端ステータスのタスク
- *   2. label "bug" を含む候補が 1 つ以上あれば候補を bug 群のみに絞る
- *   3. (ordinal 昇順, 同値は ID 数値昇順) で走査し貪欲に選択:
+ *   2. 候補を (label "bug" 最優先, ordinal 昇順, 同値は ID 数値昇順) で走査し貪欲に選択
+ *      （bug は候補を絞り込むのではなく順序で最優先を表す。非 bug も候補に残る）:
  *      - area を 1 つ以上持ち既選択のどの area とも交差しない → 選択
  *      - area 未付与 → 先頭候補としてのみ選択でき、その場合は単独集合で確定
  *        （保守的フォールバック）。2 件目以降ならスキップ（reason: no area labels）
  *      - area 交差 → スキップ（reason: area conflict: <area> (<先行 TASK-ID>)）
- *   4. In Progress のタスクが存在する間は「新規に開始してよい集合」として空を返す
+ *   3. In Progress のタスクが存在する間は「新規に開始してよい集合」として空を返す
  * - CLI として実行すると結果を JSON 1 行で stdout に出力する:
  *   {"tasks":[{"id":"TASK-28","areas":["docs"]},...],"skipped":[{"id":"TASK-30","reason":"..."},...]}
  */
@@ -71,12 +71,10 @@ export function selectNextTasks(
   // In Progress がある間は新規に開始してよいタスクはない（next_task と同じ前提）
   if (hasActiveTask(tasks)) return { tasks: [], skipped: [] };
 
-  let candidates = selectCandidates(tasks, terminalStatuses);
-  // bug 最優先の維持: bug 候補があれば bug 群のみを対象にする
-  if (candidates.some((task) => task.labels.includes("bug"))) {
-    candidates = candidates.filter((task) => task.labels.includes("bug"));
-  }
-  // 群を絞った後は compareTasks の bug 優先は無効化され ordinal → ID 順になる
+  // bug 最優先は compareTasks が bug を先頭に置くことで担保される（優先順位で
+  // あって排他ではない）。候補集合から非 bug を除外はしないので、bug と area が
+  // 非交差の非 bug タスクは同じ集合に入りうる（docs/development-style.md 4.1 章）。
+  const candidates = selectCandidates(tasks, terminalStatuses);
   candidates.sort(compareTasks);
 
   const selected: SelectedTask[] = [];
