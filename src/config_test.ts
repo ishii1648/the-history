@@ -65,9 +65,8 @@ Deno.test("SNAPSHOT_YEARS に重複がない", () => {
   assertEquals(unique.size, SNAPSHOT_YEARS.length);
 });
 
-Deno.test("SNAPSHOT_YEARS は仕様書どおりの 20 件である", () => {
+Deno.test("SNAPSHOT_YEARS は仕様書どおりの 19 件である（TASK-119 で 900 を廃止）", () => {
   assertEquals(SNAPSHOT_YEARS, [
-    900,
     1000,
     1100,
     1200,
@@ -88,6 +87,11 @@ Deno.test("SNAPSHOT_YEARS は仕様書どおりの 20 件である", () => {
     1900,
     1914,
   ]);
+});
+
+Deno.test("SNAPSHOT_YEARS の最古年は 1000 で 900 を含まない（TASK-119）", () => {
+  assertEquals(SNAPSHOT_YEARS[0], 1000);
+  assert(!SNAPSHOT_YEARS.includes(900));
 });
 
 Deno.test("INITIAL_YEAR は 1000 である", () => {
@@ -185,8 +189,7 @@ Deno.test("HRE_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS の
   }
 });
 
-Deno.test("HRE_FIEF_OVERLAY_YEARS は 900 を含まず、Roller 由来の HRE_OVERLAY_YEARS とも互いに素（TASK-86）", () => {
-  assert(!HRE_FIEF_OVERLAY_YEARS.includes(900));
+Deno.test("HRE_FIEF_OVERLAY_YEARS は Roller 由来の HRE_OVERLAY_YEARS と互いに素（TASK-86）", () => {
   const overlap = HRE_FIEF_OVERLAY_YEARS.filter((y) =>
     HRE_OVERLAY_YEARS.includes(y)
   );
@@ -235,8 +238,7 @@ Deno.test("ITALY_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS �
   }
 });
 
-Deno.test("ITALY_FIEF_OVERLAY_YEARS は 900 と近世（1500 以降）を含まない（TASK-96）", () => {
-  assert(!ITALY_FIEF_OVERLAY_YEARS.includes(900));
+Deno.test("ITALY_FIEF_OVERLAY_YEARS は近世（1500 以降）を含まない（TASK-96）", () => {
   for (const year of ITALY_FIEF_OVERLAY_YEARS) {
     assert(year < 1500, `${year} は近世（base が担う年代）`);
   }
@@ -273,10 +275,9 @@ Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YE
   }
 });
 
-Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は 900 と近世（1500 以降）を含まない（TASK-110）", () => {
-  // 900 は Cliopatria 側にも内部領邦が乏しく、1500 以降は base が主権国家を
-  // 個別収録するため（既存 3 系統と同じ「二重表示を作らない」規則）
-  assert(!CLIOPATRIA_FIEF_OVERLAY_YEARS.includes(900));
+Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は近世（1500 以降）を含まない（TASK-110）", () => {
+  // 1500 以降は base が主権国家を個別収録するため
+  // （既存 3 系統と同じ「二重表示を作らない」規則）
   for (const year of CLIOPATRIA_FIEF_OVERLAY_YEARS) {
     assert(year < 1500, `${year} は近世（base が担う年代）`);
   }

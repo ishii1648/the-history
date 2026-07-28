@@ -64,7 +64,7 @@ Deno.test("parseFiefDedupeTable は数値でない被覆率と壊れた年エン
 
 Deno.test("coverageFor は未登録の年・勢力に 0 を返す", () => {
   const table = parseFiefDedupeTable({ years: { "1200": { "Britany": 1 } } });
-  assertEquals(coverageFor(table, 900, "Britany"), 0);
+  assertEquals(coverageFor(table, 1100, "Britany"), 0);
   assertEquals(coverageFor(table, 1200, "Bohemia"), 0);
 });
 
@@ -97,9 +97,9 @@ Deno.test("suppressedPowerNames は閾値ちょうどを抑制対象に含める
   assert(suppressedPowerNames(table, 1200).has("Exact"));
 });
 
-Deno.test("suppressedPowerNames は対象外の年（900・1400 以降）で空集合を返す", () => {
+Deno.test("suppressedPowerNames は対象外の年（1400 以降）で空集合を返す", () => {
   const table = parseFiefDedupeTable({ years: { "1200": { "Britany": 1 } } });
-  for (const year of [900, 1400, 1492, 1914]) {
+  for (const year of [1400, 1492, 1914]) {
     assertEquals(suppressedPowerNames(table, year).size, 0);
   }
 });

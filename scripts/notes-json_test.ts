@@ -11,7 +11,7 @@ const years = notes.years as Record<
   { points: string[]; summary: string }
 >;
 
-Deno.test("notes.json は全 20 スナップショット年を過不足なくカバーする", () => {
+Deno.test("notes.json は全 19 スナップショット年を過不足なくカバーする", () => {
   const actual = Object.keys(years).map(Number).sort((a, b) => a - b);
   assertEquals(actual, [...SNAPSHOT_YEARS]);
 });

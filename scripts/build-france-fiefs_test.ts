@@ -145,7 +145,7 @@ Deno.test("isActiveAtYear: end_date 欠損は無期限・start_date 欠損は最
   assert(isActiveAtYear("1237", undefined, 1300));
   assert(isActiveAtYear("1237", undefined, 9999));
   assert(!isActiveAtYear("1237", undefined, 1236));
-  assert(isActiveAtYear(undefined, "1300", 900));
+  assert(isActiveAtYear(undefined, "1300", 800));
   assert(!isActiveAtYear(undefined, "1300", 1301));
   assert(isActiveAtYear(undefined, undefined, 1200));
 });

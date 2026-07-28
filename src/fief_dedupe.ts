@@ -88,7 +88,7 @@ export function coverageFor(
 
 /**
  * 指定年でラベルを抑制する base 勢力 NAME の集合を返す（純粋関数）。
- * 諸侯領オーバーレイ対象外の年（900・1400 以降）は表にエントリが無いため
+ * 諸侯領オーバーレイ対象外の年（1400 以降）は表にエントリが無いため
  * 常に空集合になり、見た目は従来から変わらない（AC #3）。
  */
 export function suppressedPowerNames(

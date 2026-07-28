@@ -6,6 +6,14 @@ import {
   encodeState,
   type StateBounds,
 } from "./url_state.ts";
+import {
+  INITIAL_CENTER,
+  INITIAL_YEAR,
+  INITIAL_ZOOM,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  SNAPSHOT_YEARS,
+} from "./config.ts";
 
 const DEFAULTS: AppState = {
   year: 1000,
@@ -14,7 +22,7 @@ const DEFAULTS: AppState = {
 };
 
 const BOUNDS: StateBounds = {
-  years: [900, 1000, 1100, 1200, 1300],
+  years: [1000, 1100, 1200, 1300, 1400],
   minZoom: 3,
   maxZoom: 8,
 };
@@ -37,8 +45,8 @@ Deno.test("encodeState は zoom / center を小数 1 桁に丸める", () => {
 
 Deno.test("encodeState は整数座標にも .0 を付ける（丸め桁を固定）", () => {
   assertEquals(
-    encodeState({ year: 900, zoom: 3, center: [0, 0] }),
-    "?year=900&zoom=3.0&center=0.0,0.0",
+    encodeState({ year: 1000, zoom: 3, center: [0, 0] }),
+    "?year=1000&zoom=3.0&center=0.0,0.0",
   );
 });
 
@@ -72,6 +80,25 @@ Deno.test("decodeState は空クエリで全てデフォルトへフォールバ
 });
 
 // ---- decodeState: year のパラメータ単位フォールバック ----
+
+Deno.test("decodeState は廃止された ?year=900 を実運用の境界で初期年 1000 へフォールバックする（TASK-119）", () => {
+  // 900 年スナップショット廃止前に共有された URL が開かれても壊れないことを、
+  // 実際の SNAPSHOT_YEARS / INITIAL_YEAR を境界にして固定する。
+  const defaults: AppState = {
+    year: INITIAL_YEAR,
+    zoom: INITIAL_ZOOM,
+    center: [INITIAL_CENTER[0], INITIAL_CENTER[1]],
+  };
+  const bounds: StateBounds = {
+    years: SNAPSHOT_YEARS,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM,
+  };
+  assertEquals(
+    decodeState("?year=900&zoom=5.0&center=10.0,45.0", defaults, bounds),
+    { year: 1000, zoom: 5, center: [10, 45] },
+  );
+});
 
 Deno.test("decodeState は非実在年をデフォルト year にフォールバックし他は活かす", () => {
   assertEquals(

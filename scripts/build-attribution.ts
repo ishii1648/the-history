@@ -69,7 +69,7 @@ import {
  * 1. approximate … 出典自身が「この年代の全境界は概略」と宣言しているもの。
  *    historical-basemaps は BORDERPRECISION（1 = approximate / 2 = moderately
  *    precise / 3 = determined by international law）を feature に持ち、本アプリの
- *    中世〜近世前半（900〜1530）の生成物は全 feature が 1 だった（実測）。
+ *    中世〜近世前半（1000〜1530）の生成物は全 feature が 1 だった（実測）。
  *    TASK-80 はこれを根拠に境界をにじませて描いている（src/approximate_borders.ts）。
  *    区間ごとの粗さの違い（長い直線ほど概略）は同タスクの 3 段の描画が担うので、
  *    ここでは出典の宣言をそのまま伝える。

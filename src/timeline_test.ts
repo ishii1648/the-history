@@ -8,7 +8,7 @@ import {
   yearAtIndex,
 } from "./timeline.ts";
 
-const YEARS = [900, 1000, 1100, 1200] as const;
+const YEARS = [1000, 1100, 1200, 1300] as const;
 
 Deno.test("clampIndex は範囲内の index をそのまま返す", () => {
   assertEquals(clampIndex(2, 4), 2);
@@ -31,17 +31,17 @@ Deno.test("clampIndex は length が 0 なら 0 を返す", () => {
 });
 
 Deno.test("yearAtIndex は index に対応する年を返す", () => {
-  assertEquals(yearAtIndex(YEARS, 0), 900);
-  assertEquals(yearAtIndex(YEARS, 3), 1200);
+  assertEquals(yearAtIndex(YEARS, 0), 1000);
+  assertEquals(yearAtIndex(YEARS, 3), 1300);
 });
 
 Deno.test("yearAtIndex は範囲外 index を端の年にクランプする", () => {
-  assertEquals(yearAtIndex(YEARS, -1), 900);
-  assertEquals(yearAtIndex(YEARS, 99), 1200);
+  assertEquals(yearAtIndex(YEARS, -1), 1000);
+  assertEquals(yearAtIndex(YEARS, 99), 1300);
 });
 
 Deno.test("indexOfYear は実在年の index を返す", () => {
-  assertEquals(indexOfYear(YEARS, 1100), 2);
+  assertEquals(indexOfYear(YEARS, 1200), 2);
 });
 
 Deno.test("indexOfYear は実在しない年（間の年）で -1 を返す", () => {
@@ -49,16 +49,16 @@ Deno.test("indexOfYear は実在しない年（間の年）で -1 を返す", ()
 });
 
 Deno.test("stepYear は中間で前後の年へ移動する", () => {
-  assertEquals(stepYear(YEARS, 1000, 1), 1100);
-  assertEquals(stepYear(YEARS, 1000, -1), 900);
+  assertEquals(stepYear(YEARS, 1100, 1), 1200);
+  assertEquals(stepYear(YEARS, 1100, -1), 1000);
 });
 
 Deno.test("stepYear は先頭で -1 しても先頭のまま停止する", () => {
-  assertEquals(stepYear(YEARS, 900, -1), 900);
+  assertEquals(stepYear(YEARS, 1000, -1), 1000);
 });
 
 Deno.test("stepYear は末尾で +1 しても末尾のまま停止する", () => {
-  assertEquals(stepYear(YEARS, 1200, 1), 1200);
+  assertEquals(stepYear(YEARS, 1300, 1), 1300);
 });
 
 Deno.test("stepYear は実在しない年ではそのまま返す", () => {

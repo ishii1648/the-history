@@ -88,8 +88,9 @@ export const ITALY_FIEF_BBOX: readonly [number, number, number, number] = [
  *
  * 1000 年は 3 件（March of Tuscany 31,764 / Duchy of Spoleto 22,146 /
  * March of Montferrat 3,382）と少ないが、トスカーナ辺境伯領とスポレート公国だけで
- * 中部イタリアの大半を覆い面として成立するため収録する（france_fiefs が 900 年を
- * 落とした「2 件で面にならない」ケースとは異なる）。
+ * 中部イタリアの大半を覆い面として成立するため収録する（france_fiefs が
+ * かつての 900 年を落とした「2 件で面にならない」ケースとは異なる。900 年は
+ * TASK-119 でスナップショット年自体が廃止された）。
  */
 export const ITALY_FIEF_YEARS: readonly number[] = [
   1000,
@@ -155,7 +156,7 @@ export const ITALY_FIEF_EXCLUSIONS: Record<string, string> = {
     "City of San Marino / Fiorentino / County of Vernio 12 km² / " +
     "Republic of Noli 58 km² / County of Novellara and Bagnolo 50 km²）。" +
     "収録した最小は County of Guastalla 133 km² で、100 km² を採否の境目にした" +
-    "（hre_fiefs の year900 で「点に近い領域」を落とした判断と同じ基準）。",
+    "（hre_fiefs が「点に近い領域」を落とした判断と同じ基準）。",
   ohmDateErrors:
     "Golden Ambrosian Republic（史実は 1447〜1450 のミラノ市共和国）が OHM では " +
     "1449〜1500 になっており 1492 年でも有効判定になる。hre_fiefs と同じく " +
