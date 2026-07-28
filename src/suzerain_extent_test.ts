@@ -718,7 +718,10 @@ Deno.test("実データ: 伊諸侯領の宗主キーの内訳が全 7 年代で�
     1100: { [HRE]: 4, "Papal States": 2, Corsica: 1 },
     1200: { [HRE]: 7, "Papal States": 2, Corsica: 1 },
     1279: { [HRE]: 10, "Papal States": 1, Corsica: 1 },
-    1300: { [HRE]: 12, "Papal States": 1, Corsica: 1 },
+    // 1300 の Papal States 2 件は Republic of Ancona と Lordship of Rimini。
+    // リミニは TASK-124 で base の帝国塗りを是正した（1278 年にルドルフ 1 世が
+    // ロマーニャの帝国権を教皇へ譲渡済みのため）
+    1300: { [HRE]: 11, "Papal States": 2, Corsica: 1 },
     1400: { [HRE]: 13, "Papal States": 1, Corsica: 1, [NO_SUZERAIN]: 1 },
     1492: { [HRE]: 16, "Papal States": 3, [NO_SUZERAIN]: 1 },
   };

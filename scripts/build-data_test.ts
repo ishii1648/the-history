@@ -512,10 +512,12 @@ Deno.test("splitFiefFromBase は切り出せないとき警告して base をそ
 });
 
 Deno.test("BASE_FIEF_SPLITS は 1000/1100 のノルマンディーを独立勢力として切り出す", () => {
-  assertEquals(BASE_FIEF_SPLITS.map((s) => s.year), [1000, 1100]);
-  for (const split of BASE_FIEF_SPLITS) {
+  const normandy = BASE_FIEF_SPLITS.filter(
+    (s) => s.fiefName === "Duchy of Normandy",
+  );
+  assertEquals(normandy.map((s) => s.year), [1000, 1100]);
+  for (const split of normandy) {
     assertEquals(split.fromName, "Kingdom of France");
-    assertEquals(split.fiefName, "Duchy of Normandy");
     // 独立勢力（自己参照）。名目上の宗主をフランス王とする補正は行わない
     assertEquals(split.subjecto, split.fiefName);
     assertEquals(
@@ -523,6 +525,63 @@ Deno.test("BASE_FIEF_SPLITS は 1000/1100 のノルマンディーを独立勢�
       `data/france_fiefs_flat_${split.year}.geojson`,
     );
   }
+});
+
+Deno.test("BASE_FIEF_SPLITS は 1279/1300 の帝国塗り封土を正しい宗主で切り出す（TASK-124）", () => {
+  // 上流 base が Holy Roman Empire の単一ポリゴンに含めて塗っている
+  // 仏封土（Artois / Saint-Pol / Flanders）とリミニを切り出す。宗主の確定は
+  // propertyFixes（data/name-overrides.json）が後段で行うが、切り出し直後から
+  // 正しい宗主を持つよう subjecto にも同じ値を宣言する。
+  const carved = BASE_FIEF_SPLITS.filter(
+    (s) => s.fromName === "Holy Roman Empire",
+  );
+  const expected: Array<[number, string, string, string]> = [
+    [
+      1279,
+      "Counts of Saint-Pol",
+      "France",
+      "data/france_fiefs_flat_1279.geojson",
+    ],
+    [1279, "County of Artois", "France", "data/france_fiefs_flat_1279.geojson"],
+    [
+      1279,
+      "County of Flanders",
+      "France",
+      "data/france_fiefs_flat_1279.geojson",
+    ],
+    [
+      1300,
+      "Counts of Saint-Pol",
+      "France",
+      "data/france_fiefs_flat_1300.geojson",
+    ],
+    [1300, "County of Artois", "France", "data/france_fiefs_flat_1300.geojson"],
+    [
+      1300,
+      "County of Flanders",
+      "France",
+      "data/france_fiefs_flat_1300.geojson",
+    ],
+    [
+      1300,
+      "Lordship of Rimini",
+      "Papal States",
+      "data/italy_fiefs_flat_1300.geojson",
+    ],
+  ];
+  assertEquals(
+    carved
+      .map((
+        s,
+      ): [number, string, string, string] => [
+        s.year,
+        s.fiefName,
+        s.subjecto,
+        s.fiefPath,
+      ])
+      .sort((a, b) => a[0] - b[0] || a[1].localeCompare(b[1], "en")),
+    expected,
+  );
 });
 
 /** ノルマンディー公領の内陸点（簡略化後も内側に残る位置を選ぶ） */
