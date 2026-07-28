@@ -376,7 +376,12 @@ export function splitWaterAndAddCoastline(
  * 従来表示を維持する（dem ソースのエラーで OpenFreeMap へフォールバック
  * しないことは src/fallback.ts が担保する）。
  */
-export function buildBasemapStyle(pmtilesUrl: string): BasemapStyle {
+export function buildBasemapStyle(
+  pmtilesUrl: string,
+  // TASK-127: 本番は R2 カスタムドメインの絶対 URL に差し替える。
+  // 省略時は従来どおり同一オリジン（ローカル開発・既存テストの互換）
+  demPmtilesUrl: string = DEM_PMTILES_URL,
+): BasemapStyle {
   // TASK-73: light flavor をそのまま使わず、羊皮紙トーンへ上書きした flavor
   // から生成する（配色の定義は PARCHMENT_FLAVOR_OVERRIDES に集約）。
   const flavor = parchmentFlavor();
@@ -392,7 +397,7 @@ export function buildBasemapStyle(pmtilesUrl: string): BasemapStyle {
       },
       [DEM_SOURCE_ID]: {
         type: "raster-dem",
-        url: `pmtiles://${DEM_PMTILES_URL}`,
+        url: `pmtiles://${demPmtilesUrl}`,
         encoding: "terrarium",
         // terrarium（AWS Terrain Tiles）は 256px タイル
         tileSize: 256,

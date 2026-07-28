@@ -1,0 +1,22 @@
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": [
+        "https://zeitreises.com",
+        "https://www.zeitreises.com",
+        "https://zeitreise-aop.pages.dev",
+        "https://*.zeitreise-aop.pages.dev"
+      ],
+      "AllowedMethods": ["GET", "HEAD"],
+      "AllowedHeaders": [
+        "range",
+        "if-match",
+        "if-none-match",
+        "if-modified-since",
+        "if-unmodified-since"
+      ],
+      "ExposeHeaders": ["etag", "content-length", "content-range"],
+      "MaxAgeSeconds": 86400
+    }
+  ]
+}
