@@ -1,9 +1,11 @@
 ---
 id: TASK-128
 title: dev サーバの圧縮配信とロード性能の計測ハーネスを追加する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 16:42'
+updated_date: '2026-07-28 17:31'
 labels:
   - 'area:scripts'
 dependencies: []
@@ -27,3 +29,15 @@ scripts/serve.ts は @std/http の serveDir をそのまま使っており無圧
 - [ ] #6 計測結果を gitignore されたパスへ JSON で出力し before/after の比較に使える
 - [ ] #7 圧縮対象の判定ロジックが純粋関数として切り出され、テストが先に書かれている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 現状把握: dev サーバの実装（deno task dev の実体）と CDP ハーネス（scripts/verify/cdp.ts）を読む
+2. TDD red: 圧縮対象判定（拡張子/Content-Type → gzip/brotli/無圧縮）の純粋関数テストを先に書く（AC#7）
+3. dev サーバ: Accept-Encoding に応じたテキスト系（html/css/js/json/geojson）の圧縮配信。pmtiles 等は二重圧縮しない（AC#1/#2）
+4. 計測ハーネス: CDP で初期ロード所要時間・転送量（圧縮後/非圧縮換算）・年代切替 1 回の追加転送量と時間・全年代切替後の JS heap を取得し、gitignore 済みパスへ JSON 出力（AC#3〜#6）
+5. deno fmt --check / lint / test / build green + 実測 1 回を回して JSON 出力を確認
+
+並列化判定: 見送り（理由: 計測ハーネスは圧縮配信の効果検証と一体で、転送量の取得経路が dev サーバの応答ヘッダに依存する。担当ファイルも scripts/ 配下で近接し分割の利得が薄い）
+<!-- SECTION:PLAN:END -->
