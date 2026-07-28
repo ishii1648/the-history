@@ -17,12 +17,22 @@
  * france_fiefs_flat_*）は base の内側を細分するだけで勢力圏の外縁を広げないため、
  * オーバーレイの有無に依らず同じ外枠が得られる。
  *
- * ## 諸侯領オーバーレイの宗主キー（TASK-120）
- * 仏諸侯領（france-fiefs）と Cliopatria 由来の領邦（cliopatria-fiefs）の一部は
- * 上流が SUBJECTO を持たないため、宣言された宗主から外枠を引けない。これらは
- * 「その封土が base のどの勢力の内側にあるか」（containingSuzerainKey）で宗主
- * キーを決める。根拠は上のデータ源の一本化と同じで、諸侯領は base の内側を
- * 細分したものだから、包含する base 勢力こそがその封土を含む勢力圏になる。
+ * ## 諸侯領オーバーレイの宗主キー（TASK-120・TASK-121）
+ * 仏諸侯領（france-fiefs）・伊諸侯領（italy-fiefs）と Cliopatria 由来の領邦
+ * （cliopatria-fiefs）の一部は上流が SUBJECTO を持たないため、宣言された宗主
+ * から外枠を引けない。これらは「その封土が base のどの勢力の内側にあるか」
+ * （containingSuzerainKey）で宗主キーを決める。根拠は上のデータ源の一本化と
+ * 同じで、諸侯領は base の内側を細分したものだから、包含する base 勢力こそが
+ * その封土を含む勢力圏になる。
+ *
+ * 伊諸侯領は帝国イタリア側の領邦・教皇領側・事実上独立の都市共和国が同じ
+ * レイヤーに並ぶが、この規則ならどれに寄せるかを実装者が史実解釈で決めずに
+ * 済む（base がその土地をどう塗っているかがそのまま答えになる）。実測では
+ * モンフェッラート辺境伯領などが帝国、スポレート公領・アンコーナ共和国・
+ * フェラーラ公領が教皇領へ解決する。都市共和国（フィレンツェ・シエナ・
+ * ルッカ）は base が帝国色で塗るため帝国の外枠が出る。ピサ・ジェノヴァは
+ * コルシカ島を含むポリゴンでラベルが島に立つため base の Corsica へ解決する
+ * （docs/data-inventory/README.md §3.8 の既知の制限）。
  *
  * name-overrides.json の `suzerains` に封土名を足す案（decision-19/20 の字義）は
  * 採らない。`suzerains` は SUBJECTO の書き換えとして色キー（colorKeyFor =
@@ -56,6 +66,7 @@ import {
   CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 } from "./picking.ts";
 import { labelAnchorFor } from "./labels.ts";
@@ -88,13 +99,13 @@ const EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
 ];
 
 /**
- * 包含する base 勢力から外枠を引く諸侯領オーバーレイのレイヤー（TASK-120）。
- * 伊諸侯領（italy-fiefs）は TASK-121 の対象なのでここには入れない
- * （帝国内のコムーネと教皇領側が混在し、帰属の判断が仏諸侯領と別問題になる）。
+ * 包含する base 勢力から外枠を引く諸侯領オーバーレイのレイヤー
+ * （TASK-120・伊諸侯領は TASK-121）。
  */
 const FIEF_EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
   FRANCE_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
+  ITALY_FIEF_LAYER_ID,
 ];
 
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */
@@ -163,7 +174,13 @@ export function resolveSuzerainKey(
  * 領邦 全 128 feature）では包含する base 勢力が常にちょうど 1 つに定まる。
  *
  * base 側に一致が無い（海側にはみ出した封土など）場合は null = 外枠なしで、
- * 従来どおりの挙動に落ちる。
+ * 従来どおりの挙動に落ちる（伊諸侯領のピオンビーノ領主領 1400 / 1492 が該当）。
+ *
+ * 「宗主候補の版図が封土より小さいなら包含とは言えない」という面積のガードは
+ * 採らない。ピサ・ジェノヴァのコルシカを外枠なしに落とせる代わりに、base の
+ * ブルターニュ公領・ノルマンディー公領のポリゴンがオーバーレイ側より小さい
+ * ために仏封土 7 件（1000〜1300 の Duchy of Brittany / Duchy of Normandy）が
+ * 外枠を失い、TASK-120 で直した挙動を壊すため（実測）。
  */
 export function containingSuzerainKey(
   fief: Feature,
@@ -190,7 +207,7 @@ export function containingSuzerainKey(
 
 /**
  * picking 結果から「表示すべき外枠の宗主キー」を解決する（純粋関数）。
- * 対象外レイヤー（伊諸侯領・都市・河川・picking なし）は null = 外枠を出さない。
+ * 対象外レイヤー（都市・河川・山脈・picking なし）は null = 外枠を出さない。
  * レイヤー ID を先に判定するため、GeoJSON Feature でない picking 結果
  * （都市マーカー）でも安全に null を返す。
  *
