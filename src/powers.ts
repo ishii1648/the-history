@@ -417,7 +417,7 @@ export function createFranceFiefOverlayLoader(
 /**
  * 中世イタリア諸侯領オーバーレイ用のローダを作る（TASK-96）。
  * HRE 領邦・仏諸侯領オーバーレイと同じ機構（createOverlayLoader）に載せることで、
- * 非対象年（900・1500 以降）は fetch せず空 FC を返し、ベースマップの
+ * 非対象年（1500 以降）は fetch せず空 FC を返し、ベースマップの
  * ヴェネツィア共和国・教皇領・ミラノ公国と二重表示にならないことを構造的に
  * 保証する。
  */
@@ -438,7 +438,7 @@ export function createItalyFiefOverlayLoader(
 /**
  * Cliopatria 領邦オーバーレイ用のローダを作る（TASK-110）。
  * 既存 3 系統と同じ機構（createOverlayLoader）に載せることで、
- * - 非対象年（900・1500 以降）は fetch せず空 FC を返し、base の主権国家
+ * - 非対象年（1500 以降）は fetch せず空 FC を返し、base の主権国家
  *   ポリゴンと二重表示にならないことを構造的に保証する
  * - 取得失敗・**データ未生成**（cliopatria_fiefs_flat_* がまだ無い環境）は
  *   reject せず warn + 空 FC に落ちるので、年代切替も base の表示も壊れない

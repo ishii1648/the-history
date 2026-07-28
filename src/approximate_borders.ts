@@ -63,7 +63,7 @@ export const UNCERTAINTY_TIERS: readonly UncertaintyTier[] = [
  * 「長い」と見なすセグメント長（km）の閾値（TASK-80 AC #2/#5）。
  *
  * 根拠は実データの分布（data/base_outline_1200.geojson の 4659 セグメント:
- * 中央値 15.8 km・p90 53.8 km・p99 291 km。europe_900 / europe_1500 でも
+ * 中央値 15.8 km・p90 53.8 km・p99 291 km。europe_1000 / europe_1500 でも
  * 中央値 10〜15 km・p90 35〜42 km と同傾向）。
  * - LONG_SEGMENT_KM = 50 ≒ p90。セグメント数の 7〜11% だが線の総延長の
  *   35〜52% を占める「頂点が粗い区間」の入口。

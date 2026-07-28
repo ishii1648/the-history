@@ -89,7 +89,7 @@ Deno.test("取得範囲は実測に使った帝国中核域 bbox をピン留め
   assertEquals([...HRE_FIEF_BBOX], [45.5, 5.5, 55.0, 19.0]);
 });
 
-Deno.test("対象年は SNAPSHOT_YEARS の部分集合で 900 を含まない", () => {
+Deno.test("対象年は SNAPSHOT_YEARS の部分集合で中世 7 年代", () => {
   assertEquals([...HRE_FIEF_YEARS], [1000, 1100, 1200, 1279, 1300, 1400, 1492]);
   for (const year of HRE_FIEF_YEARS) {
     assert(
@@ -97,9 +97,6 @@ Deno.test("対象年は SNAPSHOT_YEARS の部分集合で 900 を含まない", 
       `${year} は SNAPSHOT_YEARS に含まれない`,
     );
   }
-  // 900 年は神聖ローマ帝国（962 年成立）が存在せず、許可リストで有効なのも
-  // 6 件（うち面のある領邦は 3 件）しかないため対象外
-  assert(!HRE_FIEF_YEARS.includes(900));
 });
 
 Deno.test("採用する admin_level は 4 / 5（2 = 主権国家・3 = 帝国構成王国は除く）", () => {
@@ -167,7 +164,7 @@ Deno.test("見送り理由が分類ごとに記録されている（AC3）", () 
   assert("freeImperialCities" in HRE_FIEF_EXCLUSIONS);
   assert("hungarianCounties" in HRE_FIEF_EXCLUSIONS);
   assert("polishVoivodeships" in HRE_FIEF_EXCLUSIONS);
-  assert("year900" in HRE_FIEF_EXCLUSIONS);
+  assert("outOfSnapshotYears" in HRE_FIEF_EXCLUSIONS);
 });
 
 Deno.test("1200 年を収録する判断の根拠が記録されている（AC3）", () => {
