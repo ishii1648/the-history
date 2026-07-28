@@ -215,6 +215,141 @@ export function formatPortInUseMessage(
   return lines.join("\n");
 }
 
+// ---- 圧縮配信（TASK-128） ----
+//
+// 本番の Cloudflare はテキスト系アセットへ自動で圧縮（brotli/gzip）を適用する
+// 一方、serveDir は無圧縮で配信するため、ローカルの体感と本番の実効転送量が
+// 乖離していた。dev サーバでも Accept-Encoding に応じて圧縮して配信する。
+//
+// 方式は gzip（Web 標準 CompressionStream）を採用する:
+// - Deno の CompressionStream は gzip/deflate のみ対応で、brotli には
+//   node:zlib のストリーム接続が別途必要になる。
+// - ブラウザの Accept-Encoding には常に gzip が含まれる（Chrome は
+//   "gzip, deflate, br, zstd"）ため、gzip はすべてのブラウザと交渉可能。
+// - 本タスクの目的は「本番（圧縮あり）に近い転送量でローカル計測する」ことで、
+//   テキスト系アセットに対する gzip の圧縮率は brotli と 1 割前後の差に収まり
+//   比較基盤としては十分。判定ロジック（chooseEncoding）は encoding を返す
+//   設計にしてあり、brotli が必要になれば追加できる。
+
+/** dev サーバが応答に適用する符号化方式。 */
+export type ContentEncoding = "gzip" | "identity";
+
+/**
+ * 圧縮対象とみなす拡張子。テキスト系アセットのみで、pmtiles・png 等の
+ * 圧縮済みバイナリは含めない（二重圧縮の禁止: AC#2）。
+ */
+export const COMPRESSIBLE_EXTENSIONS: readonly string[] = [
+  ".html",
+  ".css",
+  ".js",
+  ".mjs",
+  ".json",
+  ".geojson",
+  ".svg",
+  ".txt",
+  ".xml",
+  ".map",
+];
+
+/**
+ * 圧縮対象とみなす Content-Type。拡張子を持たないパス（`/` → index.html 等）
+ * でも serveDir が付けた Content-Type から圧縮可否を判定できるようにする。
+ */
+const COMPRESSIBLE_CONTENT_TYPE_RE =
+  /^(text\/|application\/(json|geo\+json|javascript|xml)|image\/svg\+xml)/;
+
+/**
+ * Accept-Encoding ヘッダを受理可能な符号化方式名の配列にする（純粋関数）。
+ * `gzip;q=0` のような明示的拒否（q=0）は除外し、名前は小文字に正規化する。
+ */
+export function parseAcceptEncoding(header: string | null): string[] {
+  if (!header) return [];
+  const names: string[] = [];
+  for (const part of header.split(",")) {
+    const [rawName, ...params] = part.split(";");
+    const name = rawName.trim().toLowerCase();
+    if (!name) continue;
+    const q = params
+      .map((p) => p.trim().toLowerCase())
+      .find((p) => p.startsWith("q="))
+      ?.slice(2);
+    if (q !== undefined && Number(q) === 0) continue;
+    names.push(name);
+  }
+  return names;
+}
+
+/**
+ * リクエストパス・応答 Content-Type・Accept-Encoding から適用する符号化方式を
+ * 決める純粋関数（AC#7）。テキスト系アセット（拡張子または Content-Type で
+ * 判定）かつクライアントが gzip（または *）を受理する場合のみ "gzip" を返し、
+ * pmtiles 等の圧縮済みバイナリはパスも Content-Type も該当しないため
+ * "identity"（無圧縮）になる。
+ */
+export function chooseEncoding(input: {
+  pathname: string;
+  contentType: string | null;
+  acceptEncoding: string | null;
+}): ContentEncoding {
+  const accepted = parseAcceptEncoding(input.acceptEncoding);
+  if (!accepted.includes("gzip") && !accepted.includes("*")) return "identity";
+
+  const pathname = input.pathname.toLowerCase();
+  const byExtension = COMPRESSIBLE_EXTENSIONS.some((ext) =>
+    pathname.endsWith(ext)
+  );
+  const byContentType = input.contentType !== null &&
+    COMPRESSIBLE_CONTENT_TYPE_RE.test(input.contentType.toLowerCase());
+  return byExtension || byContentType ? "gzip" : "identity";
+}
+
+/**
+ * ハンドラの応答を Accept-Encoding に応じて gzip 圧縮するミドルウェア。
+ * 以下は素通しする:
+ * - chooseEncoding が identity と判定した応答（圧縮済みバイナリ等）
+ * - 200 以外（206 Partial Content を圧縮すると Range のバイト位置が壊れる。
+ *   304 等の body 無し応答も対象外）
+ * - 既に Content-Encoding が付いた応答（二重圧縮の禁止）
+ */
+export function withCompression(
+  handler: (req: Request) => Response | Promise<Response>,
+): (req: Request) => Promise<Response> {
+  return async (req) => {
+    const res = await handler(req);
+    const encoding = chooseEncoding({
+      pathname: new URL(req.url).pathname,
+      contentType: res.headers.get("Content-Type"),
+      acceptEncoding: req.headers.get("Accept-Encoding"),
+    });
+    if (
+      encoding === "identity" ||
+      res.status !== 200 ||
+      res.body === null ||
+      res.headers.get("Content-Encoding") !== null
+    ) {
+      return res;
+    }
+
+    const headers = new Headers(res.headers);
+    // 圧縮後の長さは事前に分からないため Content-Length は落とす
+    // （chunked 転送になる）。
+    headers.delete("Content-Length");
+    headers.set("Content-Encoding", encoding);
+    headers.append("Vary", "Accept-Encoding");
+    const compressed = res.body.pipeThrough(
+      new CompressionStream(encoding) as unknown as ReadableWritablePair<
+        Uint8Array<ArrayBuffer>,
+        Uint8Array<ArrayBufferLike>
+      >,
+    );
+    return new Response(compressed, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  };
+}
+
 // ---- 副作用あり（プロセス調査・起動） ----
 
 async function runCommand(cmd: string, args: string[]): Promise<string | null> {
@@ -269,12 +404,15 @@ export async function startServer(
   const lookup = deps.findOccupants ?? findOccupants;
   const log = deps.log ?? ((m: string) => console.log(m));
 
-  const handler = (req: Request) =>
+  // TASK-128: 本番（Cloudflare の自動圧縮）に近い転送量で配信・計測できるよう、
+  // テキスト系アセットは Accept-Encoding に応じて gzip 圧縮する。
+  const handler = withCompression((req: Request) =>
     serveDir(req, {
       fsRoot: config.root,
       quiet: true,
       headers: [CACHE_CONTROL_HEADER],
-    });
+    })
+  );
 
   const onListen = (addr: { port: number }) => {
     log(`dev サーバを起動しました: http://localhost:${addr.port}/`);
