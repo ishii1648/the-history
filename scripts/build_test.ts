@@ -47,7 +47,9 @@ Deno.test("getOptionalCopyTargets は distDir を反映する", () => {
 });
 
 Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON を dist/data/ にコピーする対象を返す", () => {
-  const targets = getDataCopyTargets("dist", [900, 1000], [1500, 1530], [1200]);
+  const targets = getDataCopyTargets("dist", [1000, 1100], [1500, 1530], [
+    1200,
+  ]);
   assertEquals(targets, [
     { from: "data/index.json", to: "dist/data/index.json" },
     { from: "data/colors.json", to: "dist/data/colors.json" },
@@ -72,8 +74,8 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
       from: "data/known-limitations.json",
       to: "dist/data/known-limitations.json",
     },
-    { from: "data/europe_900.geojson", to: "dist/data/europe_900.geojson" },
     { from: "data/europe_1000.geojson", to: "dist/data/europe_1000.geojson" },
+    { from: "data/europe_1100.geojson", to: "dist/data/europe_1100.geojson" },
     // TASK-19: HRE 主要領邦オーバーレイ用の GeoJSON（deno task build-hre で生成）
     { from: "data/hre_1500.geojson", to: "dist/data/hre_1500.geojson" },
     { from: "data/hre_1530.geojson", to: "dist/data/hre_1530.geojson" },
@@ -98,7 +100,7 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
 });
 
 Deno.test("getDataCopyTargets は fiefYears 省略時に fief-dedupe と base_outline を含めない（TASK-78 AC #3）", () => {
-  const targets = getDataCopyTargets("dist", [900], [1500]);
+  const targets = getDataCopyTargets("dist", [1000], [1500]);
   assertEquals(
     targets.filter((t) =>
       t.from.includes("fief-dedupe") || t.from.includes("base_outline")
@@ -143,7 +145,7 @@ Deno.test("getDataCopyTargets は distDir を反映する", () => {
 });
 
 Deno.test("getDataCopyTargets は fiefYears 省略時に france_fiefs を含めない（後方互換）", () => {
-  const targets = getDataCopyTargets("dist", [900], [1500]);
+  const targets = getDataCopyTargets("dist", [1000], [1500]);
   assertEquals(
     targets.filter((t) => t.from.includes("france_fiefs")),
     [],
@@ -335,7 +337,7 @@ Deno.test("getDataCopyTargets は europe_flat をオーバーレイ年の和集�
 });
 
 Deno.test("getDataCopyTargets は fiefYears 省略時に europe_flat を含めない（TASK-92）", () => {
-  const targets = getDataCopyTargets("dist", [900], [1500]);
+  const targets = getDataCopyTargets("dist", [1000], [1500]);
   assertEquals(targets.filter((t) => t.from.includes("europe_flat")), []);
 });
 
@@ -369,7 +371,7 @@ Deno.test("getDataCopyTargets は italyFiefYears の italy_fiefs_flat をコピ�
 });
 
 Deno.test("getDataCopyTargets は italyFiefYears 省略時に italy_fiefs を含めない（後方互換。TASK-96）", () => {
-  const targets = getDataCopyTargets("dist", [900], [1500]);
+  const targets = getDataCopyTargets("dist", [1000], [1500]);
   assertEquals(targets.filter((t) => t.from.includes("italy_fiefs")), []);
 });
 

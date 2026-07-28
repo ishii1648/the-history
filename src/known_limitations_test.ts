@@ -11,7 +11,7 @@ import {
 Deno.test("parseKnownLimitations は limitations 配列の有効なエントリを返す", () => {
   const json: unknown = {
     limitations: [
-      { id: "a", years: { from: 900, to: 1492 }, text: "text-a" },
+      { id: "a", years: { from: 1000, to: 1492 }, text: "text-a" },
       { id: "b", text: "text-b" },
     ],
   };
@@ -19,7 +19,7 @@ Deno.test("parseKnownLimitations は limitations 配列の有効なエントリ�
   assertEquals(result.length, 2);
   assertEquals(result[0], {
     id: "a",
-    years: { from: 900, to: 1492 },
+    years: { from: 1000, to: 1492 },
     text: "text-a",
   });
   assertEquals(result[1], { id: "b", text: "text-b" });
@@ -100,10 +100,10 @@ Deno.test("parseKnownLimitations は years が不正形（from>to・非数値・
 
 Deno.test("parseKnownLimitations は years が同一年（from===to）のエントリを受け入れる", () => {
   const json: unknown = {
-    limitations: [{ id: "a", years: { from: 900, to: 900 }, text: "t" }],
+    limitations: [{ id: "a", years: { from: 1200, to: 1200 }, text: "t" }],
   };
   assertEquals(parseKnownLimitations(json), [
-    { id: "a", years: { from: 900, to: 900 }, text: "t" },
+    { id: "a", years: { from: 1200, to: 1200 }, text: "t" },
   ]);
 });
 
@@ -111,17 +111,17 @@ Deno.test("parseKnownLimitations は years が同一年（from===to）のエン�
 
 Deno.test("isKnownLimitationActiveForYear は years 省略時は常に true", () => {
   const limitation: KnownLimitation = { id: "a", text: "t" };
-  assertEquals(isKnownLimitationActiveForYear(limitation, 900), true);
+  assertEquals(isKnownLimitationActiveForYear(limitation, 1000), true);
   assertEquals(isKnownLimitationActiveForYear(limitation, 1914), true);
 });
 
 Deno.test("isKnownLimitationActiveForYear は years 範囲内（境界含む）で true", () => {
   const limitation: KnownLimitation = {
     id: "a",
-    years: { from: 900, to: 1492 },
+    years: { from: 1000, to: 1492 },
     text: "t",
   };
-  assertEquals(isKnownLimitationActiveForYear(limitation, 900), true);
+  assertEquals(isKnownLimitationActiveForYear(limitation, 1000), true);
   assertEquals(isKnownLimitationActiveForYear(limitation, 1492), true);
   assertEquals(isKnownLimitationActiveForYear(limitation, 1200), true);
 });
@@ -140,11 +140,11 @@ Deno.test("isKnownLimitationActiveForYear は years 範囲外で false", () => {
 
 Deno.test("knownLimitationEntries は年代範囲内の項目に active: true を付与する", () => {
   const limitations: KnownLimitation[] = [
-    { id: "a", years: { from: 900, to: 1492 }, text: "t-a" },
+    { id: "a", years: { from: 1000, to: 1492 }, text: "t-a" },
   ];
   const result = knownLimitationEntries(limitations, 1200);
   assertEquals(result, [
-    { id: "a", years: { from: 900, to: 1492 }, text: "t-a", active: true },
+    { id: "a", years: { from: 1000, to: 1492 }, text: "t-a", active: true },
   ]);
 });
 
@@ -160,7 +160,7 @@ Deno.test("knownLimitationEntries は年代範囲外の項目に active: false �
 
 Deno.test("knownLimitationEntries は years 省略項目に常に active: true を付与する", () => {
   const limitations: KnownLimitation[] = [{ id: "a", text: "t-a" }];
-  const result = knownLimitationEntries(limitations, 900);
+  const result = knownLimitationEntries(limitations, 1000);
   assertEquals(result, [{ id: "a", text: "t-a", active: true }]);
 });
 
@@ -168,9 +168,9 @@ Deno.test("knownLimitationEntries は全件を保持し元の順序を維持す�
   const limitations: KnownLimitation[] = [
     { id: "a", years: { from: 1530, to: 1700 }, text: "t-a" },
     { id: "b", text: "t-b" },
-    { id: "c", years: { from: 900, to: 1000 }, text: "t-c" },
+    { id: "c", years: { from: 1000, to: 1100 }, text: "t-c" },
   ];
-  const result = knownLimitationEntries(limitations, 950);
+  const result = knownLimitationEntries(limitations, 1050);
   assertEquals(result.map((entry) => entry.id), ["a", "b", "c"]);
   assertEquals(result.map((entry) => entry.active), [false, true, true]);
 });
