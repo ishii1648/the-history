@@ -70,7 +70,6 @@ import {
 } from "./info.ts";
 import {
   EMPTY_FIEF_DEDUPE_TABLE,
-  excludeSuppressedFeatures,
   FIEF_DEDUPE_DATA_URL,
   type FiefDedupeTable,
   parseFiefDedupeTable,
@@ -83,6 +82,8 @@ import {
   CITY_LABEL_SIZE_PX,
   COLLISION_SIZE_SCALE,
   FIEF_LABEL_COLOR,
+  fiefLabelsVisibleAt,
+  filterPowerLabelsByZoom,
   isHreSuzerainFeature,
   type LabelDatum,
   labelTextStyleProps,
@@ -962,16 +963,26 @@ function peakNameFromPick(info: PickingInfo): string | null {
 }
 
 /**
- * picking 結果から、外枠を出すべき宗主キーを解決する（TASK-94）。
+ * picking 結果から、外枠を出すべき宗主キーを解決する（TASK-94 / TASK-120）。
  * 判定本体は suzerain_extent.ts の suzerainExtentKey（純粋関数）。都市マーカーの
  * picking 結果は GeoJSON Feature ではないが、suzerainExtentKey がレイヤー ID
- * を先に見るため properties が undefined でも安全に null になる。
+ * を先に見るため feature でなくても安全に null になる。
+ *
+ * TASK-120: 諸侯領オーバーレイは「封土を包含する base 勢力」で宗主キーを
+ * 決めるため base も渡す。包含判定は polylabel（labelAnchorFor）と
+ * point-in-polygon で mousemove 1 回あたり 1ms 未満だが、同じ封土の上を
+ * 動く間の再計算まで避けるため memoizeLatest で 1 スロットだけ覚える
+ * （TASK-50 の規律。picking 結果の object は data 配列の feature そのもので
+ * 参照が安定しているため、同一封土の連続ホバーは必ずキャッシュに当たる）。
  */
+const memoizedExtentKey = memoizeLatest(suzerainExtentKey);
+
 function extentKeyFromPick(info: PickingInfo): string | null {
   if (info.object === undefined || info.layer === null) return null;
-  return suzerainExtentKey(
+  return memoizedExtentKey(
     info.layer.id,
-    (info.object as Feature).properties,
+    info.object as Feature,
+    currentView?.base ?? EMPTY_FEATURE_COLLECTION,
     overrides,
   );
 }
@@ -2103,13 +2114,15 @@ const memoizedPowerLabelData = memoizeLatest(
     // Britany）は、同じ土地の諸侯領ラベル（ブルターニュ公領）と二重表示に
     // なるため base 側のラベルだけ落とす。抑制対象が無い年（900・1400 以降や
     // 対応表の取得失敗時）は同一参照が返り、polylabel のメモ化も効き続ける。
-    const labeledBase = excludeSuppressedFeatures(
-      base,
-      suppressedPowerNames(dedupe, year),
-    );
+    // TASK-122: 抑制対象を FeatureCollection から落とすのではなく datum に
+    // suppressed の印だけ付ける。諸侯領ラベルを出していないズーム段では抑制を
+    // 解除しないとその土地のラベルが 1 つも無くなる（AC #4）ため、実際に出すか
+    // どうかの判断は filterPowerLabelsByZoom（ズーム段依存）へ移した。datum を
+    // 常に作っておくことで characterSet も絞り込み前の全テキストから作れる。
+    const suppressed = suppressedPowerNames(dedupe, year);
     const cliopatriaLabelGroups = partitionFiefsBySuzerain(cliopatriaFiefs);
     const data = [
-      ...buildLabelData(labeledBase, ja, "base"),
+      ...buildLabelData(base, ja, "base", suppressed),
       ...buildLabelData(hre, ja, "hre"),
       ...buildLabelData(fiefs, ja, "fief"),
       // TASK-96: 伊諸侯領も kind=fief（藍紫）。base 側の教皇領・帝国との
@@ -2123,8 +2136,23 @@ const memoizedPowerLabelData = memoizeLatest(
       ...buildLabelData(cliopatriaLabelGroups.hre, ja, "hre"),
       ...buildLabelData(cliopatriaLabelGroups.fief, ja, "fief"),
     ];
+    // TASK-122 AC #7: characterSet はズームで絞り込む**前**の全 datum から
+    // 作る。表示中の datum から作ると、ズームインで諸侯領ラベルが増えた瞬間に
+    // 未収録グリフ（ü・日本語）が豆腐になるか、フォントアトラスが作り直される。
     return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
   },
+);
+
+/**
+ * 現在のズーム段で表示する勢力ラベルだけに絞る（TASK-122）。
+ * memoizedPowerLabelData の安定参照 + zoomStep をキーにするので、ホバー/
+ * 選択のたびに走る renderLayers() では再計算されない（山脈の
+ * memoizedMountainHitData と同型）。zoomStep をこちら側のキーに置くことで、
+ * 段が変わっても polylabel（memoizedPowerLabelData）は再計算されない。
+ */
+const memoizedVisiblePowerLabels = memoizeLatest(
+  (data: readonly LabelDatum[], zoomStep: number) =>
+    filterPowerLabelsByZoom(data, zoomStep),
 );
 
 function buildLabelLayer(
@@ -2136,7 +2164,7 @@ function buildLabelLayer(
   cliopatriaFiefs: FeatureCollection,
 ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
   // TextLayer は 1 枚のまま・衝突制御（共有空間・priority）も従来どおり。
-  const { data, characterSet } = memoizedPowerLabelData(
+  const { data: allData, characterSet } = memoizedPowerLabelData(
     year,
     base,
     hre,
@@ -2146,6 +2174,9 @@ function buildLabelLayer(
     nameJa,
     fiefDedupe,
   );
+  // TASK-122: FIEF_LABEL_MIN_ZOOM 未満では諸侯領・帝国領邦ラベルを出さず、
+  // 代わりに TASK-78 で抑制していた base ラベルを復活させる。
+  const data = memoizedVisiblePowerLabels(allData, zoomStep);
   return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
     // フォント・クリーム halo（TASK-72: ケルン大司教領・ザクセン選帝侯領/
     // 公領周辺の密集や HRE 外縁の赤境界線との重なり対策。背景パネルは撤去済み）
@@ -2177,9 +2208,12 @@ function buildLabelLayer(
     // deck.gl が getColor を再評価せず文字色が切り替わらない）。data 自体は
     // 強調状態に依存しないため memoizedPowerLabelData のキャッシュは効き続け、
     // ホバーのたびに polylabel が走ることはない。
+    // TASK-122: 表示対象がズーム段でも変わるため trigger に zoomStep を足す。
+    // characterSet は絞り込み前の全テキストなので段が変わっても不変
+    // （フォントアトラスは作り直されない）。
     updateTriggers: {
-      getText: [year],
-      getPosition: [year],
+      getText: [year, zoomStep],
+      getPosition: [year, zoomStep],
       getColor: [powerHighlight.selected(), powerHighlight.hovered()],
     },
   });
@@ -3120,6 +3154,52 @@ map.on("load", () => {
         y: point.y,
       };
     }),
+  };
+};
+
+// TASK-122: ヘッドレス CDP 検証用に勢力ラベルのズーム別表示状態を公開する
+// （__getMountainLabelDebug と同じ読み取り専用フック）。canvas からは表示中の
+// ラベルを数えられないため、絞り込み前後の内訳を直接返す。AC #1/#2 は
+// visible の kind 別件数で、AC #4（base 抑制の解除）は suppressedVisible
+// （そのズーム段で復活している base ラベル名）で確認する。
+(globalThis as unknown as {
+  __getPowerLabelDebug?: () => {
+    zoomStep: number;
+    fiefLabelsVisible: boolean;
+    total: Record<string, number>;
+    visible: Record<string, number>;
+    suppressedVisible: string[];
+    characterSetSize: number;
+  };
+}).__getPowerLabelDebug = () => {
+  const view = currentView;
+  const { data, characterSet } = view === null
+    ? { data: [] as LabelDatum[], characterSet: [] as string[] }
+    : memoizedPowerLabelData(
+      view.year,
+      view.base,
+      view.hre,
+      view.fiefs,
+      view.italyFiefs,
+      view.cliopatriaFiefs,
+      nameJa,
+      fiefDedupe,
+    );
+  const countByKind = (list: readonly LabelDatum[]) => {
+    const counts: Record<string, number> = { base: 0, hre: 0, fief: 0 };
+    for (const d of list) counts[d.kind ?? "base"]++;
+    return counts;
+  };
+  const visible = memoizedVisiblePowerLabels(data, zoomStep);
+  return {
+    zoomStep,
+    fiefLabelsVisible: fiefLabelsVisibleAt(zoomStep),
+    total: countByKind(data),
+    visible: countByKind(visible),
+    suppressedVisible: visible.filter((d) => d.suppressed === true).map((d) =>
+      d.text
+    ),
+    characterSetSize: characterSet.length,
   };
 };
 

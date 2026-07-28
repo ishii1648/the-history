@@ -16,6 +16,7 @@ import type {
   Position,
 } from "geojson";
 import polylabelModule from "@mapbox/polylabel";
+import { MIN_ZOOM } from "./config.ts";
 import { colorKeyFor } from "./powers.ts";
 
 /** polylabel の最小契約（パッケージに型定義が無いため自前で与える） */
@@ -62,6 +63,18 @@ export interface LabelDatum {
    * 勢力ポリゴン由来のラベルにのみ付く（河川名・都市名は持たない）。
    */
   key?: string;
+  /**
+   * TASK-78 の二重ラベル抑制対象か（kind="base" のみ・TASK-122 で導入）。
+   *
+   * TASK-78 では抑制対象の base feature を buildLabelData に渡す前に
+   * 落としていた（fief_dedupe.ts excludeSuppressedFeatures）が、TASK-122 で
+   * 諸侯領ラベルをズーム段で出し分けるようになり「落とす／残す」の判断が
+   * ズーム依存になった。datum は常に作っておいてここに印だけ付け、実際に
+   * 出すかどうかは filterPowerLabelsByZoom が決める。こうすることで
+   * characterSet を**絞り込み前**の全 datum から作れる（ズームインで
+   * 未収録グリフが出ない。AC #7）。
+   */
+  suppressed?: boolean;
 }
 
 /** ラベル文字色の RGBA */
@@ -531,11 +544,15 @@ export function labelPriorityFor(feature: Feature): number {
  * 省略時は kind キー自体を持たない（従来の呼び出しと完全互換）。
  * TASK-93: 強調キー（colorKeyFor と同一）を key に付与する。強調状態には
  * 依存しないためホバーで再計算は起きない（polylabel のメモ化は有効なまま）。
+ * TASK-122: suppressedNames（TASK-78 の抑制対象 NAME 集合）に一致する
+ * feature の datum には suppressed=true を付ける。datum 自体は落とさない
+ * （LabelDatum.suppressed のコメント参照）。
  */
 export function buildLabelData(
   fc: FeatureCollection,
   ja: Record<string, string> = {},
   kind?: LabelKind,
+  suppressedNames: ReadonlySet<string> = EMPTY_NAME_SET,
 ): LabelDatum[] {
   const data: LabelDatum[] = [];
   for (const feature of fc.features) {
@@ -551,9 +568,82 @@ export function buildLabelData(
     if (kind !== undefined) datum.kind = kind;
     const key = colorKeyFor(feature.properties);
     if (key !== null) datum.key = key;
+    const name = stringProp(feature.properties, "NAME");
+    if (name !== null && suppressedNames.has(name)) datum.suppressed = true;
     data.push(datum);
   }
   return data;
+}
+
+/** buildLabelData の suppressedNames 既定値（同一参照で無駄な再生成を避ける） */
+const EMPTY_NAME_SET: ReadonlySet<string> = new Set<string>();
+
+/**
+ * 諸侯領・帝国領邦ラベル（kind = "fief" / "hre"）を出し始める整数ズーム段
+ * （TASK-122）。この段未満では国名（kind = "base"）だけを表示する。
+ *
+ * 置き場を config.ts ではなく labels.ts にした理由: config.ts が持つのは
+ * MIN_ZOOM / MAX_ZOOM / 年集合のように**複数モジュールが共有する**地図の
+ * 基本設定で、「どの種別のラベルをどの段から出すか」は表示ポリシーであり
+ * ラベル層だけの関心事。同型の先例も、都市が cities.ts の
+ * visibleCityRankLimit、山脈が mountains.ts の mountainLabelMinZoom と
+ * 各レイヤーのモジュール側に置いている。
+ *
+ * 値 5 の根拠（実機・ヘッドレス CDP で 1000 / 1300 年を z4〜z7、しきい値
+ * 候補 5 と 6 の両方で描き比べて決めた）:
+ * - z4（初期表示・MIN_ZOOM）は欧州全域が入る段で、TASK-110 以降は仏の
+ *   諸侯領被覆率 78.5% + 帝国側領邦のラベルが一斉に載る。1300 年では
+ *   フランスの領域がシャンパーニュ伯領・ブルターニュ公領・ポワトゥー伯領…で
+ *   埋まり、肝心の「フランス」が衝突（COLLISION_SIZE_SCALE 2.8 倍判定）に
+ *   埋もれて読み取れない。ここを base だけにすると国名が確実に読める。
+ * - z5 は西欧がほぼ画面いっぱいになる段で、諸侯領ラベルを全部出しても
+ *   halo（TASK-72）+ 衝突二値化（TASK-108）が効いて 1 件ずつ判読できる。
+ *   実測で重なりも潰れも出なかった。
+ * - しきい値 6 も試したが、z5 でフランス全土が「色違いの無名ポリゴンの
+ *   パッチワーク」になり、領域が分かれていること自体は見えるのに何なのか
+ *   分からない状態になった。**引きすぎた段でラベルを出さない**のが目的で
+ *   あって、寄った段で情報を減らすのは目的ではないので 5 を採る。
+ * 面積・priority による段階解禁は採らなかった: 諸侯領は都市の人口のような
+ * 明確なランクを持たず段の切り方が恣意的になるうえ、「この段では国名だけ」
+ * という読み方の単純さが失われるため（単一しきい値で足りると実機で確認）。
+ */
+export const FIEF_LABEL_MIN_ZOOM = 5;
+
+/**
+ * そのズームで諸侯領・帝国領邦ラベルを表示するかを返す（純粋関数、TASK-122）。
+ * 判定は整数ズーム段（Math.floor）で行い、都市（visibleCityRankLimit）・
+ * 山脈（filterVisibleMountainLabels）・山峰（filterVisiblePeaks）と同じ粒度に
+ * 揃える。呼び出し側（main.ts）も整数段が変わった時だけレイヤーを作り直す。
+ * 非有限のズーム（防御）は最遠段（MIN_ZOOM）として扱う。
+ */
+export function fiefLabelsVisibleAt(zoom: number): boolean {
+  const step = Number.isFinite(zoom) ? Math.floor(zoom) : MIN_ZOOM;
+  return step >= FIEF_LABEL_MIN_ZOOM;
+}
+
+/**
+ * 現在のズーム段で表示する勢力ラベルを選び出す純粋関数（TASK-122）。
+ *
+ * - FIEF_LABEL_MIN_ZOOM 未満: kind = "hre" / "fief" を全て落とし、国名だけに
+ *   する（AC #1）。同時に **TASK-78 の base 抑制を解除**する（suppressed な
+ *   base ラベルを復活させる）。抑制は「同じ土地に諸侯領ラベルが出ている」
+ *   ことが前提の重複回避なので、諸侯領ラベルを出していない段で効かせると
+ *   その土地のラベルが 1 つも無くなる（1000〜1300 の Britany。AC #4）。
+ * - FIEF_LABEL_MIN_ZOOM 以上: 従来どおり諸侯領・領邦ラベルを出し、
+ *   suppressed な base ラベルを落とす（TASK-78 の挙動そのまま）。
+ *
+ * datum は再生成せず参照をそのまま返し、入力配列も破壊しない（main.ts 側の
+ * メモ化を無効化しないための契約。filterVisibleMountainLabels と同型）。
+ * characterSet は**この関数を通す前**の全 datum から作ること（AC #7）。
+ */
+export function filterPowerLabelsByZoom(
+  data: readonly LabelDatum[],
+  zoom: number,
+): LabelDatum[] {
+  if (fiefLabelsVisibleAt(zoom)) {
+    return data.filter((d) => d.suppressed !== true);
+  }
+  return data.filter((d) => d.kind !== "hre" && d.kind !== "fief");
 }
 
 /**

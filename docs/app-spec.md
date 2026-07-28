@@ -462,10 +462,11 @@ TASK-104 の 14 件（`propertyFixes` エントリは 15。A-4 が Blue / White 
     （ホバーの無いタッチ操作でもクリックだけで強調が成立する）
   - 状態変化は「値が変わったときだけ」レイヤーを再構築する
     （`createPowerHighlightStore` の変化検知。`mousemove` ごとの再構築を避ける）
-- **勢力圏の外枠（TASK-30 / TASK-94。実装は `src/suzerain_extent.ts`、レイヤー
-  `hre-extent`）**: ホバー/クリックした勢力の「宗主キーに属する全 feature
-  （本体 + 従属）の union の外縁」を臙脂の太線 + ごく薄い塗りで囲み、宗主と
-  封臣が 1 つの勢力圏であることを示す（`pickable: false` で picking には非関与）
+- **勢力圏の外枠（TASK-30 / TASK-94 / TASK-120。実装は
+  `src/suzerain_extent.ts`、レイヤー `hre-extent`）**: ホバー/クリックした勢力の
+  「宗主キーに属する全 feature（本体 + 従属）の union の外縁」を臙脂の太線 +
+  ごく薄い塗りで囲み、宗主と封臣が 1 つの勢力圏であることを示す
+  （`pickable: false` で picking には非関与）
   - 宗主キーの解決順は 宗主補正テーブル > `SUBJECTO`（`renames` 正規化）>
     `NAME`。独立勢力は自分自身のキーになるため、外枠は自分だけを囲む
   - 宗主補正テーブル（`data/name-overrides.json` の `suzerains`）は base の
@@ -474,12 +475,36 @@ TASK-104 の 14 件（`propertyFixes` エントリは 15。A-4 が Blue / White 
     だけでなく色キー（`colorKeyFor`）・表示ラベル（`displayLabel`）・
     `colors.json` の生成も同じ関係を反映する。歴史的に宗主関係が明白で
     データが欠くものに限り最小限に留める
-  - 入力は base（`europe_*`）のみ。領邦オーバーレイは base の内側を細分する
-    だけで勢力圏の外縁を広げず、仏諸侯領は宗主プロパティ自体を持たない。
-    アンジュー帝国は base のとおり独立勢力として扱い、英本土と大陸領が一体の
-    外枠になる（フランス王国の外枠には入らない）
+  - 外枠の形（union）の入力は base（`europe_*`）のみ。領邦オーバーレイは base
+    の内側を細分するだけで勢力圏の外縁を広げない。アンジュー帝国は base の
+    とおり独立勢力として扱い、英本土と大陸領が一体の外枠になる（フランス
+    王国の外枠には入らない）
+  - **picking 側の対象レイヤーは 4 つ**（TASK-120）。`powers`（base）と
+    `hre-powers` は全 feature が `SUBJECTO` を持つので上の解決順でそのまま
+    決まる。仏諸侯領（`france-fiefs`）と Cliopatria 由来の領邦
+    （`cliopatria-fiefs`）は上流が `SUBJECTO` を持たないものが多いため、
+    宣言が無いときだけ **「その封土を包含する base 勢力の宗主キー」**
+    （`containingSuzerainKey`）へ落とす。包含判定はラベルのアンカー
+    （`labelAnchorFor` = 最大ポリゴンの pole of inaccessibility）の
+    point-in-polygon で、「封土名が描かれている点を含む勢力が囲まれる」という
+    目視できる規則になる。伊諸侯領（`italy-fiefs`）は TASK-121 の対象で当面
+    外枠を出さない
+  - 諸侯領に宗主を持たせる手段として `suzerains` へ封土名を足す案は採らない。
+    `suzerains` は `SUBJECTO` の書き換えとして色キーにも効くため、仏封土 33 件
+    を足すと全封土の色キーが `"NAME|France"` になり、属領規則（宗主国色の明度
+    シフト、§4.3）で 33 件が単一色へ潰れる（実測: `colors.json` の `"|France"`
+    キー 39 件がユニーク色 1 件、無関係な 118 キーも決定的プロービングの
+    玉突きで変色）。諸侯ごとに色を分ける TASK-71 / decision-5 の設計と衝突する
+  - この規則の帰結として、base 側の帰属がそのまま外枠に出る。1200 年の
+    アンジュー帝国領内の封土（Anjou・Maine・Poitou など）はフランス王国では
+    なくアンジュー帝国が囲まれ、1000/1100 年のノルマンディー（TASK-101 で 独立
+    feature 化）は公国自身が囲まれる。base の帰属が史実とずれている
+    ケース（1279/1300 年の Artois・Saint-Pol・Flanders が神聖ローマ帝国側に
+    塗られている等）はここではなく `propertyFixes`（§4.5・decision-20）で
+    正す問題として切り分ける
   - union は選択時オンデマンド計算 + 宗主キー単位のメモ化
-    （`createSuzerainExtentCache`）。表示切替もキー単位の変化検知で行う
+    （`createSuzerainExtentCache`）。picking 側の宗主キー解決も `memoizeLatest`
+    で 1 スロット覚え、同じ封土上の `mousemove` では 包含判定を再計算しない
 - **強調色の使い分け**（`ACTIVE_FILL_COLOR` は TASK-73 / TASK-74
   の褪せ顔料・古地図トーンに揃えた緑青。既存の強調色とは色相が 60
   度以上離れており、同時に出ても読み分けられる。単体テストで固定）:

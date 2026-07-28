@@ -104,9 +104,8 @@ Deno.test("selectNextTasks は area 未付与タスクが 2 件目以降なら r
   });
 });
 
-Deno.test("selectNextTasks は bug 候補があれば候補を bug 群のみに絞る", () => {
+Deno.test("selectNextTasks は area が互いに素な bug 候補を複数選択する", () => {
   const tasks = [
-    task({ id: "TASK-2", ordinal: 1000, labels: ["area:docs"] }),
     task({ id: "TASK-20", ordinal: 20000, labels: ["bug", "area:scripts"] }),
     task({ id: "TASK-21", ordinal: 21000, labels: ["bug", "area:data"] }),
   ];
@@ -315,4 +314,93 @@ Deno.test("TASK-114: 粗い area:scripts と細分化 area は文字列が違う
     task({ id: "TASK-2", ordinal: 2000, labels: ["area:scripts-fiefs"] }),
   ];
   assertEquals(selectNextTasks(tasks).skipped, []);
+});
+
+// ---- TASK-115: bug は候補の絞り込みではなく優先順位で表す ----
+// 「bug 最優先」は compareTasks が bug を先頭に置くことで担保されるため、候補
+// 集合から非 bug を除外する必要はない。除外をやめることで bug 1 件と area が
+// 非交差の非 bug タスクを同じイテレーションで処理できる。規約は
+// docs/development-style.md 4.1 章のルール 2（順序であって排他ではない）。
+
+Deno.test("TASK-115: bug 候補があっても area が非交差の非 bug 候補は除外されない", () => {
+  const tasks = [
+    task({ id: "TASK-2", ordinal: 1000, labels: ["area:docs"] }),
+    task({
+      id: "TASK-20",
+      ordinal: 20000,
+      labels: ["bug", "area:scripts-loop"],
+    }),
+    task({ id: "TASK-21", ordinal: 21000, labels: ["bug", "area:data-base"] }),
+  ];
+  assertEquals(selectNextTasks(tasks), {
+    tasks: [
+      { id: "TASK-20", areas: ["scripts-loop"] },
+      { id: "TASK-21", areas: ["data-base"] },
+      { id: "TASK-2", areas: ["docs"] },
+    ],
+    skipped: [],
+  });
+});
+
+Deno.test("TASK-115: 返る集合の先頭は ordinal が大きくても bug 候補になる", () => {
+  const tasks = [
+    task({ id: "TASK-2", ordinal: 1000, labels: ["area:docs"] }),
+    task({
+      id: "TASK-20",
+      ordinal: 20000,
+      labels: ["bug", "area:scripts-loop"],
+    }),
+  ];
+  assertEquals(selectNextTasks(tasks).tasks[0], {
+    id: "TASK-20",
+    areas: ["scripts-loop"],
+  });
+});
+
+Deno.test("TASK-115: bug と area が交差する非 bug 候補は従来どおりスキップされる", () => {
+  const tasks = [
+    task({ id: "TASK-2", ordinal: 1000, labels: ["area:scripts-loop"] }),
+    task({
+      id: "TASK-20",
+      ordinal: 20000,
+      labels: ["bug", "area:scripts-loop"],
+    }),
+  ];
+  assertEquals(selectNextTasks(tasks), {
+    tasks: [{ id: "TASK-20", areas: ["scripts-loop"] }],
+    skipped: [
+      { id: "TASK-2", reason: "area conflict: scripts-loop (TASK-20)" },
+    ],
+  });
+});
+
+Deno.test("TASK-115: bug 群内の順序は ordinal → ID 昇順のまま非 bug より前に並ぶ", () => {
+  const tasks = [
+    task({ id: "TASK-1", ordinal: 500, labels: ["area:docs"] }),
+    task({ id: "TASK-30", ordinal: 3000, labels: ["bug", "area:data-base"] }),
+    task({
+      id: "TASK-22",
+      ordinal: 2000,
+      labels: ["bug", "area:scripts-loop"],
+    }),
+    task({ id: "TASK-21", ordinal: 2000, labels: ["bug", "area:src-labels"] }),
+  ];
+  assertEquals(selectNextTasks(tasks).tasks.map((selected) => selected.id), [
+    "TASK-21",
+    "TASK-22",
+    "TASK-30",
+    "TASK-1",
+  ]);
+});
+
+Deno.test("TASK-115: 先頭の bug が area 未付与なら従来どおり単独集合で確定する", () => {
+  // 保守的フォールバックは bug でも変わらない（変更範囲が不明なため直列）。
+  const tasks = [
+    task({ id: "TASK-20", ordinal: 20000, labels: ["bug"] }),
+    task({ id: "TASK-2", ordinal: 1000, labels: ["area:docs"] }),
+  ];
+  assertEquals(selectNextTasks(tasks), {
+    tasks: [{ id: "TASK-20", areas: [] }],
+    skipped: [],
+  });
 });
