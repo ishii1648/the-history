@@ -52,6 +52,13 @@ function resolveChromeBin(): string {
 
 export interface CdpApi {
   navigate(url: string): Promise<void>;
+  /**
+   * ブラウザ HTTP キャッシュの有効/無効を切り替える（TASK-128）。
+   * CLI が最初に navigate した後に再 navigate して計測するハーネスでは、
+   * 無効化しないと 2 回目のロードが 304 revalidation だらけになり
+   * コールドロードの転送量を測れない。
+   */
+  setCacheDisabled(disabled: boolean): Promise<void>;
   evaluate<T = unknown>(expr: string): Promise<T>;
   waitFor(expr: string, timeoutMs?: number): Promise<void>;
   waitForAppReady(timeoutMs?: number): Promise<void>;
@@ -401,6 +408,11 @@ export async function launch(): Promise<CdpApi> {
     await loaded;
   }
 
+  async function setCacheDisabled(disabled: boolean): Promise<void> {
+    await send("Network.enable");
+    await send("Network.setCacheDisabled", { cacheDisabled: disabled });
+  }
+
   async function evaluate<T = unknown>(expr: string): Promise<T> {
     const res = await send("Runtime.evaluate", {
       expression: expr,
@@ -501,6 +513,7 @@ export async function launch(): Promise<CdpApi> {
 
   return {
     navigate,
+    setCacheDisabled,
     evaluate,
     waitFor,
     waitForAppReady,
