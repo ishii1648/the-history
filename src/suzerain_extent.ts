@@ -15,8 +15,23 @@
  *
  * データ源は base（europe_*）に一本化する。領邦オーバーレイ（hre_fiefs_flat_* /
  * france_fiefs_flat_*）は base の内側を細分するだけで勢力圏の外縁を広げないため、
- * オーバーレイの有無に依らず同じ外枠が得られる。仏諸侯領は宗主プロパティ自体を
- * 持たないので入力にもできない。
+ * オーバーレイの有無に依らず同じ外枠が得られる。
+ *
+ * ## 諸侯領オーバーレイの宗主キー（TASK-120）
+ * 仏諸侯領（france-fiefs）と Cliopatria 由来の領邦（cliopatria-fiefs）の一部は
+ * 上流が SUBJECTO を持たないため、宣言された宗主から外枠を引けない。これらは
+ * 「その封土が base のどの勢力の内側にあるか」（containingSuzerainKey）で宗主
+ * キーを決める。根拠は上のデータ源の一本化と同じで、諸侯領は base の内側を
+ * 細分したものだから、包含する base 勢力こそがその封土を含む勢力圏になる。
+ *
+ * name-overrides.json の `suzerains` に封土名を足す案（decision-19/20 の字義）は
+ * 採らない。`suzerains` は SUBJECTO の書き換えとして色キー（colorKeyFor =
+ * "NAME|SUBJECTO"）にも効くため、仏封土 33 件を足すと全封土の色キーが
+ * "NAME|France" になり、build-colors.ts の属領規則（宗主国色の明度シフト）で
+ * 33 件が単一色へ潰れる（実測: colors.json の "|France" キー 39 件がユニーク色
+ * 1 件、無関係な 118 キーも決定的プロービングの玉突きで変色）。諸侯ごとに
+ * 異なる色を与える TASK-71 / decision-5 の設計と正面から衝突するため、宗主
+ * 関係を外枠の解決だけに効かせるこの経路を採る。詳細は docs/app-spec.md §5.2。
  *
  * ## 宗主補正（suzerains）
  * base の SUBJECTO は史実の封建関係を必ずしも反映しない（例: ブルターニュ公は
@@ -28,6 +43,7 @@
  */
 
 import union from "@turf/union";
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { featureCollection } from "@turf/helpers";
 import type {
   Feature,
@@ -36,7 +52,13 @@ import type {
   MultiPolygon,
   Polygon,
 } from "geojson";
-import { HRE_LAYER_ID, POWER_LAYER_ID } from "./picking.ts";
+import {
+  CLIOPATRIA_FIEF_LAYER_ID,
+  FRANCE_FIEF_LAYER_ID,
+  HRE_LAYER_ID,
+  POWER_LAYER_ID,
+} from "./picking.ts";
+import { labelAnchorFor } from "./labels.ts";
 import type { YearDataLoader } from "./powers.ts";
 
 /**
@@ -55,10 +77,24 @@ export const EMPTY_SUZERAIN_OVERRIDES: SuzerainOverrides = {
   suzerains: {},
 };
 
-/** 外枠の対象になるレイヤー。仏諸侯領は宗主プロパティを持たないため含めない */
+/**
+ * 宣言された宗主プロパティ（SUBJECTO）から外枠を引くレイヤー。
+ * base（powers）と HRE 領邦オーバーレイ（hre-powers）はどちらも全 feature が
+ * SUBJECTO を持つため、幾何を見ずに宗主キーへ解決できる。
+ */
 const EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
   HRE_LAYER_ID,
+];
+
+/**
+ * 包含する base 勢力から外枠を引く諸侯領オーバーレイのレイヤー（TASK-120）。
+ * 伊諸侯領（italy-fiefs）は TASK-121 の対象なのでここには入れない
+ * （帝国内のコムーネと教皇領側が混在し、帰属の判断が仏諸侯領と別問題になる）。
+ */
+const FIEF_EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
+  FRANCE_FIEF_LAYER_ID,
+  CLIOPATRIA_FIEF_LAYER_ID,
 ];
 
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */
@@ -112,19 +148,68 @@ export function resolveSuzerainKey(
 }
 
 /**
+ * 諸侯領オーバーレイの feature の宗主キーを、base の包含関係から解決する
+ * （純粋関数、TASK-120）。
+ *
+ * 優先順は 宗主補正テーブル > SUBJECTO > 包含する base 勢力の宗主キー。
+ * 前 2 段は resolveSuzerainKey と同じで、上流や補正が宗主を宣言していれば
+ * それに従う（Cliopatria 由来の HRE 領邦は SUBJECTO を持つのでここで決まる）。
+ * 宣言が無いときだけ幾何に落ちる。
+ *
+ * 包含の判定にはラベルのアンカー（最大ポリゴンの pole of inaccessibility、
+ * labels.ts labelAnchorFor）を使う。境界をまたぐ封土でも「その封土の名前が
+ * 描かれている点を含む勢力」という一意で目視可能な規則になり、面積按分の
+ * ような閾値を持ち込まずに済む。実データ（1000〜1492 の仏諸侯領・Cliopatria
+ * 領邦 全 128 feature）では包含する base 勢力が常にちょうど 1 つに定まる。
+ *
+ * base 側に一致が無い（海側にはみ出した封土など）場合は null = 外枠なしで、
+ * 従来どおりの挙動に落ちる。
+ */
+export function containingSuzerainKey(
+  fief: Feature,
+  base: FeatureCollection,
+  overrides: SuzerainOverrides,
+): string | null {
+  const name = stringProp(fief.properties, "NAME");
+  if (name !== null) {
+    const override = overrides.suzerains[name];
+    if (override !== undefined) return overrides.renames[override] ?? override;
+  }
+  if (stringProp(fief.properties, "SUBJECTO") !== null) {
+    return resolveSuzerainKey(fief.properties, overrides);
+  }
+  const anchor = labelAnchorFor(fief);
+  if (anchor === null) return null;
+  for (const f of polygonsOnly(base.features)) {
+    if (booleanPointInPolygon(anchor, f.geometry)) {
+      return resolveSuzerainKey(f.properties, overrides);
+    }
+  }
+  return null;
+}
+
+/**
  * picking 結果から「表示すべき外枠の宗主キー」を解決する（純粋関数）。
- * 対象外レイヤー（仏諸侯領・都市・河川・picking なし）は null = 外枠を出さない。
+ * 対象外レイヤー（伊諸侯領・都市・河川・picking なし）は null = 外枠を出さない。
  * レイヤー ID を先に判定するため、GeoJSON Feature でない picking 結果
  * （都市マーカー）でも安全に null を返す。
+ *
+ * 諸侯領オーバーレイ（TASK-120）だけは properties ではなくジオメトリまで要る
+ * ため、picking 結果の feature と base の両方を受け取る。
  */
 export function suzerainExtentKey(
   pickedLayerId: string | undefined,
-  pickedProps: GeoJsonProperties | undefined,
+  picked: Feature | undefined,
+  base: FeatureCollection,
   overrides: SuzerainOverrides,
 ): string | null {
   if (pickedLayerId === undefined) return null;
+  if (FIEF_EXTENT_SOURCE_LAYER_IDS.includes(pickedLayerId)) {
+    if (picked === undefined) return null;
+    return containingSuzerainKey(picked, base, overrides);
+  }
   if (!EXTENT_SOURCE_LAYER_IDS.includes(pickedLayerId)) return null;
-  return resolveSuzerainKey(pickedProps ?? null, overrides);
+  return resolveSuzerainKey(picked?.properties ?? null, overrides);
 }
 
 /**

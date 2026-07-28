@@ -962,16 +962,26 @@ function peakNameFromPick(info: PickingInfo): string | null {
 }
 
 /**
- * picking 結果から、外枠を出すべき宗主キーを解決する（TASK-94）。
+ * picking 結果から、外枠を出すべき宗主キーを解決する（TASK-94 / TASK-120）。
  * 判定本体は suzerain_extent.ts の suzerainExtentKey（純粋関数）。都市マーカーの
  * picking 結果は GeoJSON Feature ではないが、suzerainExtentKey がレイヤー ID
- * を先に見るため properties が undefined でも安全に null になる。
+ * を先に見るため feature でなくても安全に null になる。
+ *
+ * TASK-120: 諸侯領オーバーレイは「封土を包含する base 勢力」で宗主キーを
+ * 決めるため base も渡す。包含判定は polylabel（labelAnchorFor）と
+ * point-in-polygon で mousemove 1 回あたり 1ms 未満だが、同じ封土の上を
+ * 動く間の再計算まで避けるため memoizeLatest で 1 スロットだけ覚える
+ * （TASK-50 の規律。picking 結果の object は data 配列の feature そのもので
+ * 参照が安定しているため、同一封土の連続ホバーは必ずキャッシュに当たる）。
  */
+const memoizedExtentKey = memoizeLatest(suzerainExtentKey);
+
 function extentKeyFromPick(info: PickingInfo): string | null {
   if (info.object === undefined || info.layer === null) return null;
-  return suzerainExtentKey(
+  return memoizedExtentKey(
     info.layer.id,
-    (info.object as Feature).properties,
+    info.object as Feature,
+    currentView?.base ?? EMPTY_FEATURE_COLLECTION,
     overrides,
   );
 }

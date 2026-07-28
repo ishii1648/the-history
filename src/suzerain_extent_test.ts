@@ -13,6 +13,7 @@ import {
 } from "./suzerain_extent.ts";
 import {
   CITY_LAYER_ID,
+  CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
@@ -145,11 +146,15 @@ Deno.test("resolveSuzerainKey は NAME を持たない feature で null", () => 
 
 // ---- suzerainExtentKey ----
 
+/** base 側の feature を使わない経路のための空 base */
+const NO_BASE: FeatureCollection = { type: "FeatureCollection", features: [] };
+
 Deno.test("suzerainExtentKey は powers レイヤーで宗主キーを返す", () => {
   assertEquals(
     suzerainExtentKey(
       POWER_LAYER_ID,
-      { NAME: "Comté de Toulouse", SUBJECTO: "France" },
+      feature({ NAME: "Comté de Toulouse", SUBJECTO: "France" }),
+      NO_BASE,
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     "France",
@@ -160,7 +165,8 @@ Deno.test("suzerainExtentKey は HRE 本体・従属勢力で Holy Roman Empire 
   assertEquals(
     suzerainExtentKey(
       POWER_LAYER_ID,
-      { NAME: HRE, SUBJECTO: HRE },
+      feature({ NAME: HRE, SUBJECTO: HRE }),
+      NO_BASE,
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     HRE,
@@ -168,7 +174,8 @@ Deno.test("suzerainExtentKey は HRE 本体・従属勢力で Holy Roman Empire 
   assertEquals(
     suzerainExtentKey(
       POWER_LAYER_ID,
-      { NAME: "Duchy of Swabia", SUBJECTO: HRE },
+      feature({ NAME: "Duchy of Swabia", SUBJECTO: HRE }),
+      NO_BASE,
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     HRE,
@@ -180,7 +187,8 @@ Deno.test("suzerainExtentKey は hre-powers レイヤーの領邦で宗主キー
   assertEquals(
     suzerainExtentKey(
       HRE_LAYER_ID,
-      { NAME: "Bavaria", SUBJECTO: HRE },
+      feature({ NAME: "Bavaria", SUBJECTO: HRE }),
+      NO_BASE,
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     HRE,
@@ -191,49 +199,140 @@ Deno.test("suzerainExtentKey は単独勢力で自分自身のキーを返す", 
   assertEquals(
     suzerainExtentKey(
       POWER_LAYER_ID,
-      { NAME: "Denmark", SUBJECTO: "Denmark" },
+      feature({ NAME: "Denmark", SUBJECTO: "Denmark" }),
+      NO_BASE,
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     "Denmark",
   );
 });
 
-Deno.test("suzerainExtentKey は仏諸侯領・伊諸侯領・都市・河川・picking なしで null", () => {
-  // 仏諸侯領は宗主プロパティを持たず、外枠の入力にもしない（TASK-94 の範囲仕様）
-  assertEquals(
-    suzerainExtentKey(
-      FRANCE_FIEF_LAYER_ID,
-      { NAME: "Normandy" },
-      EMPTY_SUZERAIN_OVERRIDES,
-    ),
-    null,
-  );
-  // 伊諸侯領も同様（properties は NAME / ADMIN_LEVEL / OHM_RELATION_ID /
-  // START_DATE / END_DATE / OHM_NAME で SUBJECTO を持たない。TASK-95/96）。
-  // 帝国範囲の外枠は base（europe_<year>）の Holy Roman Empire から描かれ、
-  // 伊諸侯領をホバーしても帝国全体が囲まれることはない。
+Deno.test("suzerainExtentKey は伊諸侯領・都市・河川・picking なしで null", () => {
+  // 伊諸侯領は TASK-121 の対象で本タスクでは従来どおり外枠を出さない
+  // （properties は NAME / ADMIN_LEVEL / OHM_RELATION_ID / START_DATE /
+  // END_DATE / OHM_NAME で SUBJECTO を持たない。TASK-95/96）。
   assertEquals(
     suzerainExtentKey(
       ITALY_FIEF_LAYER_ID,
-      { NAME: "Republic of Florence" },
+      feature({ NAME: "Republic of Florence" }),
+      NO_BASE,
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     null,
   );
   assertEquals(
-    suzerainExtentKey(CITY_LAYER_ID, undefined, EMPTY_SUZERAIN_OVERRIDES),
+    suzerainExtentKey(
+      CITY_LAYER_ID,
+      undefined,
+      NO_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
     null,
   );
   assertEquals(
     suzerainExtentKey(
       RIVERS_LAYER_ID,
-      { NAME: "Rhine" },
+      feature({ NAME: "Rhine" }),
+      NO_BASE,
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     null,
   );
   assertEquals(
-    suzerainExtentKey(undefined, undefined, EMPTY_SUZERAIN_OVERRIDES),
+    suzerainExtentKey(undefined, undefined, NO_BASE, EMPTY_SUZERAIN_OVERRIDES),
+    null,
+  );
+});
+
+// ---- 諸侯領オーバーレイの外枠（TASK-120） ----
+//
+// 仏諸侯領（france-fiefs）と Cliopatria 由来の領邦（cliopatria-fiefs）は
+// SUBJECTO を持たないため、宗主キーは「その封土が base のどの勢力の内側に
+// あるか」で解決する。以下は synthetic な base（フランス王国の内側に封土、
+// 外側に独立公国）でその規則を固定する。
+
+/** base: フランス王国（0,0-4,4）／独立公国（5,0-7,2）／帝国（8,0-12,4） */
+const FIEF_BASE = collection([
+  feature({ NAME: "Kingdom of France", SUBJECTO: "France" }, box(0, 0, 4, 4)),
+  feature(
+    { NAME: "Duchy of Normandy", SUBJECTO: "Duchy of Normandy" },
+    box(5, 0, 2, 2),
+  ),
+  feature({ NAME: HRE, SUBJECTO: HRE }, box(8, 0, 4, 4)),
+]);
+
+Deno.test("suzerainExtentKey は france-fiefs の封土を包含する base 勢力の宗主キーへ解決する", () => {
+  assertEquals(
+    suzerainExtentKey(
+      FRANCE_FIEF_LAYER_ID,
+      feature({ NAME: "County of Anjou" }, box(1, 1)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    "France",
+  );
+});
+
+Deno.test("suzerainExtentKey は cliopatria-fiefs の仏封土も同じ規則で解決する", () => {
+  assertEquals(
+    suzerainExtentKey(
+      CLIOPATRIA_FIEF_LAYER_ID,
+      feature({ NAME: "Royal Domain of France" }, box(2, 2)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    "France",
+  );
+});
+
+Deno.test("suzerainExtentKey は SUBJECTO を持つ領邦では宣言された宗主を優先する", () => {
+  // Cliopatria 由来の HRE 領邦（1279 以降）は SUBJECTO を持つ。
+  // 幾何を見るまでもなく帝国キーへ解決する（従来の hre-powers と同じ規則）。
+  assertEquals(
+    suzerainExtentKey(
+      CLIOPATRIA_FIEF_LAYER_ID,
+      feature({ NAME: "Duchy of Bavaria", SUBJECTO: HRE }, box(9, 1)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    HRE,
+  );
+});
+
+Deno.test("suzerainExtentKey は独立勢力の内側の封土でその勢力自身のキーを返す", () => {
+  // TASK-101: 1000/1100 年のノルマンディーは base 上の独立公国。封土側を
+  // ホバーしてもフランス王国ではなく公国自身が囲まれる。
+  assertEquals(
+    suzerainExtentKey(
+      FRANCE_FIEF_LAYER_ID,
+      feature({ NAME: "Duchy of Normandy" }, box(5.5, 0.5)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    "Duchy of Normandy",
+  );
+});
+
+Deno.test("suzerainExtentKey は宗主補正を包含判定より優先する", () => {
+  assertEquals(
+    suzerainExtentKey(
+      FRANCE_FIEF_LAYER_ID,
+      feature({ NAME: "Duchy of Brittany" }, box(9, 1)),
+      FIEF_BASE,
+      overrides({}, { "Duchy of Brittany": "France" }),
+    ),
+    "France",
+  );
+});
+
+Deno.test("suzerainExtentKey はどの base 勢力にも含まれない封土で null", () => {
+  assertEquals(
+    suzerainExtentKey(
+      FRANCE_FIEF_LAYER_ID,
+      feature({ NAME: "County of Nowhere" }, box(20, 20)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
     null,
   );
 });
@@ -430,5 +529,127 @@ Deno.test("applySuzerainOverrides は補正が効かないとき同一インス�
       overrides({}, { Aquitaine: "Angevin Empire" }),
     ),
     BASE,
+  );
+});
+
+// ---- 配信データに対する回帰（TASK-120） ----
+//
+// 純粋関数の単体テストだけでは「実データでどの勢力に解決されるか」は固定
+// できない（封土の位置と base のポリゴンの両方に依存するため）。ここでは
+// data/ の生成物を直接読み、bug の再現ケース（仏封土をホバーしても
+// フランス王国の外枠が出ない）が解消していることを年代ごとに固定する。
+
+/** data/name-overrides.json から実際の宗主補正を読む */
+async function realOverrides(): Promise<SuzerainOverrides> {
+  return parseSuzerainOverrides(
+    JSON.parse(await Deno.readTextFile("data/name-overrides.json")),
+  );
+}
+
+async function readCollection(path: string): Promise<FeatureCollection> {
+  return JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
+}
+
+/** 指定レイヤーの封土 NAME を picking したときの宗主キーを返す */
+function keyOfFief(
+  layerId: string,
+  fiefs: FeatureCollection,
+  base: FeatureCollection,
+  name: string,
+  ov: SuzerainOverrides,
+): string | null {
+  const f = fiefs.features.find((x) => x.properties?.NAME === name);
+  assert(f !== undefined, `${name} が見つからない`);
+  return suzerainExtentKey(layerId, f, base, ov);
+}
+
+Deno.test("実データ: 仏諸侯領（france-fiefs）の封土がフランス王国の宗主キーへ解決する", async () => {
+  const ov = await realOverrides();
+  // 1200 年は base が当該領域をアンジュー帝国として塗る（decision-19 で
+  // 複合勢力のまま扱うと決めた勢力）ため、フランス王国内に残る封土で見る。
+  const cases: [number, string][] = [
+    [1000, "County of Anjou"],
+    [1100, "County of Anjou"],
+    [1200, "County of Champagne"],
+    [1279, "County of Anjou"],
+    [1300, "County of Anjou"],
+  ];
+  for (const [year, name] of cases) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(
+      `data/france_fiefs_flat_${year}.geojson`,
+    );
+    const key = keyOfFief(FRANCE_FIEF_LAYER_ID, fiefs, base, name, ov);
+    assertEquals(key, "France", `${year} ${name}`);
+    // 解決したキーで base から外枠が組み立つ（空でない）ことまで確認する
+    const members = extractSuzerainMembers(base, key, ov).map((f) =>
+      String(f.properties?.NAME)
+    );
+    assert(
+      members.some((n) => n === "France" || n === "Kingdom of France"),
+      `${year} の外枠にフランス王国本体が含まれない: ${members.join(", ")}`,
+    );
+  }
+});
+
+Deno.test("実データ: Cliopatria 由来の仏封土もフランス王国の宗主キーへ解決する", async () => {
+  const ov = await realOverrides();
+  const cases: [number, string][] = [
+    [1000, "Royal Domain of France"],
+    [1000, "County of Blôis"],
+    [1100, "Royal Domain of France"],
+    [1200, "Royal Domain of France"],
+    [1279, "County of Blôis"],
+    [1300, "County of Blôis"],
+  ];
+  for (const [year, name] of cases) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(
+      `data/cliopatria_fiefs_flat_${year}.geojson`,
+    );
+    assertEquals(
+      keyOfFief(CLIOPATRIA_FIEF_LAYER_ID, fiefs, base, name, ov),
+      "France",
+      `${year} ${name}`,
+    );
+  }
+});
+
+Deno.test("実データ: Cliopatria 由来の HRE 領邦は帝国の宗主キーへ解決する", async () => {
+  const ov = await realOverrides();
+  for (const year of [1279, 1300, 1400, 1492]) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(
+      `data/cliopatria_fiefs_flat_${year}.geojson`,
+    );
+    assertEquals(
+      keyOfFief(CLIOPATRIA_FIEF_LAYER_ID, fiefs, base, "Duchy of Bavaria", ov),
+      HRE,
+      `${year} Duchy of Bavaria`,
+    );
+  }
+});
+
+Deno.test("実データ: base 上の独立勢力に重なる封土は宗主をフランスにしない", async () => {
+  const ov = await realOverrides();
+  // TASK-101: 1000/1100 年のノルマンディーは base 上の独立公国。
+  for (const year of [1000, 1100]) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(
+      `data/france_fiefs_flat_${year}.geojson`,
+    );
+    assertEquals(
+      keyOfFief(FRANCE_FIEF_LAYER_ID, fiefs, base, "Duchy of Normandy", ov),
+      "Duchy of Normandy",
+      `${year} Duchy of Normandy`,
+    );
+  }
+  // decision-19: アンジュー帝国は独立の複合勢力のまま扱う。1200 年に
+  // その内側へ落ちる封土はフランス王国ではなくアンジュー帝国が囲まれる。
+  const base = await readCollection("data/europe_1200.geojson");
+  const fiefs = await readCollection("data/france_fiefs_flat_1200.geojson");
+  assertEquals(
+    keyOfFief(FRANCE_FIEF_LAYER_ID, fiefs, base, "County of Anjou", ov),
+    "Angevin Empire",
   );
 });
