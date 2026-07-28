@@ -141,6 +141,16 @@ Deno.test("buildBasemapStyle に rivers レイヤーが含まれない", () => {
 // DEM（terrarium PMTiles）を raster-dem ソースとして追加し、hillshade レイヤー
 // で起伏を表現する。DEM アーカイブは任意生成（dist に無い環境もある）。
 
+// TASK-127: 本番は R2 カスタムドメインの絶対 URL を使うため、DEM の URL も
+// 引数で差し替えられる（省略時は従来どおり同一オリジンの DEM_PMTILES_URL）。
+Deno.test("buildBasemapStyle は第 2 引数で DEM の PMTiles URL を差し替えられる（TASK-127）", () => {
+  const demUrl = "https://tiles.zeitreises.com/europe-dem.pmtiles";
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL, demUrl);
+  const dem = style.sources[DEM_SOURCE_ID];
+  assert(dem !== undefined && dem.type === "raster-dem");
+  assertEquals(dem.url, `pmtiles://${demUrl}`);
+});
+
 Deno.test("buildBasemapStyle は terrarium エンコーディングの raster-dem ソースを定義する", () => {
   const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
   const dem = style.sources[DEM_SOURCE_ID];

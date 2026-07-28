@@ -1,12 +1,15 @@
 import { assert, assertEquals } from "@std/assert";
 import {
   buildBundleArgs,
+  buildHeadersContent,
   findNodeImports,
   getDataCopyTargets,
   getOptionalCopyTargets,
   getStaticCopyTargets,
   neutralizeNodeImports,
 } from "./build.ts";
+import { FALLBACK_STYLE_URL } from "../src/config.ts";
+import { TILES_ORIGIN } from "../src/pmtiles_url.ts";
 
 Deno.test("getStaticCopyTargets は index.html / app.css / vendor CSS を dist/ にコピーする対象を返す", () => {
   const targets = getStaticCopyTargets("dist");
@@ -396,5 +399,76 @@ Deno.test("getDataCopyTargets は base_outline / europe_flat を 3 系統の年�
       "data/europe_flat_1400.geojson",
       "data/europe_flat_1492.geojson",
     ],
+  );
+});
+
+// --- TASK-127: Cloudflare Pages 用 _headers（CSP・Cache-Control）---
+// _headers は buildHeadersContent() を単一の情報源として dist/ 直下に生成する。
+// connect-src の許可オリジンはアプリが実際に接続する外部先（R2 タイル配信の
+// TILES_ORIGIN と OpenFreeMap フォールバックの FALLBACK_STYLE_URL のオリジン）
+// だけに絞り、定数から導出することでドリフトを防ぐ。
+
+Deno.test("buildHeadersContent は /* ルールで始まる Pages の _headers 形式を返す", () => {
+  const lines = buildHeadersContent().split("\n");
+  assertEquals(lines[0], "/*");
+  // ヘッダ行は 2 スペースのインデント（Pages の _headers 仕様）
+  assert(
+    lines.slice(1).filter((l) => l !== "").every((l) => l.startsWith("  ")),
+  );
+});
+
+Deno.test("buildHeadersContent は全アセットに Cache-Control: no-cache を付ける（AC #6・docs/app-spec.md §3.4）", () => {
+  assert(buildHeadersContent().includes("Cache-Control: no-cache"));
+});
+
+Deno.test("buildHeadersContent の CSP: connect-src は self + R2 タイル + OpenFreeMap のみ（AC #3）", () => {
+  const content = buildHeadersContent();
+  const csp = content
+    .split("\n")
+    .find((l) => l.includes("Content-Security-Policy:"));
+  assert(csp !== undefined, "Content-Security-Policy ヘッダがあること");
+  const connectSrc = csp
+    .split(";")
+    .map((d) => d.trim())
+    .find((d) => d.startsWith("connect-src"));
+  assert(connectSrc !== undefined, "connect-src ディレクティブがあること");
+  const sources = connectSrc.split(/\s+/).slice(1);
+  assertEquals(sources, [
+    "'self'",
+    TILES_ORIGIN,
+    new URL(FALLBACK_STYLE_URL).origin,
+  ]);
+});
+
+Deno.test("buildHeadersContent の CSP: script-src 'self' / worker-src 'self' blob:（AC #3）", () => {
+  const content = buildHeadersContent();
+  const csp = content
+    .split("\n")
+    .find((l) => l.includes("Content-Security-Policy:"))!;
+  const directives = csp
+    .slice(csp.indexOf("Content-Security-Policy:"))
+    .replace("Content-Security-Policy:", "")
+    .split(";")
+    .map((d) => d.trim());
+  assert(directives.includes("script-src 'self'"), "script-src 'self'");
+  assert(
+    directives.includes("worker-src 'self' blob:"),
+    "worker-src 'self' blob:（MapLibre/deck.gl の blob Worker 用）",
+  );
+  // worker-src 未対応の旧 Safari 向けフォールバック
+  assert(
+    directives.includes("child-src 'self' blob:"),
+    "child-src 'self' blob:",
+  );
+});
+
+Deno.test("buildHeadersContent の CSP: 外部オリジンは connect-src の 2 つ以外に現れない", () => {
+  const csp = buildHeadersContent()
+    .split("\n")
+    .find((l) => l.includes("Content-Security-Policy:"))!;
+  const externals = csp.match(/https?:\/\/[^\s;]+/g) ?? [];
+  assertEquals(
+    [...new Set(externals)].sort(),
+    [TILES_ORIGIN, new URL(FALLBACK_STYLE_URL).origin].sort(),
   );
 });

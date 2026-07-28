@@ -182,10 +182,8 @@ import {
 } from "./loading_state.ts";
 import {
   BASE_OUTLINE_YEARS,
-  BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
   CLIOPATRIA_FIEF_OVERLAY_YEARS,
-  DEM_PMTILES_URL,
   FALLBACK_STYLE_URL,
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_ALL_OVERLAY_YEARS,
@@ -199,6 +197,10 @@ import {
   MIN_ZOOM,
   SNAPSHOT_YEARS,
 } from "./config.ts";
+import {
+  resolveBasemapPmtilesUrl,
+  resolveDemPmtilesUrl,
+} from "./pmtiles_url.ts";
 import { indexOfYear, keyToStep, stepYear, yearAtIndex } from "./timeline.ts";
 import {
   type AppState,
@@ -283,12 +285,20 @@ const initialState = decodeState(
 );
 const initialYear = initialState.year;
 
+// TASK-127: PMTiles の配信元を実行時に解決する。本番/プレビュー
+// （zeitreises.com / *.pages.dev）は R2 カスタムドメイン、ローカル開発は
+// 従来どおり同一オリジンの /europe.pmtiles（判定は src/pmtiles_url.ts）。
+const basemapPmtilesUrl = resolveBasemapPmtilesUrl(
+  globalThis.location.hostname,
+);
+const demPmtilesUrl = resolveDemPmtilesUrl(globalThis.location.hostname);
+
 // PMTiles プロトコルを MapLibre に登録（1 回だけ）
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 
 // アーカイブを登録しておくと pmtiles:// の解決とヘッダ取得を共有できる
-const archive = new PMTiles(BASEMAP_PMTILES_URL);
+const archive = new PMTiles(basemapPmtilesUrl);
 protocol.add(archive);
 
 // TASK-34: 地形 DEM（hillshade 用）の PMTiles アーカイブも登録する。
@@ -296,7 +306,7 @@ protocol.add(archive);
 // 握りつぶして hillshade なしの従来表示で継続する（basemap と違いフォール
 // バックはしない。dem ソースのタイル取得エラーも fallback.ts の判定が
 // sourceId で除外する）。
-const demArchive = new PMTiles(DEM_PMTILES_URL);
+const demArchive = new PMTiles(demPmtilesUrl);
 protocol.add(demArchive);
 demArchive.getHeader().catch((error: unknown) => {
   console.warn(
@@ -308,7 +318,10 @@ demArchive.getHeader().catch((error: unknown) => {
 
 const map = new maplibregl.Map({
   container: mapContainer,
-  style: buildBasemapStyle(BASEMAP_PMTILES_URL) as StyleSpecification,
+  style: buildBasemapStyle(
+    basemapPmtilesUrl,
+    demPmtilesUrl,
+  ) as StyleSpecification,
   center: initialState.center,
   zoom: initialState.zoom,
   minZoom: MIN_ZOOM,

@@ -1,11 +1,11 @@
 ---
 id: TASK-127
 title: Cloudflare デプロイと CSP・CI 整備
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-20 04:24'
-updated_date: '2026-07-28 16:44'
+updated_date: '2026-07-28 17:30'
 labels:
   - 'area:workflow'
   - 'area:app'
@@ -43,3 +43,16 @@ Renovate 設定は本タスクから分離した（TASK-134）。
 - [ ] #6 _headers の Cache-Control が docs/app-spec.md のキャッシュ方針（エッジでの再検証）に沿う
 - [ ] #7 スマートフォンの実機ブラウザで https://zeitreises.com を開き、地図描画と年代切替が動作することを確認する
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. docs/cloudflare-provisioning.md と docs/app-spec.md §3.1/§6 を読み、確定済みリソース（Pages: zeitreise / R2: zeitreise-tiles / Secrets: CLOUDFLARE_API_TOKEN）を前提に設計
+2. TDD red: 本番/ローカルの pmtiles URL 切替（BASEMAP_PMTILES_URL / DEM_PMTILES_URL）を決める純粋関数と、_headers 生成（CSP: connect-src self + tiles.zeitreises.com + フォールバックタイル、script-src self、worker-src self blob: / Cache-Control: エッジ再検証方針）のテストを先に書く
+3. GitHub Actions: build ジョブ（シークレット無し）と deploy ジョブ（wrangler pages deploy + R2 への pmtiles アップロード。CLOUDFLARE_API_TOKEN は deploy ジョブ env のみ）を分離して実装
+4. ローカル検証: deno test / build green、_headers が dist に出力されること、ローカル dev は従来どおり同一オリジン /europe.pmtiles で動作（CDP スモーク）
+5. AC#1/#2/#3/#7（本番系）はマージ後にしか検証できないため、マージ後動作確認フェーズで https://zeitreises.com と tiles ドメインの Range Request・CSP 違反無しを確認。AC#7 のスマホ実機はユーザーへ依頼
+6. 旧 Pages プロジェクト the-history の削除可否はユーザーに確認（実装は非ブロック）
+
+並列化判定: 見送り（理由: CI workflow・_headers・URL 切替が 1 つのデプロイ経路として結合しており、独立にテスト可能な単位に分割すると統合検証が二度手間になる）
+<!-- SECTION:PLAN:END -->
