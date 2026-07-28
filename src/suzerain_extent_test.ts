@@ -207,19 +207,7 @@ Deno.test("suzerainExtentKey は単独勢力で自分自身のキーを返す", 
   );
 });
 
-Deno.test("suzerainExtentKey は伊諸侯領・都市・河川・picking なしで null", () => {
-  // 伊諸侯領は TASK-121 の対象で本タスクでは従来どおり外枠を出さない
-  // （properties は NAME / ADMIN_LEVEL / OHM_RELATION_ID / START_DATE /
-  // END_DATE / OHM_NAME で SUBJECTO を持たない。TASK-95/96）。
-  assertEquals(
-    suzerainExtentKey(
-      ITALY_FIEF_LAYER_ID,
-      feature({ NAME: "Republic of Florence" }),
-      NO_BASE,
-      EMPTY_SUZERAIN_OVERRIDES,
-    ),
-    null,
-  );
+Deno.test("suzerainExtentKey は都市・河川・picking なしで null", () => {
   assertEquals(
     suzerainExtentKey(
       CITY_LAYER_ID,
@@ -322,6 +310,61 @@ Deno.test("suzerainExtentKey は宗主補正を包含判定より優先する", 
       overrides({}, { "Duchy of Brittany": "France" }),
     ),
     "France",
+  );
+});
+
+// ---- 伊諸侯領の外枠（TASK-121） ----
+//
+// 伊諸侯領（italy-fiefs）も SUBJECTO / PARTOF を 1 件も持たないため、仏諸侯領・
+// Cliopatria 領邦とまったく同じ包含の規則に載せる（decision-27）。帝国イタリア
+// 側・教皇領側・事実上独立の都市共和国という帰属の混在は、実装者が史実判断を
+// 下すのではなく「base がその土地をどう塗っているか」がそのまま答えになる。
+
+/** base: 帝国（0,0-6,6）／教皇領（6,0-9,3）／独立の島（20,20-22,22） */
+const ITALY_BASE = collection([
+  feature({ NAME: HRE, SUBJECTO: HRE }, box(0, 0, 6, 6)),
+  feature({ NAME: "Papal States", SUBJECTO: "Papal States" }, box(6, 0, 3, 3)),
+  feature({ NAME: "Corsica", SUBJECTO: "Corsica" }, box(20, 20, 2, 2)),
+]);
+
+Deno.test("suzerainExtentKey は italy-fiefs の帝国イタリア側の封土を帝国へ解決する", () => {
+  assertEquals(
+    suzerainExtentKey(
+      ITALY_FIEF_LAYER_ID,
+      feature({ NAME: "March of Montferrat" }, box(1, 1)),
+      ITALY_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    HRE,
+  );
+});
+
+Deno.test("suzerainExtentKey は italy-fiefs の教皇領側の封土を教皇領へ解決する", () => {
+  assertEquals(
+    suzerainExtentKey(
+      ITALY_FIEF_LAYER_ID,
+      feature({ NAME: "Republic of Ancona" }, box(7, 1)),
+      ITALY_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    "Papal States",
+  );
+});
+
+Deno.test("suzerainExtentKey は italy-fiefs の封土がラベル位置の base 勢力へ解決する", () => {
+  // 都市共和国は「実質独立だが名目上は帝国」という両義の存在で、どちらへ寄せる
+  // かは実装者の史実解釈になる。包含の規則はその判断を base に委ねる（base が
+  // 帝国色で塗る土地にラベルが立つなら帝国の外枠が出る）。ここでは規則が
+  // ラベルのアンカーだけを見ることを、独立の島に載る封土で固定する
+  // （実データではピサ／ジェノヴァのコルシカがこの形になる）。
+  assertEquals(
+    suzerainExtentKey(
+      ITALY_FIEF_LAYER_ID,
+      feature({ NAME: "Republic of Genoa" }, box(20.5, 20.5, 0.5, 0.5)),
+      ITALY_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    "Corsica",
   );
 });
 
@@ -652,4 +695,168 @@ Deno.test("実データ: base 上の独立勢力に重なる封土は宗主を�
     keyOfFief(FRANCE_FIEF_LAYER_ID, fiefs, base, "County of Anjou", ov),
     "Angevin Empire",
   );
+});
+
+// ---- 配信データに対する回帰（伊諸侯領・TASK-121） ----
+//
+// 伊諸侯領は帝国イタリア側・教皇領側・事実上独立の都市共和国が同じレイヤーに
+// 並ぶ。包含の規則（decision-27）に載せたときに実際にどの宗主へ解決するかを
+// 全 7 年代・全 feature で固定する。件数の内訳がずれたら base の帰属か
+// オーバーレイの収録が変わったということなので、テストが気付く。
+
+const ITALY_YEARS = [1000, 1100, 1200, 1279, 1300, 1400, 1492] as const;
+
+/** 外枠を出さない（どの base 勢力にもラベル位置が含まれない）ことを表すキー */
+const NO_SUZERAIN = "(none)";
+
+Deno.test("実データ: 伊諸侯領の宗主キーの内訳が全 7 年代で固定されている", async () => {
+  const ov = await realOverrides();
+  const expected: Record<number, Record<string, number>> = {
+    // 1000 年は 3 件すべてが帝国領内（教皇領は base 側にトスカーナ・スポレート
+    // を持たない）
+    1000: { [HRE]: 3 },
+    1100: { [HRE]: 4, "Papal States": 2, Corsica: 1 },
+    1200: { [HRE]: 7, "Papal States": 2, Corsica: 1 },
+    1279: { [HRE]: 10, "Papal States": 1, Corsica: 1 },
+    1300: { [HRE]: 12, "Papal States": 1, Corsica: 1 },
+    1400: { [HRE]: 13, "Papal States": 1, Corsica: 1, [NO_SUZERAIN]: 1 },
+    1492: { [HRE]: 16, "Papal States": 3, [NO_SUZERAIN]: 1 },
+  };
+  for (const year of ITALY_YEARS) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(`data/italy_fiefs_flat_${year}.geojson`);
+    const counts: Record<string, number> = {};
+    for (const f of fiefs.features) {
+      const key = suzerainExtentKey(ITALY_FIEF_LAYER_ID, f, base, ov) ??
+        NO_SUZERAIN;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    assertEquals(counts, expected[year], `${year}`);
+  }
+});
+
+Deno.test("実データ: 帝国イタリアの諸侯領は神聖ローマ帝国の宗主キーへ解決する", async () => {
+  const ov = await realOverrides();
+  // モンフェッラート辺境伯領は全 7 年代に存在する帝国イタリアの代表例
+  for (const year of ITALY_YEARS) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(`data/italy_fiefs_flat_${year}.geojson`);
+    const key = keyOfFief(
+      ITALY_FIEF_LAYER_ID,
+      fiefs,
+      base,
+      "March of Montferrat",
+      ov,
+    );
+    assertEquals(key, HRE, `${year} March of Montferrat`);
+    // 解決したキーで base から外枠が組み立つ（空でない）ことまで確認する
+    assert(
+      extractSuzerainMembers(base, key, ov).length > 0,
+      `${year} の外枠が空`,
+    );
+  }
+});
+
+Deno.test("実データ: 教皇領側の諸侯領は教皇領の宗主キーへ解決する", async () => {
+  const ov = await realOverrides();
+  const cases: [number, string][] = [
+    [1100, "Duchy of Spoleto"],
+    [1200, "Duchy of Spoleto"],
+    [1100, "Republic of Ancona"],
+    [1279, "Republic of Ancona"],
+    [1400, "Republic of Ancona"],
+    [1492, "Duchy of Ferrara"],
+    [1492, "Lordship of Rimini"],
+  ];
+  for (const [year, name] of cases) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(`data/italy_fiefs_flat_${year}.geojson`);
+    assertEquals(
+      keyOfFief(ITALY_FIEF_LAYER_ID, fiefs, base, name, ov),
+      "Papal States",
+      `${year} ${name}`,
+    );
+  }
+});
+
+Deno.test("実データ: 都市共和国は base が帝国色で塗る土地の帝国キーへ解決する", async () => {
+  const ov = await realOverrides();
+  // フィレンツェ・シエナ・ルッカのコムーネは実質独立だが名目上はイタリア王国＝
+  // 帝国の内側で、base もその土地を帝国として塗る。どちらへ寄せるかを実装者が
+  // 判断せず base の帰属をそのまま読む、というのが decision-27 の要点。
+  const cases: [number, string][] = [
+    [1200, "Republic of Florence"],
+    [1300, "Republic of Florence"],
+    [1400, "Republic of Florence"],
+    [1200, "Republic of Siena"],
+    [1492, "Republic of Siena"],
+    [1200, "Republic of Lucca"],
+    [1492, "Republic of Lucca"],
+  ];
+  for (const [year, name] of cases) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(`data/italy_fiefs_flat_${year}.geojson`);
+    assertEquals(
+      keyOfFief(ITALY_FIEF_LAYER_ID, fiefs, base, name, ov),
+      HRE,
+      `${year} ${name}`,
+    );
+  }
+});
+
+Deno.test("実データ: 海洋共和国はコルシカ島のラベル位置に従って解決する（既知の制限）", async () => {
+  const ov = await realOverrides();
+  // ピサ（1100〜1279）とジェノヴァ（1300〜1400）はコルシカ島を含むポリゴンを
+  // 持ち、島の方が本土側より大きいためラベルのアンカーが島に立つ（README §3.8
+  // の「ピサ・ジェノヴァのコルシカ支配が表現される」）。base はその島を独立の
+  // 勢力 Corsica として塗るので、外枠は島だけを囲む。宗主補正で帝国へ寄せる
+  // のは「名目上の帝国従属」という解釈を実装者が入れることになり decision-19 に
+  // 反するため採らない。docs/data-inventory/README.md §3.8 に既知の制限として
+  // 記載している。
+  const cases: [number, string][] = [
+    [1100, "Republic of Pisa"],
+    [1200, "Republic of Pisa"],
+    [1279, "Republic of Pisa"],
+    [1300, "Republic of Genoa"],
+    [1400, "Republic of Genoa"],
+  ];
+  for (const [year, name] of cases) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(`data/italy_fiefs_flat_${year}.geojson`);
+    assertEquals(
+      keyOfFief(ITALY_FIEF_LAYER_ID, fiefs, base, name, ov),
+      "Corsica",
+      `${year} ${name}`,
+    );
+  }
+  // 本土だけに戻った年代では帝国キーへ解決する（1300 年のピサ＝メロリアの海戦で
+  // コルシカを失った後、1492 年のジェノヴァ＝base が Corsica を持たない）
+  const mainlandOnly: [number, string][] = [
+    [1300, "Republic of Pisa"],
+    [1492, "Republic of Genoa"],
+  ];
+  for (const [year, name] of mainlandOnly) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(`data/italy_fiefs_flat_${year}.geojson`);
+    assertEquals(
+      keyOfFief(ITALY_FIEF_LAYER_ID, fiefs, base, name, ov),
+      HRE,
+      `${year} ${name}`,
+    );
+  }
+});
+
+Deno.test("実データ: base のどの勢力にも載らない伊諸侯領は外枠を出さない", async () => {
+  const ov = await realOverrides();
+  // ピオンビーノ領主領はティレニア海沿岸の小領で、ラベルのアンカーが base の
+  // どのポリゴンにも含まれない（海側へ出る）。従来どおり外枠なしに落ちる。
+  for (const year of [1400, 1492]) {
+    const base = await readCollection(`data/europe_${year}.geojson`);
+    const fiefs = await readCollection(`data/italy_fiefs_flat_${year}.geojson`);
+    assertEquals(
+      keyOfFief(ITALY_FIEF_LAYER_ID, fiefs, base, "Lordship of Piombino", ov),
+      null,
+      `${year} Lordship of Piombino`,
+    );
+  }
 });
