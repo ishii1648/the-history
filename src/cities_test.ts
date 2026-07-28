@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import {
+  allCityPositions,
   buildCityLabelData,
   buildCityMarkerData,
   CITIES_DATA_URL,
@@ -456,6 +457,41 @@ Deno.test("CITY_PICK_TOLERANCE_PX: 従来のクリック実効範囲（ドット
 
 Deno.test("CITY_HIT_FILL_COLOR: 完全透明（見た目に影響しない判定専用層）（TASK-82）", () => {
   assertEquals(CITY_HIT_FILL_COLOR[3], 0);
+});
+
+// ---- allCityPositions（TASK-136）----
+
+Deno.test("allCityPositions: 全年代の都市座標の和集合を返す（年をまたぐ都市の追加分も含む）", () => {
+  const d = data({
+    "1000": [city("Paris", 20000, 2.35, 48.85)],
+    "1200": [city("Cologne", 40000, 6.96, 50.94)],
+  });
+  assertEquals(allCityPositions(d), [[2.35, 48.85], [6.96, 50.94]]);
+});
+
+Deno.test("allCityPositions: 同一座標の都市は年をまたいで重複しない", () => {
+  const d = data({
+    "1000": [city("Paris", 20000, 2.35, 48.85)],
+    "1200": [city("Paris", 110000, 2.35, 48.85)],
+  });
+  assertEquals(allCityPositions(d), [[2.35, 48.85]]);
+});
+
+Deno.test("allCityPositions: 不正エントリ・不正形データは除外して継続する", () => {
+  const d = data({
+    "1000": [city("Paris", 20000, 2.35, 48.85), { name: "Broken" }],
+    "1200": "not-an-array",
+  });
+  assertEquals(allCityPositions(d), [[2.35, 48.85]]);
+  assertEquals(allCityPositions({ years: null } as unknown as CitiesData), []);
+});
+
+Deno.test("allCityPositions: 決定的（同一入力 → 同一出力）", () => {
+  assertEquals(
+    allCityPositions(citiesData as CitiesData),
+    allCityPositions(citiesData as CitiesData),
+  );
+  assert(allCityPositions(citiesData as CitiesData).length > 0);
 });
 
 // ---- 契約 ----

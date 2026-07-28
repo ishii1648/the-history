@@ -15,6 +15,8 @@ import {
   RIVER_HIT_LINE_WIDTH_PX,
   RIVER_HOVERED_LINE_COLOR,
   RIVER_HOVERED_LINE_WIDTH_PX,
+  RIVER_LABEL_CITY_CLEARANCE_DEG,
+  RIVER_LABEL_COLLISION_BACKGROUND_COLOR,
   RIVER_LINE_COLOR,
   RIVER_LINE_WIDTH_PX,
   RIVER_SELECTED_LINE_COLOR,
@@ -27,8 +29,10 @@ import {
   riverLineWidth,
   riverNameFor,
   RIVERS_DATA_URL,
+  selectRiverLabelAnchor,
   toggleRiverSelection,
 } from "./rivers.ts";
+import { allCityPositions, type CitiesData } from "./cities.ts";
 
 // ---- 透明ヒットライン層（TASK-43）----
 
@@ -312,6 +316,182 @@ Deno.test("riverLabelAnchors: 突合キーとして元の英語名（name）を�
   );
   assertEquals(data[0].name, "Rhine");
   assertEquals(data[0].text, "ライン川");
+});
+
+// ---- 都市アンカー回避（TASK-136）----
+
+Deno.test("selectRiverLabelAnchor: 回避点が無ければ中点を返す", () => {
+  assertEquals(selectRiverLabelAnchor([[0, 0], [10, 0]], []), [5, 0]);
+});
+
+Deno.test("selectRiverLabelAnchor: 中点がクリアランス以上離れていれば中点を維持する（境界含む）", () => {
+  // 中点 [5,0] から距離ちょうど RIVER_LABEL_CITY_CLEARANCE_DEG の都市 →
+  // 「以上」で中点維持（既に表示できている河川を動かさない側へ倒す）
+  const atThreshold: [number, number] = [5, RIVER_LABEL_CITY_CLEARANCE_DEG];
+  assertEquals(
+    selectRiverLabelAnchor([[0, 0], [10, 0]], [atThreshold]),
+    [5, 0],
+  );
+  // 十分遠い都市でも当然そのまま
+  assertEquals(
+    selectRiverLabelAnchor([[0, 0], [10, 0]], [[5, 3]]),
+    [5, 0],
+  );
+});
+
+Deno.test("selectRiverLabelAnchor: 中点直上に都市があれば最寄り都市から最も遠い候補点へ動かす", () => {
+  // 都市が [5,0]（中点直上）と [10,0]（終端）にある。ライン上の候補点
+  // （0.1..0.9 の等分点）のうち最寄り都市距離が最大なのは [1,0]（距離 4）
+  const anchor = selectRiverLabelAnchor([[0, 0], [10, 0]], [[5, 0], [10, 0]]);
+  assertEquals(anchor, [1, 0]);
+});
+
+Deno.test("selectRiverLabelAnchor: 最大クリアランスが同値なら中点に近い側 → 小さい弧長位置の順で決定的に選ぶ", () => {
+  // 都市が中点 [5,0] のみ → 候補 [1,0]（frac 0.1）と [9,0]（frac 0.9）が
+  // 距離 4 で同率・|frac-0.5| も同じ。弧長位置が小さい [1,0] を選ぶ
+  assertEquals(selectRiverLabelAnchor([[0, 0], [10, 0]], [[5, 0]]), [1, 0]);
+});
+
+Deno.test("selectRiverLabelAnchor: 決定的（同一入力 → 同一出力）", () => {
+  const coords: [number, number][] = [[0, 0], [4, 0], [10, 0]];
+  const avoid: [number, number][] = [[5, 0.01], [8, 0.2]];
+  assertEquals(
+    selectRiverLabelAnchor(coords, avoid),
+    selectRiverLabelAnchor(coords, avoid),
+  );
+});
+
+Deno.test("riverLabelAnchors: avoidPoints 省略・空は従来どおり中点（後方互換）", () => {
+  const collection = fc([
+    riverFeature("Rhine", {
+      type: "LineString",
+      coordinates: [[0, 0], [10, 0]],
+    }),
+  ]);
+  assertEquals(riverLabelAnchors(collection)[0].position, [5, 0]);
+  assertEquals(riverLabelAnchors(collection, {}, [])[0].position, [5, 0]);
+});
+
+Deno.test("riverLabelAnchors: 中点近傍に都市がある feature だけアンカーが動き、離れた feature は動かない", () => {
+  const collection = fc([
+    riverFeature("Rhine", {
+      type: "LineString",
+      coordinates: [[0, 0], [10, 0]],
+    }),
+    riverFeature("Danube", {
+      type: "LineString",
+      coordinates: [[0, 10], [10, 10]],
+    }),
+  ]);
+  const avoid: [number, number][] = [[5, 0.01]]; // Rhine の中点直上のみ
+  const data = riverLabelAnchors(collection, {}, avoid);
+  const byName = new Map(data.map((d) => [d.name, d]));
+  assert(
+    byName.get("Rhine")!.position[0] !== 5,
+    "都市直上の Rhine アンカーは動くはず",
+  );
+  assertEquals(byName.get("Danube")!.position, [5, 10]);
+});
+
+Deno.test("riverLabelAnchors: アンカー回避は priority を変えない", () => {
+  const collection = fc([
+    riverFeature("Rhine", {
+      type: "LineString",
+      coordinates: [[0, 0], [10, 0]],
+    }),
+  ]);
+  assertEquals(
+    riverLabelAnchors(collection, {}, [[5, 0.01]])[0].priority,
+    riverLabelAnchors(collection)[0].priority,
+  );
+});
+
+Deno.test("riverLabelAnchors: 実データでライン川のアンカーが都市から離れ、既表示河川のアンカーは動かない（TASK-136 AC #1/#2）", async () => {
+  const rivers = JSON.parse(
+    await Deno.readTextFile("data/rivers.geojson"),
+  ) as FeatureCollection;
+  const cities = JSON.parse(
+    await Deno.readTextFile("data/cities.json"),
+  ) as CitiesData;
+  const avoid = allCityPositions(cities);
+  const before = filterVisibleRiverLabels(
+    riverLabelAnchors(rivers),
+    null,
+    null,
+    6,
+  );
+  const after = filterVisibleRiverLabels(
+    riverLabelAnchors(rivers, {}, avoid),
+    null,
+    null,
+    6,
+  );
+  const clearance = (p: readonly number[]) =>
+    Math.min(...avoid.map((c) => Math.hypot(c[0] - p[0], c[1] - p[1])));
+  const beforeByName = new Map(before.map((d) => [d.name, d]));
+  const afterByName = new Map(after.map((d) => [d.name, d]));
+  // ライン川: ケルン/ボン直上（クリアランス 0.023°）の旧アンカーから、
+  // 都市集合に対して十分なクリアランスを持つライン上の点へ移る
+  const rhine = afterByName.get("Rhine")!;
+  assert(
+    clearance(beforeByName.get("Rhine")!.position) <
+      RIVER_LABEL_CITY_CLEARANCE_DEG,
+    "前提: 旧ライン川アンカーは都市直上（クリアランス未満）",
+  );
+  assert(
+    clearance(rhine.position) >= 0.2,
+    `新ライン川アンカーは既表示河川並み（0.2° 以上）のクリアランスを持つはず: ${
+      clearance(rhine.position)
+    }`,
+  );
+  // 既に表示できている河川（クリアランス >= しきい値）は 1 本も動かない
+  for (const [name, b] of beforeByName) {
+    if (name === "Rhine") continue;
+    if (clearance(b.position) >= RIVER_LABEL_CITY_CLEARANCE_DEG) {
+      assertEquals(
+        afterByName.get(name)!.position,
+        b.position,
+        `${name} のアンカーが動いた`,
+      );
+    }
+  }
+  // 実データではライン川以外の表示アンカーは全てしきい値以上（= 動くのは
+  // ライン川だけ）であることも固定する
+  for (const [name, b] of beforeByName) {
+    if (name === "Rhine") continue;
+    assert(
+      clearance(b.position) >= RIVER_LABEL_CITY_CLEARANCE_DEG,
+      `${name} が回避対象に入った（しきい値の再検討が必要）`,
+    );
+  }
+});
+
+Deno.test("riverLabelAnchors: 回避点込みでもホバー連続移動でアンカー生成は 1 度きり（TASK-50 / TASK-136 AC #4）", () => {
+  const collection = fc([
+    riverFeature("Rhine", {
+      type: "LineString",
+      coordinates: [[0, 0], [10, 0]],
+    }),
+  ]);
+  const ja = { Rhine: "ライン川" };
+  const avoid: [number, number][] = [[5, 0.01]];
+  let calls = 0;
+  const memoized = memoizeLatest(
+    (f: FeatureCollection, j: typeof ja, a: [number, number][]) => {
+      calls++;
+      return riverLabelAnchors(f, j, a);
+    },
+  );
+  for (const hovered of ["Rhine", null, "Rhine", null]) {
+    filterVisibleRiverLabels(memoized(collection, ja, avoid), hovered, null, 4);
+  }
+  assertEquals(calls, 1);
+});
+
+Deno.test("RIVER_LABEL_COLLISION_BACKGROUND_COLOR: alpha 1 の不可視背景（自己衝突対策。0 だと衝突 FBO に描かれない）", () => {
+  // alpha 0 は picking シェーダの alpha==0 discard で衝突 FBO から消えるため
+  // 1 が下限。1/255 は目視では完全に不可視（TASK-136 実機確認済み）
+  assertEquals(RIVER_LABEL_COLLISION_BACKGROUND_COLOR, [0, 0, 0, 1]);
 });
 
 // ---- filterVisibleRiverLabels（TASK-69）----
