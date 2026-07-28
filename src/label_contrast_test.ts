@@ -14,6 +14,7 @@ import {
   ACTIVE_BASE_LABEL_COLOR,
   ACTIVE_FIEF_LABEL_COLOR,
   ACTIVE_HRE_LABEL_COLOR,
+  ACTIVE_RIVER_LABEL_COLOR,
   BASE_LABEL_COLOR,
   buildLabelData,
   CITY_LABEL_COLOR,
@@ -119,12 +120,25 @@ Deno.test("都市名ラベルは色を切り替えないが副基準（大きめ
 });
 
 Deno.test("河川名ラベルは色を切り替えないが塗り調整で修正前より改善する", () => {
-  // 河川名（水色）はアクティブ塗り（緑青）と同じ寒色域のため、塗りの明度を
-  // 変えても基準には届かない。判読はクリーム halo が担う（docs 参照）。
+  // 河川名（TASK-123 で強調中は濃い水色 ACTIVE_RIVER_LABEL_COLOR）は
+  // アクティブ塗り（緑青）と同じ寒色域のため、塗りの明度を変えても基準には
+  // 届かない。判読はクリーム halo が担う（docs 参照）。
   // ここでは「悪化させない」ことだけを固定する。
-  const before = contrastRatio(rgb(RIVER_LABEL_COLOR), LEGACY_ACTIVE_BG);
-  const after = contrastRatio(rgb(RIVER_LABEL_COLOR), ACTIVE_BG);
+  const before = contrastRatio(rgb(ACTIVE_RIVER_LABEL_COLOR), LEGACY_ACTIVE_BG);
+  const after = contrastRatio(rgb(ACTIVE_RIVER_LABEL_COLOR), ACTIVE_BG);
   assert(after > before, `河川名が悪化した: ${before} -> ${after}`);
+});
+
+Deno.test("TASK-123: 河川名の常時表示色はクリーム halo と十分なコントラストを保つ", () => {
+  // 常時表示に戻したことで河川名は「一時的な注記」ではなくなり、halo 上の
+  // 判読性を他の常時ラベル（強調時基準 MIN_HALO_LABEL_CONTRAST = 7:1）と
+  // 同水準で確保する。旧来の水色 #0277bd は約 4:1 しかなく常時表示には暗さが
+  // 足りないため、暗青灰へ変更した（強調色としては残る）。
+  const ratio = contrastRatio(rgb(RIVER_LABEL_COLOR), rgb(LABEL_OUTLINE_COLOR));
+  assert(
+    ratio >= MIN_HALO_LABEL_CONTRAST,
+    `halo とのコントラストが不足: ${ratio.toFixed(2)}:1`,
+  );
 });
 
 // ---- AC #5: 強調そのものの見え方を壊さない ----
