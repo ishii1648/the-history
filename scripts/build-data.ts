@@ -1,6 +1,6 @@
 /**
  * データパイプラインスクリプト。
- * - historical-basemaps の world_<year>.geojson × 20 年代を取得（コミット固定）
+ * - historical-basemaps の world_<year>.geojson × 19 年代を取得（コミット固定）
  * - ヨーロッパ bbox でクリップし、空ジオメトリになった feature を除去
  * - NAME の表記ゆれ・null を name-overrides.json で補正
  * - 上流が王国領・帝国領に一括で含めている封土を、諸侯領オーバーレイの区画で
@@ -11,7 +11,7 @@
  *   切り出した封土 feature にも届くよう、上書きは切り出しの後段に置く）
  * - simplify + 座標丸め + ポリゴンのクリーンアップ（自己交差の解消・微小破片の除去、
  *   scripts/clean-polygons.ts）で 1 ファイル SIZE_LIMIT_BYTES 以下に収める
- * - data/europe_<year>.geojson × 20 と data/index.json を生成する
+ * - data/europe_<year>.geojson × 19 と data/index.json を生成する
  *
  * ロジックは純粋関数として export しテスト対象にする（scripts/build-data_test.ts）。
  */

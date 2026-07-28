@@ -61,8 +61,8 @@ Deno.test("定数は仕様どおりの出典情報を持つ", () => {
   assertEquals(SOURCE_LICENSE, "GPL-3.0");
   assertEquals(SOURCE_COMMIT.length, 40);
   assertEquals(EUROPE_BBOX, [-25, 34, 60, 72]);
-  assertEquals(YEARS.length, 20);
-  assertEquals(YEARS[0], 900);
+  assertEquals(YEARS.length, 19);
+  assertEquals(YEARS[0], 1000);
   assertEquals(YEARS[YEARS.length - 1], 1914);
 });
 
@@ -297,8 +297,8 @@ Deno.test("normalizeSubjectProps は色キーを変えない（TASK-102）", () 
 
 Deno.test("buildIndex は年一覧と出典メタを返す", () => {
   const source = { repo: "r", commit: "c", license: "GPL-3.0" };
-  assertEquals(buildIndex([900, 1000], source), {
-    years: [900, 1000],
+  assertEquals(buildIndex([1000, 1100], source), {
+    years: [1000, 1100],
     source: { repo: "r", commit: "c", license: "GPL-3.0" },
   });
 });

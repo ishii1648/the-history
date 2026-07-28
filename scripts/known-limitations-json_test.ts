@@ -278,37 +278,20 @@ Deno.test("1700 年の制限注記は年代連動で 1700 のみ active にな�
   }
 });
 
-Deno.test("1500 年より前の HRE 領邦の制限は 900 年のみに縮小されている（TASK-86 AC #6）", () => {
+Deno.test("900 年専用だった HRE 領邦の制限は削除されている（TASK-119）", () => {
+  // TASK-86 で years が {from: 900, to: 900} に縮小されていた
+  // hre-territories-pre-1500 は、900 年のスナップショット廃止（TASK-119）で
+  // 対象年が存在しなくなったため項目ごと削除した。
   const parsed = parseKnownLimitations(knownLimitations);
   const entry = parsed.find((l) => l.id === "hre-territories-pre-1500");
-  assert(entry !== undefined, "hre-territories-pre-1500 が無い");
-  // 1000〜1492 は OHM 由来の領邦を表示するようになったので、
-  // 「帝国が単一の領域として表示される」のは 900 年だけになった
-  assertEquals(entry.years, { from: 900, to: 900 });
-  for (const year of SNAPSHOT_YEARS) {
-    assertEquals(
-      isKnownLimitationActiveForYear(entry, year),
-      year === 900,
-      `${year} 年の active 判定が期待と異なる`,
-    );
-  }
-  for (const keyword of ["900", "OpenHistoricalMap"]) {
-    assert(
-      entry.text.includes(keyword),
-      `text が ${keyword} に言及していない`,
-    );
-  }
+  assertEquals(entry, undefined);
 });
 
-Deno.test("中世 HRE 領邦の表示対象年に 900 が含まれない（制限注記と実装の整合。TASK-86 AC #6）", () => {
-  assert(!HRE_FIEF_OVERLAY_YEARS.includes(900));
-  const parsed = parseKnownLimitations(knownLimitations);
-  const entry = parsed.find((l) => l.id === "hre-territories-pre-1500");
-  assert(entry !== undefined);
+Deno.test("中世 HRE 領邦の表示対象年は全て SNAPSHOT_YEARS に含まれる（制限注記と実装の整合）", () => {
   for (const year of HRE_FIEF_OVERLAY_YEARS) {
     assert(
-      !isKnownLimitationActiveForYear(entry, year),
-      `${year} は領邦を表示しているのに制限が active になっている`,
+      SNAPSHOT_YEARS.includes(year),
+      `${year} は SNAPSHOT_YEARS に含まれない`,
     );
   }
 });
