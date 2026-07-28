@@ -257,8 +257,8 @@ Deno
 ② クリップ ヨーロッパ bbox（N34–72°, W25°–E60°）で切り出し（@turf/bbox-clip）
 ③ 簡略化  @turf/simplify で座標を間引き（目標: 1ファイル 300 KB 以下、ズーム6相当で破綻しない精度）
 ④ 正規化  NAME の表記ゆれ・null を補正するマッピングテーブル（data/name-overrides.json）を適用
-⑤ 異常是正 上流 properties の異常を data/name-overrides.json の propertyFixes で上書き（§4.5）
-⑥ 封土切出 上流が王国領に一括で含めている半独立の封土を独立 feature にする（§4.4）
+⑤ 封土切出 上流が王国領・帝国領に一括で含めている封土を独立 feature にする（§4.4）
+⑥ 異常是正 上流 properties の異常を data/name-overrides.json の propertyFixes で上書き（§4.5。切り出した封土 feature にも届くよう切り出しの後段に置く）
 ⑦ 空値正規化 空の SUBJECTO / PARTOF を NAME（＝独立勢力）に寄せる（§4.5）
 ⑧ 出力    data/europe_<year>.geojson と data/index.json（年一覧・feature数・色割当）を生成
 ```
@@ -291,11 +291,12 @@ Deno
 - 隣接勢力の色衝突はパレット設計（十分な色数・彩度差）で緩和し、MVP
   では厳密な四色問題的解決はしない
 
-### 4.4 半独立の封土の切り出し（TASK-101）
+### 4.4 封土の切り出し（TASK-101 / TASK-124）
 
-上流（historical-basemaps）は「王が名目上の宗主である領域」をまとめて 1 つの王国
-ポリゴンにしており、王の実効支配が及んでいない半独立の封土まで王国領として塗られる。
-`scripts/build-data.ts` の `BASE_FIEF_SPLITS`
+上流（historical-basemaps）は封土を上位勢力の 1 つのポリゴンにまとめて塗ることが
+あり、(a) 王の実効支配が及んでいない半独立の封土が王国領として（TASK-101）、 (b)
+フランス王の封土や教皇領に帰属すべき地域が帝国領として（TASK-124）
+塗られてしまう。`scripts/build-data.ts` の `BASE_FIEF_SPLITS`
 に列挙した組み合わせについて、諸侯領 オーバーレイの同名区画との交差を base
 から切り出して独立 feature に立てる。
 
@@ -307,16 +308,23 @@ Deno
 - 切り出した feature の `SUBJECTO` は既定で `NAME`
   自身（＝独立勢力）。名目だけの 宗主関係は `suzerains` に載せない（§5
   の宗主補正と同じく「歴史的に宗主関係が
-  明白でデータが欠いているもの」に限る、decision-19）。
+  明白でデータが欠いているもの」に限る、decision-19）。上流が誤って帝国側に
+  塗った王の封土（TASK-124）は半独立の封土ではないため、正しい宗主 （`France` /
+  `Papal States`）を宣言し、後段の `propertyFixes`（§4.5）が `PARTOF`
+  を含む帰属を年号付きの根拠 note とともに確定させる。
 - 派生データは自動的に追随する。封土はオーバーレイ union に完全に覆われるので、
-  被覆率 1.0 で base
+  被覆率 ≒1.0 で base
   ラベルが抑制され（`fief-dedupe.json`）、`europe_flat_<year>` と
-  `base_outline_<year>` からは塗り・輪郭ごと落ちる。色キーはオーバーレイと 同じ
-  `NAME` 単独キーになるため `colors.json` に新しいキーは増えない。
+  `base_outline_<year>` からは塗り・輪郭ごと落ちる。色キーは独立（自己参照）なら
+  オーバーレイと同じ `NAME` 単独キーで `colors.json` に新しいキーは増えず、
+  宗主付き（TASK-124）は複合キー `NAME|SUBJECTO` が追加される（宗主スロット
+  由来の派生色なのでプロービングには影響せず、既存の色は変わらない）。
 
-| 年          | 切り出し元          | 封土                | `SUBJECTO`                  |
-| ----------- | ------------------- | ------------------- | --------------------------- |
-| 1000 / 1100 | `Kingdom of France` | `Duchy of Normandy` | `Duchy of Normandy`（独立） |
+| 年          | 切り出し元          | 封土                                                              | `SUBJECTO`                  |
+| ----------- | ------------------- | ----------------------------------------------------------------- | --------------------------- |
+| 1000 / 1100 | `Kingdom of France` | `Duchy of Normandy`                                               | `Duchy of Normandy`（独立） |
+| 1279 / 1300 | `Holy Roman Empire` | `County of Artois` / `Counts of Saint-Pol` / `County of Flanders` | `France`                    |
+| 1300        | `Holy Roman Empire` | `Lordship of Rimini`                                              | `Papal States`              |
 
 ノルマンディーを独立扱いにする根拠は 911
 年のサン・クレール・シュール・エプト条約
@@ -326,15 +334,27 @@ Deno
 配下に付け替えるのも不正確なこと。公はフランス王へ臣従礼を行う立場ではあったが名目に
 留まるため、`suzerains` による宗主補正（`Britany` → `France`）とは扱いを分ける。
 
+TASK-124 の 4 封土の根拠（詳細は `data/name-overrides.json` の各エントリの
+note）: アルトワは 1180 年の持参領編入・1237 年のアパナージュ授与以降フランス
+王家の所領、サンポルはアルトワ・ピカルディ境界の仏封土（帝国側へ移るのは 1493
+年）、フランドル伯領本体は 843 年ヴェルダン条約以来の仏封土（スヘルデ川以東の
+帝国フランドルはポリゴン 1 枚では分割できず、known-limitations に明記して France
+側に含める）、リミニは 1278 年にルドルフ 1 世がロマーニャの帝国権を教皇へ
+譲渡済み。リミニ以外のロマーニャ一帯は切り出しに使える出典付きの区画が無く、
+帝国塗りのまま known-limitations（`base-imperial-paint-flanders-romagna`）に
+記録する。
+
 ### 4.5 上流 properties の異常是正（TASK-102 / TASK-104）
 
 上流の properties には、文字化け・列ずれと思われる異常値・年代間で揺れる
 `SUBJECTO`・史実と食い違う宗主が混ざる。生成物を直接直すと再生成で失われるため、
 `data/name-overrides.json` の `propertyFixes`（`renames` / `suzerains` と同じ
 ファイル）に年代付きで宣言し、`scripts/build-data.ts` の `applyPropertyFixes`
-が当てる。対象 feature はリネーム適用後の `NAME` で指定する。機構は TASK-102
-で導入し、TASK-104 で史実の宗主是正（下表の 4 行目）まで対象を広げた。エントリは
-計 20（TASK-102 の 3 + TASK-104 の 15 + TASK-106 の 2）。
+が当てる。対象 feature はリネーム適用後の `NAME` で指定する（切り出し（§4.4）の
+後段で当てるため、TASK-124 が切り出した封土 feature も対象にできる）。機構は
+TASK-102 で導入し、TASK-104 で史実の宗主是正（下表の 4 行目）まで対象を広げた。
+エントリは計 36（TASK-102 の 3 + TASK-104 の 15 + TASK-106 の 2 + TASK-107 の
+12 + TASK-124 の 4）。
 
 | 年代               | NAME                          | 上書き                             | 根拠                                                                                                                                                                                                                                                                                                          |
 | ------------------ | ----------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -499,9 +519,10 @@ TASK-104 の 14 件（`propertyFixes` エントリは 15。A-4 が Blue / White 
     アンジュー帝国領内の封土（Anjou・Maine・Poitou など）はフランス王国では
     なくアンジュー帝国が囲まれ、1000/1100 年のノルマンディー（TASK-101 で 独立
     feature 化）は公国自身が囲まれる。base の帰属が史実とずれている
-    ケース（1279/1300 年の Artois・Saint-Pol・Flanders が神聖ローマ帝国側に
-    塗られている等）はここではなく `propertyFixes`（§4.5・decision-20）で
-    正す問題として切り分ける
+    ケースはここではなく base 側（切り出し §4.4 と `propertyFixes` §4.5・
+    decision-20）で正す問題として切り分ける（1279/1300 年の Artois・
+    Saint-Pol・Flanders・リミニが神聖ローマ帝国側に塗られていた件は TASK-124
+    がこの経路で是正した）
   - union は選択時オンデマンド計算 + 宗主キー単位のメモ化
     （`createSuzerainExtentCache`）。picking 側の宗主キー解決も `memoizeLatest`
     で 1 スロット覚え、同じ封土上の `mousemove` では 包含判定を再計算しない
