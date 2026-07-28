@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertStrictEquals } from "@std/assert";
 import type { Feature, FeatureCollection, Position } from "geojson";
 import {
   BASE_LABEL_COLOR,
@@ -8,6 +8,9 @@ import {
   CITY_LABEL_SIZE_PX,
   COLLISION_SIZE_SCALE,
   FIEF_LABEL_COLOR,
+  FIEF_LABEL_MIN_ZOOM,
+  fiefLabelsVisibleAt,
+  filterPowerLabelsByZoom,
   HRE_LABEL_COLOR,
   HRE_SUZERAIN_NAME,
   isHreSuzerainFeature,
@@ -32,6 +35,8 @@ import {
   RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
 } from "./labels.ts";
+import type { LabelDatum } from "./labels.ts";
+import { MAX_ZOOM, MIN_ZOOM } from "./config.ts";
 import { colorKeyFor } from "./powers.ts";
 
 /** テスト用の Feature を組み立てる */
@@ -702,4 +707,146 @@ Deno.test("partitionFiefsBySuzerain: 空 FeatureCollection では両側とも空
   });
   assertEquals(hre.features, []);
   assertEquals(fief.features, []);
+});
+
+// ---- ズーム段によるラベル絞り込み（TASK-122） ----
+
+Deno.test("FIEF_LABEL_MIN_ZOOM は MIN_ZOOM より上・MAX_ZOOM 以下（実際に出し分けが起きる段）", () => {
+  assert(FIEF_LABEL_MIN_ZOOM > MIN_ZOOM);
+  assert(FIEF_LABEL_MIN_ZOOM <= MAX_ZOOM);
+});
+
+Deno.test("fiefLabelsVisibleAt はしきい値の 1 段下で false・しきい値ちょうどで true", () => {
+  assertEquals(fiefLabelsVisibleAt(FIEF_LABEL_MIN_ZOOM - 1), false);
+  assertEquals(fiefLabelsVisibleAt(FIEF_LABEL_MIN_ZOOM), true);
+});
+
+Deno.test("fiefLabelsVisibleAt は整数ズーム段で判定する（小数は切り捨て）", () => {
+  assertEquals(fiefLabelsVisibleAt(FIEF_LABEL_MIN_ZOOM - 0.01), false);
+  assertEquals(fiefLabelsVisibleAt(FIEF_LABEL_MIN_ZOOM + 0.99), true);
+  assertEquals(fiefLabelsVisibleAt(MIN_ZOOM), false);
+  assertEquals(fiefLabelsVisibleAt(MAX_ZOOM), true);
+});
+
+Deno.test("fiefLabelsVisibleAt は非有限値を最遠段（MIN_ZOOM）として扱う", () => {
+  assertEquals(fiefLabelsVisibleAt(Number.NaN), false);
+});
+
+/** 絞り込みテスト用のラベル datum 群（base 2 件・うち 1 件は TASK-78 抑制対象） */
+function zoomFilterFixture(): LabelDatum[] {
+  return [
+    { text: "フランス王国", position: [2, 47], priority: 300, kind: "base" },
+    // TASK-78 で諸侯領にほぼ完全内包され抑制される base 勢力（1000〜1300 の Britany）
+    {
+      text: "ブルターニュ",
+      position: [-3, 48],
+      priority: 100,
+      kind: "base",
+      suppressed: true,
+    },
+    {
+      text: "ブルターニュ公領",
+      position: [-3, 48],
+      priority: 100,
+      kind: "fief",
+    },
+    { text: "バイエルン公領", position: [11, 48], priority: 120, kind: "hre" },
+  ];
+}
+
+Deno.test("filterPowerLabelsByZoom: しきい値未満では hre/fief の datum を除く（TASK-122 AC #1）", () => {
+  const out = filterPowerLabelsByZoom(
+    zoomFilterFixture(),
+    FIEF_LABEL_MIN_ZOOM - 1,
+  );
+  assertEquals(out.every((d) => d.kind !== "hre" && d.kind !== "fief"), true);
+});
+
+Deno.test("filterPowerLabelsByZoom: しきい値未満では TASK-78 の base 抑制を解除する（AC #4）", () => {
+  const out = filterPowerLabelsByZoom(
+    zoomFilterFixture(),
+    FIEF_LABEL_MIN_ZOOM - 1,
+  );
+  assertEquals(out.map((d) => d.text), ["フランス王国", "ブルターニュ"]);
+});
+
+Deno.test("filterPowerLabelsByZoom: しきい値以上では諸侯領を出し base 抑制を効かせる（AC #2）", () => {
+  const out = filterPowerLabelsByZoom(zoomFilterFixture(), FIEF_LABEL_MIN_ZOOM);
+  assertEquals(out.map((d) => d.text), [
+    "フランス王国",
+    "ブルターニュ公領",
+    "バイエルン公領",
+  ]);
+});
+
+Deno.test("filterPowerLabelsByZoom: どのズーム段でもラベルが 0 件になる土地が無い（AC #4）", () => {
+  const fixture = zoomFilterFixture();
+  for (let z = MIN_ZOOM; z <= MAX_ZOOM; z++) {
+    const texts = filterPowerLabelsByZoom(fixture, z).map((d) => d.text);
+    // ブルターニュの土地には常にちょうど 1 つのラベルが載る（base か諸侯領のどちらか）
+    const breton = texts.filter(
+      (t) => t === "ブルターニュ" || t === "ブルターニュ公領",
+    ).length;
+    assertEquals(breton, 1, `zoom ${z} でブルターニュのラベルが ${breton} 件`);
+  }
+});
+
+Deno.test("filterPowerLabelsByZoom: kind 省略の datum は base 扱いで常に残す", () => {
+  const data: LabelDatum[] = [{ text: "無印", position: [0, 0], priority: 0 }];
+  assertEquals(filterPowerLabelsByZoom(data, MIN_ZOOM).length, 1);
+  assertEquals(filterPowerLabelsByZoom(data, MAX_ZOOM).length, 1);
+});
+
+Deno.test("filterPowerLabelsByZoom: 入力配列を破壊せず datum の参照をそのまま返す（メモ化の契約）", () => {
+  const data = zoomFilterFixture();
+  const before = [...data];
+  const out = filterPowerLabelsByZoom(data, MAX_ZOOM);
+  assertEquals(data, before);
+  assertStrictEquals(out[0], data[0]);
+});
+
+Deno.test("buildLabelData: suppressedNames の NAME には suppressed=true を付ける（datum は落とさない）", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      feature({ type: "Polygon", coordinates: [squareRing(0, 0, 4)] }, {
+        NAME: "Britany",
+      }),
+      feature({ type: "Polygon", coordinates: [squareRing(10, 0, 4)] }, {
+        NAME: "France",
+      }),
+    ],
+  };
+  const data = buildLabelData(fc, {}, "base", new Set(["Britany"]));
+  // characterSet を絞り込み前の全テキストから作れるよう、datum 自体は残す
+  assertEquals(data.map((d) => d.text), ["Britany", "France"]);
+  assertEquals(data[0].suppressed, true);
+  // 抑制対象でない datum は suppressed キー自体を持たない（従来と完全互換）
+  assertEquals("suppressed" in data[1], false);
+});
+
+Deno.test("buildLabelData: suppressedNames 省略時は suppressed を一切付けない", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      feature({ type: "Polygon", coordinates: [squareRing(0, 0, 4)] }, {
+        NAME: "Britany",
+      }),
+    ],
+  };
+  assertEquals("suppressed" in buildLabelData(fc, {}, "base")[0], false);
+});
+
+Deno.test("characterSet は絞り込み前の全 datum から作れば全ズーム段の和集合になる（AC #7）", () => {
+  const all = zoomFilterFixture();
+  const full = new Set(characterSetFrom(all.map((d) => d.text)));
+  for (let z = MIN_ZOOM; z <= MAX_ZOOM; z++) {
+    for (
+      const ch of characterSetFrom(
+        filterPowerLabelsByZoom(all, z).map((d) => d.text),
+      )
+    ) {
+      assert(full.has(ch), `zoom ${z} の文字 ${ch} が全体集合に無い`);
+    }
+  }
 });
