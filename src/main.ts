@@ -91,7 +91,6 @@ import {
   MOUNTAIN_LABEL_SIZE_PX,
   partitionFiefsBySuzerain,
   POWER_LABEL_SIZE_PX,
-  RIVER_LABEL_COLOR,
   RIVER_LABEL_SIZE_PX,
 } from "./labels.ts";
 import { labelCollisionExtensions } from "./label_collision.ts";
@@ -145,6 +144,8 @@ import {
   RIVER_HIT_LINE_COLOR,
   RIVER_HIT_LINE_WIDTH_PX,
   riverLabelAnchors,
+  riverLabelColor,
+  type RiverLabelDatum,
   riverLineColor,
   riverLineWidth,
   riverNameFor,
@@ -916,6 +917,11 @@ function pickedMetadata(info: PickingInfo): unknown {
  * フィードバックにならないため。ツールチップ = カーソル直下の即応表示、
  * 地図ラベル = 川そのものへの注記（選択時は解除まで残る）と役割が異なり、
  * 勢力・都市のホバー挙動（ツールチップ）とも一貫する。
+ *
+ * TASK-123（ズーム段による常時表示の復活）でもこの判断を維持する。常時表示に
+ * 戻っても中点ラベルが「カーソル直下の即応表示」になれない事情は変わらず、
+ * 常時ラベルが出ている勢力・都市もホバーでツールチップを重ねて出しており、
+ * 河川だけ挙動を変える理由がない。
  */
 function handlePickHover(info: PickingInfo): void {
   const label = pickedLabel(info);
@@ -1263,35 +1269,58 @@ const memoizedRiverLabelData = memoizeLatest(
 );
 
 /**
- * 河川名ラベルの TextLayer を生成する（TASK-24 AC #1、TASK-69）。
+ * 現在のズーム段とホバー/選択状態で表示する河川ラベルに絞る（TASK-123）。
+ * memoizedRiverLabelData の安定参照 + hovered/selected + zoomStep をキーに
+ * するので、いずれも変わらない renderLayers 呼び出しでは同じ配列参照が
+ * deck.gl へ渡り、属性再計算が走らない（memoizedVisiblePowerLabels と同型）。
+ */
+const memoizedVisibleRiverLabels = memoizeLatest(
+  (
+    anchors: readonly RiverLabelDatum[],
+    hovered: string | null,
+    selected: string | null,
+    zoomStep: number,
+  ) => filterVisibleRiverLabels(anchors, hovered, selected, zoomStep),
+);
+
+/**
+ * 河川名ラベルの TextLayer を生成する（TASK-24 AC #1、TASK-69、TASK-123）。
  * アンカーは最長 LineString の中点（rivers.ts riverLabelAnchors）。勢力ラベル
- * より小さめの水色系文字 + 白 halo で「水系の注記」に見えるようにし、
+ * より小さめの青灰系文字 + クリーム halo で「水系の注記」に見えるようにし、
  * CollisionFilterExtension（勢力ラベルと同一衝突空間）でライン長由来の
  * priority により長い川を優先表示する。pickable: false でライン・ポリゴンの
  * picking を妨げない。
  *
- * TASK-69: 常時表示をやめ、ホバー中・クリック選択中の河川だけを表示する。
- * 表示対象の決定は純粋関数 filterVisibleRiverLabels に委ね、ここでは
- * hovered/selected を渡すだけにする。アンカー生成（memoizedRiverLabelData）は
- * 年代・hover/selection 非依存のまま全河川分を 1 度だけ行い、hover 連続移動で
+ * TASK-69 で常時表示をやめホバー/選択時のみにしたが、TASK-122 で低ズームの
+ * 諸侯領ラベルが消え密度問題が解消したため、TASK-123 でズーム段による
+ * 常時表示（riverLabelMinPriority による priority 上位の段階出し）を戻した。
+ * ホバー中・クリック選択中の河川はしきい値未満でも必ず表示され、文字色だけ
+ * 強調色（ACTIVE_RIVER_LABEL_COLOR）へ切り替わる。表示対象の決定は純粋関数
+ * filterVisibleRiverLabels に委ね、ここでは hovered/selected/zoomStep を
+ * 渡すだけにする。アンカー生成（memoizedRiverLabelData）は年代・ズーム・
+ * hover/selection 非依存のまま全河川分を 1 度だけ行い、hover 連続移動で
  * 再計算が走らないようにする（TASK-50 非退行）。characterSet も全河川分の
  * メモ化結果（同一参照）を渡し続け、表示対象が変わってもフォントアトラスの
  * 再生成が起きないようにする。
  */
 function buildRiverLabelLayer(): TextLayer<
-  LabelDatum,
-  CollisionFilterExtensionProps<LabelDatum>
+  RiverLabelDatum,
+  CollisionFilterExtensionProps<RiverLabelDatum>
 > {
   const { data: anchors, characterSet } = memoizedRiverLabelData(
     riversData,
     nameJa,
   );
-  const data = filterVisibleRiverLabels(
+  const data = memoizedVisibleRiverLabels(
     anchors,
     hoveredRiverName,
     selectedRiverName,
+    zoomStep,
   );
-  return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
+  return new TextLayer<
+    RiverLabelDatum,
+    CollisionFilterExtensionProps<RiverLabelDatum>
+  >({
     // フォント・クリーム halo（TASK-72: ライン/ワール/レク川合流部の密集や
     // HRE 外縁の赤境界線との重なり対策。背景パネルは撤去済み）・衝突制御は
     // 共通 base props
@@ -1301,11 +1330,18 @@ function buildRiverLabelLayer(): TextLayer<
     pickable: false,
     getText: (d) => d.text,
     getPosition: (d) => d.position,
-    // 勢力ラベル（POWER_LABEL_SIZE_PX）より控えめなサイズ・濃い水色（#0277bd）+ 白 halo
+    // 勢力ラベル（POWER_LABEL_SIZE_PX）より控えめなサイズ + クリーム halo。
+    // 常時表示は暗青灰（RIVER_LABEL_COLOR）、ホバー/選択中は濃い水色
+    // （ACTIVE_RIVER_LABEL_COLOR）で強調する（TASK-123）
     getSize: RIVER_LABEL_SIZE_PX,
-    getColor: RIVER_LABEL_COLOR,
+    getColor: (d) =>
+      riverLabelColor(d.name, selectedRiverName, hoveredRiverName),
     // 日本語名（ライン川 等）のグリフもラベル文字列から自動生成する
     characterSet,
+    // hovered/selected は getColor の入力なので trigger に足す（data 参照も
+    // 同時に変わるが、契約として明示する）。zoomStep の変化は data 参照の
+    // 変化として伝わる
+    updateTriggers: { getColor: [hoveredRiverName, selectedRiverName] },
   });
 }
 
@@ -3210,6 +3246,7 @@ map.on("load", () => {
   __getRiverLabelDebug?: () => {
     hovered: string | null;
     selected: string | null;
+    zoomStep: number;
     visibleLabels: string[];
   };
 }).__getRiverLabelDebug = () => {
@@ -3217,10 +3254,13 @@ map.on("load", () => {
   return {
     hovered: hoveredRiverName,
     selected: selectedRiverName,
+    // TASK-123: ズーム段で常時表示が変わるため、判定に使った段も返す
+    zoomStep,
     visibleLabels: filterVisibleRiverLabels(
       data,
       hoveredRiverName,
       selectedRiverName,
+      zoomStep,
     ).map((d) => d.name),
   };
 };

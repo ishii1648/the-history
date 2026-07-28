@@ -18,9 +18,11 @@ import type {
 } from "geojson";
 import type { Rgba } from "./powers.ts";
 import {
+  ACTIVE_RIVER_LABEL_COLOR,
   type LabelDatum,
   MAX_LABEL_PRIORITY,
   MIN_LABEL_PRIORITY,
+  RIVER_LABEL_COLOR,
 } from "./labels.ts";
 import { PICKING_RADIUS_PX } from "./picking.ts";
 
@@ -170,6 +172,25 @@ export function riverLineWidth(
   return RIVER_LINE_WIDTH_PX;
 }
 
+/**
+ * 河川ラベルの文字色を決める（純粋関数、TASK-123）。ライン
+ * （riverLineColor）と同じ「英語名での突合」「選択 > ホバー > 通常」の
+ * 優先度で、常時表示ラベルは暗青灰（RIVER_LABEL_COLOR）、ホバー/選択中の
+ * 河川は従来の濃い水色（ACTIVE_RIVER_LABEL_COLOR）で強調する。
+ * deck.gl の accessor へモジュール定数の参照を直接渡さないため、
+ * 呼び出しごとに複製して返す。
+ */
+export function riverLabelColor(
+  name: string,
+  selected: string | null,
+  hovered: string | null,
+): Rgba {
+  if (name === selected || name === hovered) {
+    return [...ACTIVE_RIVER_LABEL_COLOR];
+  }
+  return [...RIVER_LABEL_COLOR];
+}
+
 /** 折れ線の全長（座標系の単位 = 度の平面近似）。ラベル配置用途には十分 */
 function lineLength(coords: readonly Position[]): number {
   let sum = 0;
@@ -285,17 +306,58 @@ export function riverLabelAnchors(
 }
 
 /**
- * 地図上に表示する河川ラベルを、ホバー/選択状態から選び出す（純粋関数、TASK-69）。
+ * 常時表示する河川ラベルの priority 下限をズーム段から決める（純粋関数、
+ * TASK-123）。この値以上の priority を持つ河川だけが、ホバー/選択に依らず
+ * 地図上に常時表示される。
  *
- * 通常状態（hovered・selected とも null）では 1 件も返さず、河川名ラベルは
- * ホバー中・クリック選択中の河川に限って表示される。ライン強調
- * （riverLineColor/riverLineWidth）と同じ「英語名での突合」を使うため、
- * 強調されているラインとラベルが必ず一致する。
+ * しきい値の方式: 都市（cities.ts visibleCityRankLimit）のような「件数上限」
+ * ではなく「priority の絶対値」で切る。理由:
+ * - priority は riverLabelPriority（100 * log10(全パート合計長)）由来で、
+ *   「どのくらい大きな川か」を直接表す安定な尺度。件数上限だと同率 priority の
+ *   タイブレーク規則が別途必要になり、データへ河川を追加しただけで既存の
+ *   大河が枠から押し出される。
+ * - 山脈（NE MIN_LABEL をズーム段へ写像、TASK-97）・諸侯領
+ *   （FIEF_LABEL_MIN_ZOOM、TASK-122）と同じ「各対象が出始める段を持つ」体系
+ *   になる（都市の件数上限は年ごとに候補プールが変わる都市特有の事情）。
+ *
+ * 段の設計（データは data/rivers.geojson の 48 feature = 同名集約後 30 河川。
+ * 実機のヘッドレス CDP で 1000/1200/1300 年 × z4〜z6 を描画して確認した値）:
+ * - z4 以下（初期表示。欧州全域）: 70。ライン川（75）・ドナウ川（125）・
+ *   ロワール川（95）級の大河 17 本だけが出る。セーヌ川（73）まで含み、
+ *   タホ川（67）以下は出さない。
+ * - z5: 30。タホ川・ティグリス川・スヴィリ川（34）など中規模まで 21 本。
+ * - z6 以上: MIN_LABEL_PRIORITY（事実上すべて）。レク/ワール川など分流・
+ *   短流（priority 負値あり）も含め全 30 河川を解禁する。z6 では画面内に
+ *   入る河川が数本に絞られるため、全解禁しても密度は問題にならない。
+ * - 判定は整数ズーム段（Math.floor）。都市・山脈・山峰・諸侯領と同じ粒度で、
+ *   呼び出し側（main.ts）の「整数段が変わった時のみ再構築」とも揃える。
+ * - 非有限値（NaN 等の防御）は最も保守的な z4 しきい値へフォールバック。
+ */
+export function riverLabelMinPriority(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 70;
+  const step = Math.floor(zoom);
+  if (step <= 4) return 70;
+  if (step === 5) return 30;
+  return MIN_LABEL_PRIORITY;
+}
+
+/**
+ * 地図上に表示する河川ラベルを、ズーム段とホバー/選択状態から選び出す
+ * （純粋関数、TASK-69 → TASK-123）。
+ *
+ * TASK-69 ではホバー中・クリック選択中の河川に限って表示していたが、
+ * TASK-122 で低ズームの諸侯領ラベルが消え密度問題が解消したため、TASK-123 で
+ * 「ズーム段に応じた常時表示」を戻した。表示されるのは次の和集合:
+ * - priority が riverLabelMinPriority(zoom) 以上の河川（常時表示）
+ * - ホバー中・選択中の河川（しきい値未満でも必ず表示 = TASK-69 挙動の非退行）。
+ *   ライン強調（riverLineColor/riverLineWidth）と同じ「英語名での突合」を
+ *   使うため、強調されているラインとラベルが必ず一致する。
  *
  * 同名の feature が複数ある場合（Natural Earth の rivers は Rhine が 4 分割
  * されている等、パート分割が普通にある）は最も priority が高い（= 合計長が
  * 最長の）アンカー 1 件だけを残す。全件残すと 1 本の川に同じ名前のラベルが
- * 何枚も出てしまい、ホバー中の川を 1 つの注記で示すという目的に反するため。
+ * 何枚も出てしまうため。しきい値判定はパートごとの priority で行うが、
+ * 「最高 priority のパートが通れば名前が出る」ので河川単位の判定と一致する。
  *
  * アンカー自体は再計算せず、渡された datum の参照をそのまま返す
  * （TASK-50 のメモ化を無効化しないための契約）。入力配列は破壊しない。
@@ -304,11 +366,14 @@ export function filterVisibleRiverLabels(
   anchors: readonly RiverLabelDatum[],
   hovered: string | null,
   selected: string | null,
+  zoom: number,
 ): RiverLabelDatum[] {
-  if (hovered === null && selected === null) return [];
+  const minPriority = riverLabelMinPriority(zoom);
   const best = new Map<string, RiverLabelDatum>();
   for (const a of anchors) {
-    if (a.name !== hovered && a.name !== selected) continue;
+    if (a.priority < minPriority && a.name !== hovered && a.name !== selected) {
+      continue;
+    }
     const current = best.get(a.name);
     if (current === undefined || a.priority > current.priority) {
       best.set(a.name, a);

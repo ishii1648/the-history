@@ -4,6 +4,11 @@ import type { Rgba } from "./powers.ts";
 import { memoizeLatest } from "./memo.ts";
 import { PICKING_RADIUS_PX } from "./picking.ts";
 import {
+  ACTIVE_RIVER_LABEL_COLOR,
+  MIN_LABEL_PRIORITY,
+  RIVER_LABEL_COLOR,
+} from "./labels.ts";
+import {
   filterVisibleRiverLabels,
   RIVER_CLICK_TOLERANCE_PX,
   RIVER_HIT_LINE_COLOR,
@@ -15,7 +20,9 @@ import {
   RIVER_SELECTED_LINE_COLOR,
   RIVER_SELECTED_LINE_WIDTH_PX,
   riverLabelAnchors,
+  riverLabelColor,
   type RiverLabelDatum,
+  riverLabelMinPriority,
   riverLineColor,
   riverLineWidth,
   riverNameFor,
@@ -318,15 +325,16 @@ function anchor(
   return { name, text: `${name}川`, position, priority };
 }
 
-Deno.test("filterVisibleRiverLabels: ホバーも選択も無ければ 1 つも表示しない", () => {
+Deno.test("filterVisibleRiverLabels: ホバーも選択も無ければしきい値未満は 1 つも表示しない", () => {
+  // anchor() の priority 既定値 0 は z4 のしきい値（70）未満
   const anchors = [anchor("Rhine"), anchor("Danube")];
-  assertEquals(filterVisibleRiverLabels(anchors, null, null), []);
+  assertEquals(filterVisibleRiverLabels(anchors, null, null, 4), []);
 });
 
 Deno.test("filterVisibleRiverLabels: ホバー中の河川だけを表示する", () => {
   const anchors = [anchor("Rhine"), anchor("Danube")];
   assertEquals(
-    filterVisibleRiverLabels(anchors, "Danube", null).map((d) => d.name),
+    filterVisibleRiverLabels(anchors, "Danube", null, 4).map((d) => d.name),
     ["Danube"],
   );
 });
@@ -334,7 +342,7 @@ Deno.test("filterVisibleRiverLabels: ホバー中の河川だけを表示する"
 Deno.test("filterVisibleRiverLabels: 選択中の河川だけを表示する（ホバーなしでも残る）", () => {
   const anchors = [anchor("Rhine"), anchor("Danube")];
   assertEquals(
-    filterVisibleRiverLabels(anchors, null, "Rhine").map((d) => d.name),
+    filterVisibleRiverLabels(anchors, null, "Rhine", 4).map((d) => d.name),
     ["Rhine"],
   );
 });
@@ -342,7 +350,7 @@ Deno.test("filterVisibleRiverLabels: 選択中の河川だけを表示する（�
 Deno.test("filterVisibleRiverLabels: 選択中に別の河川をホバーすると両方表示する", () => {
   const anchors = [anchor("Rhine"), anchor("Danube"), anchor("Elbe")];
   assertEquals(
-    filterVisibleRiverLabels(anchors, "Elbe", "Rhine").map((d) => d.name),
+    filterVisibleRiverLabels(anchors, "Elbe", "Rhine", 4).map((d) => d.name),
     ["Rhine", "Elbe"],
   );
 });
@@ -350,7 +358,7 @@ Deno.test("filterVisibleRiverLabels: 選択中に別の河川をホバーする�
 Deno.test("filterVisibleRiverLabels: 選択中の河川をホバーしてもラベルは 1 つ", () => {
   const anchors = [anchor("Rhine"), anchor("Danube")];
   assertEquals(
-    filterVisibleRiverLabels(anchors, "Rhine", "Rhine").map((d) => d.name),
+    filterVisibleRiverLabels(anchors, "Rhine", "Rhine", 4).map((d) => d.name),
     ["Rhine"],
   );
 });
@@ -361,20 +369,20 @@ Deno.test("filterVisibleRiverLabels: 同名の feature が複数あってもラ�
     anchor("Rhine", 30, [2, 2]),
     anchor("Rhine", 20, [3, 3]),
   ];
-  const visible = filterVisibleRiverLabels(anchors, "Rhine", null);
+  const visible = filterVisibleRiverLabels(anchors, "Rhine", null, 4);
   assertEquals(visible.length, 1);
   assertEquals(visible[0].position, [2, 2]);
 });
 
 Deno.test("filterVisibleRiverLabels: 未知の名前は無視する（該当なしなら空）", () => {
   const anchors = [anchor("Rhine")];
-  assertEquals(filterVisibleRiverLabels(anchors, "Nile", "Amazon"), []);
+  assertEquals(filterVisibleRiverLabels(anchors, "Nile", "Amazon", 4), []);
 });
 
 Deno.test("filterVisibleRiverLabels: 入力配列を破壊せず、同一 datum 参照をそのまま返す（アンカー再計算なし）", () => {
   const anchors = [anchor("Rhine"), anchor("Danube")];
   const snapshot = [...anchors];
-  const visible = filterVisibleRiverLabels(anchors, "Rhine", null);
+  const visible = filterVisibleRiverLabels(anchors, "Rhine", null, 4);
   assertEquals(anchors, snapshot);
   assert(visible[0] === anchors[0]);
 });
@@ -400,9 +408,144 @@ Deno.test("filterVisibleRiverLabels: ホバー連続移動でもアンカー生�
   });
   const hovers = ["Rhine", "Danube", null, "Rhine", "Danube", null];
   for (const hovered of hovers) {
-    filterVisibleRiverLabels(memoized(collection, ja), hovered, "Danube");
+    filterVisibleRiverLabels(memoized(collection, ja), hovered, "Danube", 4);
   }
   assertEquals(calls, 1);
+});
+
+// ---- ズーム段による常時表示の出し分け（TASK-123）----
+
+Deno.test("riverLabelMinPriority: z4 以下は大河のみ（しきい値 70）", () => {
+  assertEquals(riverLabelMinPriority(4), 70);
+  // MIN_ZOOM=4 だが maxBounds クランプ等の防御込みで下も同じ
+  assertEquals(riverLabelMinPriority(3), 70);
+  assertEquals(riverLabelMinPriority(0), 70);
+});
+
+Deno.test("riverLabelMinPriority: 小数ズームは整数段へ切り捨てて判定する", () => {
+  assertEquals(riverLabelMinPriority(4.99), 70);
+  assertEquals(riverLabelMinPriority(5.0), riverLabelMinPriority(5.9));
+});
+
+Deno.test("riverLabelMinPriority: z5 は中規模の河川まで解禁（しきい値 30）", () => {
+  assertEquals(riverLabelMinPriority(5), 30);
+});
+
+Deno.test("riverLabelMinPriority: z6 以上は全河川（priority 下限まで解禁）", () => {
+  assertEquals(riverLabelMinPriority(6), MIN_LABEL_PRIORITY);
+  assertEquals(riverLabelMinPriority(8), MIN_LABEL_PRIORITY);
+});
+
+Deno.test("riverLabelMinPriority: ズームに対して単調非増加（ズームインで減ることはあっても増えない）", () => {
+  let prev = riverLabelMinPriority(0);
+  for (let z = 1; z <= 12; z++) {
+    const threshold = riverLabelMinPriority(z);
+    assert(threshold <= prev, `z=${z} でしきい値が増えた`);
+    prev = threshold;
+  }
+});
+
+Deno.test("riverLabelMinPriority: 非有限ズーム（NaN 等）は最も保守的な z4 しきい値へフォールバック", () => {
+  assertEquals(riverLabelMinPriority(Number.NaN), 70);
+  assertEquals(riverLabelMinPriority(Number.NEGATIVE_INFINITY), 70);
+});
+
+Deno.test("filterVisibleRiverLabels: ホバー/選択なしでも priority がしきい値以上なら常時表示（TASK-123）", () => {
+  const anchors = [anchor("Danube", 125), anchor("Lek", 11)];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, null, null, 4).map((d) => d.name),
+    ["Danube"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: しきい値ちょうどは表示・1 未満は非表示（境界）", () => {
+  const anchors = [anchor("AtThreshold", 70), anchor("BelowThreshold", 69)];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, null, null, 4).map((d) => d.name),
+    ["AtThreshold"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: ズーム段が上がると表示が段階的に増える", () => {
+  const anchors = [
+    anchor("Danube", 125),
+    anchor("Svir", 34),
+    anchor("Nederrijn", -13),
+  ];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, null, null, 4).map((d) => d.name),
+    ["Danube"],
+  );
+  assertEquals(
+    filterVisibleRiverLabels(anchors, null, null, 5).map((d) => d.name),
+    ["Danube", "Svir"],
+  );
+  assertEquals(
+    filterVisibleRiverLabels(anchors, null, null, 6).map((d) => d.name),
+    ["Danube", "Svir", "Nederrijn"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: ホバー中はしきい値未満でも必ず表示する（AC #3 非退行）", () => {
+  const anchors = [anchor("Danube", 125), anchor("Lek", 11)];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, "Lek", null, 4).map((d) => d.name),
+    ["Danube", "Lek"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: 選択中はしきい値未満でも必ず表示する（AC #3 非退行）", () => {
+  const anchors = [anchor("Danube", 125), anchor("Waal", 2)];
+  assertEquals(
+    filterVisibleRiverLabels(anchors, null, "Waal", 4).map((d) => d.name),
+    ["Danube", "Waal"],
+  );
+});
+
+Deno.test("filterVisibleRiverLabels: 常時表示でも同名 feature のラベルは 1 つ（最高 priority を採用）", () => {
+  const anchors = [
+    anchor("Rhine", 75, [1, 1]),
+    anchor("Rhine", 74, [2, 2]),
+    anchor("Danube", 125, [3, 3]),
+  ];
+  const visible = filterVisibleRiverLabels(anchors, null, null, 4);
+  assertEquals(visible.map((d) => d.name), ["Rhine", "Danube"]);
+  assertEquals(visible[0].position, [1, 1]);
+});
+
+Deno.test("filterVisibleRiverLabels: 実データの z4 でライン川・ドナウ川・ロワール川が常時表示される（AC #1）", async () => {
+  const fc = JSON.parse(
+    await Deno.readTextFile("data/rivers.geojson"),
+  ) as FeatureCollection;
+  const anchors = riverLabelAnchors(fc);
+  const at = (zoom: number) =>
+    filterVisibleRiverLabels(anchors, null, null, zoom).map((d) => d.name);
+  const z4 = at(4);
+  for (const name of ["Rhine", "Danube", "Loire"]) {
+    assert(z4.includes(name), `z4 に ${name} が無い: ${z4.join(", ")}`);
+  }
+  // 段階的に増える（AC #2）: z4 ⊂ z5 ⊂ z6、z6 は同名集約後の全河川
+  const z5 = at(5);
+  const z6 = at(6);
+  assert(z4.length < z5.length && z5.length < z6.length);
+  assert(z4.every((name) => z5.includes(name)));
+  assert(z5.every((name) => z6.includes(name)));
+  assertEquals(z6.length, new Set(anchors.map((a) => a.name)).size);
+});
+
+Deno.test("riverLabelColor: 選択 > ホバー > 通常の優先度で強調色を返す（TASK-123）", () => {
+  // ライン（riverLineColor）と同じ英語名突合。選択中・ホバー中は強調色、
+  // それ以外の常時表示ラベルは通常色
+  assertEquals(riverLabelColor("Rhine", "Rhine", null), [
+    ...ACTIVE_RIVER_LABEL_COLOR,
+  ]);
+  assertEquals(riverLabelColor("Rhine", null, "Rhine"), [
+    ...ACTIVE_RIVER_LABEL_COLOR,
+  ]);
+  assertEquals(riverLabelColor("Rhine", null, null), [...RIVER_LABEL_COLOR]);
+  assertEquals(riverLabelColor("Rhine", "Danube", "Elbe"), [
+    ...RIVER_LABEL_COLOR,
+  ]);
 });
 
 // ---- 定数（basemap.ts からの移設契約） ----

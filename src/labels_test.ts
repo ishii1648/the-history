@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertStrictEquals } from "@std/assert";
 import type { Feature, FeatureCollection, Position } from "geojson";
 import {
+  ACTIVE_RIVER_LABEL_COLOR,
   BASE_LABEL_COLOR,
   buildLabelData,
   characterSetFrom,
@@ -30,6 +31,7 @@ import {
   MAX_LABEL_PRIORITY,
   MIN_LABEL_COLLISION_FADE_CUTOFF,
   MIN_LABEL_PRIORITY,
+  MOUNTAIN_LABEL_COLOR,
   partitionFiefsBySuzerain,
   POWER_LABEL_SIZE_PX,
   RIVER_LABEL_COLOR,
@@ -518,11 +520,40 @@ Deno.test("国名・河川名・都市名ラベルのサイズは従来値以上
 });
 
 Deno.test("TASK-38: 既存のラベル色分け定数は変更されていない", () => {
-  // 国名 = 濃グレー、HRE 領邦 = 臙脂、都市 = 茶系、河川 = 水色系（不変）
+  // 国名 = 濃グレー、HRE 領邦 = 臙脂、都市 = 茶系（不変）
   assertEquals(BASE_LABEL_COLOR, [40, 40, 40, 255]);
   assertEquals(HRE_LABEL_COLOR, [140, 30, 30, 255]);
   assertEquals(CITY_LABEL_COLOR, [121, 62, 22, 255]);
-  assertEquals(RIVER_LABEL_COLOR, [2, 119, 189, 255]);
+});
+
+Deno.test("TASK-123: 河川名の常時表示色は暗青灰、強調色は従来の濃い水色", () => {
+  // 常時表示（通常）色はライン色 #7a949e と同系の暗青灰（羊皮紙上で騒がない）
+  assertEquals(RIVER_LABEL_COLOR, [42, 72, 92, 255]);
+  // ホバー/選択中は TASK-24 以来の濃い水色 #0277bd（TASK-69 時代の表示色）を維持
+  assertEquals(ACTIVE_RIVER_LABEL_COLOR, [2, 119, 189, 255]);
+});
+
+Deno.test("TASK-123: 河川名の常時表示色は他の全ラベル種別と識別できる（AC #6）", () => {
+  // 山脈の苔緑・諸侯領の藍紫・帝国領邦の臙脂・都市の茶・国名の濃グレーの
+  // いずれとも異なる値で、青が最大チャンネル（水系 = 青系の記号性を保つ）
+  for (
+    const other of [
+      BASE_LABEL_COLOR,
+      HRE_LABEL_COLOR,
+      FIEF_LABEL_COLOR,
+      CITY_LABEL_COLOR,
+      MOUNTAIN_LABEL_COLOR,
+    ]
+  ) {
+    assert(
+      JSON.stringify(RIVER_LABEL_COLOR) !== JSON.stringify(other),
+      `RIVER_LABEL_COLOR が ${JSON.stringify(other)} と同じ`,
+    );
+  }
+  assert(
+    RIVER_LABEL_COLOR[2] > RIVER_LABEL_COLOR[0] &&
+      RIVER_LABEL_COLOR[2] > RIVER_LABEL_COLOR[1],
+  );
 });
 
 // TASK-23: 日本語ラベルのグリフ生成（characterSet が日本語文字を含む）
