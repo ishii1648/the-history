@@ -1,9 +1,11 @@
 ---
 id: TASK-136
 title: ライン川など都市アンカーと重なる河川ラベルが低ズームで表示されない問題を再配置で解消する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 17:28'
+updated_date: '2026-07-28 17:31'
 labels:
   - 'area:src-rivers'
 dependencies: []
@@ -46,3 +48,15 @@ TASK-69 以前の常時表示時代も同じ挙動だったと推定される（
 - [ ] #4 ホバー連続移動でアンカー再計算が走らない（TASK-50 非退行）
 - [ ] #5 deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. TDD red: アンカー選定の純粋関数（都市アンカーから十分離れた点を決定的に選ぶ）の境界テストを先に書く
+2. src/rivers.ts の riverLabelAnchors のアンカー選定を拡張。ライン川が z4〜6 のどこかで実描画されること・既存の主要河川（ドナウ/ロワール/セーヌ/エルベ等）の位置が動かないことを両立する規則を設計
+3. メモ化（TASK-50）と決定性を維持（同一入力 → 同一出力、ホバー連続移動で再計算しない）
+4. CDP 実機（ポート 8136）で 1000/1200/1300 × z4〜6 のライン川描画と既存河川の非退行を確認
+5. deno fmt --check / lint / test / build 全 green
+
+並列化判定: 見送り（理由: rivers.ts 単一ファイルのアンカー選定ロジックに閉じており独立サブ作業が無い）
+<!-- SECTION:PLAN:END -->
