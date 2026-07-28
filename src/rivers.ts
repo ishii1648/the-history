@@ -2,7 +2,8 @@
  * 主要河川レイヤーの DOM/deck.gl 非依存な純粋ロジック（TASK-24）。
  * - クリックによる河川選択のトグル状態遷移
  * - 選択状態に応じたライン色・線幅の決定
- * - 河川ラベルのアンカー座標（最長 LineString の中点）と優先度の算出
+ * - 河川ラベルのアンカー座標（最長 LineString の中点。都市アンカー直上の
+ *   場合のみライン上の代替点へ回避、TASK-136）と優先度の算出
  *
  * TASK-21 で MapLibre style（basemap.ts）の line レイヤーとして描画していた
  * Natural Earth 主要河川を、クリック/ホバー可能にするため deck.gl の
@@ -122,6 +123,28 @@ export const RIVER_HIT_LINE_COLOR: Rgba = [0, 0, 0, 0];
 export const RIVER_CLICK_TOLERANCE_PX = RIVER_HIT_LINE_WIDTH_PX / 2 +
   PICKING_RADIUS_PX;
 
+/**
+ * 河川名ラベルの背景色（ほぼ不可視の alpha 1。TASK-136 自己衝突対策）。
+ *
+ * CollisionFilterExtension の可視判定は「衝突 FBO のアンカー画素（±2px の
+ * 5x5 サンプル）が自分の描画で占められているか」を見る。TASK-72 で背景
+ * パネルを撤去して以降、衝突 FBO にはグリフの字形そのもの（SDF の透明部は
+ * picking シェーダの alpha==0 discard で描かれない）しか残らないため、
+ * テキスト中央（= アンカー）がグリフの空白に当たるラベルは**自分自身の
+ * 判定に失敗して常に非表示**になる。「ライン川」は偶数 4 文字でテキスト
+ * 中央が「イ|ン」の文字間空白に落ちる唯一の河川名で、TASK-69 以前から
+ * 一度も描画されていなかった（実機で 3 文字の「ライン」に変えると同じ
+ * アンカーで描画されることを確認済み = 位置ではなく字形の問題）。
+ *
+ * 対策: TextLayer の background を有効化し、テキスト矩形を埋める背景
+ * クアッドを衝突 FBO の実体にする。alpha は 0 だと上記の discard で FBO に
+ * 描かれないため、目視では識別不能な 1 を使う。矩形は従来のグリフ描画を
+ * 包む範囲なので、他ラベルとの衝突関係は「字形の隙間頼み」がなくなる方向
+ * にのみ変わる（実機 1000/1200/1300 年 × z4〜z6 で既存河川ラベルの表示に
+ * 退行がないことを確認済み）。
+ */
+export const RIVER_LABEL_COLLISION_BACKGROUND_COLOR: Rgba = [0, 0, 0, 1];
+
 /** properties から河川名（name）を取り出す。欠落・空文字・非文字列は null */
 export function riverNameFor(props: GeoJsonProperties): string | null {
   const v = props?.name;
@@ -204,13 +227,17 @@ function lineLength(coords: readonly Position[]): number {
 }
 
 /**
- * 折れ線に沿った中点（全長の 1/2 の地点）を返す。頂点に丸めず頂点間を
- * 線形補間するため、頂点密度の偏りに影響されずライン中央にラベルが乗る。
+ * 折れ線に沿った弧長比 fraction（0..1）の地点を返す。頂点に丸めず頂点間を
+ * 線形補間するため、頂点密度の偏りに影響されずライン上の狙った位置に
+ * ラベルが乗る。fraction 0.5 が従来の「中点」（TASK-136 で一般化）。
  */
-function midpointAlong(coords: readonly Position[]): [number, number] {
+function pointAlong(
+  coords: readonly Position[],
+  fraction: number,
+): [number, number] {
   const total = lineLength(coords);
   if (total === 0) return [coords[0][0], coords[0][1]];
-  let remaining = total / 2;
+  let remaining = total * fraction;
   for (let i = 1; i < coords.length; i++) {
     const seg = Math.hypot(
       coords[i][0] - coords[i - 1][0],
@@ -227,6 +254,99 @@ function midpointAlong(coords: readonly Position[]): [number, number] {
   }
   const last = coords[coords.length - 1];
   return [last[0], last[1]];
+}
+
+/**
+ * 河川ラベルアンカーが都市アンカーから確保すべき最小距離（度、平面近似）
+ * （TASK-136）。中点アンカーがこの距離未満まで都市に近い場合のみ、ライン上の
+ * 代替候補点へアンカーを移す。
+ *
+ * 0.1° の根拠（実データ data/rivers.geojson × data/cities.json 全年代 union
+ * 634 都市での実測）:
+ * - ライン川の旧中点アンカー [7.093, 50.757] は Bonn まで 0.023°（ケルンまで
+ *   約 0.22°）で、CollisionFilterExtension の共有衝突空間（衝突判定は
+ *   COLLISION_SIZE_SCALE=2.8 倍）で都市ラベル（priority 150 以上 > 河川上限
+ *   145）に常に負け、z4〜z6 で一度も描画されなかった。
+ * - 一方、既に表示できている河川の中点アンカーの最小クリアランスは
+ *   Lek 0.108° / Tajo 0.121° / Dnipro 0.138° / Loire 0.240°（z4 表示実績）…と
+ *   続く。しきい値 0.1° はこの間に落ち、**実データで動くのはライン川だけ**に
+ *   なる（rivers_test.ts の実データテストで固定）。既表示河川の位置を
+ *   動かさないこと（AC #2）を最優先した最小介入の値。
+ */
+export const RIVER_LABEL_CITY_CLEARANCE_DEG = 0.1;
+
+/** アンカー候補の弧長等分数（TASK-136）。候補は k/20（k=2..18）= 0.1〜0.9 */
+const ANCHOR_CANDIDATE_STEPS = 20;
+
+/** 候補の最小ステップ（= 弧長比 0.1）。両端 10% は「川の端のラベル」に見えるため除外 */
+const ANCHOR_CANDIDATE_MIN_STEP = 2;
+
+/** 候補の最大ステップ（= 弧長比 0.9） */
+const ANCHOR_CANDIDATE_MAX_STEP = 18;
+
+/** point から最寄りの回避点（都市アンカー）までの距離（度、平面近似）。空なら +Inf */
+function nearestAvoidDistance(
+  point: readonly [number, number],
+  avoid: readonly Position[],
+): number {
+  let min = Number.POSITIVE_INFINITY;
+  for (const p of avoid) {
+    const d = Math.hypot(p[0] - point[0], p[1] - point[1]);
+    if (d < min) min = d;
+  }
+  return min;
+}
+
+/**
+ * 河川ラベルのアンカー点をライン上から選ぶ（純粋関数、TASK-136）。
+ *
+ * 規則（決定的。同一入力 → 同一出力）:
+ * 1. 中点（弧長比 0.5）が全回避点から RIVER_LABEL_CITY_CLEARANCE_DEG 以上
+ *    離れていれば中点をそのまま使う（従来挙動。既に表示できている河川の
+ *    ラベル位置を一切動かさない）。
+ * 2. 中点が都市直上（クリアランス未満）の場合のみ、弧長比 0.1〜0.9 を 0.05
+ *    刻みで等分した候補点のうち「最寄り回避点までの距離が最大」の点を選ぶ。
+ *    同率なら中点に近い側 → 弧長位置が小さい側の順で決定的にタイブレークする
+ *    （比較はステップ整数 |k - 10| → k で行い、浮動小数の丸めに依存しない）。
+ *
+ * 「しきい値を満たす最寄り候補」ではなく最大クリアランス点を選ぶのは、
+ * 発動時 = 都市密集地帯を流れる川であり、境界ぎりぎりの点では
+ * COLLISION_SIZE_SCALE 倍の衝突判定に再び負ける可能性が高いため
+ * （ライン川はこの規則でクレーフェルト〜アルネム間の下流域
+ * [6.36, 51.77]（クリアランス 0.49°）へ移り、z4 から描画される）。
+ */
+export function selectRiverLabelAnchor(
+  coords: readonly Position[],
+  avoid: readonly Position[],
+): [number, number] {
+  const midpoint = pointAlong(coords, 0.5);
+  if (
+    avoid.length === 0 ||
+    nearestAvoidDistance(midpoint, avoid) >= RIVER_LABEL_CITY_CLEARANCE_DEG
+  ) {
+    return midpoint;
+  }
+  let best = midpoint;
+  let bestClearance = Number.NEGATIVE_INFINITY;
+  let bestCenterDistance = Number.POSITIVE_INFINITY;
+  for (
+    let k = ANCHOR_CANDIDATE_MIN_STEP;
+    k <= ANCHOR_CANDIDATE_MAX_STEP;
+    k++
+  ) {
+    const point = pointAlong(coords, k / ANCHOR_CANDIDATE_STEPS);
+    const clearance = nearestAvoidDistance(point, avoid);
+    const centerDistance = Math.abs(k - ANCHOR_CANDIDATE_STEPS / 2);
+    if (
+      clearance > bestClearance ||
+      (clearance === bestClearance && centerDistance < bestCenterDistance)
+    ) {
+      best = point;
+      bestClearance = clearance;
+      bestCenterDistance = centerDistance;
+    }
+  }
+  return best;
 }
 
 /** feature の折れ線一覧（LineString は 1 本、MultiLineString は全パート）。他は空 */
@@ -264,19 +384,25 @@ export interface RiverLabelDatum extends LabelDatum {
 /**
  * FeatureCollection から河川ラベルのアンカーデータを組み立てる（純粋関数）。
  * - name を持つ feature ごとに 1 件（name 欠落・折れ線を持たないものは除外）
- * - position は最長 LineString（MultiLineString は最長パート）の中点
- * - priority は全パート合計長由来（長い川を優先表示）
+ * - position は最長 LineString（MultiLineString は最長パート）上の点。
+ *   通常は中点、中点が avoidPoints（都市アンカー）の直上にある場合のみ
+ *   同ライン上の都市から遠い候補点へ移す（selectRiverLabelAnchor、TASK-136）
+ * - priority は全パート合計長由来（長い川を優先表示）。アンカー回避では変えない
  * - ja（name-ja.json、英語名 → 日本語名）を渡すと text を日本語化。未登録は英語のまま
+ * - avoidPoints は年代非依存にするため全年代の都市座標 union
+ *   （cities.ts allCityPositions）を渡す契約。union から離れた点は
+ *   どの年代でも都市から離れており、年代切替でラベルが跳ばない
  *
  * TASK-50: 年代・hover/selection に依存しない計算なので、呼び出し側
- * （main.ts memoizedRiverLabelData）は起動時ロード済みの riversData/nameJa に
- * 対して 1 度だけ実行し、以降はメモ化された結果を使い回す。TASK-69 の
- * 表示対象の絞り込みは filterVisibleRiverLabels（この結果に対する純粋な
- * フィルタ）で行い、アンカー再計算は発生させない。
+ * （main.ts memoizedRiverLabelData）は起動時ロード済みの riversData/nameJa/
+ * 都市座標 union に対して 1 度だけ実行し、以降はメモ化された結果を使い回す。
+ * TASK-69 の表示対象の絞り込みは filterVisibleRiverLabels（この結果に対する
+ * 純粋なフィルタ）で行い、アンカー再計算は発生させない。
  */
 export function riverLabelAnchors(
   fc: FeatureCollection,
   ja: Record<string, string> = {},
+  avoidPoints: readonly Position[] = [],
 ): RiverLabelDatum[] {
   const data: RiverLabelDatum[] = [];
   for (const feature of fc.features) {
@@ -298,7 +424,7 @@ export function riverLabelAnchors(
     data.push({
       name,
       text: ja[name] ?? name,
-      position: midpointAlong(longest),
+      position: selectRiverLabelAnchor(longest, avoidPoints),
       priority: riverLabelPriority(totalLength),
     });
   }
