@@ -70,7 +70,7 @@ import {
   POWER_LAYER_ID,
 } from "./picking.ts";
 import { labelAnchorFor } from "./labels.ts";
-import type { YearDataLoader } from "./powers.ts";
+import { createYearCache, type YearDataLoader } from "./powers.ts";
 
 /**
  * 宗主キーの解決に使う name-overrides.json の内容。
@@ -370,14 +370,19 @@ export function applySuzerainOverrides(
 
 /**
  * 年代データローダに宗主補正を挟む（TASK-94）。
- * 変換結果は年ごとに保持し、同じ年に対しては常に同一インスタンスを返す
+ * 変換結果は年ごとに保持し、保持中の年に対しては常に同一インスタンスを返す
  * （ローダ本体のキャッシュと同じ参照安定性を保つ）。
+ *
+ * TASK-129: この保持もローダ本体と同じ LRU（上限 YEAR_CACHE_MAX_YEARS 年）に
+ * 載せる。ここが無制限の Map のままだと、内側ローダのキャッシュを退避しても
+ * 補正後の FeatureCollection が全年代分残り続け、上限の意味がなくなるため。
+ * 解放された年の再ロードは内側ローダ（再 fetch）へ戻る。
  */
 export function withSuzerainOverrides(
   loader: YearDataLoader,
   getOverrides: () => SuzerainOverrides,
 ): YearDataLoader {
-  const cache = new Map<number, FeatureCollection>();
+  const cache = createYearCache<FeatureCollection>();
   return {
     has: (year) => loader.has(year),
     async load(year) {

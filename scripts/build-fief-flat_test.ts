@@ -256,7 +256,7 @@ Deno.test("生成済みの france_fiefs_flat_<year> は raw と同じ feature �
         `${year}: properties が raw と異なる`,
       );
     }
-    // 残存する重なりは座標丸め（COORD_PRECISION=5、約 1m）由来のみ
+    // 残存する重なりは座標丸め（COORD_PRECISION=3、約 100m）由来のみ
     const fs = flat.features;
     for (let i = 0; i < fs.length; i++) {
       for (let j = i + 1; j < fs.length; j++) {
@@ -504,13 +504,15 @@ Deno.test('イタリア諸侯領は "keep-smaller" で削るため、内包さ�
     area(fc.features.find((f) => f.properties?.NAME === name)! as Feature);
 
   // 相手より常に小さい側は形が丸ごと残る（座標は COORD_PRECISION へ丸め直される
-  // ため完全一致では比較せず、相対誤差 0.1% で「丸めだけ」を確かめる）。
-  // 削られていれば 99% 超を失うので、この許容幅で十分に区別できる。
+  // ため完全一致では比較せず、相対誤差 1% で「丸めだけ」を確かめる）。
+  // COORD_PRECISION = 3（グリッド ≒ 100 m）の丸めは 186 km² 規模の伯領で
+  // 0.2〜0.3% 程度の面積変動を生む（実測）。削られていれば 99% 超を失うので、
+  // この許容幅でも十分に区別できる。
   for (const name of ["County of Santa Fiora", "County of Pitigliano"]) {
     assertAlmostEquals(
       areaOf(flat, name),
       areaOf(raw, name),
-      areaOf(raw, name) * 1e-3,
+      areaOf(raw, name) * 1e-2,
       `${name} のジオメトリが削られている`,
     );
   }

@@ -426,7 +426,7 @@ export interface PinchRemoval {
 /**
  * 1 点で接触するリング（くびれ）を単純なリングに直す（純粋関数）。
  *
- * shrinkToLimit の座標丸め（COORD_PRECISION = 5 桁 ≒ 1 m）で近接した 2 頂点が
+ * shrinkToLimit の座標丸め（COORD_PRECISION = 3 桁 ≒ 100 m）で近接した 2 頂点が
  * 同一座標へ潰れると、パート内のリングが 1 点だけを共有した状態になる。実データの
  * 内訳は 2 種類:
  * - 外環が自分自身に触れる（P → L1 → P → L2 → P と同じ点を 2 回通る）
