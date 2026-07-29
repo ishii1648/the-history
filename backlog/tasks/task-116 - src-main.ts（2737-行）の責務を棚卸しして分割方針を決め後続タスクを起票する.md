@@ -1,9 +1,11 @@
 ---
 id: TASK-116
 title: src/main.ts（2737 行）の責務を棚卸しして分割方針を決め後続タスクを起票する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-27 14:14'
+updated_date: '2026-07-29 15:46'
 labels:
   - 'area:src-main'
   - 'area:docs'
@@ -47,3 +49,15 @@ UI タスクが一切衝突しなくなる最良ケースを仮定しても並�
 - [ ] #4 抽出候補ごとに後続タスクが起票され、それぞれに area ラベルが付与されている
 - [ ] #5 本タスクでは src/main.ts の実コードを変更していない（方針決定と起票のみ）
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. src/main.ts（2737 行）を通読し、責務を分類（配線/状態管理/レイヤー構築/イベント処理/デバッグフック等）
+2. 抽出候補のモジュール単位・概算行数・依存関係を docs/main-ts-inventory.md（または data-inventory 同様の適所）にまとめる（AC#1）
+3. main.ts に残す配線責務の範囲を定義（AC#2）
+4. 分割方針は mainagent が backlog decision として記録、抽出候補ごとの後続タスク起票も mainagent が行う（AC#3/#4。subagent は起票案を報告に含める）
+5. 実コードは変更しない（AC#5）。deno test green を確認
+
+並列化判定: 見送り（理由: 単一ファイルの通読・分類作業で分割単位が無い）
+<!-- SECTION:PLAN:END -->
