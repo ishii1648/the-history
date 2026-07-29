@@ -22,6 +22,12 @@
  *   checkScript.ts は `export async function run(api: CdpApi) { ... }` を
  *   export する。
  *
+ * リモート CDP モード（Issue #169）:
+ *   環境変数 CDP_BROKER にホスト側 chrome-broker の HTTP ベース URL を
+ *   指定すると、ローカルで Chrome を spawn せず broker から取得した外部
+ *   Chrome の CDP エンドポイントへ接続する（詳細は本ファイルの
+ *   「リモート CDP モード」セクションと docs/development-style.md 4.3.1）。
+ *
  * 制約（ヘッドレス検証で踏んだ落とし穴）:
  * - `document.visibilityState` に依存する分岐がある場合、ヘッドレスでも
  *   "visible" 扱いになるとは限らないため、可視性に依存しないロジックを使うこと。
@@ -378,6 +384,131 @@ export function resolveCheckScriptUrl(
   return toFileUrl(absolute).href;
 }
 
+// ---- リモート CDP モード（CDP_BROKER。旧 TASK-155 / Issue #169） ----
+//
+// agent-loop を Linux pod（実 GPU 描画不可）へ移すための「pod = 頭脳、
+// macOS ホスト = 網膜」分離。環境変数 CDP_BROKER にホスト側 chrome-broker
+// の HTTP ベース URL（例: http://192.168.5.2:8377）を指定すると、ローカルで
+// Chrome を spawn する代わりに broker からセッションを取得して外部 Chrome
+// の CDP エンドポイントへ接続する。未設定時の挙動は従来と完全に同一。
+//
+// broker API 契約（本タスクで確定。broker 実体は k8s-lab リポジトリ側）:
+// - POST {base}/session
+//     → 2xx / JSON { "id": string, "webSocketDebuggerUrl": string }
+//       （fresh profile + 空きポートで headless Chrome を spawn した結果）
+// - DELETE {base}/session/{id}
+//     → セッション破棄（Chrome kill）。close() が best-effort で呼ぶ。
+// broker は 127.0.0.1 bind のため webSocketDebuggerUrl の host は
+// 127.0.0.1 になっている。pod から到達できるよう、接続前に CDP_BROKER の
+// host（Lima slirp ゲートウェイ等）へ書き換える（ポートは ws URL のまま）。
+
+/** リモート CDP モードの接続設定。 */
+export interface BrokerConfig {
+  /** broker の HTTP ベース URL（末尾スラッシュなしに正規化済み）。 */
+  baseUrl: string;
+}
+
+/**
+ * 環境変数 CDP_BROKER の値から接続モードを解決する。未設定・空文字なら
+ * ローカルモード（null）。設定時は http(s) の URL であることを検証し、
+ * 前後空白と末尾スラッシュを正規化した {@linkcode BrokerConfig} を返す。
+ */
+export function resolveBrokerConfig(
+  value: string | undefined,
+): BrokerConfig | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error(`CDP_BROKER が URL として不正です: "${trimmed}"`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(
+      `CDP_BROKER は http(s) の broker URL を指定してください: "${trimmed}"`,
+    );
+  }
+  return { baseUrl: trimmed.replace(/\/+$/, "") };
+}
+
+/**
+ * broker が返す webSocketDebuggerUrl の host（127.0.0.1）を、こちらから
+ * 到達可能な broker の host に書き換える。スキーム・ポート・パス・クエリは
+ * ws URL のまま保持する。
+ */
+export function rewriteWsUrlHost(wsUrl: string, brokerBaseUrl: string): string {
+  const ws = new URL(wsUrl);
+  ws.hostname = new URL(brokerBaseUrl).hostname;
+  return ws.href;
+}
+
+/**
+ * POST {base}/session の応答 JSON を検証して id と webSocketDebuggerUrl を
+ * 取り出す。形式が契約と異なる場合は内容を含めて例外を投げる。
+ */
+export function parseBrokerSessionResponse(
+  body: unknown,
+): { id: string; webSocketDebuggerUrl: string } {
+  const record = body as
+    | { id?: unknown; webSocketDebuggerUrl?: unknown }
+    | null;
+  if (
+    typeof record !== "object" || record === null ||
+    typeof record.id !== "string" ||
+    typeof record.webSocketDebuggerUrl !== "string"
+  ) {
+    throw new Error(
+      `broker の /session 応答が契約 { id, webSocketDebuggerUrl } と異なります: ${
+        JSON.stringify(body)
+      }`,
+    );
+  }
+  return { id: record.id, webSocketDebuggerUrl: record.webSocketDebuggerUrl };
+}
+
+/**
+ * CDP エンドポイントへの「接続」を抽象化する。ローカル（Chrome spawn）と
+ * リモート（broker セッション）で wsUrl の得方と後始末だけが異なり、
+ * 接続後の CDP プロトコル操作は完全に共通。
+ */
+interface CdpConnection {
+  wsUrl: string;
+  /** WebSocket close 後の後始末（プロセス kill / broker セッション破棄）。
+   * 例外を投げない（best-effort）。 */
+  cleanup(): Promise<void>;
+}
+
+/**
+ * broker からセッションを取得してリモート接続を作る。fetch を注入できる
+ * ため、実ブローカー無しでモックによる単体テストが可能。
+ */
+export async function openBrokerSession(
+  broker: BrokerConfig,
+  fetchFn: typeof fetch = fetch,
+): Promise<CdpConnection> {
+  const res = await fetchFn(`${broker.baseUrl}/session`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `broker POST /session が失敗しました: ${res.status} ${body}`.trim(),
+    );
+  }
+  const session = parseBrokerSessionResponse(await res.json());
+  const wsUrl = rewriteWsUrlHost(session.webSocketDebuggerUrl, broker.baseUrl);
+  async function cleanup(): Promise<void> {
+    try {
+      const del = await fetchFn(`${broker.baseUrl}/session/${session.id}`, {
+        method: "DELETE",
+      });
+      await del.body?.cancel();
+    } catch {
+      // best-effort: broker 側 TTL による孤児掃除に委ねる
+    }
+  }
+  return { wsUrl, cleanup };
+}
+
 // ---- プロセス起動・CDP 通信（副作用あり） ----
 
 function findFreePort(): Promise<number> {
@@ -413,8 +544,14 @@ export interface LaunchOptions {
   emulation?: EmulationConfig;
 }
 
-export async function launch(options: LaunchOptions = {}): Promise<CdpApi> {
-  const { emulation } = options;
+/**
+ * ローカルモードの接続: ヘッドレス Chrome を spawn し、CDP エンドポイント
+ * から接続すべき ws URL を得る。cleanup はプロセス kill と一時プロファイル
+ * 削除（従来の close() と同じ内容・同じ順序）。
+ */
+async function launchLocalChrome(
+  emulation?: EmulationConfig,
+): Promise<CdpConnection> {
   const port = await findFreePort();
   const userDataDir = await Deno.makeTempDir({ prefix: "cdp-verify-" });
 
@@ -437,7 +574,38 @@ export async function launch(options: LaunchOptions = {}): Promise<CdpApi> {
   const targets = await listRes.json() as CdpTarget[];
   const wsUrl = pickPageTargetUrl(targets);
 
-  const ws = new WebSocket(wsUrl);
+  async function cleanup(): Promise<void> {
+    try {
+      process.kill("SIGTERM");
+    } catch {
+      // ignore
+    }
+    try {
+      await process.status;
+    } catch {
+      // ignore
+    }
+    try {
+      await Deno.remove(userDataDir, { recursive: true });
+    } catch {
+      // ignore
+    }
+  }
+
+  return { wsUrl, cleanup };
+}
+
+export async function launch(options: LaunchOptions = {}): Promise<CdpApi> {
+  const { emulation } = options;
+  // CDP_BROKER 設定時はリモートモード: Chrome の spawn・ポート待ち・kill を
+  // 全てスキップし、broker が用意した外部 Chrome へ接続する。未設定時は
+  // 従来どおりローカル spawn（挙動を一切変えない）。
+  const broker = resolveBrokerConfig(Deno.env.get("CDP_BROKER"));
+  const connection = broker
+    ? await openBrokerSession(broker)
+    : await launchLocalChrome(emulation);
+
+  const ws = new WebSocket(connection.wsUrl);
   await new Promise<void>((resolve, reject) => {
     ws.onopen = () => resolve();
     ws.onerror = (e) => reject(e);
@@ -567,21 +735,9 @@ export async function launch(options: LaunchOptions = {}): Promise<CdpApi> {
     } catch {
       // ignore
     }
-    try {
-      process.kill("SIGTERM");
-    } catch {
-      // ignore
-    }
-    try {
-      await process.status;
-    } catch {
-      // ignore
-    }
-    try {
-      await Deno.remove(userDataDir, { recursive: true });
-    } catch {
-      // ignore
-    }
+    // ローカル: プロセス kill + 一時プロファイル削除 /
+    // リモート: broker セッション破棄（DELETE /session/:id）
+    await connection.cleanup();
   }
 
   return {
