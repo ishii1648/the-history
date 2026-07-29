@@ -1,11 +1,11 @@
 ---
 id: TASK-126
 title: excludeSuppressedFeatures がデッドコードになっている（TASK-122 の抑制方式変更の残骸）
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-28 16:37'
-updated_date: '2026-07-29 16:55'
+updated_date: '2026-07-29 17:00'
 labels:
   - 'area:src-fief-dedupe'
   - 'area:src-main'
@@ -47,10 +47,10 @@ TASK-78（base ラベル抑制の導入）・TASK-122（抑制方式の変更）
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 excludeSuppressedFeatures を削除するか残すかが根拠付きで判断されている
-- [ ] #2 残す場合: アプリから呼ばれていないことと抑制の実装が labels.ts にあることが doc コメントに明記されている
-- [ ] #3 suppressedPowerNames など現役の関数が失われていない
-- [ ] #4 deno test が green
+- [x] #1 excludeSuppressedFeatures を削除するか残すかが根拠付きで判断されている
+- [x] #2 残す場合: アプリから呼ばれていないことと抑制の実装が labels.ts にあることが doc コメントに明記されている
+- [x] #3 suppressedPowerNames など現役の関数が失われていない
+- [x] #4 deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -63,3 +63,19 @@ TASK-78（base ラベル抑制の導入）・TASK-122（抑制方式の変更）
 
 並列化判定: 見送り（理由: 単一関数の削除判断のみ）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## 実装記録（mainagent レビュー済み）
+- 判断: 削除。アプリ経路の参照ゼロ（定義本体・自テスト 3 件・labels.ts の歴史コメントのみ）を全走査で確認。main.ts は TASK-122 の suppressedPowerNames → buildLabelData 方式に移行済みで、残置は「これが抑制の実装」との誤読リスクのみ。git 履歴で復元可能
+- AC#2 は「残す場合」の条件付き AC のため、削除選択により空満足（歴史的経緯は fief_dedupe.ts / labels.ts の doc コメントに TASK-126 参照付きで残した）
+- 現役 API（suppressedPowerNames / parseFiefDedupeTable / coverageFor 等）とテスト・main.ts の参照は無傷。TASK-122 の抑制実装は labels_test.ts（805〜897 行）で担保済みを確認
+- fmt / lint / test（1492 passed = -3 は削除テスト）/ build green（mainagent 独立検証）
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+デッドコード excludeSuppressedFeatures を専用 helper・テストごと削除（-77 行）。アプリ経路の参照ゼロを全走査で確認し、抑制の実装が labels.ts にある旨を doc コメントで明示。現役 API は無傷、1492 passed。
+<!-- SECTION:FINAL_SUMMARY:END -->
