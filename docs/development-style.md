@@ -1,7 +1,8 @@
 # 開発スタイル規約（TDD・issue 駆動・ループエンジニアリング）
 
-> このプロジェクトの開発は「テスト駆動開発（TDD）」「issue 駆動開発（Backlog.md
-> タスク起点）」「ループエンジニアリング（複数階層のフィードバックループ）」の 3
+> このプロジェクトの開発は「テスト駆動開発（TDD）」「issue 駆動開発（GitHub
+> Issue のタスク起点。backlog.md から移行済み、docs/adr/0031
+> 参照）」「ループエンジニアリング（複数階層のフィードバックループ）」の 3
 > 本柱で進める。人間は開発フローに原則入らず、介入は例外時のみとする（4
 > 章を参照）。
 
@@ -9,7 +10,7 @@
 
 - テストは実装と同居させる: `src/foo.ts` に対して `src/foo_test.ts`
   を置く。実行は `deno test`。
-- backlog タスクの Acceptance Criteria
+- タスク Issue の Acceptance Criteria
   を起点にテストケースを設計する。実装より先にテストを書き、red（失敗）を確認してから実装し、green
   にしてから refactor する（red → green → refactor）。
 - MapLibre / deck.gl などの
@@ -27,18 +28,25 @@
 
 ## 2. issue 駆動開発規約
 
-- すべての変更は Backlog.md タスクを起点とする。着手前に
-  `backlog search "<キーワード>" --plain` で既存タスクを確認し、なければ
-  `backlog task create` で新規作成する。
-- 既存の運用規約（本ファイル末尾ではなくプロジェクト `CLAUDE.md` の「Task-Driven
-  Development」節）に定める、ブランチ名 `task-N-slug`・依存関係順の実行（area が
-  互いに素な場合のタスク間並列を含む。4.2 章参照）・PR への TASK ID
+- すべての変更は GitHub Issue のタスク（label `task`）を起点とする。起票は
+  `task-intake` スキル（`.claude/skills/task-intake/SKILL.md`）の手順で行う:
+  着手前の重複確認は search API を使わず
+  `gh issue list --state all --limit 1000 --json number,title,labels,body` を 1
+  コール叩いてローカルでマッチし、なければ `gh issue create --body-file <path>`
+  で新規作成する（本文はシェル引数で渡さず必ずファイル経由。バッククォートの
+  コマンド置換によるテキスト破壊を防ぐ）。本文は
+  `.github/ISSUE_TEMPLATE/task.md` の規約（LOOP-META・`AC1` 記法・area
+  ラベル）に従う。`backlog` CLI は使わない（移行前のタスクは
+  `docs/archive/backlog-tasks/` に凍結。索引は同ディレクトリの README）。
+- 既存の運用規約（本ファイル末尾ではなくプロジェクト `CLAUDE.md`
+  の「タスク駆動開発」節）に定める、ブランチ名 `task-N-slug`・依存関係順の実行
+  （area が互いに素な場合のタスク間並列を含む。4.2 章参照）・PR への Issue 番号
   明記は継続して守る。
-- タスクを Done にできるのは、Acceptance Criteria が全てチェック済みで、かつ CI
-  が green の場合に限る。
+- タスクを Done（Issue クローズ）にできるのは、Acceptance Criteria が
+  全てチェック済みで、かつ CI が green の場合に限る。
 - 動作確認（`/agent-loop` のマージ後動作確認フェーズや手動確認）・
   `/code-review`・ユーザー報告で見つけた問題は、直接 hotfix せず必ず label `bug`
-  付きの backlog タスクとして起票してから直す。
+  付きのタスク Issue として起票してから直す。
 - **起票はフェーズ単位でバッチ化する**（根拠と限界は 4.2.1 章）。1 件見つける
   たびに起票して次へ進むのではなく、そのフェーズ（1 回のマージ後動作確認、1 回の
   `/code-review`、1 回のユーザー報告）の確認を最後までやり切って問題を出し切り、
@@ -49,8 +57,9 @@
     動作確認/どの報告で見つかったか）を記載する。
   - Acceptance Criteria: 「再現テスト（red）が追加されている」「修正により
     green」。自動テストできない描画系の問題に限り「目視確認」を追加する。
-  - dependencies は原則空、ordinal は通常どおり採番する（優先順位は label `bug`
-    が担保するため、選択順に ordinal は使わない）。
+  - LOOP-META の depends-on は原則空、ordinal は原則 null（Issue
+    番号順）とする（優先順位は label `bug` が担保するため、選択順に ordinal
+    は使わない）。
 
 ### 2.1 設計判断の記録（ADR / docs/adr/）
 
@@ -74,7 +83,7 @@
 
 - タスク限りの実装意図・Why（そのタスクのスコープで完結し、後続タスクを
   制約しないもの）。これらはコンテキストコミットの `intent:` / `decision:` 行と
-  backlog task の Implementation Notes に記録すれば十分であり、ADR
+  タスク Issue の Implementation Notes コメントに記録すれば十分であり、ADR
   へ転記しない（重複記録は同期切れ・形骸化を招くため禁止）。
 
 **コンテキストコミットとの棲み分け:** コミット本文の `decision:` 行は「その
@@ -146,9 +155,14 @@
    （イテレーション境界規約。進行中タスクの finalization 完了が先）。
 
 このルールは `scripts/next_task.ts` に実装されており、`deno task next-task`
-で次タスク ID（例: `TASK-2`）が出力される（候補なしなら出力なし・exit 0）。
-backlog CLI には依存しないため、CLI が未インストールの環境や CI 上でも動く。
-動作確認で見つけた問題（2 章参照）を label `bug`
+で次タスク ID（例: `#12`）が出力される（候補なしなら出力なし・exit 0）。
+タスクの読み取り元は環境変数 `TASK_SOURCE` で切り替わり、**既定は github**
+（GitHub Issue を `gh issue list` 1 コールで取得し、status は open/closed と
+`status:in-progress` ラベル、依存と ordinal は本文 LOOP-META から導出する。
+TASK-139 で抽象化、TASK-140 で既定を切替）。`TASK_SOURCE=backlog` の明示指定は
+移行前のチェックアウト（`backlog/tasks/*.md` が存在する時点）向けに残る。
+本章のルール記述に残る backlog 前提の文面（status 名・TASK-N 表記等）の
+全面更新は TASK-141 で行う。 動作確認で見つけた問題（2 章参照）を label `bug`
 付きで起票すると、このルールにより次イテレーションで最優先に選ばれる（単一選択
 なら 1 件目、集合選択なら集合の先頭）。 バッチ起票で bug
 候補が複数になった場合も ルール 2 が順序を一意に定める（bug 群内は `ordinal` →
@@ -238,8 +252,8 @@ feature に出典プロパティを付与した TASK-109 の 1 回だけ）。
 
 area ラベル全体の運用:
 
-- area の付与はタスク作成時に行い、既存タスクの整備時にも追記する（backlog CLI
-  の `--add-label` を使い、既存ラベルを消さない）。
+- area の付与はタスク作成時に行い、既存タスクの整備時にも追記する
+  （`gh issue edit <N> --add-label` を使い、既存ラベルを消さない）。
 - `deno task next-tasks` は、To Do かつ dependencies 全 Done の候補から 4.1
   章と同じ優先順（bug 最優先 → `ordinal` → ID）の貪欲選択で「area が互いに
   素なタスク集合」を決定的に返す。出力は JSON（`tasks` = 選択された集合、
@@ -323,11 +337,12 @@ TASK-118（`cleanup-branches` が subagent worktree を削除できない）は 
 
 外側ループはローカルの Claude Code セッション自身が実行主体となって回す。 GitHub
 Actions からセッションを起動する方式は用いない。手順は
-`.claude/skills/agent-loop/SKILL.md`（`/agent-loop` スキル）に定義されており、
-セッションは「`deno task next-tasks` で着手可能なタスク集合を判定（4.2 章）→
-集合内の各タスクを標準タスクフロー （TDD・subagent 実装・mainagent
-レビュー）で実装（並列可なら同時に）→ タスクごとに個別 PR 作成 → CI 監視 → green
-で マージ → finalization →
+`.claude/skills/agent-loop/SKILL.md`（`/agent-loop` スキル）に定義されており
+（同スキル本文と本節以下の手順詳細に残る backlog 前提の記述は TASK-141 で Issue
+ベースへ更新予定）、 セッションは「`deno task next-tasks`
+で着手可能なタスク集合を判定（4.2 章）→ 集合内の各タスクを標準タスクフロー
+（TDD・subagent 実装・mainagent レビュー）で実装（並列可なら同時に）→
+タスクごとに個別 PR 作成 → CI 監視 → green で マージ → finalization →
 次の集合へ」を人の指示なしで繰り返す。集合が単一タスクの場合は従来どおりの
 直列フローと同一になる。
 
@@ -562,14 +577,16 @@ issue 上で判断を返す。判断が返ったらエージェントがタス�
   はこの表を参照するのみで値を重複定義しないため、他文書の追随作業は
   不要である。
 
-## 5. backlog CLI が使えない環境でのフォールバック
+## 5. 旧 backlog.md 資産の扱い
 
-CLAUDE.md の規約どおり backlog の変更（タスクの作成・編集・ステータス遷移）は
-`backlog` CLI で行う。CLI が未インストールの環境では `npm i -g backlog.md`
-でインストールしてから作業する。インストールできない場合、タスクファイルの
-**読み取り**は `backlog/tasks/*.md` を直接読んでよいが、**書き込み**は行わず、
-CLI が使える状態を先に整えること（`scripts/next_task.ts` は読み取り専用なので
-常に使用できる）。
+タスク管理は GitHub Issue へ移行済みで、`backlog` CLI は使わない
+（docs/adr/0031・TASK-140）。移行前のタスク markdown は
+`docs/archive/backlog-tasks/` に凍結アーカイブされており（TASK-N →
+ファイル名の索引は同ディレクトリの README）、読み取り専用の歴史的記録として
+参照する（起票・編集・復活はしない）。移行時点で未終端だったタスクは
+`scripts/migrate-tasks-to-issues.ts` で Issue 化され、アーカイブ側 md の
+「移行先: #N」と Issue 本文末尾の旧 ID・アーカイブパスで相互リンクされている。
+`backlog/config.yml` 等の残骸の完全撤去は TASK-142（の移行先 Issue）で行う。
 
 ## 6. branch protection 設定手順
 
