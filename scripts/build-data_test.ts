@@ -709,3 +709,112 @@ Deno.test("切り出しの対象外年（1200）の base には Duchy of Normand
     0,
   );
 });
+
+Deno.test("BASE_FIEF_SPLITS は 1100/1200 のポーランド塗りボヘミア・モラヴィアを帝国封土として切り出す（TASK-157）", () => {
+  // 上流 base の 1100 / 1200 年はボヘミア・モラヴィア一帯を単一の Poland
+  // ポリゴンに塗り込めている（史実では 1100 年は帝国内のボヘミア公領、
+  // 1200 年は帝国内のボヘミア王国）。OHM 由来の区画があるのは 1100 年の
+  // Duchy of Bohemia と 1200 年の Moravia のみで、1200 年のボヘミア本体は
+  // 出典付き区画が無く known-limitations に残す（decision-14 / decision-18）。
+  const carved = BASE_FIEF_SPLITS.filter((s) => s.fromName === "Poland");
+  assertEquals(
+    carved.map((
+      s,
+    ): [number, string, string, string] => [
+      s.year,
+      s.fiefName,
+      s.subjecto,
+      s.fiefPath,
+    ]),
+    [
+      [
+        1100,
+        "Duchy of Bohemia",
+        "Holy Roman Empire",
+        "data/hre_fiefs_flat_1100.geojson",
+      ],
+      [
+        1200,
+        "Moravia",
+        "Holy Roman Empire",
+        "data/hre_fiefs_flat_1200.geojson",
+      ],
+    ],
+  );
+});
+
+/** ボヘミア公領（1100 年の OHM 区画）の内陸点 */
+const BOHEMIA_POINTS: Array<[string, [number, number]]> = [
+  ["プラハ", [14.42, 50.08]],
+  ["ブルノ", [16.61, 49.19]],
+];
+
+/** ポーランド本体の点（切り出しで失われてはいけない領域） */
+const POLAND_POINTS: Array<[string, [number, number]]> = [
+  ["クラクフ", [19.94, 50.06]],
+  ["グニェズノ", [17.60, 52.53]],
+];
+
+Deno.test("1100 年の base はボヘミア・モラヴィアをポーランド領に含めない（TASK-157）", () => {
+  const base = readBase(1100);
+  for (const [label, point] of BOHEMIA_POINTS) {
+    const names = namesAt(base, point);
+    assert(
+      !names.includes("Poland"),
+      `${label} が Poland に含まれている: ${names.join(", ")}`,
+    );
+    assert(
+      names.includes("Duchy of Bohemia"),
+      `${label} が Duchy of Bohemia に含まれていない: ${names.join(", ")}`,
+    );
+  }
+  const bohemia = base.features.filter((f) =>
+    f.properties?.NAME === "Duchy of Bohemia"
+  );
+  assertEquals(bohemia.length, 1);
+  // 帝国の封建諸侯領（宗主 = 神聖ローマ帝国）として立つ
+  assertEquals(bohemia[0].properties?.SUBJECTO, "Holy Roman Empire");
+  assertEquals(bohemia[0].properties?.PARTOF, "Holy Roman Empire");
+  for (const [label, point] of POLAND_POINTS) {
+    const names = namesAt(base, point);
+    assert(
+      names.includes("Poland"),
+      `${label} が Poland から失われた: ${names.join(", ")}`,
+    );
+  }
+});
+
+Deno.test("1200 年の base はモラヴィアを帝国封土として分離しボヘミア本体は既知の制限として残す（TASK-157）", () => {
+  const base = readBase(1200);
+  const brno: [number, number] = [16.61, 49.19];
+  const brnoNames = namesAt(base, brno);
+  assert(
+    !brnoNames.includes("Poland"),
+    `ブルノが Poland に含まれている: ${brnoNames.join(", ")}`,
+  );
+  assert(
+    brnoNames.includes("Moravia"),
+    `ブルノが Moravia に含まれていない: ${brnoNames.join(", ")}`,
+  );
+  const moravia = base.features.filter((f) => f.properties?.NAME === "Moravia");
+  assertEquals(moravia.length, 1);
+  assertEquals(moravia[0].properties?.SUBJECTO, "Holy Roman Empire");
+  assertEquals(moravia[0].properties?.PARTOF, "Holy Roman Empire");
+  // ボヘミア本体（プラハ）は 1200 年に出典付き区画が無く（OHM の
+  // Duchy of Bohemia は end_date 1100・Cliopatria の Kingdom of Bohemia は
+  // FromYear 1202）、形状を合成しない方針（decision-14 / decision-18）に従い
+  // Poland 塗りのまま known-limitations に記録する
+  assert(namesAt(base, [14.42, 50.08]).includes("Poland"));
+  assertEquals(
+    base.features.filter((f) => f.properties?.NAME === "Duchy of Bohemia")
+      .length,
+    0,
+  );
+  for (const [label, point] of POLAND_POINTS) {
+    const names = namesAt(base, point);
+    assert(
+      names.includes("Poland"),
+      `${label} が Poland から失われた: ${names.join(", ")}`,
+    );
+  }
+});

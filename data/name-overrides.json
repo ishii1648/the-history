@@ -241,6 +241,18 @@
       "name": "Lordship of Rimini",
       "set": { "SUBJECTO": "Papal States", "PARTOF": "Papal States" },
       "note": "TASK-124。1278 年にルドルフ 1 世がロマーニャの帝国権を教皇ニコラウス 3 世へ正式に譲渡しており、1300 年のリミニ（マラテスタ家の事実上支配）の名目上の上位権は教皇領。帝国領として塗るのは誤り。1279 年は italy_fiefs にリミニ領主領の feature が無く（OHM の開始年より前）切り出し元が無いため対象外。リミニ以外のロマーニャ一帯（ファエンツァ・フォルリ等）も同じ根拠で 1279 / 1300 年の帝国塗りは誤りだが、出典付きの区画が無く切り出せない（decision-14 / decision-18）ため known-limitations に明記して残す。切り出しと宗主確定の機構は County of Artois のエントリと同一。"
+    },
+    {
+      "years": [1100],
+      "name": "Duchy of Bohemia",
+      "set": { "SUBJECTO": "Holy Roman Empire", "PARTOF": "Holy Roman Empire" },
+      "note": "TASK-157。1100 年のボヘミアはボジヴォイ 2 世が統治する神聖ローマ帝国内の公領で、ポーランドの領域ではない（ボヘミア公は 1002 年以降帝国の封建諸侯。ヴラチスラフ 2 世の王号 1085 年は一代限りで 1092 年に消滅しており、1100 年時点の称号は公領が正しい）。上流 base はプラハ・ブルノを含む一帯を単一の Poland ポリゴンに含めて塗っており、独立の feature が存在しなかったため、BASE_FIEF_SPLITS（build-data.ts、decision-28 の機構）が OHM 由来の同名区画（リレーション 2805282）∩ Poland を切り出したうえで、本エントリが宗主を Holy Roman Empire に確定する。これにより勢力圏の外枠（suzerain_extent.ts）と諸侯領オーバーレイの包含解決（containingSuzerainKey）が帝国を返す。"
+    },
+    {
+      "years": [1200],
+      "name": "Moravia",
+      "set": { "SUBJECTO": "Holy Roman Empire", "PARTOF": "Holy Roman Empire" },
+      "note": "TASK-157。1200 年のモラヴィア（ブルノを含む辺境伯領、1182 年成立）はボヘミア王プシェミスル・オタカル 1 世（1198 年に王号取得、1212 年の金印勅書で確認）の下にある神聖ローマ帝国内の領邦で、ポーランドの領域ではない。上流 base はボヘミア・モラヴィア一帯を単一の Poland ポリゴンに含めて塗っており、BASE_FIEF_SPLITS が OHM 由来の Moravia 区画（リレーション 2830504、1182〜1742）∩ Poland を切り出したうえで、本エントリが宗主を Holy Roman Empire に確定する。ボヘミア本体（プラハ側）は 1200 年を覆う出典付き区画が上流（OHM / Cliopatria）のどちらにも無く切り出せないため、known-limitations（base-poland-paint-bohemia-1200）に明記して残す。"
     }
   ]
 }

@@ -419,6 +419,39 @@ export const BASE_FIEF_SPLITS: readonly BaseFiefSplit[] = [
     subjecto: "Papal States",
     fiefPath: "data/italy_fiefs_flat_1300.geojson",
   },
+  /**
+   * ## ポーランド塗りボヘミア・モラヴィアの切り出し（TASK-157）
+   *
+   * 上流の 1100 / 1200 年 base はプラハ・ブルノを含むボヘミア・モラヴィア一帯を
+   * 単一の Poland ポリゴンに含めて塗っているが、史実では 1100 年は帝国内の
+   * ボヘミア公領（ボジヴォイ 2 世）、1200 年は帝国内のボヘミア王国
+   * （プシェミスル・オタカル 1 世、1198 年に王号取得）で、いずれもポーランドの
+   * 領域ではない。decision-28 と同型の事案として、OHM 由来の区画 ∩ Poland を
+   * 切り出して feature を立て、宗主（SUBJECTO / PARTOF = Holy Roman Empire）の
+   * 宣言と年号付きの根拠は data/name-overrides.json の propertyFixes 側に置く。
+   *
+   * 切り出しに使える出典付き区画は 1100 年の Duchy of Bohemia
+   * （OHM リレーション 2805282、1017〜1100）と 1200 年の Moravia
+   * （OHM リレーション 2830504、1182〜1742）のみ。1200 年のボヘミア本体は
+   * OHM の Duchy of Bohemia が end_date 1100 で終わり、Cliopatria の
+   * Kingdom of Bohemia も FromYear 1202 からで 1200 年を覆う区画がどちらの
+   * 上流にも無いため、形状を合成しない方針（decision-14 / decision-18）に従い
+   * 切り出さず known-limitations（base-poland-paint-bohemia-1200）に残す。
+   */
+  {
+    year: 1100,
+    fromName: "Poland",
+    fiefName: "Duchy of Bohemia",
+    subjecto: "Holy Roman Empire",
+    fiefPath: "data/hre_fiefs_flat_1100.geojson",
+  },
+  {
+    year: 1200,
+    fromName: "Poland",
+    fiefName: "Moravia",
+    subjecto: "Holy Roman Empire",
+    fiefPath: "data/hre_fiefs_flat_1200.geojson",
+  },
 ];
 
 /** ポリゴン系ジオメトリを持つ feature か */
