@@ -9,3 +9,5 @@ scripts/verify/checks/.popover-known-limitations.png
 scripts/verify/checks/.popover-footer.png
 # TASK-128: perf 計測ハーネスの実行時に生成される計測結果 JSON
 scripts/verify/checks/.perf-*.json
+# TASK-125: wrangler CLI のローカルキャッシュ
+.wrangler/
