@@ -30,6 +30,10 @@ import {
   ITALY_FIEF_SIZE_LIMIT_BYTES,
   ITALY_FIEF_YEARS,
 } from "./build-italy-fiefs.ts";
+import {
+  BRITAIN_FIEF_SIZE_LIMIT_BYTES,
+  BRITAIN_FIEF_YEARS,
+} from "./build-britain-fiefs.ts";
 import { BASE_OUTLINE_YEARS } from "../src/config.ts";
 
 /** 経緯度の矩形リング（反時計回り）。widthDeg 四方 */
@@ -392,6 +396,15 @@ Deno.test("生成物は年代ごとのサイズ上限に収まる", async () => 
     ...ITALY_FIEF_YEARS.map((y): [string, number] => [
       `italy_fiefs_${y}.geojson`,
       ITALY_FIEF_SIZE_LIMIT_BYTES,
+    ]),
+    // TASK-151: ブリテン諸島の政体オーバーレイ（raw / flat）
+    ...BRITAIN_FIEF_YEARS.map((y): [string, number] => [
+      `britain_fiefs_${y}.geojson`,
+      BRITAIN_FIEF_SIZE_LIMIT_BYTES,
+    ]),
+    ...BRITAIN_FIEF_YEARS.map((y): [string, number] => [
+      `britain_fiefs_flat_${y}.geojson`,
+      BRITAIN_FIEF_SIZE_LIMIT_BYTES,
     ]),
     // TASK-92: 諸侯領 union を差し引いた派生 base。境界が諸侯領の輪郭に沿う分
     // 元の europe_<year> より頂点が増えるため、上限は base と同じ値で見張る

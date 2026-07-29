@@ -20,6 +20,9 @@
  * - data/italy_fiefs_flat_<year>.geojson（year ∈ ITALY_FIEF_FLAT_YEARS、TASK-96）…
  *   同じ扱いの中世イタリア諸侯領（src/powers.ts italyFiefDataUrlFor が参照する）。
  *   削り方針は HRE 領邦と同じ "keep-smaller"。
+ * - data/britain_fiefs_flat_<year>.geojson（year ∈ BRITAIN_FIEF_FLAT_YEARS、
+ *   TASK-151）… 同じ扱いのブリテン諸島の政体。削り方針は "keep-smaller"。
+ *   地図への表示は後続 TASK-153 で、ここではデータチェーンにだけ載せる。
  *
  * ## なぜ必要か
  * 諸侯領は 1 枚のレイヤーに半透明（src/powers.ts FILL_ALPHA=128）で描かれる。
@@ -76,6 +79,7 @@ import type {
 import { serializeWithAttribution } from "./build-attribution.ts";
 import { COORD_PRECISION } from "./build-data.ts";
 import { cleanFeatureCollection, formatCleanStats } from "./clean-polygons.ts";
+import { BRITAIN_FIEF_YEARS } from "./build-britain-fiefs.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
@@ -105,6 +109,12 @@ export const ITALY_FIEF_FLAT_YEARS: readonly number[] = ITALY_FIEF_YEARS;
  */
 export const CLIOPATRIA_FIEF_FLAT_YEARS: readonly number[] =
   CLIOPATRIA_FIEF_YEARS;
+
+/**
+ * ブリテン諸島の政体（OHM 由来・TASK-151）の生成対象年。
+ * build-britain-fiefs.ts の対象年と同一。
+ */
+export const BRITAIN_FIEF_FLAT_YEARS: readonly number[] = BRITAIN_FIEF_YEARS;
 
 /**
  * 重なりを解消するとき「どちら側のジオメトリを削るか」の方針（TASK-86）。
@@ -513,6 +523,16 @@ export function cliopatriaFlatPathFor(year: number): string {
   return `data/cliopatria_fiefs_flat_${year}.geojson`;
 }
 
+/** 入力（build-britain-fiefs.ts の生成物）のパス（TASK-151） */
+export function britainRawPathFor(year: number): string {
+  return `data/britain_fiefs_${year}.geojson`;
+}
+
+/** 出力（ブリテン諸島の政体・重なり解消済み）のパス（TASK-151） */
+export function britainFlatPathFor(year: number): string {
+  return `data/britain_fiefs_flat_${year}.geojson`;
+}
+
 /** *_flat_<year>.geojson に埋め込むメタデータ */
 export interface FiefFlatMetadata {
   generatedBy: string;
@@ -580,8 +600,10 @@ function cleanFlat(fc: FeatureCollection, label: string): FeatureCollection {
  * （scripts/clean-polygons_test.ts）を破る。build-hre-fiefs.ts が同種のくびれに
  * 対して持つ removePinchPoints を、派生データ側でもそのまま使う。
  *
- * 他の 3 系統（仏・伊・帝国）には適用しない: いずれも実データでくびれが
- * 発生しておらず、通すと丸め由来の無用な差分が出るため。
+ * 既存の 3 系統（仏・伊・帝国）には適用しない: いずれも実データでくびれが
+ * 発生しておらず、通すと丸め由来の無用な差分が出るため。TASK-151 で追加した
+ * ブリテン諸島には最初から適用する（新設系統なので差分の懸念が無く、
+ * くびれ無しなら入力をそのまま返すため無害）。
  *
  * 副作用: くびれの頂点を落とすと、その頂点で切れていた「相手レイヤーの切り欠き」の
  * 先端が塞がり、差し引いたはずの面がごく僅かに戻る。実測で残るのは
@@ -809,11 +831,57 @@ async function buildCliopatriaFiefFlat(): Promise<void> {
   }
 }
 
+/**
+ * ブリテン諸島の政体の flat 化（TASK-151）。
+ *
+ * 削り方針は "keep-smaller"（帝国・伊・Cliopatria と同じ）。実データの重なりは
+ * 「Kingdom of Dublin ⊂ Kingdom of Leinster」のような広域王国と局所政体の
+ * 入れ子で、小さい側（＝より個別性の高い情報）の形・色・ラベル・picking を
+ * 丸ごと残す方が地図の読み取りに合う。
+ *
+ * 別レイヤーの差し引き（subtractOverlay）は行わない: 仏・伊・帝国・Cliopatria の
+ * 各オーバーレイはいずれも大陸側で、ブリテン諸島とは地理的に交わらない
+ * （FRANCE_BBOX の北西端はウェールズに掛かるが、仏許可リストの諸侯領は全て
+ * 大陸側にある）。base の England / Scotland との重なりは、表示時に
+ * build-fief-dedupe が担う構造（後続 TASK-153 で登録）で、flat 化の責務ではない。
+ */
+async function buildBritainFiefFlat(): Promise<void> {
+  for (const year of BRITAIN_FIEF_FLAT_YEARS) {
+    const raw = await readCollection(britainRawPathFor(year));
+    const { fc, resolutions } = resolveOverlaps(
+      raw,
+      console.warn,
+      "keep-smaller",
+    );
+    const metadata: FiefFlatMetadata = {
+      generatedBy: "scripts/build-fief-flat.ts",
+      input: britainRawPathFor(year),
+      year,
+      cutPolicy: "keep-smaller",
+      containmentCoverageThreshold: CONTAINMENT_COVERAGE_THRESHOLD,
+      minOverlapAreaM2: MIN_OVERLAP_AREA_M2,
+      sliverAreaLimitM2: SLIVER_AREA_LIMIT_M2,
+      resolutions,
+    };
+    const outPath = britainFlatPathFor(year);
+    const json = serializeWithAttribution(outPath, {
+      ...cleanFlat(unpinch(fc), outPath),
+      metadata,
+    });
+    await Deno.writeTextFile(outPath, json);
+    console.log(
+      `${outPath}: ${json.length} bytes, features=${fc.features.length}, 解消=${resolutions.length} 件`,
+    );
+    logResolutions(resolutions);
+  }
+}
+
 async function main(): Promise<void> {
   await buildFranceFiefFlat();
   await buildItalyFiefFlat();
   await buildHreFiefFlat();
   await buildCliopatriaFiefFlat();
+  await buildBritainFiefFlat();
 }
 
 if (import.meta.main) {
