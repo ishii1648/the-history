@@ -1,51 +1,41 @@
-<!-- BACKLOG.MD GUIDELINES START -->
-<!-- backlog.md-instructions-version: 1.48.0 -->
-
 <CRITICAL_INSTRUCTION>
 
-## Backlog.md Workflow
+## GitHub Issue Workflow
 
-This project uses Backlog.md for task and project management.
+This project uses GitHub Issues for task management (migrated from Backlog.md;
+see `docs/adr/0031-migrate-task-management-to-github-issues.md`).
 
-**For every user request in this project, run `backlog instructions overview`
-before answering or taking action.**
-
-Use the overview to decide whether to search, read, create, or update Backlog
-tasks.
-
-Before task lifecycle actions, read the matching detailed guide:
-
-- `backlog instructions task-creation` before creating or splitting tasks
-- `backlog instructions task-execution` before planning, changing status or
-  assignee, adding a plan or implementation notes, or implementing task work
-- `backlog instructions task-finalization` before checking acceptance criteria,
-  writing final summaries, or moving tasks to terminal statuses
-
-Use `backlog <command> --help` before running unfamiliar commands. Help shows
-options, fields, and examples.
-
-Do not edit Backlog task, draft, document, decision, or milestone markdown files
-directly. Use the `backlog` CLI so metadata, relationships, and history stay
-consistent.
+- Tasks are GitHub Issues with the `task` label. Read them with
+  `gh issue view <N>` / `gh issue list`; candidate selection is
+  `deno task next-tasks` (single: `deno task next-task`).
+- Create tasks with the `task-intake` skill
+  (`.claude/skills/task-intake/SKILL.md`): duplicate check via one
+  `gh issue list --state all --json number,title,labels,body` call + local
+  matching, then `gh issue create --body-file <path>` following
+  `.github/ISSUE_TEMPLATE/task.md` (LOOP-META, `AC1` notation, area labels).
+  Never pass issue bodies as inline shell arguments (backtick command
+  substitution destroys them).
+- Do not use the `backlog` CLI. Archived Backlog.md tasks live frozen in
+  `docs/archive/backlog-tasks/` (index in its README); read them for history,
+  never edit or revive them there.
+- Task state: open = To Do, open + `status:in-progress` label = In Progress,
+  closed = Done (closed as not planned = cancelled).
 
 </CRITICAL_INSTRUCTION>
 
-<!-- BACKLOG.MD GUIDELINES END -->
+## タスク駆動開発（GitHub Issue）
 
-## タスク駆動開発（Backlog.md）
-
-- ブランチ名には TASK ID を含める: `task-N-slug`（例:
-  `task-1-deno-setup`）。これによりブランチから backlog
-  タスクへ常に追跡できるようにする。
-- `backlog/tasks/*.md` の依存関係順に厳密に作業する。あるタスクの `dependencies`
-  が全て終端ステータスに達するまでは着手しない。タスク間の並列実行は
-  `deno task next-tasks` が返す「area が互いに素なタスク集合」に限り許可する
-  （`docs/development-style.md` 4.2
-  章）。各タスクのステータス遷移（`In
-  Progress` →
-  `Done`）の一意性は並列時も維持する。
-- PR タイトル・説明には TASK ID を明記し、レビュー履歴が backlog
-  タスクと紐づくようにする。
+- ブランチ名には Issue 番号を含める: `task-N-slug`（例:
+  `task-160-deno-setup`）。これによりブランチからタスク Issue
+  へ常に追跡できるようにする（旧 backlog 時代の `task-N-*` は TASK-N 由来。
+  アーカイブ側の README で対応が引ける）。
+- タスク Issue の依存関係（本文 LOOP-META の `depends-on`）順に厳密に作業する。
+  あるタスクの依存 Issue が全てクローズされるまでは着手しない。タスク間の
+  並列実行は `deno task next-tasks` が返す「area が互いに素なタスク集合」に
+  限り許可する （`docs/development-style.md` 4.2 章）。各タスクのステータス
+  遷移（`In Progress` → `Done`）の一意性は並列時も維持する。
+- PR タイトル・説明には Issue 番号（`#N`）を明記し、レビュー履歴がタスク Issue
+  と紐づくようにする。
 - TDD は必須: 実装より先にテストを書き、red（失敗）を確認してから green
   にする。詳細は `docs/development-style.md` を参照。
 - エージェント分担: 実装は subagent に委譲し、レビューは mainagent
@@ -62,27 +52,29 @@ consistent.
   衝突を避けるため worktree isolation を利用し、成果物の conflict は PR で
   解消する。
 - 標準タスクフロー: `deno task next-tasks` で着手可能なタスク集合を判定 →
-  集合内の各タスクごとに backlog タスク → ブランチ作成（いずれも main から
-  分岐）→ タスク内並列化判定（実装プランに記録）→ テスト先行 → 実装 （subagent
+  集合内の各タスクごとにブランチ作成（main から分岐）→
+  タスク内並列化判定（実装プランに記録）→ テスト先行 → 実装 （subagent
   に委譲、並列可なら複数起動）→ `deno test` green → mainagent
-  によるレビューで収束 → 個別 PR 作成（TASK ID 明記）→ CI green → マージ →
-  マージ後動作確認 → backlog finalization。集合が単一タスクなら従来の直列
-  フローと同一。動作確認で見つけた問題は label `bug` 付きタスクとして起票し、
-  次イテレーションで最優先修正する（直接 hotfix しない）。
+  によるレビューで収束 → 個別 PR 作成（Issue 番号明記）→ CI green → マージ →
+  マージ後動作確認 → finalization（AC チェック・Issue クローズ。ループ内の
+  詳細手順は TASK-141 で Issue ベースへ更新予定）。集合が単一タスクなら従来の
+  直列フローと同一。動作確認で見つけた問題は label `bug` 付き Issue として
+  task-intake スキルで起票し、次イテレーションで最優先修正する（直接 hotfix
+  しない）。
 - タスクは Acceptance Criteria が全てチェック済みかつ CI が green の場合にのみ
-  Done となる。
-- 次タスクの選択は人の指名ではなく決定的ルールで行う: status が `To Do` かつ
-  `dependencies` が全て `Done` のタスクのうち `ordinal`
-  最小のものを選ぶ（`In
-  Progress` のタスクが残っている間は選ばない）。ただし
-  label `bug` を持つタスクは `ordinal` に関わらず最優先で選ぶ（bug 群内は
-  ordinal → ID 順）。判定は `deno task next-tasks`（area が互いに素な集合を
+  Done（Issue クローズ）となる。
+- 次タスクの選択は人の指名ではなく決定的ルールで行う: open（`In Progress`
+  ラベルなし）かつ依存 Issue が全てクローズ済みのタスクのうち `ordinal`
+  最小（LOOP-META で未指定なら Issue 番号）のものを選ぶ（`In Progress`
+  のタスクが残っている間は選ばない）。ただし label `bug` を持つタスクは
+  `ordinal` に関わらず最優先で選ぶ（bug 群内は ordinal → ID 順）。判定は
+  `deno task next-tasks`（area が互いに素な集合を
   同じ優先順の貪欲選択で返す。単一選択の `deno task next-task` も互換維持）を
   使う。外側ループはローカルの Claude Code セッションで `/agent-loop`
   スキル（`.claude/skills/agent-loop/SKILL.md`）を実行して
-  回し、マージ後も同一セッションが次タスクを継続する。CI や PR のステータスは
-  Monitor ツールや PR activity 購読で監視する。詳細は
-  `docs/development-style.md` の 4 章を参照。
+  回し、マージ後も同一セッションが次タスクを継続する（スキル本文の Issue
+  ベース化は TASK-141 で更新予定）。CI や PR のステータスは Monitor ツールや PR
+  activity 購読で監視する。詳細は `docs/development-style.md` の 4 章を参照。
 - 人の介入は例外時のみ: AC が曖昧・CI が恒常 red・仕様判断が必要な場合に限り
   `needs-human` ラベル付き issue を起票して停止し、判断を仰ぐ。それ以外で人の
   指示を待たない。加えて、CI red 連続回数・実装 subagent 試行回数・タスク

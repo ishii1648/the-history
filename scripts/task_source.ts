@@ -1,7 +1,9 @@
 /**
  * タスク取得の TaskSource 抽象（TASK-139、背景は docs/adr/0031）。
  * - 環境変数 `TASK_SOURCE=backlog|github` でタスクの読み取り元を切り替える。
- *   未設定・空文字は backlog（従来どおりローカル backlog/tasks/*.md）で既定不変。
+ *   未設定・空文字は github（TASK-140 で既定を切替。backlog の明示指定は
+ *   引き続き可だが、backlog/tasks/*.md は docs/archive/backlog-tasks/ へ
+ *   アーカイブ済みのため移行前のチェックアウトでのみ意味を持つ）。
  * - github ソースは `gh issue list --state all --limit 1000
  *   --json number,title,state,stateReason,labels,body` の 1 コールで全件取得する
  *   （search API は 30 req/min 制限があるため使わない）。
@@ -185,14 +187,14 @@ export function parseIssuesJson(text: string): GhIssue[] {
 
 /**
  * 環境変数 TASK_SOURCE の値からソース種別を決める（純粋関数）。
- * 未設定・空文字・"backlog" は backlog（既定不変）、"github" は github、
- * それ以外はタイポの黙殺を避けるためエラー。
+ * 未設定・空文字・"github" は github（TASK-140 で既定を切替）、"backlog" の
+ * 明示指定は引き続き backlog、それ以外はタイポの黙殺を避けるためエラー。
  */
 export function resolveSourceKind(value: string | undefined): TaskSourceKind {
-  if (value === undefined || value === "" || value === "backlog") {
-    return "backlog";
+  if (value === undefined || value === "" || value === "github") {
+    return "github";
   }
-  if (value === "github") return "github";
+  if (value === "backlog") return "backlog";
   throw new Error(
     `unknown TASK_SOURCE: ${value} (expected "backlog" or "github")`,
   );

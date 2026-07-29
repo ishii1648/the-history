@@ -4,7 +4,14 @@
     "lib": ["dom", "dom.iterable", "deno.ns"]
   },
   "fmt": {
-    "exclude": ["backlog/", "data/", "docs/adr/", "vendor/", ".outputs/"]
+    "exclude": [
+      "backlog/",
+      "data/",
+      "docs/adr/",
+      "docs/archive/",
+      "vendor/",
+      ".outputs/"
+    ]
   },
   "tasks": {
     "build": "deno run --allow-read --allow-write --allow-run scripts/build.ts",
@@ -28,6 +35,7 @@
     "extract-pmtiles": "deno run --allow-net=build-metadata.protomaps.dev --allow-run=pmtiles --allow-read scripts/extract-pmtiles.ts",
     "extract-dem": "deno run --allow-net=s3.amazonaws.com --allow-read --allow-write scripts/extract-dem.ts",
     "next-task": "deno run --allow-read --allow-env --allow-run=gh scripts/next_task.ts",
+    "migrate-tasks-to-issues": "deno run --allow-read=docs --allow-write --allow-run=gh scripts/migrate-tasks-to-issues.ts",
     "setup-issue-labels": "deno run --allow-read=docs --allow-run=gh scripts/setup-issue-labels.ts",
     "next-tasks": "deno run --allow-read --allow-env --allow-run=gh scripts/next_tasks.ts",
     "cleanup-branches": "deno run --allow-run=git scripts/cleanup_branches.ts",

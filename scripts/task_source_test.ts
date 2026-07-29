@@ -362,14 +362,14 @@ Deno.test("selectNextTasks は github 由来でも status:in-progress の issue 
 
 // ---- ソース切替（TASK_SOURCE / --json-file） ----
 
-Deno.test("resolveSourceKind は未設定・空文字・backlog を backlog とする（既定不変）", () => {
-  assertEquals(resolveSourceKind(undefined), "backlog");
-  assertEquals(resolveSourceKind(""), "backlog");
-  assertEquals(resolveSourceKind("backlog"), "backlog");
+Deno.test("resolveSourceKind は未設定・空文字を github とする（TASK-140 の既定切替）", () => {
+  assertEquals(resolveSourceKind(undefined), "github");
+  assertEquals(resolveSourceKind(""), "github");
+  assertEquals(resolveSourceKind("github"), "github");
 });
 
-Deno.test("resolveSourceKind は github を github とする", () => {
-  assertEquals(resolveSourceKind("github"), "github");
+Deno.test("resolveSourceKind は backlog の明示指定を引き続き受け付ける", () => {
+  assertEquals(resolveSourceKind("backlog"), "backlog");
 });
 
 Deno.test("resolveSourceKind は未知の値にエラーを投げる", () => {
