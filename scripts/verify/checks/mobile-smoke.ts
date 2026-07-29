@@ -8,10 +8,12 @@
  *   3. 年代切替（__setYear → 反映を waitFor）
  *   4. タップ相当入力（Input.dispatchTouchEvent）でポリゴン picking →
  *      情報パネル表示
- *   5. 主要 UI（タイムライン・情報パネル・トグル群）の重なり計測（報告のみ。
- *      レイアウト調整は TASK-132 の範囲のため、重なりがあってもこのチェックは
- *      失敗にしない）
- *   6. スクリーンショット保存（.outputs/claude/task131/。目視確認用）
+ *   5. 主要 UI（タイムライン・情報パネル・トグル群・attribution）の重なり計測。
+ *      TASK-132 で小画面レイアウトを調整したため、重なりが 1 件でもあれば
+ *      失敗にする（TASK-131 時点は報告のみだった）
+ *   6. タップ当たり判定の計測（TASK-132 AC #4）。主要タップ対象の実寸が
+ *      44px 未満なら失敗にする
+ *   7. スクリーンショット保存（.outputs/claude/task131/。目視確認用）
  *
  * 使い方:
  *   deno task build && deno task serve --port 8131 &
@@ -62,8 +64,8 @@ export function rectOverlapArea(a: Rect, b: Rect): number {
 
 /**
  * 可視 UI 要素の矩形群から、交差面積が閾値以上のペアを列挙する純粋関数。
- * モバイル幅で UI 同士が重なって操作不能になる箇所の検出材料にする
- * （報告のみ。修正は TASK-132）。
+ * モバイル幅で UI 同士が重なって操作不能になる箇所を検出する
+ * （TASK-132 でレイアウトを調整済みのため、検出 = 回帰として失敗にする）。
  */
 export function findOverlaps(
   rects: readonly UiRect[],
@@ -96,7 +98,55 @@ export const UI_OVERLAP_SELECTORS: readonly string[] = [
   ".known-limitations-toggle",
   ".notes-toggle",
   ".notes-panel",
+  // TASK-132: maplibre の attribution は小画面ではコンパクト表示だが初期状態は
+  // 展開されている（maplibregl-compact-show。最初の地図ドラッグまで開いたまま）。
+  // TASK-131 でこの展開状態が下端トグル群と重なることを実測したため（AC #3）、
+  // 「初期表示で開いたままでも重ならない」ことを保証対象にする。
+  ".maplibregl-ctrl-attrib",
 ];
+
+// ---- タップ当たり判定の計測（TASK-132 AC #4） ----
+
+/**
+ * タップ当たり判定の下限（px）。iOS HIG / WCAG 2.5.5 相当の 44px。
+ * app.css の小画面ブレークポイントはこの値を満たすようトグル・ボタン類を
+ * 44px 以上にしている。
+ */
+export const MIN_TAP_TARGET_PX = 44;
+
+/**
+ * タップ当たり判定を検査する主要タップ対象。`.info-panel-close` は情報パネルが
+ * 開いた状態（タップ picking 後）でのみ可視になるため、計測は picking 確認の
+ * 後に行う。非表示の要素は buildUiRectsExpr が除外する。
+ */
+export const TAP_TARGET_SELECTORS: readonly string[] = [
+  "#timeline-prev",
+  "#timeline-next",
+  ".timeline-slider",
+  ".footer-toggle",
+  ".known-limitations-toggle",
+  ".notes-toggle",
+  ".info-panel-close",
+];
+
+/**
+ * 可視タップ対象の矩形群から、幅または高さが下限未満のものを寸法付きで
+ * 列挙する純粋関数（mobile-smoke_test.ts でユニットテストする）。
+ */
+export function findSmallTapTargets(
+  rects: readonly UiRect[],
+  minPx: number = MIN_TAP_TARGET_PX,
+): Array<{ selector: string; width: number; height: number }> {
+  const small: Array<{ selector: string; width: number; height: number }> = [];
+  for (const { selector, rect } of rects) {
+    const width = rect.right - rect.left;
+    const height = rect.bottom - rect.top;
+    if (width < minPx || height < minPx) {
+      small.push({ selector, width, height });
+    }
+  }
+  return small;
+}
 
 /** ブラウザ内で可視 UI 要素の矩形を収集する評価式を組み立てる。 */
 export function buildUiRectsExpr(selectors: readonly string[]): string {
@@ -199,15 +249,29 @@ export async function run(api: CdpApi): Promise<void> {
   await api.screenshot(MOBILE_TAP_SCREENSHOT_PATH);
   results.tapScreenshot = MOBILE_TAP_SCREENSHOT_PATH;
 
-  // 5. UI の重なり計測（報告のみ。修正は TASK-132 の範囲）
+  // 5. UI の重なり計測（TASK-132 で調整済みのため、重なり検出 = 失敗）。
+  // 情報パネルが開いた状態（前段の picking 後）で測ることで
+  // 「常時 UI + 情報パネル」の共存レイアウトを検証する。
   const uiRects = await api.evaluate<UiRect[]>(
     buildUiRectsExpr(UI_OVERLAP_SELECTORS),
   );
   results.uiRects = uiRects;
   const overlaps = findOverlaps(uiRects);
   results.overlaps = overlaps;
+  const overlapsOk = overlaps.length === 0;
+  results.overlapsOk = overlapsOk;
 
-  // 6. エラートースト非表示の確認
+  // 6. タップ当たり判定の計測（TASK-132 AC #4。44px 未満の対象があれば失敗）
+  const tapTargetRects = await api.evaluate<UiRect[]>(
+    buildUiRectsExpr(TAP_TARGET_SELECTORS),
+  );
+  results.tapTargetRects = tapTargetRects;
+  const smallTapTargets = findSmallTapTargets(tapTargetRects);
+  results.smallTapTargets = smallTapTargets;
+  const tapTargetsOk = smallTapTargets.length === 0;
+  results.tapTargetsOk = tapTargetsOk;
+
+  // 7. エラートースト非表示の確認
   const errorToast = await api.evaluate<
     { present: boolean; visible: boolean; text: string | null }
   >(
@@ -229,6 +293,8 @@ export async function run(api: CdpApi): Promise<void> {
       canvasOk &&
       yearAfterSwitch === 1500 &&
       infoPanelLabel === "ライン川" &&
+      overlapsOk &&
+      tapTargetsOk &&
       errorToastOk,
   );
   results.overallOk = overallOk;
@@ -237,7 +303,13 @@ export async function run(api: CdpApi): Promise<void> {
   if (overlaps.length > 0) {
     console.log(
       `\n[OVERLAP] モバイル幅で UI の重なりを ${overlaps.length} 件検出` +
-        "（レイアウト調整は TASK-132 の範囲。上の overlaps を参照）",
+        "（AC #3 の回帰。上の overlaps を参照）",
+    );
+  }
+  if (smallTapTargets.length > 0) {
+    console.log(
+      `\n[TAP-TARGET] ${MIN_TAP_TARGET_PX}px 未満のタップ対象を ` +
+        `${smallTapTargets.length} 件検出（AC #4 の回帰。上の smallTapTargets を参照）`,
     );
   }
   console.log(overallOk ? "\n[RESULT] PASS" : "\n[RESULT] FAIL");
