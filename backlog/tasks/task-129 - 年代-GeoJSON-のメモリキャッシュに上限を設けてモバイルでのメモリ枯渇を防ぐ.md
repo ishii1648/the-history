@@ -1,9 +1,11 @@
 ---
 id: TASK-129
 title: 年代 GeoJSON のメモリキャッシュに上限を設けてモバイルでのメモリ枯渇を防ぐ
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 16:42'
+updated_date: '2026-07-29 15:46'
 labels:
   - 'area:src-powers'
 dependencies:
@@ -27,3 +29,15 @@ src/powers.ts の createYearDataLoader および各オーバーレイローダ�
 - [ ] #5 TASK-128 の計測ハーネスで全年代を切り替えた後の JS heap を before/after 比較し、削減されたことを記録する
 - [ ] #6 キャッシュ退避ロジックのテストが先に書かれている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. src/powers.ts の createYearDataLoader と各オーバーレイローダのキャッシュ構造・inflight 共有を読む
+2. TDD red: LRU 退避（上限超で最古解放・再アクセスで再 fetch・inflight 共有維持）のテストを先に書く（AC#6）
+3. 実装: 保持数上限を定数 1 箇所に定義し根拠コメント（AC#2）。全ローダに適用（AC#1/#3/#4）
+4. TASK-128 の verify:perf で全年代切替後の JS heap を before/after 比較し記録（AC#5、ポート 8129）
+5. deno fmt --check / lint / test / build 全 green
+
+並列化判定: 見送り（理由: powers.ts 単一ファイルのキャッシュ機構に閉じる）
+<!-- SECTION:PLAN:END -->
