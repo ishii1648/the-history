@@ -59,3 +59,7 @@ ordinal: 121000
 ## Final Summary
 
 起票フローを GitHub Issue へ切替。task-intake スキル・移行スクリプト・TASK_SOURCE 既定変更・ドキュメント更新をファイル作業として実装し、未終端 7 タスクを依存トポソート順に Issue 化（#165〜#171、相互リンク付き）。両ソース候補集合の等価性を切替前後で確認。backlog タスク 156 件は履歴保持で docs/archive/backlog-tasks/ へ凍結。
+
+### 追記（mainagent）
+
+- 初回移行後に、別セッション起票の未追跡タスクファイル 4 件（task-153/154/158/159）が本ブランチのコミットへ混入していたことを検出。同一手順（buildIssueBody / buildGhCreateArgs / insertMigrationLink を再利用したワンオフ、移行先マーカーの無い未終端のみ対象）で追加移行した: TASK-153→#172, TASK-158→#173, TASK-154→#174, TASK-159→#175。移行合計は 11 件。TASK-153 の依存 TASK-151 は終端のため本文注記へ。
