@@ -1291,9 +1291,10 @@ deno task build-attribution        # 最後（出典キーの付与）
 
 ## 9. 既知の制約（data/known-limitations.json）
 
-河川ラインについては、全 30 河川の端点・連続性を横断検査した結果（成分分断 0 件
-/ 出口欠如 0 件 / 生成パイプライン起因 0 件 / EUROPE_BBOX クリップ 3 件）と、
-河口部を海として扱う Natural Earth 側の仕様を
+河川ラインについては、全 30 河川（TASK-76 当時の scalerank<=5 の収録全数。
+TASK-152 で scalerank<=6 へ拡大し現在は 50 河川）の端点・連続性を横断検査した
+結果（成分分断 0 件 / 出口欠如 0 件 / 生成パイプライン起因 0 件 / EUROPE_BBOX
+クリップ 3 件）と、河口部を海として扱う Natural Earth 側の仕様を
 [rivers-continuity-audit.md](rivers-continuity-audit.md) にまとめている（TASK-76
 調査）。
 

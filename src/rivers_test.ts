@@ -429,23 +429,27 @@ Deno.test("riverLabelAnchors: 実データでライン川のアンカーが都�
     Math.min(...avoid.map((c) => Math.hypot(c[0] - p[0], c[1] - p[1])));
   const beforeByName = new Map(before.map((d) => [d.name, d]));
   const afterByName = new Map(after.map((d) => [d.name, d]));
-  // ライン川: ケルン/ボン直上（クリアランス 0.023°）の旧アンカーから、
-  // 都市集合に対して十分なクリアランスを持つライン上の点へ移る
-  const rhine = afterByName.get("Rhine")!;
-  assert(
-    clearance(beforeByName.get("Rhine")!.position) <
-      RIVER_LABEL_CITY_CLEARANCE_DEG,
-    "前提: 旧ライン川アンカーは都市直上（クリアランス未満）",
-  );
-  assert(
-    clearance(rhine.position) >= 0.2,
-    `新ライン川アンカーは既表示河川並み（0.2° 以上）のクリアランスを持つはず: ${
-      clearance(rhine.position)
-    }`,
-  );
+  // 都市直上アンカーの回避対象（実データの固定）:
+  // - Rhine: ケルン/ボン直上（クリアランス 0.023°）
+  // - Po: ピアチェンツァ近傍（クリアランス 0.053°。TASK-152 の rank 6 追加分）
+  const avoidedRivers = ["Rhine", "Po"];
+  for (const name of avoidedRivers) {
+    assert(
+      clearance(beforeByName.get(name)!.position) <
+        RIVER_LABEL_CITY_CLEARANCE_DEG,
+      `前提: 旧 ${name} アンカーは都市直上（クリアランス未満）`,
+    );
+    const moved = afterByName.get(name)!;
+    assert(
+      clearance(moved.position) >= 0.2,
+      `新 ${name} アンカーは既表示河川並み（0.2° 以上）のクリアランスを持つはず: ${
+        clearance(moved.position)
+      }`,
+    );
+  }
   // 既に表示できている河川（クリアランス >= しきい値）は 1 本も動かない
   for (const [name, b] of beforeByName) {
-    if (name === "Rhine") continue;
+    if (avoidedRivers.includes(name)) continue;
     if (clearance(b.position) >= RIVER_LABEL_CITY_CLEARANCE_DEG) {
       assertEquals(
         afterByName.get(name)!.position,
@@ -454,10 +458,10 @@ Deno.test("riverLabelAnchors: 実データでライン川のアンカーが都�
       );
     }
   }
-  // 実データではライン川以外の表示アンカーは全てしきい値以上（= 動くのは
-  // ライン川だけ）であることも固定する
+  // 実データでは上記 2 河川以外の表示アンカーは全てしきい値以上（= 動くのは
+  // ライン川とポー川だけ）であることも固定する
   for (const [name, b] of beforeByName) {
-    if (name === "Rhine") continue;
+    if (avoidedRivers.includes(name)) continue;
     assert(
       clearance(b.position) >= RIVER_LABEL_CITY_CLEARANCE_DEG,
       `${name} が回避対象に入った（しきい値の再検討が必要）`,
