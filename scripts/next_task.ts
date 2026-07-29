@@ -8,6 +8,9 @@
  */
 
 import { parse } from "@std/yaml";
+// 循環参照（task_source.ts → 本モジュール）だが、相互参照は全て関数呼び出し時の
+// live binding 経由なので ESM の静的 import で安全に解決される。
+import { loadTaskSnapshot } from "./task_source.ts";
 
 export const TASKS_DIR = "backlog/tasks";
 const DEFAULT_TERMINAL_STATUSES = ["Done"];
@@ -128,10 +131,13 @@ export async function readTasks(dir: string): Promise<TaskMeta[]> {
 }
 
 if (import.meta.main) {
-  const tasks = await readTasks(TASKS_DIR);
+  // TASK_SOURCE=backlog|github でタスクの読み取り元を切り替える（TASK-139）
+  const { tasks, terminalStatuses } = await loadTaskSnapshot({
+    args: Deno.args,
+  });
   // 直列実行規約: 進行中タスクの finalization が済むまで次タスクを起動しない
   if (!hasActiveTask(tasks)) {
-    const next = selectNextTask(tasks);
+    const next = selectNextTask(tasks, terminalStatuses);
     if (next) {
       console.log(next.id);
     }
