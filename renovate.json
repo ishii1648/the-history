@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "enabledManagers": ["deno", "github-actions"],
+  "automerge": false,
+  "minimumReleaseAge": "7 days",
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "patch 更新は 3 日のクールダウン（それ以外は既定の 7 日）",
+      "matchUpdateTypes": ["patch"],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "deck.gl 系パッケージは 1 PR にまとめて更新する",
+      "matchPackageNames": ["@deck.gl/**"],
+      "groupName": "deck.gl"
+    },
+    {
+      "description": "コア依存（maplibre-gl / deck.gl / pmtiles）は diff 目視レビュー必須",
+      "matchPackageNames": ["maplibre-gl", "pmtiles", "@deck.gl/**"],
+      "labels": ["core-dependency", "needs-human-review"],
+      "commitMessageSuffix": "[core]",
+      "automerge": false
+    }
+  ]
+}
