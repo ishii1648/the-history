@@ -53,12 +53,7 @@ import {
   type Rgba,
   type YearDataLoader,
 } from "./powers.ts";
-import {
-  displayLabel,
-  type SourceLine,
-  sourceLines,
-  tooltipPlacement,
-} from "./info.ts";
+import { displayLabel, sourceLines } from "./info.ts";
 import {
   EMPTY_FIEF_DEDUPE_TABLE,
   type FiefDedupeTable,
@@ -167,8 +162,6 @@ import {
   createLoadingState,
   failedYears,
   failLoading,
-  hasError,
-  isSpinnerVisible,
   type LoadingState,
   startLoading,
   succeedLoading,
@@ -194,27 +187,12 @@ import {
   resolveBasemapPmtilesUrl,
   resolveDemPmtilesUrl,
 } from "./pmtiles_url.ts";
-import { indexOfYear, keyToStep, stepYear, yearAtIndex } from "./timeline.ts";
 import {
   type AppState,
   createReplaceStateUpdater,
   decodeState,
 } from "./url_state.ts";
-import { wireCollapsiblePanel } from "./collapsible.ts";
-import {
-  createNotesState,
-  isNotesPanelHidden,
-  notesAriaExpanded,
-  type NotesData,
-  type NotesEvent,
-  notesForYear,
-  notesHeadingFor,
-  reduceNotesEvent,
-} from "./notes.ts";
-import {
-  type KnownLimitation,
-  knownLimitationEntries,
-} from "./known_limitations.ts";
+import type { NotesData } from "./notes.ts";
 import {
   CITY_HIT_LAYER_ID,
   CITY_LAYER_ID,
@@ -248,6 +226,12 @@ import {
   YEAR_FILL_TRANSITION_MS,
 } from "./power_highlight.ts";
 import { installDebugHooks } from "./debug_hooks.ts";
+import { setupInfoUI } from "./ui/info_panel.ts";
+import { setupFooter } from "./ui/footer.ts";
+import { setupKnownLimitationsUI } from "./ui/known_limitations.ts";
+import { setupNotesUI } from "./ui/notes.ts";
+import { setupLoadingUI } from "./ui/loading.ts";
+import { setupTimeline } from "./ui/timeline.ts";
 
 const mapContainer = document.getElementById("map");
 if (!mapContainer) {
@@ -945,8 +929,8 @@ function pickedMetadata(info: PickingInfo): unknown {
  */
 function handlePickHover(info: PickingInfo): void {
   const label = pickedLabel(info);
-  if (label !== null) showTooltip(label, info.x, info.y);
-  else hideTooltip();
+  if (label !== null) infoUi.showTooltip(label, info.x, info.y);
+  else infoUi.hideTooltip();
   // TASK-30 / TASK-94: 勢力（宗主・封臣のいずれ）のホバーでその勢力圏の外枠を
   // 出し、ホバー解除（picking なし・対象外レイヤー）で通常表示へ戻す
   applyExtentKey(extentKeyFromPick(info));
@@ -1118,7 +1102,7 @@ function handlePickClick(rawInfo: PickingInfo): void {
     if (selectedMountainName !== null || selectedPeakName !== null) {
       const label = pickedLabel(info);
       if (label !== null) {
-        showInfoPanel(label, sourceLines(pickedMetadata(info)));
+        infoUi.showInfoPanel(label, sourceLines(pickedMetadata(info)));
       }
     }
     return;
@@ -1129,7 +1113,7 @@ function handlePickClick(rawInfo: PickingInfo): void {
     if (selectedRiverName !== null) {
       const label = pickedLabel(info);
       if (label !== null) {
-        showInfoPanel(label, sourceLines(pickedMetadata(info)));
+        infoUi.showInfoPanel(label, sourceLines(pickedMetadata(info)));
       }
     }
     return;
@@ -1138,7 +1122,9 @@ function handlePickClick(rawInfo: PickingInfo): void {
   // picking があれば整形済みラベル（都市名/勢力名）をパネルへ出す（TASK-27）
   applyRiverSelection(null);
   const label = pickedLabel(info);
-  if (label !== null) showInfoPanel(label, sourceLines(pickedMetadata(info)));
+  if (label !== null) {
+    infoUi.showInfoPanel(label, sourceLines(pickedMetadata(info)));
+  }
 }
 
 /** 河川の選択状態を更新し、変化があればレイヤーを再構築して反映する */
@@ -2299,232 +2285,26 @@ function buildLabelLayer(
   });
 }
 
-// ホバー/クリック情報 UI への反映フック（setupInfoUI が実体を差し込む）。
-// buildPowerLayer は年代切替のたびに再生成されるため、レイヤー側は常にこの
-// モジュールスコープの関数を参照し、DOM 配線は 1 度だけ行う。
-let showTooltip: (label: string, x: number, y: number) => void = () => {};
-let hideTooltip: () => void = () => {};
-let showInfoPanel: (label: string, sources: SourceLine[]) => void = () => {};
+// ホバー/クリック情報 UI（TASK-7/109/111）と attribution フッター（TASK-26）の
+// DOM 配線は src/ui/ へ抽出した（TASK-146）。buildPowerLayer は年代切替のたびに
+// 再生成されるため、レイヤー側は常にこのハンドルを参照し、DOM 配線は 1 度だけ行う。
+const infoUi = setupInfoUI({
+  doc: document,
+  viewportSize: () => ({
+    width: globalThis.innerWidth,
+    height: globalThis.innerHeight,
+  }),
+});
 
-/** クリックパネルの出典欄（TASK-109）を包む要素の class 名 */
-const INFO_PANEL_SOURCE_CLASS = "info-panel-source";
-
-/**
- * ホバーツールチップとクリックパネルの DOM を配線する（TASK-7, app-spec §5.2）。
- * - ツールチップ: onHover の {x, y} を使いカーソル近傍へ absolute 配置。object なしで非表示
- * - パネル: クリックで表示し続ける固定小パネル（左上）。閉じるボタンで非表示
- * どちらも displayLabel（純粋関数）で整形済みのラベルを受け取るだけにする。
- */
-function setupInfoUI(): void {
-  const tooltip = document.getElementById("info-tooltip");
-  const panel = document.getElementById("info-panel");
-  const panelLabel = document.getElementById("info-panel-label");
-  const panelClose = document.getElementById("info-panel-close") as
-    | HTMLButtonElement
-    | null;
-  if (!tooltip || !panel || !panelLabel || !panelClose) {
-    console.warn("情報表示 UI 要素が見つからないため配線をスキップします");
-    return;
-  }
-
-  // TASK-111: カーソル近傍への配置は tooltipPlacement（純粋関数）に委ね、ここは
-  // 実測サイズの取得と style への反映だけを行う。hidden のままでは
-  // getBoundingClientRect が 0 を返すので、先に表示してから測る。折り返し後の
-  // 実寸が要るため、textContent の更新より後に測ることも必須。測る前に left/top を
-  // 原点へ戻すのは、絶対配置の shrink-to-fit 幅が「左端から親の右端まで」の
-  // 余白に依存し、前回の右寄り座標のままだと本来より狭く折り返された幅を
-  // 測ってしまうため（配置後は left + width <= viewport なので再折り返しは起きない）。
-  showTooltip = (label, x, y) => {
-    tooltip.textContent = label;
-    tooltip.style.left = "0px";
-    tooltip.style.top = "0px";
-    tooltip.hidden = false;
-    const rect = tooltip.getBoundingClientRect();
-    const { left, top } = tooltipPlacement(
-      { x, y },
-      { width: rect.width, height: rect.height },
-      { width: globalThis.innerWidth, height: globalThis.innerHeight },
-    );
-    tooltip.style.left = `${left}px`;
-    tooltip.style.top = `${top}px`;
-  };
-  hideTooltip = () => {
-    tooltip.hidden = true;
-  };
-  // TASK-109: 出典欄（見出し + 値の定義リスト）。index.html には置かず、
-  // 名前 1 行だけだった従来のパネル DOM に対して 1 度だけ足す。行の中身は
-  // sourceLines（純粋関数）が決めた配列をそのまま写すだけにする。
-  const panelSource = document.createElement("dl");
-  panelSource.className = INFO_PANEL_SOURCE_CLASS;
-  panelSource.hidden = true;
-  panel.appendChild(panelSource);
-
-  showInfoPanel = (label, sources) => {
-    panelLabel.textContent = label;
-    panelSource.replaceChildren(...sources.flatMap(sourceLineNodes));
-    // 出典 metadata を持たないデータ（rivers / cities / mountains 等）では
-    // 行が 0 件になるので、罫線ごと出典欄を畳んで従来の 1 行パネルに戻す
-    panelSource.hidden = sources.length === 0;
-    panel.hidden = false;
-  };
-
-  panelClose.addEventListener("click", () => {
-    panel.hidden = true;
-  });
-}
-
-/**
- * 出典行 1 件を dt（見出し）+ dd（値）の 2 ノードにする（TASK-109）。
- * href があればリンクにし、無ければただのテキストにする。metadata 由来の
- * 文字列は textContent / href で入れるだけで、HTML としては解釈しない。
- */
-function sourceLineNodes(line: SourceLine): Node[] {
-  const dt = document.createElement("dt");
-  dt.className = `${INFO_PANEL_SOURCE_CLASS}-label`;
-  dt.textContent = line.label;
-  const dd = document.createElement("dd");
-  dd.className = `${INFO_PANEL_SOURCE_CLASS}-value`;
-  if (line.href === undefined) {
-    dd.textContent = line.value;
-  } else {
-    const a = document.createElement("a");
-    a.href = line.href;
-    a.target = "_blank";
-    // 新規タブへ開く外部リンクの定石（opener 経由の書き換え・リファラ漏れ防止）
-    a.rel = "noopener noreferrer";
-    a.textContent = line.value;
-    dd.appendChild(a);
-  }
-  return [dt, dd];
-}
-
-setupInfoUI();
-
-/**
- * attribution フッターの折りたたみ UI を配線する（TASK-26）。
- * 状態遷移は footer.ts の reducer（純粋関数）、イベント購読と
- * aria-expanded / hidden の同期は collapsible.ts の共通配線（TASK-53）に
- * 集約されており、ここでは要素の取得と root 内判定の注入だけを行う。
- * - ⓘボタン click でトグル（native button なので Enter/Space は標準動作。AC #4）
- * - フッター外の click / Escape キーで折りたたみ（展開時のみ。AC #3）
- */
-function setupFooter(): void {
-  const footer = document.getElementById("app-footer");
-  const toggle = document.getElementById("footer-toggle") as
-    | HTMLButtonElement
-    | null;
-  const content = document.getElementById("footer-content");
-  if (!footer || !toggle || !content) {
-    console.warn("フッター UI 要素が見つからないため配線をスキップします");
-    return;
-  }
-
-  // AC #1〜#4: 配線仕様（トグル / 外側 click / Escape / 属性同期）は
-  // wireCollapsiblePanel に共通化した。ⓘボタン自身のクリックは footer 内
-  // なので outside-click にならず、二重発火しない。
-  wireCollapsiblePanel({
-    toggle,
-    content,
-    containsTarget: (target) =>
-      target instanceof Node && footer.contains(target),
-    eventSource: document,
-  });
-}
-
-setupFooter();
+setupFooter({ doc: document });
 
 // ---- データの既知の制限一覧（TASK-46）----
 
-// revealKnownLimitations は loadKnownLimitations 成功時にトグルボタンを表示し
-// 一覧を描画するフック（setupKnownLimitationsUI が実体を差し込む。notes.json と
-// 同じ「未生成時はトグルごと非表示で従来表示を維持」方針）
-let revealKnownLimitations: (limitations: KnownLimitation[]) => void = () => {};
-
-// reflectYearToKnownLimitations は年代切替の確定（applyFn。最新要求のみ到達）に
-// 追従して一覧の該当年代表示を更新するフック（setupKnownLimitationsUI が実体を
-// 差し込む。reflectYearToNotes と同じタイミング保証）。TASK-52。
-let reflectYearToKnownLimitations: (year: number) => void = () => {};
-
-/**
- * データの既知の制限一覧 UI を配線する（TASK-46）。
- * 折りたたみは attribution フッターと同一の操作性（トグル click /
- * コンテナ外 click / Escape）なので、reducer（footer.ts）ごと共通配線
- * wireCollapsiblePanel（collapsible.ts、TASK-53）を再利用する。
- * ここでは一覧の描画と表示フックの差し込みだけを行う。
- *
- * TASK-52: 全件表示は維持したまま、knownLimitationEntries で現在年代の
- * 該当判定（active）を付与し、該当項目だけ視覚強調する（削除ではなく配線）。
- */
-function setupKnownLimitationsUI(): void {
-  const container = document.getElementById("known-limitations");
-  const toggle = document.getElementById("known-limitations-toggle") as
-    | HTMLButtonElement
-    | null;
-  const content = document.getElementById("known-limitations-content");
-  const list = document.getElementById("known-limitations-list");
-  if (!container || !toggle || !content || !list) {
-    console.warn(
-      "既知の制限 UI 要素が見つからないため配線をスキップします",
-    );
-    return;
-  }
-
-  let limitations: KnownLimitation[] = [];
-  let currentYear: number | null = null;
-
-  /**
-   * 現在の limitations / currentYear を元に一覧を再描画する。
-   * currentYear が未確定（switchYear 未完了）の間は年代非依存として
-   * 全件 active 扱いにはせず、そもそも呼ばれない想定だが、防御的に
-   * limitations が空・currentYear が null のときは何もしない。
-   */
-  function renderList(): void {
-    if (limitations.length === 0 || currentYear === null) return;
-    const entries = knownLimitationEntries(limitations, currentYear);
-    list!.replaceChildren(...entries.map((entry) => {
-      const li = document.createElement("li");
-      li.textContent = entry.text;
-      li.classList.toggle("known-limitations-item--active", entry.active);
-      if (entry.active) {
-        const badge = document.createElement("span");
-        badge.className = "known-limitations-badge";
-        badge.textContent = "この年代に該当";
-        li.append(" ", badge);
-      }
-      return li;
-    }));
-  }
-
-  // 折りたたみの配線（トグル / コンテナ外 click / Escape / 属性同期）は
-  // attribution と同じ共通配線に委譲する（TASK-53）
-  wireCollapsiblePanel({
-    toggle,
-    content,
-    containsTarget: (target) =>
-      target instanceof Node && container.contains(target),
-    eventSource: document,
-  });
-
-  // known-limitations.json のロード成功時のみトグルを表示し、一覧を描画する
-  // （AC #3: 制限事項の追加はデータ編集のみで可能。全件表示は維持したまま、
-  // TASK-52 で現在年代の該当項目を視覚強調する）
-  revealKnownLimitations = (loaded) => {
-    if (loaded.length === 0) return;
-    limitations = loaded;
-    renderList();
-    toggle!.hidden = false;
-  };
-
-  // AC 相当: 年代切替の確定（applyFn。最新要求のみ到達）に追従して
-  // 一覧の該当年代表示を更新する。パネルの開閉状態に関わらず内容を
-  // 最新化しておくことで、次回展開時は常に現在年代の判定を表示する。
-  reflectYearToKnownLimitations = (year) => {
-    currentYear = year;
-    renderList();
-  };
-}
-
-setupKnownLimitationsUI();
+// 一覧の描画・折りたたみ（wireCollapsiblePanel）・年代追従（TASK-52）の配線は
+// src/ui/known_limitations.ts へ抽出した（TASK-146）。reveal は
+// loadKnownLimitations 成功時に、reflectYear は年代切替の確定（applyFn。
+// 最新要求のみ到達）から呼ぶ。
+const knownLimitationsUi = setupKnownLimitationsUI({ doc: document });
 
 // ---- 年代ごとの歴史解説パネル（TASK-33）----
 
@@ -2534,104 +2314,10 @@ setupKnownLimitationsUI();
  */
 let notesData: NotesData | null = null;
 
-// 解説 UI への反映フック（setupNotesUI が実体を差し込む）。
-// reflectYearToNotes は applyFn（最新要求のみ）から呼ばれ、確定した年の解説へ
-// 内容を差し替える（reflectYearToTimeline と同じタイミング保証）。
-let reflectYearToNotes: (year: number) => void = () => {};
-
-// loadNotes 成功時にトグルボタンを表示するフック（欠如時は hidden のまま）
-let revealNotesToggle: () => void = () => {};
-
-/**
- * 年代解説パネルの DOM を配線する（TASK-33）。
- * 状態遷移は notes.ts の reducer（純粋関数）に集約し、ここでは
- * 「イベント → reducer → aria-expanded / hidden の同期」と内容描画だけを行う。
- * - 「解説」トグル click で開閉（native button なので Enter/Space は標準動作）
- * - Escape キーで折りたたみ（展開時のみ）
- * - outside-click では閉じない（地図クリック操作で解説が誤って閉じないため。
- *   方針は notes.ts の先頭コメント参照）
- */
-function setupNotesUI(): void {
-  const toggle = document.getElementById("notes-toggle") as
-    | HTMLButtonElement
-    | null;
-  const panel = document.getElementById("notes-panel");
-  const heading = document.getElementById("notes-heading");
-  const points = document.getElementById("notes-points");
-  const summary = document.getElementById("notes-summary");
-  if (!toggle || !panel || !heading || !points || !summary) {
-    console.warn("解説 UI 要素が見つからないため配線をスキップします");
-    return;
-  }
-
-  let state = createNotesState();
-  let currentYear: number | null = null;
-
-  /** 現在の状態を aria-expanded / hidden へ反映する */
-  function render(): void {
-    toggle!.setAttribute("aria-expanded", notesAriaExpanded(state));
-    panel!.hidden = isNotesPanelHidden(state);
-  }
-
-  /**
-   * 指定年の解説を見出し・箇条書き・まとめへ描画する。
-   * その年の解説が欠落・不正形（notesForYear が null）の場合は箇条書きを
-   * 空にして案内文だけ出す（データ契約上は全 20 年分あるため防御的措置）。
-   */
-  function renderContent(year: number): void {
-    heading!.textContent = notesHeadingFor(year);
-    const entry = notesData === null ? null : notesForYear(notesData, year);
-    if (entry === null) {
-      points!.replaceChildren();
-      summary!.textContent = "この年代の解説はまだありません。";
-      return;
-    }
-    points!.replaceChildren(...entry.points.map((p) => {
-      const li = document.createElement("li");
-      li.textContent = p;
-      return li;
-    }));
-    summary!.textContent = entry.summary;
-  }
-
-  function dispatch(event: NotesEvent): void {
-    state = reduceNotesEvent(state, event);
-    render();
-  }
-
-  toggle.addEventListener("click", () => dispatch("toggle"));
-
-  // Escape キーで折りたたむ（未展開時は何もしない）
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (!state.expanded) return;
-    dispatch("escape");
-  });
-
-  // AC #1: 年代切替の確定（applyFn。最新要求のみ到達）に追従して内容を
-  // 差し替える。展開中でも即時に新しい年の解説へ切り替わる。
-  reflectYearToNotes = (year) => {
-    currentYear = year;
-    renderContent(year);
-  };
-
-  // notes.json のロード成功時のみトグルを表示する。ロード前に年が確定して
-  // いた場合（通常は Promise.all で先にロードが終わるため起きない）にも
-  // 備えて内容を描き直す。
-  revealNotesToggle = () => {
-    toggle!.hidden = false;
-    if (currentYear !== null) renderContent(currentYear);
-  };
-
-  render();
-}
-
-setupNotesUI();
-
-// タイムライン UI への「反映」フック（setupTimeline が実体を差し込む）。
-// applyFn（最新要求のみ）から呼ぶことで、古い要求で年表示・スライダーが
-// 巻き戻らないことを担保する（TASK-6 の UI 反映タイミング）。
-let reflectYearToTimeline: (year: number) => void = () => {};
+// 解説パネルの DOM 配線は src/ui/notes.ts へ抽出した（TASK-146）。notesData の
+// 所有はここに残し getter で注入する。reflectYear は applyFn（最新要求のみ）
+// から、revealToggle は loadNotes 成功時に呼ぶ。
+const notesUi = setupNotesUI({ doc: document, getNotesData: () => notesData });
 
 // 年代切替の競合ガード（DOM/deck.gl 非依存ロジックは powers.ts に集約）。
 // overlay への反映（applyFn）は最新要求のときだけ呼ばれ、遅延解決した古い要求で
@@ -2660,11 +2346,11 @@ const yearSwitcher = createYearSwitcher(
     };
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
-    reflectYearToTimeline(year);
+    timelineUi.reflectYear(year);
     // TASK-33 AC #1: 解説パネルも確定年に追従させる
-    reflectYearToNotes(year);
+    notesUi.reflectYear(year);
     // TASK-52: 既知の制限一覧も確定年に追従させ、該当項目の強調を更新する
-    reflectYearToKnownLimitations(year);
+    knownLimitationsUi.reflectYear(year);
     // AC #1: 年代確定のたびに URL を現在の視点込みで同期する
     syncUrlToState();
   },
@@ -2709,16 +2395,13 @@ map.on("zoom", () => {
 // ---- ローディング/エラー UI（TASK-9, docs/app-spec.md §5.4）----
 
 // ロード状態機械（DOM 非依存ロジックは loading_state.ts に集約）。
-// switchYear が開始/成功/失敗を通知し、setupLoadingUI が差し込む描画関数へ反映する。
+// switchYear が開始/成功/失敗を通知し、setupLoadingUI が返す描画ハンドルへ反映する。
 let loadingState = createLoadingState();
-
-// ロード状態を UI へ反映するフック（setupLoadingUI が実体を差し込む）。
-let renderLoadingUI: (state: LoadingState) => void = () => {};
 
 /** ロード状態を更新し、最新状態を UI へ反映する */
 function updateLoadingState(next: LoadingState): void {
   loadingState = next;
-  renderLoadingUI(loadingState);
+  loadingUi.render(loadingState);
 }
 
 /**
@@ -2746,164 +2429,34 @@ export function switchYear(year: number): Promise<void> {
   );
 }
 
-/**
- * スピナーとエラートースト（app-spec §5.4）の DOM を配線する。
- * 表示可否は loading_state の状態機械から導出し、この関数は描画に徹する。
- * - スピナー: 進行中のロードが 1 つ以上ある間だけ表示（キャッシュヒットでは出ない）
- * - トースト: 失敗した年代があれば表示し、「再試行」で失敗年代を再取得、「閉じる」で消す
- */
-function setupLoadingUI(): void {
-  const spinner = document.getElementById("loading-spinner");
-  const toast = document.getElementById("error-toast");
-  const toastMessage = document.getElementById("error-toast-message");
-  const retryBtn = document.getElementById("error-toast-retry") as
-    | HTMLButtonElement
-    | null;
-  const closeBtn = document.getElementById("error-toast-close") as
-    | HTMLButtonElement
-    | null;
-  if (!spinner || !toast || !toastMessage || !retryBtn || !closeBtn) {
-    console.warn(
-      "ローディング/エラー UI 要素が見つからないため配線をスキップします",
-    );
-    return;
-  }
-
-  renderLoadingUI = (state) => {
-    spinner.hidden = !isSpinnerVisible(state);
-    if (hasError(state)) {
-      const years = failedYears(state);
-      toastMessage.textContent = `${
-        years.join("・")
-      } 年の地図データ取得に失敗しました`;
-      toast.hidden = false;
-    } else {
-      toast.hidden = true;
-    }
-  };
-
-  // AC #3: 失敗した年代を再取得する。成功すれば hasError が false になりトーストが消える。
-  retryBtn.addEventListener("click", () => {
+// スピナー / エラートースト（app-spec §5.4）の DOM 配線は src/ui/loading.ts へ
+// 抽出した（TASK-146）。状態機械（loadingState）の所有と遷移はここに残し、
+// 再試行 / 閉じるの動作をコールバックで注入する（switchYear への循環 import 回避）。
+const loadingUi = setupLoadingUI({
+  doc: document,
+  initialState: loadingState,
+  // AC #3: 失敗した年代を再取得する。成功すれば hasError が false になり
+  // トーストが消える。
+  onRetry: () => {
     for (const year of failedYears(loadingState)) {
       void switchYear(year);
     }
-  });
-
+  },
   // ユーザーが明示的に閉じたら失敗集合をクリアする（再試行はしない）
-  closeBtn.addEventListener("click", () => {
+  onClose: () => {
     updateLoadingState(clearErrors(loadingState));
-  });
+  },
+});
 
-  renderLoadingUI(loadingState);
-}
-
-setupLoadingUI();
-
-/**
- * タイムラインスライダー（app-spec §5.1）を組み立てて配線する。
- *
- * 離散スライダーの実体は `input[type=range]`（0..19 の index）で、値→年は yearAtIndex。
- * datalist で 20 目盛りを提示し、間の年は index 化できないため選べない（AC #1）。
- *
- * UI 反映の方針:
- * - ユーザー操作（要求）時は syncUI で即時に UI を更新し、操作追従性を確保する。
- * - 加えて applyFn（最新要求のみ到達）から reflectYearToTimeline 経由でも syncUI を呼ぶ。
- *   どちらの経路も「最後にユーザーが要求した年」へ収束し、遅延解決した古い要求で
- *   UI が巻き戻ることはない（switchYear のトークンガードが古い反映を破棄するため）。
- *
- * キーボード二重発火対策:
- * - keydown は document で受けるが、フォーカスがスライダー自身の場合は何もしない。
- *   range は矢印キーで値が変わり input イベントを発火するので、そちらの経路で 1 回
- *   だけ切り替わる。二重に stepYear すると 1 打鍵で 2 年代進む不具合になるため防ぐ。
- *   TASK-25: keyToStep が ↑↓ も返すようになったが、対象キー判定は keyToStep に
- *   集約されているためこのガードはそのまま ↑↓ にも効く（縦 range の native な
- *   ↑↓ 操作とも二重にならない）。
- */
-function setupTimeline(): void {
-  const root = document.getElementById("timeline");
-  const yearEl = document.getElementById("timeline-year");
-  const slider = document.getElementById("timeline-slider") as
-    | HTMLInputElement
-    | null;
-  const prevBtn = document.getElementById("timeline-prev") as
-    | HTMLButtonElement
-    | null;
-  const nextBtn = document.getElementById("timeline-next") as
-    | HTMLButtonElement
-    | null;
-  const marks = document.getElementById("timeline-marks");
-  if (!root || !yearEl || !slider || !prevBtn || !nextBtn || !marks) {
-    console.warn("タイムライン UI 要素が見つからないため配線をスキップします");
-    return;
-  }
-
-  const lastIndex = SNAPSHOT_YEARS.length - 1;
-
-  // 20 目盛りを datalist に展開し、range の上限を index 空間に合わせる（AC #1）。
-  slider.min = "0";
-  slider.max = String(lastIndex);
-  slider.step = "1";
-  marks.replaceChildren(
-    ...SNAPSHOT_YEARS.map((year, i) => {
-      const opt = document.createElement("option");
-      opt.value = String(i);
-      opt.label = String(year);
-      return opt;
-    }),
-  );
-
-  /** 年に合わせて年表示・スライダー位置・端ボタン活性を揃える（要求/反映の共通経路） */
-  function syncUI(year: number): void {
-    const idx = indexOfYear(SNAPSHOT_YEARS, year);
-    yearEl!.textContent = String(year);
-    if (idx >= 0) slider!.value = String(idx);
-    prevBtn!.disabled = idx <= 0;
-    nextBtn!.disabled = idx >= lastIndex;
-  }
-
-  /** スライダーの現在 index から現在年を得る */
-  function currentYear(): number {
-    return yearAtIndex(SNAPSHOT_YEARS, Number(slider!.value));
-  }
-
-  /** 年を要求する: UI を即時反映し、switchYear（キャッシュ + 最新要求ガード）へ委譲 */
-  function requestYear(year: number): void {
-    syncUI(year);
-    void switchYear(year);
-  }
-
-  // AC #2: ドラッグ / 目盛りクリック → range の input イベント
-  slider.addEventListener("input", () => {
-    requestYear(yearAtIndex(SNAPSHOT_YEARS, Number(slider.value)));
-  });
-
-  // AC #2: 前後ボタン（端では stepYear が停止し、ボタンも disabled になる）
-  prevBtn.addEventListener("click", () => {
-    requestYear(stepYear(SNAPSHOT_YEARS, currentYear(), -1));
-  });
-  nextBtn.addEventListener("click", () => {
-    requestYear(stepYear(SNAPSHOT_YEARS, currentYear(), 1));
-  });
-
-  // AC #2: キーボード ← → / ↑ ↓（↑=古い方向・↓=新しい方向。縦レイアウトの
-  // 上=古い並びと一致させる。スライダー自身にフォーカスがある時は native + input に委ねる）
-  document.addEventListener("keydown", (e) => {
-    const step = keyToStep(e.key);
-    if (step === 0) return;
-    if (e.target === slider) return; // 二重発火防止（range の input が処理する）
-    e.preventDefault();
-    requestYear(stepYear(SNAPSHOT_YEARS, currentYear(), step));
-  });
-
-  // applyFn（最新要求のみ）からの権威ある反映をこの UI に差し込む
-  reflectYearToTimeline = syncUI;
-
-  // 初期表示を復元年（URL または INITIAL_YEAR）に合わせる（実データ反映は
-  // map load 後の switchYear）
-  syncUI(initialYear);
-}
-
-setupTimeline();
+// タイムラインスライダー（app-spec §5.1）の DOM 配線は src/ui/timeline.ts へ
+// 抽出した（TASK-146）。年代切替の実体（switchYear。キャッシュ + 最新要求
+// ガード）はコールバックで注入する（循環 import 回避）。
+const timelineUi = setupTimeline({
+  doc: document,
+  years: SNAPSHOT_YEARS,
+  initialYear,
+  onRequestYear: (year) => void switchYear(year),
+});
 
 /** 初期年代の勢力圏を描画する。例外で地図全体を落とさない */
 async function initPowerLayer(): Promise<void> {
@@ -2913,7 +2466,7 @@ async function initPowerLayer(): Promise<void> {
     // TASK-24: rivers.geojson も初期描画前に揃え、初回から河川を重ねる。
     // TASK-27: cities.json も同様に揃え、初回から都市マーカーを重ねる。
     // TASK-33: notes.json も初期描画前に揃え、初回の年確定（applyFn →
-    // reflectYearToNotes）の時点で解説を描画できるようにする。
+    // notesUi.reflectYear）の時点で解説を描画できるようにする。
     // TASK-46: known-limitations.json も同様に揃え、初回描画前にトグルを出す。
     // TASK-145: ローダ本体は src/data_loading.ts（返り値型 + fetch 注入）へ
     // 抽出した。モジュール変数への代入（状態の所有）と成功時フックの発火は
@@ -2955,11 +2508,11 @@ async function initPowerLayer(): Promise<void> {
     // notes は取得成功時（null でない）だけ反映し、トグルボタンを表示する
     if (loadedNotes !== null) {
       notesData = loadedNotes;
-      revealNotesToggle();
+      notesUi.revealToggle();
     }
     // known-limitations は 1 件以上のときだけトグルを表示する（0 件 = 縮退）
     if (loadedLimitations.length > 0) {
-      revealKnownLimitations(loadedLimitations);
+      knownLimitationsUi.reveal(loadedLimitations);
     }
     fiefDedupe = loadedFiefDedupe;
     await switchYear(initialYear);
