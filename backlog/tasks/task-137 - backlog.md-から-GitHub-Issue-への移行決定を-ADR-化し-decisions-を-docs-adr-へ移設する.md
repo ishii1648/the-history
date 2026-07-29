@@ -1,11 +1,11 @@
 ---
 id: TASK-137
 title: backlog.md から GitHub Issue への移行決定を ADR 化し decisions を docs/adr/ へ移設する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-28 17:37'
-updated_date: '2026-07-29 17:19'
+updated_date: '2026-07-29 17:28'
 labels:
   - 'area:docs'
 dependencies: []
@@ -27,11 +27,11 @@ ordinal: 118000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 backlog/decisions/ の 27 件が docs/adr/ 配下に decision 番号を保持した名前で存在し、git log --follow で移設前の履歴が追える
-- [ ] #2 移行決定の ADR が新規追加され、代替案と不採用理由・受容したトレードオフ・将来課題（スナップショット鏡方式）を含む
-- [ ] #3 docs/adr/README.md に一覧と採番規約が記載されている
-- [ ] #4 docs/development-style.md の decision 運用記述が docs/adr/ 方式に更新されている
-- [ ] #5 docs/ 配下の既存文書から decision への参照がリンク切れになっていない
+- [x] #1 backlog/decisions/ の 27 件が docs/adr/ 配下に decision 番号を保持した名前で存在し、git log --follow で移設前の履歴が追える
+- [x] #2 移行決定の ADR が新規追加され、代替案と不採用理由・受容したトレードオフ・将来課題（スナップショット鏡方式）を含む
+- [x] #3 docs/adr/README.md に一覧と採番規約が記載されている
+- [x] #4 docs/development-style.md の decision 運用記述が docs/adr/ 方式に更新されている
+- [x] #5 docs/ 配下の既存文書から decision への参照がリンク切れになっていない
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -46,3 +46,23 @@ ordinal: 118000
 
 並列化判定: 見送り（理由: 移設と参照更新が一体の変更）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## 実装記録（mainagent レビュー済み）
+- 実在の 30 件（起票時 27 + 実装中追加の decision-28〜30）を git mv で docs/adr/00NN-<slug>.md へ移設。rename 類似度 89〜98%、git log --follow を 0001/0020/0030 で確認（mainagent も 0020 で追認）
+- frontmatter は status/date のみへ正規化（id/title は H1 へ、status の大文字 7 件を統一）。本文は不変
+- ADR-0031: 代替案 3 案（tasks 共有実体化 / 専用ブランチ + 薄 CLI / ハイブリッド）と不採用理由・受容トレードオフ（オフライン性無視・本文 git 履歴喪失の許容）・将来課題（Issue 本文スナップショット鏡方式）を記録
+- README: 採番規約（decisions の後継・N 保持・次番号から直接作成）+ 0001〜0031 一覧
+- development-style 2.1 のみ書き換え（4 章と SKILL.md の backlog decision create 参照は後続タスクの範囲として意図的に残置）
+- 参照検証: decision-N 文字列 77 箇所は番号保持で有効・旧ファイル名参照ゼロ・backlog/decisions/ パス参照は 2.1 書き換えで解消
+- deno.json の fmt exclude に docs/adr/ を追加（fmt が ADR 本文を折り返すため。backlog/ 除外と同趣旨）
+- 1534 passed・fmt/lint green（mainagent 独立検証）
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+backlog decisions 30 件を番号保持で docs/adr/ へ git mv 移設（履歴追跡可・本文不変）。Issue 移行決定を ADR-0031 として代替案・トレードオフ・将来課題付きで記録し、README の採番規約と development-style 2.1 を docs/adr/ 方式へ更新。参照 77 箇所の有効性を検証。1534 passed。
+<!-- SECTION:FINAL_SUMMARY:END -->
