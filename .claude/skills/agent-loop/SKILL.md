@@ -1,6 +1,6 @@
 ---
 name: agent-loop
-description: backlog の次タスクを決定的に選択し、実装から finalization までを人の介入なしで繰り返すローカル自律ループ。ユーザーが /agent-loop を実行したとき、または自律タスクループの開始・再開を指示したときに使う。
+description: GitHub Issue の次タスクを決定的に選択し、claim タグで着手を宣言して実装から finalization までを人の介入なしで繰り返すローカル自律ループ。ユーザーが /agent-loop を実行したとき、または自律タスクループの開始・再開を指示したときに使う。
 ---
 
 # agent-loop — 自律タスクループ（ローカル実行）
@@ -10,41 +10,66 @@ description: backlog の次タスクを決定的に選択し、実装から fina
 ステータスはこのセッションが Monitor ツールや PR activity
 購読（MCP）で監視する。
 
+タスクの単一ストアは GitHub Issue である（`docs/adr/0031`。`backlog` CLI は
+使わない）。状態の扱いは次の 2 層で固定する:
+
+- **着手の権威 = claim タグ**: origin の `refs/tags/claim/issue-<N>`。タグ ref
+  への push は既存タグがあるとサーバ側で拒否されるため、push
+  の成否がそのままアトミックな二重着手ガード（compare-and-swap）になる。
+- **`status:in-progress` ラベル = advisory 表示**: 人間向けの見た目であり
+  権威ではない。ラベルと claim の不一致は `deno task loop-doctor` が検出・
+  修復する。
+
 ## ループ手順
 
 1. **着手可能なタスク集合の判定**
-   - `In Progress` のタスクがあればそれを現在タスク（複数あれば現在の集合）
+   - まず origin の claim 一覧を確認する:
+     `git ls-remote origin 'refs/tags/claim/issue-*'`。claim された open Issue
+     が 「進行中タスク」であり、あればそれを現在タスク（複数あれば現在の集合）
      として再開する（ブランチ・PR の状態を調べ、中断地点から続きを行う）。
-     再開時、実装プランに並列化判定が記録されていなければ追記してから続行する。
-     `In Progress` が残っている間は新たな集合判定を開始しない
-     （イテレーション境界の明確化）。
+     再開時、実装プランのコメントに並列化判定が記録されていなければ追記して
+     から続行する。進行中タスクが残っている間は新たな集合判定を開始しない
+     （イテレーション境界の明確化）。他セッションが claim
+     しているタスクには触らない。
    - なければ `deno task next-tasks` で着手可能なタスク集合（area が互いに素な
-     タスク群。`docs/development-style.md` 4.2 章）を判定する。集合が空なら
-     着手可能なタスクがないためループを終了し、最終レポートを出力する。
-   - 集合が複数タスクの場合: 各タスクについて backlog CLI で `In Progress` に
-     して実装プランを記録し（タスク内並列化判定を含む。手順 2 参照）、個別
-     ブランチ `task-N-slug` を**いずれも main から分岐**して作成し、実装
-     subagent を worktree isolation で並列起動する。タスクごとに個別 PR を
-     作成する（1 タスク = 1 PR）。並列実行中も 1 タスク = 1 PR・bug intake・
-     エスカレーション基準（手順 6）は不変。
-   - 対象タスクのブランチ `task-N-*` が既に origin に存在する場合は状態を
+     タスク群。`docs/development-style.md` 4.2 章）を判定する。ID は Issue 番号
+     由来の `#N` 形式で返る。集合が空なら着手可能なタスクがないためループを
+     終了し、最終レポートを出力する。
+   - 集合が複数タスクの場合: 各タスクについて claim push と実装プランの記録
+     （手順 2）を行い、個別ブランチ `issue-<N>-slug` を**いずれも main から
+     分岐**して作成し、実装 subagent を worktree isolation
+     で並列起動する。タスクごとに個別 PR を作成する（1 タスク = 1 PR）。
+     並列実行中も 1 タスク = 1 PR・bug intake・エスカレーション基準（手順
+     6）は不変。
+   - 対象タスクのブランチ `issue-<N>-*` が既に origin に存在する場合は状態を
      調査し、再開できるなら再開、判断が必要なら手順 6 のエスカレーションに従う。
 2. **標準タスクフローの実行**（CLAUDE.md / docs/development-style.md に従う。
    集合内の各タスクにそれぞれ適用する）
-   - backlog CLI でタスクを `In Progress` にし、実装プランを記録する。
-   - 実装プランには **並列化判定** を必須項目として記録する: タスクを独立
-     サブ作業（互いにファイル競合・実行順依存がなく、独立にテスト可能な単位。
-     例: 独立モジュール群、データ変換とテストフィクスチャ、実装とドキュメント）
-     に分割できるか列挙する。
+   - **着手宣言 = claim push（権威）**:
+     `git push origin main:refs/tags/claim/issue-<N>`。
+     - 成功したらこのセッションが着手権を持つ。続けて advisory 表示として
+       `gh issue edit <N> --add-label status:in-progress` を行う（ラベル付与の
+       失敗は着手を無効にしない。loop-doctor が後で整合させる）。
+     - **拒否された（タグが既に存在する）ら他セッションが着手済み**。その Issue
+       はスキップして集合の残りを続行する。claim タグへの force push は
+       いかなる場合も行わない。
+   - 実装プラン（**並列化判定**を必須項目として含む）は Issue
+     コメントに投稿する（`gh issue comment <N> --body-file <path>`）。Issue
+     本文の read-modify-write は finalization の AC チェック 1 回だけに限る
+     （本文編集の競合窓を最小化するため。Implementation Plan / Notes / Final
+     Summary はすべてコメント）。
+   - 並列化判定: タスクを独立サブ作業（互いにファイル競合・実行順依存がなく、
+     独立にテスト可能な単位。例: 独立モジュール群、データ変換とテスト
+     フィクスチャ、実装とドキュメント）に分割できるか列挙する。
    - 独立サブ作業が 2 つ以上あれば subagent を並列起動（worktree isolation）し、
      subagent ごとの担当範囲・成果物の分担表をプランに書く。
    - 並列化しない場合は「並列化判定: 見送り（理由: …）」を明記する。判定の
      無記載はプラン不備としてレビューで差し戻す。
-   - ブランチ `task-N-slug` を作成し、テスト先行（red 確認 → green）で
-     実装する。default branch（main）上では作業しない。実装は subagent に
-     委譲し、mainagent がレビューで収束させる。並列化判定で並列可とした場合は
-     分担表に従い subagent を並列に複数起動し、worktree isolation で衝突を
-     避ける（成果物の conflict は PR で解消する）。
+   - ブランチ `issue-<N>-slug` を main から作成し、テスト先行（red 確認 →
+     green）で実装する。default branch（main）上では作業しない。実装は subagent
+     に委譲し、mainagent がレビューで収束させる。並列化判定で並列可と
+     した場合は分担表に従い subagent を並列に複数起動し、worktree isolation で
+     衝突を避ける（成果物の conflict は PR で解消する）。
    - **subagent の成果の取り込みと worktree の復元**: subagent には「commit /
      push はしない。ファイル変更のみ行い報告する」と指示しているため、成果は
      mainagent が worktree からパッチとして取り出してタスクブランチへ適用する。
@@ -61,7 +86,10 @@ description: backlog の次タスクを決定的に選択し、実装から fina
      dirty」を消すためのものであり、取り出し済みのパッチの
      複製を捨てるだけなので失われる成果は無い。
    - `deno fmt --check` / `deno lint` / `deno test` / `deno task build` を 全て
-     green にしてから PR を作成する（タイトル・説明に TASK ID を明記）。
+     green にしてから PR を作成する。**PR 本文に `Closes #<N>` を必ず含める**
+     （タイトルにも Issue 番号を明記する）。マージ時の自動クローズが Done
+     遷移の実体なので、`Closes #<N>` の欠落は「マージしても Issue が open の
+     まま残る」不整合に直結する（loop-doctor の検出対象）。
 3. **CI 監視とマージ**
    - PR activity 購読（subscribe_pr_activity 等の MCP）が使える場合は購読する。
    - CI の完了は Monitor ツール（例: PR の check-runs をポーリングし、 success /
@@ -100,16 +128,28 @@ description: backlog の次タスクを決定的に選択し、実装から fina
        恒常的に満たせない必須 status check、リポジトリのマージ権限が無い等。
        この場合は手順 6 のエスカレーションに従いループを停止する。
    - CI red なら修正して再 push し、green になるまでこのループを回す。
-   - CI green になったら finalization（AC を検証エビデンス付きでチェック → final
-     summary → `Done`）をタスクブランチ上でコミットし、再度 CI green を
-     確認してからマージする。finalization では **decision 記録の判定**を行う:
-     このタスクで下した判断に**タスク横断で影響するもの**（データソース採用・
-     ライセンス方針・アーキテクチャ/方式選択・規約変更等）があれば
-     `backlog decision create` で記録する（記録基準・棲み分け・CLI の使い方は
-     `docs/development-style.md` 2.1 章）。タスク限りの実装意図は Implementation
-     Notes とコンテキストコミットに留め、decision 化しない。`Done`
-     がマージと同時に main へ載ることで、 次イテレーションの `next-tasks`
-     判定が正しく進む。
+   - CI green になったら**マージ前に finalization を完了する**:
+     1. **AC チェック**（Issue 本文の read-modify-write は**この 1 回のみ**）:
+        `gh issue view <N> --json body -q .body` で本文を取得し、各 AC の
+        checkbox を検証結果に基づき `- [x]` に更新した本文ファイルを作って
+        `gh issue edit <N> --body-file <path>` で書き戻す。検証エビデンスは
+        本文に書かず、次の Implementation Notes コメントに書く。
+     2. **Implementation Notes / Final Summary をコメント投稿**:
+        `gh issue comment <N> --body-file <path>`（実装内容・AC ごとの検証
+        エビデンス・残課題）。
+     3. **decision 記録の判定**: このタスクで下した判断に**タスク横断で影響
+        するもの**（データソース採用・ライセンス方針・アーキテクチャ/方式
+        選択・規約変更等）があれば `docs/adr/00NN-<slug>.md` を連番で直接
+        作成し、`docs/adr/README.md` の一覧に行を足す（記録基準・棲み分け・
+        書式は `docs/development-style.md` 2.1 章）。タスク限りの実装意図は
+        Implementation Notes とコンテキストコミットに留め、ADR 化しない。
+   - finalization を終えてからマージする。**Issue のクローズは PR 本文の
+     `Closes #<N>` による自動クローズに任せ、明示的な `gh issue close` は
+     しない**（マージとクローズの間に異常終了の窓を作らないため）。マージ後に
+     Issue が open のまま残っていれば `Closes` の記述漏れ等の不整合であり、
+     loop-doctor（手順 5）が `open-but-pr-merged` として検出する。検出したら
+     原因（記述漏れ）を確認したうえで Issue をクローズし、以後の PR 作成時の
+     `Closes #<N>` 必須を徹底する。
 4. **マージ後の動作確認**
    - マージ直後、次イテレーションに進む前に `deno task build` と dev
      サーバ起動で当該タスクの変更点を実際に動かして確認する。**標準は ヘッドレス
@@ -137,26 +177,32 @@ description: backlog の次タスクを決定的に選択し、実装から fina
      問題を出し切り、一覧として保持したまま手順 5 へ進む。起票は手順 7 で 手順 1
      に戻る直前にまとめて行う（後述の「bug intake」節）。集合が複数
      タスクの場合は集合内の全タスクぶんの問題を 1 つの一覧に集約する。
-5. **マージ後の後始末（refs の掃除）**
+5. **マージ後の後始末（refs の掃除と整合性診断）**
    - **1 タスクのマージが完了するたびに**（動作確認の直後、次イテレーションに
      進む前に）`deno task cleanup-branches --apply` を実行する。1 タスク = 1
-     ブランチ + subagent の worktree isolation 用ブランチを作り続けるため、
-     後始末をしないと refs が単調増加し、backlog.md のクロスブランチ走査
-     （全ブランチに `ls-tree` / `log` / `show`）が線形に遅くなる（TASK-112。
-     放置した結果 refs 285 本・`backlog board` 12.7 秒まで劣化した実績がある）。
+     ブランチ + subagent の worktree isolation 用ブランチ + claim タグを
+     作り続けるため、後始末をしないと refs が単調増加し、ブランチ・worktree の
+     状態把握や不整合調査のノイズになる（`docs/development-style.md` 4.3.3
+     章）。
    - このコマンドは以下を 1 回で行う（実装は `scripts/cleanup_branches.ts`）:
      - `git fetch --prune`（GitHub の `deleteBranchOnMerge` は 2026-07-27 に
        有効化済みなので、origin 側の実体は既に消えている。残るのは リモート追跡
        ref の掃除）
      - subagent の worktree 削除（`git worktree remove` → `git worktree prune`）
      - マージ済みタスクブランチの削除（`git branch -d`）
+     - **クローズ済み Issue の claim
+       タグ削除**（`git push origin --delete
+       refs/tags/claim/issue-<N>`。gh
+       でクローズ済みと確認できた Issue の claim だけが対象で、open な Issue の
+       claim（着手中の権威）と Issue 一覧に 現れない番号の claim
+       は絶対に消さない）
    - **他セッションのブランチ・worktree を消さないための多重防御**（ブランチ
      削除に `-D` は使わない。git が拒否したものはスキップして skipped に
      記録される）:
-     - 削除対象は loop が生成した名前のみ（ブランチ `task-<N>-*` /
-       `worktree-agent-*`、worktree は `.claude/worktrees/` 配下）。人手の
-       `feat/*`・`docs/*` ブランチやセッション worktree（`<repo>@feat-*`）は
-       対象外。
+     - 削除対象は loop が生成した名前のみ（ブランチ `task-<N>-*` / `issue-<N>-*`
+       / `worktree-agent-*`、worktree は `.claude/worktrees/` 配下）。人手の
+       `feat/*`・`docs/*` ブランチやセッション
+       worktree（`<repo>@feat-*`）は対象外。
      - origin/main にマージ済みのブランチのみ削除する。
      - どこかの worktree にチェックアウト中のブランチは削除しない。
      - `locked` な worktree（実行中の subagent が保持）・自分自身の worktree は
@@ -173,21 +219,29 @@ description: backlog の次タスクを決定的に選択し、実装から fina
      - 自分自身の worktree でない
      - チェックアウト中のブランチが `worktree-agent-*` である
    - ＝ loop が生成した使い捨ての足場だけが対象で、成果はパッチとして取り出し
-     済みなので失われるものは無い。agent worktree でも detached や `task-N-*`
-     がチェックアウトされている場合は `--force` の対象外とし、従来どおり git
-     の拒否を尊重して skipped に残す。
+     済みなので失われるものは無い。agent worktree でも detached や `issue-N-*` /
+     `task-N-*` がチェックアウトされている場合は `--force` の
+     対象外とし、従来どおり git の拒否を尊重して skipped に残す。
    - 出力は JSON 1 行で `refsBefore` / `refsAfter` と、`--force` で回収した
-     worktree の一覧 `forced` を含む。**`refsAfter` がイテレーションをまたいで
-     単調増加していないこと**を確認する。増えている場合は `skipped` の理由を
-     読み、loop の想定外にブランチが残っていないかを調べる。`forced` が毎回
-     出る場合は手順 2 の worktree 復元が漏れているサインなので、そちらを直す。
+     worktree の一覧 `forced`、削除した claim タグの Issue 番号 `claimTags` を
+     含む。**`refsAfter` がイテレーションをまたいで単調増加していないこと**を
+     確認する。増えている場合は `skipped` の理由を読み、loop の想定外に
+     ブランチが残っていないかを調べる。`forced` が毎回出る場合は手順 2 の
+     worktree 復元が漏れているサインなので、そちらを直す。
    - 何が消えるか先に確かめたいときは `--apply` を外して dry-run
      （`deno task cleanup-branches`）で計画だけを出力する。ネットワークを
-     使いたくない場合は `--no-fetch` を付ける。
+     使いたくない場合は `--no-fetch` を付ける（claim
+     タグ掃除もスキップされる）。
+   - 続けて **`deno task loop-doctor`** を実行し、Issue ベース運用の不整合
+     （open なのに `Closes` 指定 PR がマージ済み / closed なのに AC 未チェック /
+     claim タグ残存 / advisory ラベルと claim の不一致）を検査する。修復可能な
+     もの（claim タグ削除・ラベルの整合）は `deno task loop-doctor --apply` で
+     修復する。修復不可の findings（AC チェック漏れ・`Closes` 記述漏れ等）は
+     原因を調べて解消し、判断が必要なら手順 6 に従う。
 6. **例外時のみエスカレーション**
-   - 以下のいずれかに限り、`needs-human` ラベル付き issue（**原因・検討した
-     選択肢・推奨対応**を記載）を起票してループを停止する。それ以外で人の
-     指示を待たない。
+   - 以下のいずれかに限り、`needs-human` ラベル付き Issue（**原因・検討した
+     選択肢・推奨対応**を記載。`task` ラベルは付けず選定候補に入れない）を
+     起票してループを停止する。それ以外で人の指示を待たない。
      - AC が曖昧・CI が恒常 red・仕様判断が必要な場合。
      - 手順 3 で **自動修正不可** と切り分けたマージブロック（必須レビュー
        承認者の不在、恒常的に満たせない必須 status check、マージ権限不足
@@ -203,9 +257,11 @@ description: backlog の次タスクを決定的に選択し、実装から fina
 7. **次イテレーション**
    - 集合内の全タスクのマージ（finalization 含む）と後始末（手順 5）が
      完了したら、**手順 1 に戻る前に**、手順 4 の動作確認で見つけた問題を
-     `backlog task create` で**全件まとめて起票する**（1 件 = 1 タスク。
-     フォーマットは「bug intake」節）。問題が 0 件なら起票は不要。
-   - 起票を終えてから手順 1 に戻って次の集合判定を行う。`In Progress` の
+     `task-intake` スキル（`.claude/skills/task-intake/SKILL.md`）の手順で
+     **全件まとめて起票する**（`gh issue create --body-file`。1 件 = 1 Issue、
+     label `task` + `bug` + `area:*`。フォーマットは「bug intake」節）。 問題が
+     0 件なら起票は不要。
+   - 起票を終えてから手順 1 に戻って次の集合判定を行う。claim された進行中
      タスクが残っている間は集合判定を開始しないガードはそのまま適用する
      （起票はイテレーションの終わり、判定はその後、という順序）。
 
@@ -214,15 +270,17 @@ description: backlog の次タスクを決定的に選択し、実装から fina
 **起票はフェーズ単位でバッチ化する**（規約と根拠・限界は
 `docs/development-style.md` 2 章・4.2.1 章）。1 件見つけるたびに起票して次へ
 進むのではなく、そのフェーズで見つけた問題を出し切ってから**全件をまとめて
-起票する**。バッチでも **1 件 = 1 タスク**で起票し、複数の問題を 1 タスクに
+起票する**。バッチでも **1 件 = 1 Issue**で起票し、複数の問題を 1 Issue に
 まとめない。候補が 1 件しかなければ `next-tasks` の area 判定は原理的に働かない
 ため、まとめて起票することが次イテレーションの判定機会そのものを増やす。
+起票の実務手順（重複確認 → `gh issue create --body-file` →
+起票後確認）は`task-intake` スキルに従う。
 
 - **手順 4（マージ後の動作確認）**: ループ自身が見つけた問題はその場で修正
   せず、起票もその場では行わない。確認を最後までやり切って問題を一覧化し、
   集合内の全タスクのマージと後始末（手順 5）が終わったあと、**手順 1 に戻る
-  前に**（手順 7）`backlog task create` で全件を label `bug` 付きタスクとして
-  起票する。1 タスク = 1 PR のガードは維持する。bug 最優先ルール
+  前に**（手順 7）`task-intake` スキルの手順で全件を label `bug` 付き Issue
+  として起票する。1 タスク = 1 PR のガードは維持する。bug 最優先ルール
   （`docs/development-style.md` 4.1 章）により、起票した bug タスクは次
   イテレーションで最優先に選ばれ、複数件あって area が互いに素なら同じ
   イテレーションで並列に処理されうる。
@@ -234,14 +292,14 @@ description: backlog の次タスクを決定的に選択し、実装から fina
   処理せず全件を読み切ってから**、それぞれを同じ bug intake フォーマット （label
   `bug`・再現手順・期待/実際の挙動・発見契機 ＝どの `/code-review`
   指摘か。Acceptance Criteria は「再現テスト（red）→ 修正で green」）で
-  `backlog task create` する。起票後は bug 最優先ルール
-  （`docs/development-style.md` 4.1 章）で次イテレーションに選ばれるため、
-  ユーザーが `/agent-loop` を再開すればループが指摘を処理する。
+  起票する。起票後は bug 最優先ルール （`docs/development-style.md` 4.1
+  章）で次イテレーションに選ばれるため、 ユーザーが `/agent-loop`
+  を再開すればループが指摘を処理する。
 - **イテレーション境界との関係**: バッチ起票は「イテレーションの終わりに
-  まとめて起票し、そのあとで集合判定する」順序で行う。`In Progress` のタスクが
-  残っている間は新たな集合判定を開始しない（手順 1・「ガード」節）という
-  ルールは変更しない。イテレーション途中で見つけた問題を現在の集合へ合流させる
-  ことはしない。
+  まとめて起票し、そのあとで集合判定する」順序で行う。claim された進行中
+  タスクが残っている間は新たな集合判定を開始しない（手順 1・「ガード」節）
+  というルールは変更しない。イテレーション途中で見つけた問題を現在の集合へ
+  合流させることはしない。
 - **バッチ化が効かない場合**: 直前のタスクの直接の帰結として問題が 1 件だけ
   出る場合（例: TASK-112 が入れた後始末が動かず TASK-118 になった）は、
   まとめようにも他に独立した問題が無いため単独起票のままになる。それは想定内
@@ -251,13 +309,14 @@ description: backlog の次タスクを決定的に選択し、実装から fina
     動作確認/どの報告で見つかったか）を記載する。
   - Acceptance Criteria: 「再現テスト（red）が追加されている」「修正により
     green」。自動テストできない描画系の問題に限り「目視確認」を追加する。
-  - dependencies は原則空、ordinal は通常どおり採番する（優先順位は ordinal
-    ではなく label `bug` が担保する）。
+  - LOOP-META の depends-on は原則空（`[]`）、ordinal は原則 null（Issue
+    番号順）とする（優先順位は label `bug` が担保するため、ordinal
+    で優先度を表現しない）。
 
 ## 最終レポート（全タスク完了時）
 
-全タスク完了（`deno task next-tasks` が空集合 + `In Progress` なし）で停止する
-際は、 最終レポートに以下を含める:
+全タスク完了（`deno task next-tasks` が空集合 + claim
+された進行中タスクなし）で停止する 際は、 最終レポートに以下を含める:
 
 - 完了報告: このループで処理したタスクとマージした PR の要約。
 - **ユーザーへ `/code-review` の実行を促す文言**。何がレビュー対象になるか
@@ -274,7 +333,7 @@ description: backlog の次タスクを決定的に選択し、実装から fina
 
 ## 停止条件
 
-- `deno task next-tasks` の出力が空集合で `In Progress` のタスクもない
+- `deno task next-tasks` の出力が空集合で claim された進行中タスクもない
   （全タスク完了）。停止時は上記「最終レポート」を出力する。
 - `needs-human` エスカレーションを起票した。
 - ユーザーが明示的に停止を指示した。
@@ -282,8 +341,10 @@ description: backlog の次タスクを決定的に選択し、実装から fina
 ## ガード
 
 - ループは同時に 1
-  セッションのみ実行する（複数セッションでの並行実行はしない）。
+  セッションのみ実行する（複数セッションでの並行実行はしない）。セッション間の
+  二重着手はこのガードに加えて claim タグ CAS（手順
+  2）がサーバ側で機械的に防ぐ。
 - 1 イテレーション = 1 タスク集合（各タスクは個別 PR）。集合は
   `deno task next-tasks` の判定結果に限り、複数タスクを 1 つの PR に
-  まとめない。`In Progress` のタスクが残っている間は新たな集合判定を
+  まとめない。claim された進行中タスクが残っている間は新たな集合判定を
   開始しない。

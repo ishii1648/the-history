@@ -25,8 +25,8 @@ see `docs/adr/0031-migrate-task-management-to-github-issues.md`).
 
 ## タスク駆動開発（GitHub Issue）
 
-- ブランチ名には Issue 番号を含める: `task-N-slug`（例:
-  `task-160-deno-setup`）。これによりブランチからタスク Issue
+- ブランチ名には Issue 番号を含める: `issue-N-slug`（例:
+  `issue-160-deno-setup`）。これによりブランチからタスク Issue
   へ常に追跡できるようにする（旧 backlog 時代の `task-N-*` は TASK-N 由来。
   アーカイブ側の README で対応が引ける）。
 - タスク Issue の依存関係（本文 LOOP-META の `depends-on`）順に厳密に作業する。
