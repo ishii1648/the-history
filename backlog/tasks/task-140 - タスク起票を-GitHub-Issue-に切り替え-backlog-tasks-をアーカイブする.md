@@ -1,9 +1,11 @@
 ---
 id: TASK-140
 title: タスク起票を GitHub Issue に切り替え backlog/tasks をアーカイブする
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 17:38'
+updated_date: '2026-07-29 18:55'
 labels:
   - 'area:workflow'
   - 'area:docs'
@@ -34,3 +36,15 @@ ordinal: 121000
 - [ ] #4 重複確認手順が search API を使わず issue list 1 コール + ローカルマッチである
 - [ ] #5 切替前の両ソース候補集合の一致確認が Implementation Notes に記録されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. subagent: backlog-intake スキル → task-intake へ全面書き換え（gh issue create --body-file ベース・重複確認は issue list 1 コール + ローカルマッチ）。backlog/tasks（archive 含む）を docs/archive/backlog-tasks/ へ git mv + TASK-N 索引 README。CLAUDE.md / development-style の起票フロー更新。TASK_SOURCE 既定を github へ切替
+2. subagent: 未終端タスクの Issue 化を行う移行スクリプト（scripts/migrate-tasks-to-issues.ts、gh 呼び出し・dry-run 付き・作成後に相互リンクを archive md へ書き戻す）を作成。実行は mainagent
+3. mainagent: 移行スクリプトを実行し未終端タスクを Issue 化（AC#3）。切替前に両ソース候補集合の一致を確認し Implementation Notes に記録（AC#5）
+4. mainagent: task-intake 手順で試験起票 → 既定 next-tasks が Issue 由来候補を返すことを確認（AC#1）
+5. fmt / lint / test green
+
+並列化判定: 一部あり（subagent = ファイル作業と移行スクリプト、mainagent = gh 実行と切替検証。gh 権限が mainagent に限られるための役割分担）
+<!-- SECTION:PLAN:END -->
