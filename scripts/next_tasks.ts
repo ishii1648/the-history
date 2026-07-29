@@ -18,11 +18,10 @@
 import {
   compareTasks,
   hasActiveTask,
-  readTasks,
   selectCandidates,
   type TaskMeta,
-  TASKS_DIR,
 } from "./next_task.ts";
+import { loadTaskSnapshot } from "./task_source.ts";
 
 /** 選定されたタスク（ID と担当ファイル領域） */
 export interface SelectedTask {
@@ -114,6 +113,9 @@ export function selectNextTasks(
 }
 
 if (import.meta.main) {
-  const tasks = await readTasks(TASKS_DIR);
-  console.log(JSON.stringify(selectNextTasks(tasks)));
+  // TASK_SOURCE=backlog|github でタスクの読み取り元を切り替える（TASK-139）
+  const { tasks, terminalStatuses } = await loadTaskSnapshot({
+    args: Deno.args,
+  });
+  console.log(JSON.stringify(selectNextTasks(tasks, terminalStatuses)));
 }

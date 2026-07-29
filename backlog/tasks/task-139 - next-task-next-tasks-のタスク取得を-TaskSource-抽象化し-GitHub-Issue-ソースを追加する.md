@@ -1,9 +1,11 @@
 ---
 id: TASK-139
 title: next-task/next-tasks のタスク取得を TaskSource 抽象化し GitHub Issue ソースを追加する
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-07-28 17:38'
+updated_date: '2026-07-29 17:48'
 labels:
   - 'area:scripts-loop'
 dependencies:
@@ -27,10 +29,43 @@ ordinal: 120000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 TASK_SOURCE 未設定または backlog のとき従来どおりローカル md から選定され、既存テストが green のまま
-- [ ] #2 TASK_SOURCE=github のとき gh issue list 由来の候補に同一の選定ルール（bug 最優先 → ordinal → ID）が適用される
-- [ ] #3 LOOP-META の depends-on がパースされ、依存が未クローズの issue が候補から除外される
-- [ ] #4 task ラベルの無い issue（needs-human 等）が候補に含まれない
-- [ ] #5 変換・パースの純粋関数テストがネットワーク非依存で green
-- [ ] #6 deno task next-tasks の JSON 出力契約（tasks/skipped）が維持されている
+- [x] #1 TASK_SOURCE 未設定または backlog のとき従来どおりローカル md から選定され、既存テストが green のまま
+- [x] #2 TASK_SOURCE=github のとき gh issue list 由来の候補に同一の選定ルール（bug 最優先 → ordinal → ID）が適用される
+- [x] #3 LOOP-META の depends-on がパースされ、依存が未クローズの issue が候補から除外される
+- [x] #4 task ラベルの無い issue（needs-human 等）が候補に含まれない
+- [x] #5 変換・パースの純粋関数テストがネットワーク非依存で green
+- [x] #6 deno task next-tasks の JSON 出力契約（tasks/skipped）が維持されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. scripts/next_tasks.ts / next_task.ts の構造（TaskMeta・readTasks・選定純粋関数）を読む
+2. TDD red: parseLoopMeta / issueToTaskMeta / statusOf の純粋関数テストをフィクスチャ JSON で先に書く（AC#5）
+3. TaskSource 抽象を導入し TASK_SOURCE=backlog|github で切替（既定 backlog 不変 = AC#1）。github は gh issue list 1 コール（--json、search API 不使用）。task ラベル必須・LOOP-META パース・依存未クローズ除外（AC#2〜#4）
+4. --json-file オプションで gh 非起動の検証経路。next-tasks の JSON 出力契約は不変（AC#6）
+5. deno.json の next-task(s) に --allow-run=gh --allow-env 追加。fmt / lint / test green
+
+並列化判定: 見送り（理由: 単一スクリプト群の抽象化）
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## 実装記録（mainagent レビュー済み）
+- scripts/task_source.ts の loadTaskSnapshot({env, args}) が唯一の切替点。resolveSourceKind は未設定/空/backlog → backlog（既定不変）、github → github、未知値は即エラー（タイポ黙殺防止）
+- github ソース: gh issue list --state all --limit 1000 --json number,title,state,stateReason,labels,body の 1 コール（search API 不使用）。--json-file <path> で gh 非起動の検証経路
+- terminalStatuses をソース属性化: backlog=[Done]、github=[Done, 取りやめ]（closed は理由問わず依存解決）
+- parseLoopMeta: HTML コメント内 YAML を @std/yaml でパース。depends-on はクォート付き #N のみ（裸 #N が YAML コメント化して空になる挙動をテストで固定）。破損時は既定値へフォールバック
+- statusOf: closed NOT_PLANNED=取りやめ / closed=Done（state がラベル優先）/ open+status:in-progress=In Progress / open=To Do。issueToTaskMeta: task ラベル無しは null（needs-human 等を候補外に）
+- AC#1/#6: next_task_test / next_tasks_test は無変更で green（git status で確認）。JSON 出力契約不変
+- E2E（--json-file フィクスチャ）: bug 最優先 #6・依存 closed 解決 #2・依存 open 除外 #3・needs-human 不在・TASK_SOURCE=jira は明示エラー
+- 発見: main での動的 import が TLA デッドロック（task_source → next_task の静的辺が評価中 entry を待つ）→ 静的 import へ変更で解消
+- red（TS2307）→ green 32 テスト。全体 1586 passed（mainagent 独立検証）・deno.json の next-task(s) に --allow-env --allow-run=gh 追加
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+タスク選定の読み取り部を TaskSource 抽象（TASK_SOURCE=backlog|github、既定不変）に分離し、GitHub Issue ソース（gh 1 コール + --json-file 検証経路・LOOP-META パース・task ラベル必須・closed 依存解決）を追加。既存テスト無変更 green・JSON 契約不変。red → green 32 テスト、1586 passed。
+<!-- SECTION:FINAL_SUMMARY:END -->
