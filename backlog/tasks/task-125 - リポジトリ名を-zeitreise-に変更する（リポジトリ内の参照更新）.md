@@ -1,11 +1,11 @@
 ---
 id: TASK-125
 title: リポジトリ名を zeitreise に変更する（リポジトリ内の参照更新）
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-28 16:15'
-updated_date: '2026-07-29 16:55'
+updated_date: '2026-07-29 17:00'
 labels:
   - 'area:workflow'
   - 'area:docs'
@@ -45,12 +45,12 @@ README.md・deno.json・index.html・.github/workflows/ci.yml・docs/ 配下に�
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 backlog/config.yml の project_name が zeitreise になっている
-- [ ] #2 Backlog.md が再生成され Project 行が zeitreise になっている
-- [ ] #3 .gitignore に .wrangler/ が追加され、git status に .wrangler/ が出なくなっている
-- [ ] #4 追跡対象ファイルに残る the-history の参照が、履歴的記述として意図的に残したものだけになっている（残した箇所とその理由が Implementation Notes に記録されている）
-- [ ] #5 GitHub / Cloudflare / ローカルパスの変更手順が、人間が実行できる粒度で Implementation Notes または docs に記載されている
-- [ ] #6 deno test が green
+- [x] #1 backlog/config.yml の project_name が zeitreise になっている
+- [x] #2 Backlog.md が再生成され Project 行が zeitreise になっている
+- [x] #3 .gitignore に .wrangler/ が追加され、git status に .wrangler/ が出なくなっている
+- [x] #4 追跡対象ファイルに残る the-history の参照が、履歴的記述として意図的に残したものだけになっている（残した箇所とその理由が Implementation Notes に記録されている）
+- [x] #5 GitHub / Cloudflare / ローカルパスの変更手順が、人間が実行できる粒度で Implementation Notes または docs に記載されている
+- [x] #6 deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -65,3 +65,20 @@ README.md・deno.json・index.html・.github/workflows/ci.yml・docs/ 配下に�
 
 並列化判定: 見送り（理由: 設定・gitignore・ドキュメントの小規模変更のみ）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## 実装記録（mainagent レビュー済み）
+- config.yml の project_name → zeitreise、Backlog.md は backlog board export Backlog.md --force + deno fmt Backlog.md で再生成（今後もセットで実行）
+- .gitignore に .wrangler/ を追加（Cloudflare ローカルキャッシュ、account_id を含むため追跡しない意図を明示）
+- AC#4 残した the-history 参照: (1) task-2/task-11 の Implementation Notes 内の当時の PR URL — 歴史的記録で GitHub リダイレクトにより到達可能、backlog md の直接編集も規約違反のため残置 (2) task-127 の旧 Pages プロジェクト名 the-history — リポジトリ名ではなく実在する別リソースの名前 (3) runbook 自体の旧名言及 — 手順書の性質上意図的
+- AC#5 docs/repo-rename-runbook.md: gh repo rename 手順・リダイレクト仕様（旧名での新規作成は禁止）・Cloudflare は変更不要の確認結果（deploy.yml/R2/CORS すべて zeitreise 系・wrangler CLI 方式でリポジトリ名非依存）・ローカル worktree/remote の移行手順（fish 構文）
+- fmt / lint / test 1495 passed（mainagent 独立検証）
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+リポジトリ内の the-history 参照を整理（config.yml・Backlog.md 再生成・.gitignore に .wrangler/）。残置は歴史的記録と別リソース名のみで根拠を記録。GitHub リネーム・ローカル移行の人間向け手順を docs/repo-rename-runbook.md に整備。1495 passed。
+<!-- SECTION:FINAL_SUMMARY:END -->
