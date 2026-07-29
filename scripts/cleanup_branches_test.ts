@@ -1,12 +1,15 @@
 import { assertEquals } from "@std/assert";
 import {
   canForceRemoveWorktree,
+  claimTagRef,
   type CleanupPlan,
   isAgentWorktreePath,
   isLoopBranch,
   type MergedBranch,
+  parseClaimTagNumbers,
   parseMergedBranches,
   parseWorktreeList,
+  planClaimTagCleanup,
   planCleanup,
   type WorktreeEntry,
   type WorktreeRemoval,
@@ -127,13 +130,15 @@ Deno.test("parseMergedBranches は NUL 区切りの for-each-ref 出力を分解
 
 // --- 対象判定 ----------------------------------------------------------
 
-Deno.test("isLoopBranch は task-N-* と worktree-agent-* のみを対象にする", () => {
+Deno.test("isLoopBranch は task-N-* / issue-N-* / worktree-agent-* のみを対象にする", () => {
   assertEquals(isLoopBranch("task-112-loop-cleanup"), true);
+  assertEquals(isLoopBranch("issue-165-agent-loop-issue"), true);
   assertEquals(isLoopBranch("worktree-agent-a8d27b0e"), true);
   assertEquals(isLoopBranch("main"), false);
   assertEquals(isLoopBranch("feat/20260722-235030"), false);
   assertEquals(isLoopBranch("docs/claude-md-task-conventions"), false);
   assertEquals(isLoopBranch("task-foo"), false);
+  assertEquals(isLoopBranch("issue-foo"), false);
 });
 
 Deno.test("isAgentWorktreePath は .claude/worktrees 配下のみを対象にする", () => {
@@ -433,6 +438,68 @@ Deno.test("planCleanup は同じ実行で削除する worktree のブランチ�
   });
   assertEquals(result.worktrees, [removal("/repo/.claude/worktrees/agent-1")]);
   assertEquals(result.branches, ["worktree-agent-1"]);
+});
+
+// --- claim タグ掃除（TASK-141 / #165） -----------------------------------
+
+Deno.test("claimTagRef は issue 番号から claim タグの完全 ref を組み立てる", () => {
+  assertEquals(claimTagRef(165), "refs/tags/claim/issue-165");
+});
+
+Deno.test("parseClaimTagNumbers は ls-remote 出力から claim タグの issue 番号を取り出す", () => {
+  const lsRemote = [
+    `${"a".repeat(40)}\trefs/tags/claim/issue-165`,
+    `${"b".repeat(40)}\trefs/tags/claim/issue-150`,
+    // annotated tag の peeled 行・claim 以外の ref は無視する
+    `${"c".repeat(40)}\trefs/tags/claim/issue-150^{}`,
+    `${"d".repeat(40)}\trefs/tags/v1.0.0`,
+    `${"e".repeat(40)}\trefs/heads/main`,
+    `${"f".repeat(40)}\trefs/tags/claim/issue-abc`,
+    "",
+  ].join("\n");
+  // 昇順・重複なしで決定的に返す
+  assertEquals(parseClaimTagNumbers(lsRemote), [150, 165]);
+});
+
+Deno.test("planClaimTagCleanup はクローズ済み issue の claim タグだけを削除対象にする", () => {
+  const states = new Map<number, string>([
+    [150, "CLOSED"],
+    [165, "OPEN"],
+  ]);
+  const result = planClaimTagCleanup([150, 165, 999], states);
+  assertEquals(result.deletions, [150]);
+  assertEquals(result.skipped, [
+    {
+      kind: "claim-tag",
+      name: "claim/issue-165",
+      reason: "issue is still open",
+    },
+    {
+      kind: "claim-tag",
+      name: "claim/issue-999",
+      reason: "issue state unknown",
+    },
+  ]);
+});
+
+Deno.test("planClaimTagCleanup は未クローズ・状態不明の claim を絶対に削除しない", () => {
+  // issue 状態が 1 件も取れない場合、削除対象は空になる（保守的）
+  const result = planClaimTagCleanup([150, 165], new Map());
+  assertEquals(result.deletions, []);
+  assertEquals(result.skipped.length, 2);
+  for (const item of result.skipped) {
+    assertEquals(item.kind, "claim-tag");
+    assertEquals(item.reason, "issue state unknown");
+  }
+});
+
+Deno.test("planClaimTagCleanup は同じ入力から常に同じ計画を返す（決定性）", () => {
+  const states = new Map<number, string>([[10, "CLOSED"], [11, "CLOSED"]]);
+  assertEquals(
+    planClaimTagCleanup([11, 10], states),
+    planClaimTagCleanup([11, 10], states),
+  );
+  assertEquals(planClaimTagCleanup([11, 10], states).deletions, [11, 10]);
 });
 
 Deno.test("planCleanup は入力順を保った決定的な結果を返す", () => {

@@ -1,20 +1,33 @@
 /**
- * agent-loop の後始末スクリプト（マージ済みタスクブランチ / subagent worktree の削除）。
+ * agent-loop の後始末スクリプト（マージ済みタスクブランチ / subagent worktree /
+ * クローズ済み issue の claim タグの削除）。
  *
- * 1 タスク = 1 ブランチ（+ subagent の worktree isolation 用ブランチ）を作り続ける
- * agent-loop 運用では、マージ後に後始末をしないと refs が単調増加し、backlog.md の
- * クロスブランチ走査（全ブランチに ls-tree / log / show）が線形に遅くなる（TASK-112）。
+ * 1 タスク = 1 ブランチ（+ subagent の worktree isolation 用ブランチ + 着手時の
+ * claim タグ `refs/tags/claim/issue-<N>`）を作り続ける agent-loop 運用では、
+ * マージ後に後始末をしないと refs が単調増加し、ブランチ一覧・worktree の状態
+ * 把握や不整合調査のノイズになる（当初の動機は backlog.md のクロスブランチ
+ * 走査の劣化（TASK-112）。backlog.md 撤去後も refs を溜めない運用は継続する。
+ * `docs/development-style.md` 4.3.3 章）。
  *
  * 安全設計（他セッションのブランチ・worktree を誤って消さないための多重防御）:
  *   1. ブランチ削除に `-D` は使わない。git が拒否したものは skipped として報告する
- *   2. 削除対象は loop が生成した名前だけ（ブランチ: `task-<N>-*` / `worktree-agent-*`、
- *      worktree: `.claude/worktrees/` 配下）。人手のブランチ・セッション worktree は触らない
+ *   2. 削除対象は loop が生成した名前だけ（ブランチ: `task-<N>-*` / `issue-<N>-*` /
+ *      `worktree-agent-*`、worktree: `.claude/worktrees/` 配下）。人手のブランチ・
+ *      セッション worktree は触らない
  *   3. origin/main にマージ済みのブランチのみ削除する
  *   4. どこかの worktree にチェックアウト中のブランチは削除しない
  *      （同じ実行で削除する worktree の分は解放されるものとして扱う）
  *   5. locked な worktree（実行中の subagent が保持）と自分自身の worktree は削除しない
  *   6. tip が origin/main と同一のブランチは削除しない。着手直後でまだコミットが無い
  *      in-flight のタスクブランチが「マージ済み」に見えてしまうため
+ *
+ * claim タグ掃除（TASK-141 / #165）:
+ *   二重着手ガードの権威である claim タグ（`refs/tags/claim/issue-<N>`）は、
+ *   issue が PR の `Closes #N` でクローズされたあとは掃除対象になる。削除する
+ *   のは **gh でクローズ済みと確認できた issue の claim だけ**で、open な issue
+ *   の claim（着手中の権威）と issue 一覧に現れない番号の claim は絶対に消さない。
+ *   gh / ls-remote が失敗した場合は claim 掃除だけを skipped にして、ブランチ・
+ *   worktree の掃除は継続する。
  *
  * `git worktree remove --force` の扱い（TASK-118）:
  *   subagent には「commit / push はしない」と指示しているため、mainagent がパッチを
@@ -31,11 +44,13 @@
  * 使い方:
  *   deno task cleanup-branches           # dry-run（計画を表示するだけ）
  *   deno task cleanup-branches --apply   # 実際に削除する
- *   deno task cleanup-branches --apply --no-fetch   # git fetch --prune を省略
+ *   deno task cleanup-branches --apply --no-fetch   # ネットワーク省略
+ *     （fetch に加え、origin への問い合わせが要る claim タグ掃除もスキップする）
  *
- * 結果は JSON 1 行で stdout に出力する（`forced` は --force で回収した worktree）:
+ * 結果は JSON 1 行で stdout に出力する（`forced` は --force で回収した worktree、
+ * `claimTags` は削除した（dry-run では削除予定の）claim タグの issue 番号）:
  *   {"mode":"apply","worktrees":[...],"forced":[...],"branches":[...],
- *    "skipped":[...],"refsBefore":20,"refsAfter":7}
+ *    "claimTags":[...],"skipped":[...],"refsBefore":20,"refsAfter":7}
  */
 
 /** `git worktree list --porcelain` の 1 エントリ */
@@ -61,7 +76,7 @@ export interface MergedBranch {
 
 /** 削除を見送った対象とその理由 */
 export interface SkippedItem {
-  kind: "worktree" | "branch";
+  kind: "worktree" | "branch" | "claim-tag";
   name: string;
   reason: string;
 }
@@ -95,15 +110,18 @@ export interface PlanInput {
 
 const AGENT_WORKTREE_SEGMENT = "/.claude/worktrees/";
 const TASK_BRANCH_PATTERN = /^task-\d+-/;
+const ISSUE_BRANCH_PATTERN = /^issue-\d+-/;
 const AGENT_BRANCH_PATTERN = /^worktree-agent-/;
 
 /**
  * loop が生成したブランチ名か（純粋関数）。
- * `task-<数字>-*`（タスクブランチ）と `worktree-agent-*`（subagent の worktree isolation）
- * のみを対象とし、人手の `feat/*` や `docs/*` は対象外にする。
+ * `task-<数字>-*`（移行前のタスクブランチ）・`issue-<数字>-*`（Issue 移行後の
+ * タスクブランチ。TASK-141 / #165）・`worktree-agent-*`（subagent の worktree
+ * isolation）のみを対象とし、人手の `feat/*` や `docs/*` は対象外にする。
  */
 export function isLoopBranch(name: string): boolean {
-  return TASK_BRANCH_PATTERN.test(name) || AGENT_BRANCH_PATTERN.test(name);
+  return TASK_BRANCH_PATTERN.test(name) || ISSUE_BRANCH_PATTERN.test(name) ||
+    AGENT_BRANCH_PATTERN.test(name);
 }
 
 /**
@@ -209,6 +227,77 @@ export function parseMergedBranches(output: string): MergedBranch[] {
   return branches;
 }
 
+// --- claim タグ掃除（TASK-141 / #165） -----------------------------------
+
+const CLAIM_TAG_REF_PREFIX = "refs/tags/claim/issue-";
+
+/** issue 番号から claim タグの完全 ref を組み立てる（純粋関数） */
+export function claimTagRef(issue: number): string {
+  return `${CLAIM_TAG_REF_PREFIX}${issue}`;
+}
+
+/**
+ * `git ls-remote origin 'refs/tags/claim/issue-*'` の出力から claim タグの
+ * issue 番号を取り出す（純粋関数）。annotated tag の peeled 行（`^{}`）や
+ * claim 以外の ref は無視し、昇順・重複なしで決定的に返す。
+ */
+export function parseClaimTagNumbers(lsRemote: string): number[] {
+  const numbers = new Set<number>();
+  for (const rawLine of lsRemote.split("\n")) {
+    const line = rawLine.trim();
+    if (line === "") continue;
+    const ref = line.split("\t")[1];
+    if (ref === undefined || !ref.startsWith(CLAIM_TAG_REF_PREFIX)) continue;
+    const suffix = ref.slice(CLAIM_TAG_REF_PREFIX.length);
+    if (!/^\d+$/.test(suffix)) continue;
+    numbers.add(Number(suffix));
+  }
+  return [...numbers].sort((a, b) => a - b);
+}
+
+/** claim タグ掃除の計画（deletions は issue 番号） */
+export interface ClaimTagPlan {
+  deletions: number[];
+  skipped: SkippedItem[];
+}
+
+/**
+ * 削除してよい claim タグを決める（純粋関数）。
+ * **クローズ済みと確認できた issue の claim だけ**を削除対象にする。open な
+ * issue の claim は着手中の権威そのものなので絶対に消さない。issue 一覧に
+ * 現れない番号は「取り漏れ」と区別できないため、これも消さない（保守的）。
+ * 入力順を保つため、同じ入力からは常に同じ計画が得られる。
+ *
+ * @param claims claim タグが存在する issue 番号（parseClaimTagNumbers の結果）
+ * @param issueStates issue 番号 → state（gh の出力どおり "OPEN" / "CLOSED"）
+ */
+export function planClaimTagCleanup(
+  claims: number[],
+  issueStates: Map<number, string>,
+): ClaimTagPlan {
+  const deletions: number[] = [];
+  const skipped: SkippedItem[] = [];
+  for (const claim of claims) {
+    const state = issueStates.get(claim);
+    if (state === "CLOSED") {
+      deletions.push(claim);
+    } else if (state === "OPEN") {
+      skipped.push({
+        kind: "claim-tag",
+        name: `claim/issue-${claim}`,
+        reason: "issue is still open",
+      });
+    } else {
+      skipped.push({
+        kind: "claim-tag",
+        name: `claim/issue-${claim}`,
+        reason: "issue state unknown",
+      });
+    }
+  }
+  return { deletions, skipped };
+}
+
 /**
  * 削除してよい worktree / ブランチを決める（純粋関数）。
  * 入力順を保つため、同じ入力からは常に同じ計画が得られる。
@@ -286,8 +375,8 @@ interface GitResult {
   stderr: string;
 }
 
-async function git(...args: string[]): Promise<GitResult> {
-  const command = new Deno.Command("git", {
+async function runCommand(bin: string, args: string[]): Promise<GitResult> {
+  const command = new Deno.Command(bin, {
     args,
     stdout: "piped",
     stderr: "piped",
@@ -298,6 +387,58 @@ async function git(...args: string[]): Promise<GitResult> {
     stdout: new TextDecoder().decode(stdout),
     stderr: new TextDecoder().decode(stderr).trim(),
   };
+}
+
+function git(...args: string[]): Promise<GitResult> {
+  return runCommand("git", args);
+}
+
+/**
+ * origin の claim タグと gh の issue 状態から claim タグ掃除の計画を立てる。
+ * gh / ls-remote が使えない場合は削除ゼロ + skipped 理由を返し、呼び出し側の
+ * ブランチ・worktree 掃除を巻き添えにしない。
+ */
+async function gatherClaimTagPlan(network: boolean): Promise<ClaimTagPlan> {
+  const skipAll = (reason: string): ClaimTagPlan => ({
+    deletions: [],
+    skipped: [{ kind: "claim-tag", name: "claim/issue-*", reason }],
+  });
+
+  if (!network) return skipAll("skipped (--no-fetch)");
+
+  const lsRemote = await git("ls-remote", "origin", "refs/tags/claim/issue-*");
+  if (!lsRemote.ok) {
+    return skipAll(`git ls-remote failed: ${lsRemote.stderr}`);
+  }
+  const claims = parseClaimTagNumbers(lsRemote.stdout);
+  if (claims.length === 0) return { deletions: [], skipped: [] };
+
+  const issues = await runCommand("gh", [
+    "issue",
+    "list",
+    "--state",
+    "all",
+    "--limit",
+    "1000",
+    "--json",
+    "number,state",
+  ]);
+  if (!issues.ok) return skipAll(`gh issue list failed: ${issues.stderr}`);
+
+  const states = new Map<number, string>();
+  try {
+    for (const entry of JSON.parse(issues.stdout) as unknown[]) {
+      const record = entry as Record<string, unknown>;
+      if (
+        typeof record.number === "number" && typeof record.state === "string"
+      ) {
+        states.set(record.number, record.state);
+      }
+    }
+  } catch (error) {
+    return skipAll(`gh issue list returned invalid JSON: ${error}`);
+  }
+  return planClaimTagCleanup(claims, states);
 }
 
 async function countRefs(): Promise<number> {
@@ -347,9 +488,18 @@ async function main(args: string[]): Promise<number> {
     currentWorktree,
     mainCommit,
   });
+  // claim タグ掃除は origin への問い合わせ（ls-remote / gh）が要るため、
+  // --no-fetch（ネットワーク省略）ではスキップする
+  const claimPlan = await gatherClaimTagPlan(fetch);
+  plan.skipped.push(...claimPlan.skipped);
 
   if (!apply) {
-    console.log(JSON.stringify({ mode: "dry-run", ...plan, refsBefore }));
+    console.log(JSON.stringify({
+      mode: "dry-run",
+      ...plan,
+      claimTags: claimPlan.deletions,
+      refsBefore,
+    }));
     return 0;
   }
 
@@ -394,12 +544,30 @@ async function main(args: string[]): Promise<number> {
     else plan.skipped.push({ kind: "branch", name, reason: result.stderr });
   }
 
+  const deletedClaimTags: number[] = [];
+  for (const issue of claimPlan.deletions) {
+    const ref = claimTagRef(issue);
+    const result = await git("push", "origin", "--delete", ref);
+    if (!result.ok) {
+      plan.skipped.push({
+        kind: "claim-tag",
+        name: `claim/issue-${issue}`,
+        reason: result.stderr,
+      });
+      continue;
+    }
+    deletedClaimTags.push(issue);
+    // fetch で複製されたローカルタグも合わせて消す（無ければ失敗を無視）
+    await git("tag", "-d", `claim/issue-${issue}`);
+  }
+
   const refsAfter = await countRefs();
   console.log(JSON.stringify({
     mode: "apply",
     worktrees: removedWorktrees,
     forced: forcedWorktrees,
     branches: deletedBranches,
+    claimTags: deletedClaimTags,
     skipped: plan.skipped,
     refsBefore,
     refsAfter,

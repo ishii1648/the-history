@@ -39,9 +39,10 @@
   ラベル）に従う。`backlog` CLI は使わない（移行前のタスクは
   `docs/archive/backlog-tasks/` に凍結。索引は同ディレクトリの README）。
 - 既存の運用規約（本ファイル末尾ではなくプロジェクト `CLAUDE.md`
-  の「タスク駆動開発」節）に定める、ブランチ名 `task-N-slug`・依存関係順の実行
-  （area が互いに素な場合のタスク間並列を含む。4.2 章参照）・PR への Issue 番号
-  明記は継続して守る。
+  の「タスク駆動開発」節）に定める、ブランチ名 `issue-N-slug`（移行前のタスクは
+  `task-N-slug`）・依存関係順の実行 （area が互いに素な場合のタスク間並列を
+  含む。4.2 章参照）・PR への Issue 番号 明記（本文の `Closes #N` を含む）は
+  継続して守る。
 - タスクを Done（Issue クローズ）にできるのは、Acceptance Criteria が
   全てチェック済みで、かつ CI が green の場合に限る。
 - 動作確認（`/agent-loop` のマージ後動作確認フェーズや手動確認）・
@@ -140,8 +141,9 @@
 ルール 2・3 は候補の**全順序**を定めるものであり、この順序が単一選択（4.1 章）と
 集合選択（4.2 章）の両方の基礎になる。
 
-1. 候補 = status が `To Do` かつ `dependencies` の全てが `Done`
-   のタスク（backlog に存在しない依存 ID は未完了として扱う）。
+1. 候補 = status が `To Do` かつ `dependencies` の全てが終端ステータスの
+   タスク（Issue 一覧に存在しない依存 ID は未完了として扱う。closed は
+   COMPLETED（`Done`）/ NOT_PLANNED（取りやめ）のいずれも依存解決とみなす）。
 2. 候補は label `bug` を持つものを `ordinal` に関わらず先頭に並べる。bug
    候補が複数ある場合はその中で `ordinal` 昇順、同値なら ID
    の数値部分が小さい方を先に置く。
@@ -160,9 +162,14 @@
 （GitHub Issue を `gh issue list` 1 コールで取得し、status は open/closed と
 `status:in-progress` ラベル、依存と ordinal は本文 LOOP-META から導出する。
 TASK-139 で抽象化、TASK-140 で既定を切替）。`TASK_SOURCE=backlog` の明示指定は
-移行前のチェックアウト（`backlog/tasks/*.md` が存在する時点）向けに残る。
-本章のルール記述に残る backlog 前提の文面（status 名・TASK-N 表記等）の
-全面更新は TASK-141 で行う。 動作確認で見つけた問題（2 章参照）を label `bug`
+移行前のチェックアウト（`backlog/tasks/*.md` が存在する時点）向けに残る。 本章の
+status 名（`To Do` / `In Progress` / `Done`）は Issue の state・ラベル
+から導出する論理ステータスであり、着手中（`In Progress`）の**権威**は claim
+タグ（4.3 章）である。`status:in-progress` ラベルは advisory
+表示のため、ラベルと claim のずれは `deno task loop-doctor` が検出・修復する
+（4.3.3 章）。`TASK-N` 表記は移行前タスクの歴史的参照であり（索引は
+`docs/archive/backlog-tasks/` の README）、移行後のタスク ID は Issue 番号 `#N`
+である。 動作確認で見つけた問題（2 章参照）を label `bug`
 付きで起票すると、このルールにより次イテレーションで最優先に選ばれる（単一選択
 なら 1 件目、集合選択なら集合の先頭）。 バッチ起票で bug
 候補が複数になった場合も ルール 2 が順序を一意に定める（bug 群内は `ordinal` →
@@ -189,7 +196,7 @@ ID 順）ため決定性は 変わらず、 そのうえで 4.2 章の area 判�
 | area                | 対応パスの目安                                                                                                                             |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `area:docs`         | `docs/`                                                                                                                                    |
-| `area:workflow`     | `.claude/`・`CLAUDE.md`・backlog 運用                                                                                                      |
+| `area:workflow`     | `.claude/`・`CLAUDE.md`・タスク Issue 運用                                                                                                 |
 | `area:scripts-*`    | `scripts/` 配下（下の細分化表を参照。粗い `area:scripts` は使わない）                                                                      |
 | `area:data-*`       | `data/` 配下（下の細分化表を参照。粗い `area:data` は使わない）                                                                            |
 | `area:src-main`     | `src/main.ts`・`index.html`・`app.css` の UI 統合部。UI 系タスクの大半は ここに触るため、`src-main` を持つタスク同士は互いに衝突扱いとする |
@@ -204,7 +211,7 @@ ID 順）ため決定性は 変わらず、 そのうえで 4.2 章の area 判�
 | `area:scripts-features` | `scripts/build-rivers.ts`・`build-mountains.ts`・`build-peaks.ts`・`build-cities.ts`・`audit-rivers.ts`（河川・山脈・山峰・都市）                                                       |
 | `area:scripts-meta`     | `scripts/build-colors.ts`・`build-attribution.ts`・`audit-attribution.ts`・`name-ja_test.ts`・`known-limitations-json_test.ts`・`notes-json_test.ts`                                    |
 | `area:scripts-build`    | `scripts/build.ts`・`extract-pmtiles.ts`・`extract-dem.ts`（ビルド統合エントリとベースマップ素材取得）。`build.ts` は全パイプラインのハブなので `src-main` と同様に同士は衝突扱いとする |
-| `area:scripts-loop`     | `scripts/next_task.ts`・`next_tasks.ts`・`cleanup_branches.ts`（backlog / agent-loop 支援ツール）                                                                                       |
+| `area:scripts-loop`     | `scripts/next_task.ts`・`next_tasks.ts`・`task_source.ts`・`cleanup_branches.ts`・`loop_doctor.ts`（agent-loop 支援ツール）                                                             |
 | `area:scripts-verify`   | `scripts/serve.ts`・`scripts/verify/`（ローカル配信と headless 動作確認ハーネス）                                                                                                       |
 
 **`data/` の細分化**（生成元パイプラインと 1 対 1 に対応させる）:
@@ -337,14 +344,16 @@ TASK-118（`cleanup-branches` が subagent worktree を削除できない）は 
 
 外側ループはローカルの Claude Code セッション自身が実行主体となって回す。 GitHub
 Actions からセッションを起動する方式は用いない。手順は
-`.claude/skills/agent-loop/SKILL.md`（`/agent-loop` スキル）に定義されており
-（同スキル本文と本節以下の手順詳細に残る backlog 前提の記述は TASK-141 で Issue
-ベースへ更新予定）、 セッションは「`deno task next-tasks`
-で着手可能なタスク集合を判定（4.2 章）→ 集合内の各タスクを標準タスクフロー
-（TDD・subagent 実装・mainagent レビュー）で実装（並列可なら同時に）→
-タスクごとに個別 PR 作成 → CI 監視 → green で マージ → finalization →
+`.claude/skills/agent-loop/SKILL.md`（`/agent-loop` スキル）に定義されており、
+セッションは「`deno task next-tasks` で着手可能なタスク集合を判定（4.2 章）→
+各タスクに claim タグを push して着手を宣言 → 集合内の各タスクを標準タスク
+フロー（TDD・subagent 実装・mainagent レビュー）で実装（並列可なら同時に）→
+タスクごとに個別 PR 作成（本文に `Closes #N` 必須）→ CI 監視 → green で
+finalization → マージ（Issue は `Closes #N` の自動クローズで Done になる）→
 次の集合へ」を人の指示なしで繰り返す。集合が単一タスクの場合は従来どおりの
-直列フローと同一になる。
+直列フローと同一になる。finalization での Issue 本文の read-modify-write は AC
+チェックの 1 回だけに限り、Implementation Plan / Notes / Final Summary は Issue
+コメントに投稿する。
 
 CI や PR のステータスは、GitHub Actions のトリガーではなくセッション側が
 監視する:
@@ -357,12 +366,19 @@ CI や PR のステータスは、GitHub Actions のトリガーではなくセ�
 
 安全ガード:
 
-- 着手可能なタスクがない場合はループを終了する（`In Progress` のタスクが
+- 着手可能なタスクがない場合はループを終了する（claim 済みの進行中タスクが
   あればそれを再開する）。
-- 次タスクのブランチ `task-N-*` が既に origin に存在する場合は状態を調査し、
-  再開またはエスカレーションする（二重着手防止）。
+- **二重着手ガードの権威は origin への claim タグ push**
+  （`git push origin main:refs/tags/claim/issue-<N>`）。タグ ref への push は
+  既存タグがあるとサーバ側で拒否されるため、push の成否がアトミックな
+  compare-and-swap になる。拒否されたら他セッションが着手済みとしてその Issue
+  をスキップする（claim への force push は禁止）。`status:in-progress`
+  ラベルは人間向けの advisory 表示であり、権威ではない。
+- 次タスクのブランチ `issue-N-*` が既に origin に存在する場合は状態を調査し、
+  再開またはエスカレーションする。
 - ループは同時に 1 セッションのみ。1 イテレーション = 1 タスク集合（各タスクは
-  個別 PR）。`In Progress` のタスクが残っている間は新たな集合判定を開始しない。
+  個別 PR）。claim 済みの進行中タスクが残っている間は新たな集合判定を
+  開始しない。
 
 起動はローカルセッションで `/agent-loop` を実行するだけでよい。停止は
 セッションを止めるか、停止条件（全タスク完了・needs-human 起票）に達した
@@ -443,28 +459,35 @@ claude-in-chrome も使えない場合）は、ビルド成果物・データ出
 ### 4.3.3 マージ後の後始末（refs の掃除）
 
 自律ループは 1 タスクにつきタスクブランチ 1 本と subagent の worktree isolation
-用ブランチ（`worktree-agent-*`）を作る。マージ後にこれらを消さないと refs
-が単調増加し、backlog.md のクロスブランチ走査（`active_branch_days` の
-窓に入る全ブランチに対する `ls-tree` / `log` / `show`）が線形に遅くなる。 実際に
-2026-07-27 時点で refs 285 本（うち 279 本がマージ済み）まで膨らみ、
-`backlog board` が 12.7 秒（git サブプロセス 2131 回・約 44ms/ref）かかる
+用ブランチ（`worktree-agent-*`）、着手宣言の claim タグ
+（`refs/tags/claim/issue-<N>`。4.3 章）を作る。マージ後にこれらを消さないと
+refs・worktree が単調増加し、ブランチ一覧や worktree の状態把握といった日常の
+git 操作の見通しが劣化するうえ、掃除漏れの claim タグ・ブランチは「進行中に
+見えるゴミ」として二重着手判定や不整合調査のノイズになる。（歴史的経緯:
+掃除を仕組み化した当初の動機は backlog.md のクロスブランチ走査で、refs 285 本
+（うち 279 本がマージ済み）まで膨らんだ結果 `backlog board` が 12.7 秒かかる
 状態になった（TASK-112。調査は `.outputs/claude/backlog-board-slowdown.md`）。
+backlog.md は撤去済みでこの劣化自体は再発しないが、refs
+を溜めない運用は上記の理由で継続する。）
 
 そのため **1 タスクのマージが完了するたびに `deno task cleanup-branches --apply`
 を実行する**（`/agent-loop` 手順 5）。実装は `scripts/cleanup_branches.ts` で、
 `git fetch --prune` → `git worktree remove` / `git worktree prune` →
-`git branch -d` を 1 回で行い、`refsBefore` / `refsAfter` を含む JSON を返す。
-`refsAfter` がイテレーションをまたいで単調増加していないことが、後始末が
-効いていることの確認になる。
+`git branch -d` → クローズ済み Issue の claim タグ削除
+（`git push origin --delete refs/tags/claim/issue-<N>`）を 1 回で行い、
+`refsBefore` / `refsAfter` と削除した claim タグの Issue 番号 `claimTags` を
+含む JSON を返す。`refsAfter` がイテレーションをまたいで単調増加していない
+ことが、後始末が効いていることの確認になる。
 
 複数の worktree が同時に存在する運用（mainagent のセッション worktree ＋ 実行中
 subagent の worktree）のため、**他セッションのものを誤って消さない**
 ことを最優先に設計している。ブランチ削除に `-D` は使わず、git が拒否した削除は
 skipped として理由付きで報告する。加えて削除対象を次の条件で絞る:
 
-- loop が生成した名前のみ（ブランチ `task-<N>-*` / `worktree-agent-*`、 worktree
-  は `.claude/worktrees/` 配下）。人手の `feat/*`・`docs/*` ブランチ、
-  セッション worktree（`<repo>@feat-*`）、main worktree は対象外。
+- loop が生成した名前のみ（ブランチ `task-<N>-*`（移行前）/ `issue-<N>-*` /
+  `worktree-agent-*`、 worktree は `.claude/worktrees/` 配下）。人手の
+  `feat/*`・`docs/*` ブランチ、 セッション worktree（`<repo>@feat-*`）、main
+  worktree は対象外。
 - origin/main にマージ済みのブランチのみ。
 - どこかの worktree にチェックアウト中のブランチは対象外（同じ実行で削除する
   worktree の分だけは解放されるものとして扱う）。
@@ -484,9 +507,28 @@ skipped として理由付きで報告する。加えて削除対象を次の条
 イテレーションぶん」で頭打ちになり、単調増加はしない。
 
 判定ロジックは純粋関数（`planCleanup` / `canForceRemoveWorktree` /
-`parseWorktreeList` / `parseMergedBranches`）に切り出し、
-`scripts/cleanup_branches_test.ts` でネットワーク・git 非依存の単体テストを
-持つ。
+`parseWorktreeList` / `parseMergedBranches` / `parseClaimTagNumbers` /
+`planClaimTagCleanup`）に切り出し、 `scripts/cleanup_branches_test.ts`
+でネットワーク・git 非依存の単体テストを 持つ。
+
+#### claim タグの掃除と loop-doctor（TASK-141 / #165）
+
+claim タグ掃除の安全条件はブランチ削除と同じ発想の保守設計にする: 削除する のは
+**gh でクローズ済みと確認できた Issue の claim だけ**で、open な Issue の
+claim（着手中の権威そのもの）は絶対に消さない。Issue 一覧に現れない番号の claim
+も「一覧の取り漏れ」と区別できないため消さず、skipped として理由付きで
+報告する。`--no-fetch` 時と gh / `git ls-remote` が失敗した場合は claim 掃除
+だけをスキップし、ブランチ・worktree の掃除は巻き添えにしない。
+
+Issue 移行で着手〜クローズがアトミックでなくなった代償として、不整合の検出・
+修復は `deno task loop-doctor`（`scripts/loop_doctor.ts`）が明示的に担う。
+検査パターンは (1) open なのに `Closes #N` 指定 PR がマージ済み、(2) closed
+なのに AC 未チェック、(3) claim タグ残存、(4) `status:in-progress` ラベルと
+claim タグの不一致。診断は純粋関数 `diagnose` に切り出してフィクスチャ JSON で
+テストし（`scripts/loop_doctor_test.ts`）、`--issues-json` / `--prs-json` /
+`--claims` で gh / git 非依存に入力を注入できる。dry-run 既定・`--apply` で
+修復可能なもの（閉じた Issue の claim タグ削除・advisory ラベルの整合。権威は
+常に claim タグ側）だけを修復し、(1)(2) は判断を要するため検出のみとする。
 
 #### subagent worktree の dirty は常態として扱う（TASK-118）
 
@@ -519,7 +561,12 @@ subagent の成果は mainagent がパッチとして取り出し済みなので
 `scripts/cleanup_branches_test.ts` の `canForceRemoveWorktree` テストと本章・
 decision-24 の更新をセットで行う。
 
-#### `active_branch_days` の値（backlog/config.yml）
+#### `active_branch_days` の値（backlog/config.yml・歴史的記録）
+
+> タスク管理の GitHub Issue 移行（docs/adr/0031）により backlog.md は使って
+> おらず、本節の設定は既に効力を持たない。値の根拠を残すための歴史的記録で
+> あり、`backlog/config.yml` 等の残骸の完全撤去（TASK-142 の移行先 Issue）で
+> 本節ごと削除してよい。
 
 `active_branch_days` は backlog.md がクロスブランチ走査の対象にするブランチの
 **コミット日時の新しさの窓**（日数）である。backlog.md 1.48.0 の実装では 次の 3
