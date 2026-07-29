@@ -469,11 +469,20 @@ async function main(): Promise<void> {
     const base = await readCollection(basePathFor(year));
     const fiefPaths = fiefsPathsFor(year);
     const collections = await Promise.all(fiefPaths.map(readCollection));
-    // 2 系統のオーバーレイは同じ 1 枚の「オーバーレイが覆う面」として扱う
-    const fiefs: FeatureCollection = {
-      type: "FeatureCollection",
-      features: collections.flatMap((c) => c.features),
-    };
+    // 2 系統のオーバーレイは同じ 1 枚の「オーバーレイが覆う面」として扱う。
+    // union の前に座標を COORD_PRECISION へ丸める（TASK-130）: 配信される
+    // fiefs_flat の外周は丸め後の頂点で描かれるため、生データ（丸め前）の
+    // union で base に穴を開けると、丸めで外へ動いた辺の分（最大で半グリッド
+    // ≒ 56 m）だけ base 塗りが諸侯領の内側に残り、二重塗りの帯になる。
+    // 先に丸めれば穴の縁と fiefs_flat の外周が同一頂点列になり、帯が消える
+    // （一致は build-fief-dedupe_test.ts の二重塗り再現テストが担保する）。
+    const fiefs: FeatureCollection = truncate(
+      {
+        type: "FeatureCollection",
+        features: collections.flatMap((c) => c.features),
+      },
+      { precision: COORD_PRECISION, coordinates: 2 },
+    );
     const fiefUnion = fiefUnionOf(fiefs);
     if (fiefUnion === null) {
       throw new Error(

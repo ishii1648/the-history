@@ -78,8 +78,28 @@ export const MIN_HOLE_AREA_M2 = 1_000_000;
 /** union → 座標丸め → 再検査 の最大反復回数 */
 export const MAX_NORMALIZE_ITERATIONS = 5;
 
-/** 座標を丸める既定の小数桁数（build-data.ts の COORD_PRECISION と同値） */
-export const DEFAULT_COORD_PRECISION = 5;
+/**
+ * 座標を丸める既定の小数桁数（build-data.ts の COORD_PRECISION と同値。
+ * 本モジュールは build-data.ts から import される側なので、循環 import を避ける
+ * ため定数を複製する。一致は clean-polygons_test.ts が固定する。TASK-130）
+ */
+export const DEFAULT_COORD_PRECISION = 3;
+
+/**
+ * 残すパート（外環）の平均幅の下限（m）= 座標グリッド 1 目盛り
+ * （緯度方向 10^-DEFAULT_COORD_PRECISION 度 ≒ 111 m。TASK-130）。
+ *
+ * 面積閾値だけでは「線状の残骸」と「コンパクトな史実の飛び地」を区別できない。
+ * COORD_PRECISION = 3 への丸めはスライバの面積を最大で周長 × 半グリッド
+ * （≒ 56 m）ぶん伸縮させるため、simplify が半島を線に潰した残骸が偶然
+ * MIN_PART_AREA_M2 を超えて復活することがある（実測: europe_1500 の
+ * Denmark-Norway、約 20 km × 60 m・1.27 km² の三角形。幻の勢力ラベルが
+ * 地図に出る）。一方、同じ面積帯の史実の飛び地（Württemberg 1.09 km² など）は
+ * コンパクトで平均幅が数百 m ある。平均幅 = 2·面積 ÷ 周長（細長い形なら
+ * ほぼ実幅）がグリッド 1 目盛りに満たないパートは、丸め誤差と同じスケールの
+ * 幅しか持たない = 形として信頼できない残骸なので落とす。
+ */
+export const MIN_PART_MEAN_WIDTH_M = 111_320 * 10 ** -DEFAULT_COORD_PRECISION;
 
 /** ポリゴン系ジオメトリ */
 export type PolygonalGeometry = Polygon | MultiPolygon;
@@ -191,7 +211,7 @@ export function normalizeSelfIntersections(
  * 接触点を含むリングのうち面積が最大のもの（＝外環や本体側）はそのままにし、
  * 残りのリングの当該頂点だけを「そのリングの内側」へ 10^-precision 単位で
  * 動かす。穴なら穴が僅かに縮む方向で、隣の環から離れる。移動量は 1〜3 目盛り
- * （COORD_PRECISION=5 なら 1〜3 m）で、座標はグリッド上に留まるため丸めの
+ * （COORD_PRECISION=3 なら 100〜300 m）で、座標はグリッド上に留まるため丸めの
  * 不変条件も崩れない。
  *
  * 修復後に自己交差が 1 つでも残る場合は null を返す（呼び出し側は元の
@@ -360,21 +380,53 @@ function ringArea(ring: Position[]): number {
   }
 }
 
+/** 地球の平均半径（m）。周長の近似計算に使う */
+const EARTH_RADIUS_M = 6_371_008.8;
+
+/**
+ * リングの周長（m）。equirectangular 近似（経度差を中点緯度の cos で縮める）。
+ * MIN_PART_MEAN_WIDTH_M との比較にしか使わないため、数 % の誤差は許容できる。
+ */
+function ringPerimeterM(ring: Position[]): number {
+  const toRad = Math.PI / 180;
+  let total = 0;
+  for (let i = 0; i + 1 < ring.length; i++) {
+    const [ax, ay] = ring[i];
+    const [bx, by] = ring[i + 1];
+    const dx = (bx - ax) * toRad * Math.cos(((ay + by) / 2) * toRad);
+    const dy = (by - ay) * toRad;
+    total += Math.hypot(dx, dy) * EARTH_RADIUS_M;
+  }
+  return total;
+}
+
 /**
  * 閾値未満のパート（外環）と穴（内環）を落とす（純粋関数）。
  * 穴を落とすのはその内側を親の面で塗り潰すことに等しい。閾値は
  * MIN_PART_AREA_M2 / MIN_HOLE_AREA_M2 の根拠コメントを参照。
+ * 面積が閾値以上でも、平均幅（2·面積 ÷ 周長）が minPartMeanWidthM に満たない
+ * 線状のパートは落とす（座標丸めスケールの幅しか無い残骸。TASK-130。
+ * 根拠は MIN_PART_MEAN_WIDTH_M のコメントを参照）。
  */
 export function dropTinyRings(
   geometry: PolygonalGeometry,
   minPartAreaM2: number = MIN_PART_AREA_M2,
   minHoleAreaM2: number = MIN_HOLE_AREA_M2,
+  minPartMeanWidthM: number = MIN_PART_MEAN_WIDTH_M,
 ): DroppedRings {
   const kept: Position[][][] = [];
   let droppedParts = 0;
   let droppedHoles = 0;
   for (const part of polygonParts(geometry)) {
-    if (part.length === 0 || ringArea(part[0]) < minPartAreaM2) {
+    if (part.length === 0) {
+      droppedParts++;
+      continue;
+    }
+    const partArea = ringArea(part[0]);
+    if (
+      partArea < minPartAreaM2 ||
+      2 * partArea / ringPerimeterM(part[0]) < minPartMeanWidthM
+    ) {
       droppedParts++;
       continue;
     }

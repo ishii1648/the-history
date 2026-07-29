@@ -240,7 +240,7 @@ export function prunePeakProperties(fc: FeatureCollection): FeatureCollection {
  * 座標を precision 桁に丸める（純粋関数）。
  * 山脈・河川は simplify + truncate（shrinkToLimit）で丸めるが、Point は
  * simplify の対象外なので丸めだけを行う。桁は base データ（build-data.ts の
- * COORD_PRECISION = 5 桁 ≒ 1 m）に揃える。
+ * COORD_PRECISION = 3 桁 ≒ 100 m）に揃える。
  */
 export function roundPeakCoordinates(
   fc: FeatureCollection,

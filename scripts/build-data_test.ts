@@ -6,7 +6,7 @@ import type {
   MultiPolygon,
   Polygon,
 } from "geojson";
-import { SNAPSHOT_YEARS } from "../src/config.ts";
+import { MAX_ZOOM, SNAPSHOT_YEARS } from "../src/config.ts";
 import { colorKeyFor } from "../src/powers.ts";
 import {
   applyNameOverrides,
@@ -15,6 +15,7 @@ import {
   buildIndex,
   buildSourceUrl,
   clipToBbox,
+  COORD_PRECISION,
   EUROPE_BBOX,
   normalizeSubjectProps,
   resolveName,
@@ -336,7 +337,7 @@ Deno.test("shrinkToLimit は limit 以下になる最小トレランスの結果
   assert(SIMPLIFY_TOLERANCES.includes(small.tolerance));
 });
 
-Deno.test("shrinkToLimit は座標を小数5桁に丸める", () => {
+Deno.test("shrinkToLimit は座標を COORD_PRECISION（小数3桁）に丸める", () => {
   const fc: FeatureCollection = {
     type: "FeatureCollection",
     features: [{
@@ -354,9 +355,37 @@ Deno.test("shrinkToLimit は座標を小数5桁に丸める", () => {
     }],
   };
   const result = shrinkToLimit(fc, 1_000_000);
-  const serialized = JSON.stringify(result.fc);
-  assert(serialized.includes("1.12346"), serialized);
-  assert(!serialized.includes("1.123456789"), serialized);
+  const geometry = result.fc.features[0].geometry as Polygon;
+  // 先頭頂点が小数3桁へ丸められている（1.123456789 → 1.123、2.987654321 → 2.988）
+  assertEquals(geometry.coordinates[0][0], [1.123, 2.988]);
+  // 全頂点が 10^-COORD_PRECISION のグリッド上にある（それ以上の桁が残らない）
+  const scale = 10 ** COORD_PRECISION;
+  for (const [x, y] of geometry.coordinates[0]) {
+    assert(Number.isInteger(Math.round(x * scale * 1e6) / 1e6), `x=${x}`);
+    assert(Number.isInteger(Math.round(y * scale * 1e6) / 1e6), `y=${y}`);
+  }
+});
+
+Deno.test("COORD_PRECISION は MAX_ZOOM の 1 ピクセル相当距離に対し過不足がない", () => {
+  // MapLibre のズーム z では世界全体が 512·2^z CSS px に写るため、
+  // 1 px ≈ 赤道周長 / (512·2^z) · cos(緯度) メートル。
+  const EQUATOR_M = 40_075_016.686;
+  const northLat = EUROPE_BBOX[3]; // ヨーロッパ bbox の最高緯度（px が最も細かい）
+  const metersPerPixel = EQUATOR_M / (512 * 2 ** MAX_ZOOM) *
+    Math.cos((northLat * Math.PI) / 180);
+  // 丸め誤差の最大は緯度方向のグリッド半分（経度方向は cos(緯度) 倍で常に小さい）
+  const maxRoundingErrorM = 111_320 * 10 ** -COORD_PRECISION / 2;
+  // 採用桁数: 丸め誤差が最悪ケース（bbox 北端・ズーム上限）でも 1 px 未満
+  assert(
+    maxRoundingErrorM < metersPerPixel,
+    `丸め誤差 ${maxRoundingErrorM}m が 1px ${metersPerPixel}m を超えている`,
+  );
+  // 1 桁減らすと 1 px を超える（= これ以上桁を落とせない下限であること）
+  const coarserErrorM = 111_320 * 10 ** -(COORD_PRECISION - 1) / 2;
+  assert(
+    coarserErrorM >= metersPerPixel,
+    `1 桁粗い ${coarserErrorM}m でも 1px 未満なら、さらに桁を落とせるはず`,
+  );
 });
 
 Deno.test("shrinkToLimit はどのトレランスでも収まらなければ例外を投げる", () => {

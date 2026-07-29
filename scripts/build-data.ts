@@ -63,8 +63,20 @@ export const SIMPLIFY_TOLERANCES: number[] = [0.005, 0.01, 0.02, 0.05, 0.1];
 /** 出力 1 ファイルあたりのサイズ上限（バイト）。300 KB を安全側に解釈する */
 export const SIZE_LIMIT_BYTES = 300 * 1000;
 
-/** 座標を丸める小数桁数 */
-export const COORD_PRECISION = 5;
+/**
+ * 座標を丸める小数桁数（TASK-130）。
+ *
+ * アプリのズーム上限は MAX_ZOOM = 8（src/config.ts）で、MapLibre のズーム z では
+ * 世界全体が 512·2^z CSS px に写るため、1 px ≈ 40,075km / (512·2^8) · cos(緯度)
+ * ≈ 306·cos(緯度) m。ヨーロッパ bbox（緯度 34〜72°）では 1 px ≈ 253〜94 m になる。
+ * 小数 3 桁のグリッドは緯度方向 1e-3 度 ≈ 111 m 刻みで、丸め誤差の最大は
+ * その半分の約 56 m。px が最も細かい bbox 北端（72°N・1 px ≈ 94 m）でも
+ * 1 px 未満に収まり、表示上の劣化は生じない（2 桁だと誤差 ≈ 557 m で 1 px を
+ * 超えるため、これ以上は落とせない）。また SIMPLIFY_TOLERANCES の最小値
+ * 0.005 度（≈ 556 m）が先に形状の詳細を律速するため、丸めが解像度のボトルネック
+ * になることもない。根拠の数値関係は build-data_test.ts が固定する。
+ */
+export const COORD_PRECISION = 3;
 
 const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;

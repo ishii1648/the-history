@@ -43,11 +43,11 @@ import {
 
 /**
  * bbox の辺に「接している」とみなす座標許容差（度）。
- * 出力座標は build-data.ts の COORD_PRECISION = 5 桁に丸められる（1e-5 度 ≒ 1 m）
+ * 出力座標は build-data.ts の COORD_PRECISION = 3 桁に丸められる（1e-3 度 ≒ 100 m）
  * ため丸め誤差の 2 倍を採る。実測ではクリップ由来の端点は -25 / 34 / 60 / 72 が
  * そのまま出るので、この値の取り方に判定は敏感でない。
  */
-export const BBOX_EDGE_EPS_DEG = 2e-5;
+export const BBOX_EDGE_EPS_DEG = 2e-3;
 
 /**
  * 2 つのパートが「連続している（同じ 1 本の川の続き）」とみなす接続距離
@@ -81,7 +81,7 @@ export const OPEN_SEA_MARGIN_KM = 5;
 
 /**
  * パイプライン差分（simplify 前後）で有意とみなす bbox のずれ（度）。
- * simplify は端点を保存するため理論上 0 だが、座標丸め（5 桁）と
+ * simplify は端点を保存するため理論上 0 だが、座標丸め（3 桁）と
  * トレランス分の内側化を見込んで 0.01 度（≒ 1 km）を採る。
  */
 export const PIPELINE_BBOX_DELTA_DEG = 0.01;
