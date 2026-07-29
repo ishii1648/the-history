@@ -1,9 +1,11 @@
 ---
 id: TASK-134
 title: Renovate を導入し依存更新のクールダウンと自動マージ無効を設定する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 16:44'
+updated_date: '2026-07-29 15:46'
 labels:
   - 'area:workflow'
 dependencies:
@@ -26,3 +28,14 @@ docs/app-spec.md §6 のセキュリティ方針では、依存更新に Renovat
 - [ ] #4 lockfile の更新がコミットに含まれる設定になっている
 - [ ] #5 コア依存（maplibre-gl / deck.gl / pmtiles）の更新 PR が目視レビュー対象と判別できる形になっている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. docs/app-spec.md §6 の依存更新方針を読み、renovate.json を作成（AC#1）
+2. minimum release age: 通常 7 日・patch 3 日（AC#2）。automerge 無効（AC#3）。lockfile 更新を含む設定（AC#4）
+3. コア依存（maplibre-gl / deck.gl / pmtiles）を packageRules で分離しラベル等でレビュー必須と判別可能に（AC#5）
+4. 設定は Renovate の JSON スキーマで検証（deno で schema 検証 or renovate-config-validator 相当の静的確認）
+
+並列化判定: 見送り（理由: 設定ファイル 1 つの追加）
+<!-- SECTION:PLAN:END -->
