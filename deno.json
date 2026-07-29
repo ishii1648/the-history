@@ -4,7 +4,7 @@
     "lib": ["dom", "dom.iterable", "deno.ns"]
   },
   "fmt": {
-    "exclude": ["backlog/", "data/", "vendor/", ".outputs/"]
+    "exclude": ["backlog/", "data/", "docs/adr/", "vendor/", ".outputs/"]
   },
   "tasks": {
     "build": "deno run --allow-read --allow-write --allow-run scripts/build.ts",
