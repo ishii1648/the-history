@@ -67,7 +67,8 @@ export interface LabelDatum {
    * TASK-78 の二重ラベル抑制対象か（kind="base" のみ・TASK-122 で導入）。
    *
    * TASK-78 では抑制対象の base feature を buildLabelData に渡す前に
-   * 落としていた（fief_dedupe.ts excludeSuppressedFeatures）が、TASK-122 で
+   * 落としていた（旧 fief_dedupe.ts excludeSuppressedFeatures、TASK-126 で
+   * 削除）が、TASK-122 で
    * 諸侯領ラベルをズーム段で出し分けるようになり「落とす／残す」の判断が
    * ズーム依存になった。datum は常に作っておいてここに印だけ付け、実際に
    * 出すかどうかは filterPowerLabelsByZoom が決める。こうすることで
