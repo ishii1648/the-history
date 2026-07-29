@@ -1,9 +1,11 @@
 ---
 id: TASK-139
 title: next-task/next-tasks のタスク取得を TaskSource 抽象化し GitHub Issue ソースを追加する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 17:38'
+updated_date: '2026-07-29 17:39'
 labels:
   - 'area:scripts-loop'
 dependencies:
@@ -34,3 +36,15 @@ ordinal: 120000
 - [ ] #5 変換・パースの純粋関数テストがネットワーク非依存で green
 - [ ] #6 deno task next-tasks の JSON 出力契約（tasks/skipped）が維持されている
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. scripts/next_tasks.ts / next_task.ts の構造（TaskMeta・readTasks・選定純粋関数）を読む
+2. TDD red: parseLoopMeta / issueToTaskMeta / statusOf の純粋関数テストをフィクスチャ JSON で先に書く（AC#5）
+3. TaskSource 抽象を導入し TASK_SOURCE=backlog|github で切替（既定 backlog 不変 = AC#1）。github は gh issue list 1 コール（--json、search API 不使用）。task ラベル必須・LOOP-META パース・依存未クローズ除外（AC#2〜#4）
+4. --json-file オプションで gh 非起動の検証経路。next-tasks の JSON 出力契約は不変（AC#6）
+5. deno.json の next-task(s) に --allow-run=gh --allow-env 追加。fmt / lint / test green
+
+並列化判定: 見送り（理由: 単一スクリプト群の抽象化）
+<!-- SECTION:PLAN:END -->
