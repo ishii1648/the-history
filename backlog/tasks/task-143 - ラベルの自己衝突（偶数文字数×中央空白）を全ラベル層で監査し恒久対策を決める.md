@@ -1,9 +1,11 @@
 ---
 id: TASK-143
 title: ラベルの自己衝突（偶数文字数×中央空白）を全ラベル層で監査し恒久対策を決める
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 18:43'
+updated_date: '2026-07-29 15:46'
 labels:
   - 'area:src-labels'
 dependencies: []
@@ -43,3 +45,15 @@ TASK-136 は河川層のみ TextLayer background + ほぼ不可視の背景ク�
 - [ ] #3 対処した場合: 既存ラベルの表示バランスが退行しない（CDP 目視確認）
 - [ ] #4 deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. 全ラベル層（都市/勢力/HRE 領邦/諸侯領/山脈/山峰/河川）のラベル文字列とアンカーを静的に走査し、「偶数文字数×中央が文字間空白」候補を抽出
+2. 候補を CDP 実機で検証し、実際に一度も描画されないラベルを特定（AC#1、ポート 8143。TASK-136 の実証手順を流用）
+3. 恒久対策を判断: (a) 全層に背景クアッド一般化 (b) 個別対処 (c) 記録のみ。既存表示バランスへの影響を CDP で確認（AC#3）
+4. decision 記録は mainagent が行う（AC#2。subagent は判断材料と推奨案を報告）
+5. deno fmt --check / lint / test / build 全 green（AC#4）
+
+並列化判定: 見送り（理由: 走査 → 実証 → 対策判断が直列依存）
+<!-- SECTION:PLAN:END -->
