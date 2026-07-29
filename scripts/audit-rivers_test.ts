@@ -91,9 +91,9 @@ Deno.test("bboxEdgesTouched は接触した辺を全て返す", () => {
   assertEquals(bboxEdgesTouched([-25, 50], [...bbox]), ["west"]);
   assertEquals(bboxEdgesTouched([60, 34], [...bbox]), ["east", "south"]);
   assertEquals(bboxEdgesTouched([0, 50], [...bbox]), []);
-  // 許容差（既定 2e-5 度）の内側は接触扱い
-  assertEquals(bboxEdgesTouched([-25.00001, 50], [...bbox]), ["west"]);
-  assertEquals(bboxEdgesTouched([-25.001, 50], [...bbox]), []);
+  // 許容差（既定 2e-3 度 = COORD_PRECISION 3 桁の丸め誤差の 2 倍）の内側は接触扱い
+  assertEquals(bboxEdgesTouched([-25.001, 50], [...bbox]), ["west"]);
+  assertEquals(bboxEdgesTouched([-25.01, 50], [...bbox]), []);
 });
 
 Deno.test("partDistanceKm は端点↔ライン距離で測る（分流の分岐点を接続と見なす）", () => {

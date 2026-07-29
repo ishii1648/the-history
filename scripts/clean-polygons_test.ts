@@ -11,6 +11,7 @@ import type {
 import {
   cleanFeatureCollection,
   cleanGeometry,
+  DEFAULT_COORD_PRECISION,
   dropTinyRings,
   MIN_HOLE_AREA_M2,
   MIN_PART_AREA_M2,
@@ -19,7 +20,7 @@ import {
   selfIntersectionPoints,
   separateTouchingRings,
 } from "./clean-polygons.ts";
-import { SIZE_LIMIT_BYTES, YEARS } from "./build-data.ts";
+import { COORD_PRECISION, SIZE_LIMIT_BYTES, YEARS } from "./build-data.ts";
 import {
   FIEF_SIZE_LIMIT_BYTES,
   FRANCE_FIEF_YEARS,
@@ -75,6 +76,12 @@ function feature(
 function ringAreaM2(ring: Position[]): number {
   return area(turfPolygon([ring]));
 }
+
+Deno.test("DEFAULT_COORD_PRECISION は build-data.ts の COORD_PRECISION と一致する", () => {
+  // clean-polygons.ts は build-data.ts から import される側なので、循環 import を
+  // 避けるため定数を複製している。ドリフトはこのテストで検出する。
+  assertEquals(DEFAULT_COORD_PRECISION, COORD_PRECISION);
+});
 
 Deno.test("selfIntersectionPoints は自己交差点を検出し、単純なポリゴンでは空", () => {
   const kinked = selfIntersectionPoints(poly([BOWTIE]));
@@ -147,6 +154,30 @@ Deno.test("dropTinyRings は閾値未満のパートと穴だけを落とす", (
   assert(result.geometry !== null);
   assertEquals(polygonParts(result.geometry).length, 1);
   assertEquals(polygonParts(result.geometry)[0].length, 2);
+});
+
+Deno.test("dropTinyRings は面積が閾値以上でも線状のパート（平均幅がグリッド未満）を落とす（TASK-130）", () => {
+  // 実データの残骸: europe_1500 の Denmark-Norway スライバ（約 20 km × 60 m の
+  // 三角形、面積 1.27 km²）。面積は MIN_PART_AREA_M2 を超えるが、平均幅
+  // 2·面積/周長 ≒ 61 m は座標グリッド 1 目盛り（≒ 111 m）未満で、丸めが
+  // 偶然引き伸ばした線状の残骸。これが残ると幻の勢力ラベルが復活する。
+  const sliver: Position[] = [
+    [11.767, 55.176],
+    [11.907, 55.021],
+    [11.97, 54.954],
+    [11.767, 55.176],
+  ];
+  assert(ringAreaM2(sliver) >= MIN_PART_AREA_M2);
+  const result = dropTinyRings(multi([[sliver]]));
+  assertEquals(result.geometry, null);
+  assertEquals(result.droppedParts, 1);
+
+  // 同程度の面積でもコンパクトな飛び地（1.2 km 四方、平均幅 ≒ 1.1 km）は残す
+  const enclave = square(11, 55, 0.019);
+  assert(ringAreaM2(enclave) >= MIN_PART_AREA_M2);
+  const kept = dropTinyRings(multi([[enclave]]));
+  assertEquals(kept.droppedParts, 0);
+  assert(kept.geometry !== null);
 });
 
 Deno.test("dropTinyRings は全パートが閾値未満なら null を返す", () => {
@@ -395,11 +426,13 @@ Deno.test("separateTouchingRings は 1 点で接する穴を引き離して自�
   assertEquals(selfIntersectionPoints(repaired).length, 0);
   // 外環は 1 頂点も動かさない（動かすのは面積が小さい側 = 穴）
   assertEquals(polygonParts(repaired)[0][0], polygonParts(geometry)[0][0]);
-  // 穴の形の変化は頂点 1 つを数グリッド（1e-5 度）動かした分だけ
+  // 穴の形の変化は頂点 1 つを数グリッド（10^-DEFAULT_COORD_PRECISION 度）
+  // 動かした分だけ。許容幅はグリッド刻みに比例させ、桁数変更に追従させる
+  const step = 10 ** -DEFAULT_COORD_PRECISION;
   const before = area(turfPolygon([polygonParts(geometry)[0][1]]));
   const after = area(turfPolygon([polygonParts(repaired)[0][1]]));
   assert(
-    Math.abs(after - before) / before < 1e-4,
+    Math.abs(after - before) / before < step,
     `穴の面積が ${before} から ${after} へ変わりすぎ`,
   );
 });
