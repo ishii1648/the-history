@@ -5,6 +5,8 @@ import {
   buildRiversSourceUrl,
   canonicalRiverName,
   clipRiversToBbox,
+  excludeArtificialWaterways,
+  EXCLUDED_WATERWAY_NAMES,
   extractSourceRiverNames,
   filterMajorRivers,
   MAX_SCALERANK,
@@ -40,8 +42,9 @@ Deno.test("定数は仕様どおりの出典情報とサイズ上限を持つ", 
   assertEquals(RIVERS_SOURCE_COMMIT.length, 40);
   assertEquals(RIVERS_SOURCE_LICENSE, "Public Domain (Natural Earth)");
   assertEquals(RIVERS_SIZE_LIMIT_BYTES, 150 * 1000);
-  // Elbe（scalerank 5）が残る閾値であること
-  assert(MAX_SCALERANK >= 5);
+  // TASK-152: rank 6 に欧州史の主要河川（Po・Rhône・Garonne・Don・Thames 等）
+  // が収録されているため、閾値は 6（Elbe=5 も当然含まれる）
+  assertEquals(MAX_SCALERANK, 6);
 });
 
 Deno.test("filterMajorRivers は scalerank が閾値以下の feature のみ残す", () => {
@@ -76,6 +79,43 @@ Deno.test("filterMajorRivers は scalerank が数値でない feature を除去�
   const filtered = filterMajorRivers(fc, 5);
 
   assertEquals(filtered.features.map((f) => f.properties?.name), ["ok"]);
+});
+
+// TASK-152: rank 6 には自然河川でない人工水路が含まれる。運河は主要「河川」
+// オーバーレイの趣旨（欧州史の自然河川）から除外し、自然分流（Soroksari Duna
+// はドナウのチェペル島東水路）は既存のデルタ分流（Waal・Nederrijn・Bratul 各
+// 分流）と同じ扱いで採用する。
+Deno.test("excludeArtificialWaterways は運河を除外し自然河川・分流を残す", () => {
+  const fc: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      // 人工運河（1793〜1802 年築造のフランツ運河）→ 除外
+      multiLineFeature({ name: "Ferenc Csatorna", scalerank: 6 }, [[[
+        18.9,
+        46.2,
+      ], [18.8, 45.8]]]),
+      // ドナウの自然分流 → 残す
+      multiLineFeature({ name: "Soroksari Duna", scalerank: 6 }, [[
+        [19.0, 47.5],
+        [18.9, 47.0],
+      ]]),
+      // 通常の河川 → 残す
+      multiLineFeature({ name: "Po", scalerank: 6 }, [[[7.1, 45.0], [
+        12.5,
+        44.9,
+      ]]]),
+      // name 欠損は除外対象名と一致しようがないため残す
+      multiLineFeature({ scalerank: 6 }, [[[0, 0], [1, 1]]]),
+    ],
+  };
+
+  const filtered = excludeArtificialWaterways(fc);
+
+  assertEquals(
+    filtered.features.map((f) => f.properties?.name),
+    ["Soroksari Duna", "Po", undefined],
+  );
+  assert(EXCLUDED_WATERWAY_NAMES.has("Ferenc Csatorna"));
 });
 
 Deno.test("clipRiversToBbox は bbox 外のラインを除去し、空パートを残さない", () => {
@@ -195,6 +235,10 @@ Deno.test("canonicalRiverName は国境で呼称のみ変わる別名を代表�
   assertEquals(canonicalRiverName("Euphrates"), "Euphrates");
   assertEquals(canonicalRiverName("Dnepre"), "Dnipro");
   assertEquals(canonicalRiverName("Dnipro"), "Dnipro");
+  // TASK-152: Tisza（ハンガリー）→ Tisa（セルビア）は端点座標
+  // [20.178851, 46.260846] が一致する継続区間（実体は同一の川）
+  assertEquals(canonicalRiverName("Tisa"), "Tisza");
+  assertEquals(canonicalRiverName("Tisza"), "Tisza");
   // デルタの分流は実体が異なる水路のため正規化対象外（別名のまま）
   assertEquals(canonicalRiverName("Nederrijn"), "Nederrijn");
   assertEquals(canonicalRiverName("Waal"), "Waal");
@@ -267,39 +311,60 @@ Deno.test("extractSourceRiverNames は名寄せ前のユニーク name をソー
 const SOURCE_RIVER_NAMES = [
   "Al Furat",
   "Amu  Darya",
+  "Ariège",
   "Borcea",
   "Bratul Chillia",
   "Bratul Sfintu Gheorghe",
   "Bratul Sulina",
+  "Dalälven",
   "Danube",
   "Daugava",
   "Dicle",
   "Dnepre",
+  "Dniester",
   "Dnipro",
+  "Don",
   "Donau",
+  "Drava",
+  "Duero",
   "Ebro",
   "Elbe",
   "Euphrates",
   "Firat",
+  "Garonne",
+  "Glomma",
+  "Göta älv",
+  "Kama",
+  "Kem",
+  "Kemijoki",
+  "Kokemäenjoki",
   "Lek",
   "Loire",
   "Nederrijn",
   "Neva",
   "Oder",
   "Pechora",
+  "Po",
   "Rhein",
   "Rhin",
   "Rhine",
+  "Rhône",
   "Seine",
   "Severnaya Dvina",
+  "Soroksari Duna",
   "Sukhona",
   "Svir’",
   "Tajo",
   "Tejo",
+  "Thames",
   "Tigris",
+  "Tisa",
+  "Tisza",
   "Ural",
   "Vistula",
   "Volga",
+  "Vorma",
+  "Vuoksi",
   "Vychegda",
   "Waal",
 ];

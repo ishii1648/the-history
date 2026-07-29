@@ -11,7 +11,7 @@ Protomaps ベースマップの water_river レイヤーは minzoom 9 だが、�
 
 ## Decision
 
-河川データとして Natural Earth 50m rivers_lake_centerlines（パブリックドメイン）を採用し、ミラーの nvkelso/natural-earth-vector からコミット固定（ca96624）で取得する。scripts/build-rivers.ts で欧州 bbox クリップ・主要河川フィルタ（scalerank<=5）・simplify を行い data/rivers.geojson を生成・コミットする。
+河川データとして Natural Earth 50m rivers_lake_centerlines（パブリックドメイン）を採用し、ミラーの nvkelso/natural-earth-vector からコミット固定（ca96624）で取得する。scripts/build-rivers.ts で欧州 bbox クリップ・主要河川フィルタ（scalerank<=6。当初は 5 だったが、rank 6 にポー・ローヌ・ガロンヌ・ドン・テムズ等の欧州史の主要河川が含まれるため TASK-152 で引き上げ）・simplify を行い data/rivers.geojson を生成・コミットする。
 
 ## Consequences
 

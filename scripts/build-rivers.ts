@@ -51,10 +51,45 @@ export const RIVERS_SOURCE_LICENSE = "Public Domain (Natural Earth)";
 
 /**
  * 主要河川とみなす scalerank の上限（値が小さいほど主要）。
- * 50m データでは Danube=2, Volga=3, Rhine=4, Seine=4, Elbe=5 のため、
- * 5 まで含めることで欧州史の主要河川を網羅する（6 は細かすぎるため除外）。
+ * 50m データでは Danube=2, Volga=3, Rhine=4, Seine=4, Elbe=5 に加え、
+ * rank 6 に欧州史の主要河川（Po・Rhône・Garonne・Don・Thames・Dniester・
+ * Drava・Duero・Tisza 等）が収録されているため 6 まで含める（TASK-152。
+ * 5 では上記がすべて欠落していた）。7 以下は 50m 版に存在しない
+ * （Severn / Trent / Shannon 等は 10m 版に scalerank=8 でのみ存在）。
  */
-export const MAX_SCALERANK = 5;
+export const MAX_SCALERANK = 6;
+
+/**
+ * 除外する人工水路のソース名（TASK-152）。NE 50m は featurecla=River のまま
+ * 人工運河を収録しているが、本オーバーレイの趣旨は「欧州史の自然河川」の補完
+ * であり、近代築造の運河は大半の年代で存在しない anachronism になるため名前で
+ * 除外する。
+ * - Ferenc Csatorna（フランツ運河 / 現バチカ大運河）: 1793〜1802 年築造の
+ *   ドナウ〜ティサ間の人工運河。自然河川ではない。
+ * 一方 Soroksari Duna（ソロクシャーリ・ドナウ）はドナウがチェペル島で分かれた
+ * 自然分流であり、既存のデルタ分流（Waal・Nederrijn・Bratul 各分流・Borcea）と
+ * 同じ扱いで採用する。
+ * ソースコミット更新時の注意: この名前がソースから消えても検出はスナップ
+ * ショット再生成（--print-source-names）時の目視に頼る（除外後の名前一覧には
+ * 現れないため、死んだエイリアス検査のような自動検出はできない）。
+ */
+export const EXCLUDED_WATERWAY_NAMES: ReadonlySet<string> = new Set([
+  "Ferenc Csatorna",
+]);
+
+/**
+ * 人工水路（EXCLUDED_WATERWAY_NAMES）の feature を除去する（純粋関数）。
+ * name が無い feature は除外対象名と一致しようがないため残す。
+ */
+export function excludeArtificialWaterways(
+  fc: FeatureCollection,
+): FeatureCollection {
+  const features = fc.features.filter((feature) => {
+    const name = feature.properties?.name;
+    return typeof name !== "string" || !EXCLUDED_WATERWAY_NAMES.has(name);
+  });
+  return { type: "FeatureCollection", features };
+}
 
 /** 出力ファイルのサイズ上限（バイト）。150 KB を安全側に解釈する */
 export const RIVERS_SIZE_LIMIT_BYTES = 150 * 1000;
@@ -143,14 +178,21 @@ export function clipRiversToBbox(
  * - Dicle（トルコ）→ Tigris（イラク）
  * - Firat/Al Furat（トルコ・シリア、各 2 feature）→ Euphrates（イラク）
  * - Dnepre → Dnipro（白・宇。範囲が重なる並行区間）
+ * - Tisza（ハンガリー）→ Tisa（セルビア）: Tisza の南端と Tisa の北端の座標
+ *   [20.178851, 46.260846] が完全一致する継続区間（TASK-152）
+ *
+ * エイリアス不要と確認済み（TASK-152）: Duero（スペイン語名）は 50m データでは
+ * 単一 feature が西経 8.67 度（ポルトガル・ポルト近郊）まで達しており、
+ * ポルトガル語名 Douro の feature はソースに存在しない（名前分割なし）。
+ * Dniester（Nistru）・Drava（Drau）も同様に単一名のみ収録。
  *
  * 一方、デルタの分流（Rhine の Nederrijn/Lek/Waal、Danube の
  * Bratul Chillia/Bratul Sfintu Gheorghe/Bratul Sulina/Borcea）は本流から
  * 分岐した別水路という実体があり、data/name-ja.json でも個別の日本語名を
  * 持つため正規化の対象外とする。
  *
- * 正規化先（値）は data/name-ja.json に既存のキーを持つ名前を選び、
- * name-ja.json 側の変更を不要にしている。
+ * 正規化先（値）は data/name-ja.json にキーを持つ名前を選ぶ（登録は
+ * scripts/build-rivers_test.ts の回帰テストが保証する）。
  */
 export const RIVER_NAME_ALIASES: Record<string, string> = {
   "Rhein": "Rhine",
@@ -160,6 +202,7 @@ export const RIVER_NAME_ALIASES: Record<string, string> = {
   "Firat": "Euphrates",
   "Al Furat": "Euphrates",
   "Dnepre": "Dnipro",
+  "Tisa": "Tisza",
 };
 
 /**
@@ -221,7 +264,8 @@ async function fetchFeatureCollection(): Promise<FeatureCollection> {
 async function main(): Promise<void> {
   const raw = await fetchFeatureCollection();
   const major = filterMajorRivers(raw, MAX_SCALERANK);
-  const clipped = clipRiversToBbox(major, EUROPE_BBOX);
+  const natural = excludeArtificialWaterways(major);
+  const clipped = clipRiversToBbox(natural, EUROPE_BBOX);
   if (Deno.args.includes("--print-source-names")) {
     // 回帰テスト用スナップショット（scripts/build-rivers_test.ts の
     // SOURCE_RIVER_NAMES）の再生成モード。名寄せ前の生ソース名を出力して終了する。
