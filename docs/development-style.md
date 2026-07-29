@@ -52,10 +52,13 @@
   - dependencies は原則空、ordinal は通常どおり採番する（優先順位は label `bug`
     が担保するため、選択順に ordinal は使わない）。
 
-### 2.1 設計判断の記録（backlog decisions）
+### 2.1 設計判断の記録（ADR / docs/adr/）
 
-タスク横断で影響する設計判断は backlog decision として記録し、後続タスクが
-判断の背景・根拠を参照できるようにする。
+タスク横断で影響する設計判断は `docs/adr/` の Architecture Decision Record
+（ADR）として記録し、後続タスクが判断の背景・根拠を参照できるようにする。
+かつては backlog CLI 管理の decisions（`backlog/decisions/`）だったが、 decision
+番号を保持して `docs/adr/` へ移設した（経緯は
+`docs/adr/0031-migrate-task-management-to-github-issues.md` を参照）。
 
 **記録する判断（タスク横断で影響するもののみ）:**
 
@@ -71,32 +74,32 @@
 
 - タスク限りの実装意図・Why（そのタスクのスコープで完結し、後続タスクを
   制約しないもの）。これらはコンテキストコミットの `intent:` / `decision:` 行と
-  backlog task の Implementation Notes に記録すれば十分であり、decision
+  backlog task の Implementation Notes に記録すれば十分であり、ADR
   へ転記しない（重複記録は同期切れ・形骸化を招くため禁止）。
 
 **コンテキストコミットとの棲み分け:** コミット本文の `decision:` 行は「その
-コミット/タスク限りの判断」を残す場所、backlog decision は「タスク横断の
-判断」を残す場所と区別する。タスク横断の判断が実装中に生まれた場合は backlog
-decision に本体を書き、コミット側は decision ID（例: `decision-3 参照`）を
+コミット/タスク限りの判断」を残す場所、ADR は「タスク横断の
+判断」を残す場所と区別する。タスク横断の判断が実装中に生まれた場合は ADR
+に本体を書き、コミット側は decision ID（例: `decision-3 参照`）を
 参照するに留める（本文の二重管理をしない）。
 
 **記録タイミング:** `/agent-loop` の finalization 時に「このタスクで下した
 判断にタスク横断で影響するものがあるか」を判定して記録する
 （`.claude/skills/agent-loop/SKILL.md` の手順に組み込み済み）。
 
-**CLI の使い方**（backlog.md v1.48 時点。`backlog decision --help` /
-`backlog search --help` で確認済み。decision には list / view / edit
-サブコマンドは存在しない）:
+**作成・参照の方法**（backlog CLI は使わない。採番規約の詳細は
+`docs/adr/README.md` を参照）:
 
-- 作成: `backlog decision create -s accepted "<タイトル>"`。タイトルは
-  検索しやすい日本語で「何をどう決めたか」まで含める。CLI は本文の編集を
-  サポートしないため、作成直後に生成ファイルの `## Context` / `## Decision` /
-  `## Consequences` セクションを埋める（背景・決定・根拠・関連 TASK を
-  簡潔に。frontmatter は CLI 管理のため編集しない）。
-- 一覧: `backlog search --type decision --plain`
-- キーワード検索: `backlog search "<キーワード>" --type decision --plain`
-- 本文の参照: 一覧で得たファイル `backlog/decisions/decision-N - <タイトル>.md`
-  を直接読む（読み取りの直接参照は 5 章のフォールバックと同じ扱いで可）。
+- 作成: `docs/adr/00NN-<slug>.md` を既存の最大番号の次の連番で直接作成する
+  （slug は英語ケバブケース）。frontmatter は `status` / `date` のみとし、 本文
+  H1 を `# decision-N: <タイトル>` の形式で書く。タイトルは検索しやすい
+  日本語で「何をどう決めたか」まで含める。本文は `## Context` / `## Decision` /
+  `## Consequences` を埋める（背景・決定・根拠・関連 TASK を簡潔に）。作成後は
+  `docs/adr/README.md` の一覧に行を追加する。
+- 一覧: `docs/adr/README.md` の一覧表を見る。
+- キーワード検索: `docs/adr/` 配下を grep する。
+- 本文の参照: `docs/adr/00NN-<slug>.md` を直接読む。`decision-N` の N は ADR
+  番号と一致するため、既存の `decision-N` 参照は番号で引ける。
 
 ## 3. ループエンジニアリング（3 層ループ運用）
 
