@@ -8,10 +8,12 @@ import {
   filterBasemapLayers,
   HILLSHADE_EXAGGERATION_STOPS,
   HILLSHADE_LAYER_ID,
+  HILLSHADE_MIN_SHORT_SIDE_PX,
   INLAND_WATER_KINDS,
   PARCHMENT_FLAVOR_OVERRIDES,
   PARCHMENT_LANDCOVER_COLORS,
   parchmentFlavor,
+  shouldEnableHillshade,
   WATER_INLAND_LAYER_ID,
   WATER_LAYER_ID,
   waterKindIsMarine,
@@ -529,4 +531,126 @@ Deno.test("coastline の色は羊皮紙のインク系（暖色の焦茶）で�
   assert(r >= g && g >= b, `${COASTLINE_COLOR} は暖色のはず`);
   const [wr, wg, wb] = hex(PARCHMENT_FLAVOR_OVERRIDES.water);
   assert(r + g + b < wr + wg + wb, "海の色より暗いこと（線として読めること）");
+});
+
+// --- TASK-133: モバイル端末での DEM hillshade 抑制 ---
+// 小画面のモバイルでは hillshade の判読寄与が小さい割に DEM タイルの GPU
+// メモリ・帯域を消費するため、端末条件（ビューポート短辺 + タッチ入力）に
+// 応じて hillshade を無効化できるようにする。判定は DOM 非依存の純粋関数
+// shouldEnableHillshade で行い（AC #1/#2/#6）、無効時は buildBasemapStyle が
+// DEM ソース・hillshade レイヤー自体を含めない（AC #5 の前提）。
+
+Deno.test("shouldEnableHillshade: モバイルプリセット相当（375x812・タッチあり）では無効（TASK-133）", () => {
+  // TASK-131 の MOBILE_PRESET（幅 375 / 高さ 812 / タッチ有効）で false になる
+  assertEquals(
+    shouldEnableHillshade({
+      viewportWidthPx: 375,
+      viewportHeightPx: 812,
+      maxTouchPoints: 5,
+    }),
+    false,
+  );
+});
+
+Deno.test("shouldEnableHillshade: 横持ち（812x375）でも短辺で判定するため無効のまま", () => {
+  // 判定は min(width, height) なので、画面回転で有効/無効が反転しない
+  assertEquals(
+    shouldEnableHillshade({
+      viewportWidthPx: 812,
+      viewportHeightPx: 375,
+      maxTouchPoints: 5,
+    }),
+    false,
+  );
+});
+
+Deno.test("shouldEnableHillshade: デスクトップ既定（1600x900・タッチなし）では有効（AC #4）", () => {
+  assertEquals(
+    shouldEnableHillshade({
+      viewportWidthPx: 1600,
+      viewportHeightPx: 900,
+      maxTouchPoints: 0,
+    }),
+    true,
+  );
+});
+
+Deno.test("shouldEnableHillshade: タッチなしなら小さいウィンドウでも有効（デスクトップの縮小ウィンドウを巻き込まない）", () => {
+  assertEquals(
+    shouldEnableHillshade({
+      viewportWidthPx: 500,
+      viewportHeightPx: 400,
+      maxTouchPoints: 0,
+    }),
+    true,
+  );
+});
+
+Deno.test("shouldEnableHillshade: タッチ対応でも短辺が閾値以上なら有効（タブレット・タッチ対応ラップトップ）", () => {
+  // iPad 縦持ち（768x1024）とタッチ対応ラップトップ（1600x900）は有効のまま
+  assertEquals(
+    shouldEnableHillshade({
+      viewportWidthPx: 768,
+      viewportHeightPx: 1024,
+      maxTouchPoints: 5,
+    }),
+    true,
+  );
+  assertEquals(
+    shouldEnableHillshade({
+      viewportWidthPx: 1600,
+      viewportHeightPx: 900,
+      maxTouchPoints: 10,
+    }),
+    true,
+  );
+});
+
+Deno.test("shouldEnableHillshade: 閾値は短辺 768px（境界の下は無効・境界ちょうどは有効）", () => {
+  assertEquals(HILLSHADE_MIN_SHORT_SIDE_PX, 768);
+  assertEquals(
+    shouldEnableHillshade({
+      viewportWidthPx: HILLSHADE_MIN_SHORT_SIDE_PX - 1,
+      viewportHeightPx: 1024,
+      maxTouchPoints: 1,
+    }),
+    false,
+  );
+  assertEquals(
+    shouldEnableHillshade({
+      viewportWidthPx: HILLSHADE_MIN_SHORT_SIDE_PX,
+      viewportHeightPx: 1024,
+      maxTouchPoints: 1,
+    }),
+    true,
+  );
+});
+
+Deno.test("buildBasemapStyle は hillshade 無効時に DEM ソース自体を含めない（TASK-133 AC #5 の前提）", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL, DEM_PMTILES_URL, false);
+  // DEM ソースがスタイルに存在しなければ、MapLibre が DEM PMTiles への
+  // リクエスト（ヘッダ・タイル取得）を発行する経路が存在しない
+  assertEquals(Object.keys(style.sources), [BASEMAP_SOURCE_ID]);
+});
+
+Deno.test("buildBasemapStyle は hillshade 無効時に hillshade レイヤーを含めず、他レイヤー構成は不変（AC #3）", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL, DEM_PMTILES_URL, false);
+  // hillshade だけが抜け、ベースマップ・水面分割・海岸線は従来どおり
+  assertEquals(
+    style.layers.map((l) => l.id),
+    [
+      "background",
+      "earth",
+      "landcover",
+      WATER_INLAND_LAYER_ID,
+      WATER_LAYER_ID,
+      COASTLINE_LAYER_ID,
+    ],
+  );
+});
+
+Deno.test("buildBasemapStyle の第 3 引数は省略時 true（デスクトップは従来どおり hillshade を含む。AC #4）", () => {
+  const style = buildBasemapStyle(BASEMAP_PMTILES_URL);
+  assert(style.layers.some((l) => l.id === HILLSHADE_LAYER_ID));
+  assert(style.sources[DEM_SOURCE_ID] !== undefined);
 });
