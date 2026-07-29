@@ -93,31 +93,31 @@ Deno.test("filterCitiesToBbox は bbox 外の都市を除外する", () => {
 // ---------------------------------------------------------------------------
 
 Deno.test("pickNearestRecord はスナップショット年ちょうどの記録を最優先する", () => {
-  const picked = pickNearestRecord({ 880: 10, 900: 20, 910: 30 }, 900);
-  assertEquals(picked, { year: 900, population: 20 });
+  const picked = pickNearestRecord({ 980: 10, 1000: 20, 1010: 30 }, 1000);
+  assertEquals(picked, { year: 1000, population: 20 });
 });
 
 Deno.test("pickNearestRecord は年差が最小の記録を選ぶ", () => {
-  const picked = pickNearestRecord({ 860: 10, 895: 20 }, 900);
-  assertEquals(picked, { year: 895, population: 20 });
+  const picked = pickNearestRecord({ 960: 10, 995: 20 }, 1000);
+  assertEquals(picked, { year: 995, population: 20 });
 });
 
 Deno.test("pickNearestRecord は年差が同じなら過去の記録を優先する", () => {
-  const picked = pickNearestRecord({ 890: 10, 910: 20 }, 900);
-  assertEquals(picked, { year: 890, population: 10 });
+  const picked = pickNearestRecord({ 990: 10, 1010: 20 }, 1000);
+  assertEquals(picked, { year: 990, population: 10 });
 });
 
 Deno.test("pickNearestRecord は過去 50 年・未来 25 年の窓の外を無視する", () => {
   // 過去 51 年 → 窓外、過去 50 年 → 窓内
-  assertEquals(pickNearestRecord({ 849: 10 }, 900), null);
-  assertEquals(pickNearestRecord({ 850: 10 }, 900), {
-    year: 850,
+  assertEquals(pickNearestRecord({ 949: 10 }, 1000), null);
+  assertEquals(pickNearestRecord({ 950: 10 }, 1000), {
+    year: 950,
     population: 10,
   });
   // 未来 26 年 → 窓外、未来 25 年 → 窓内
-  assertEquals(pickNearestRecord({ 926: 10 }, 900), null);
-  assertEquals(pickNearestRecord({ 925: 10 }, 900), {
-    year: 925,
+  assertEquals(pickNearestRecord({ 1026: 10 }, 1000), null);
+  assertEquals(pickNearestRecord({ 1025: 10 }, 1000), {
+    year: 1025,
     population: 10,
   });
 });
@@ -195,8 +195,8 @@ Deno.test("selectCitiesForYear は既知の誤記録（Algiers 1925 等）を無
 });
 
 Deno.test("selectCitiesForYear は Istanbul を Constantinople へ改名する", () => {
-  const rows = [row("Istanbul", 28.96, 41.01, { 900: 300000 })];
-  const markers = selectCitiesForYear(rows, 900);
+  const rows = [row("Istanbul", 28.96, 41.01, { 1000: 300000 })];
+  const markers = selectCitiesForYear(rows, 1000);
   assertEquals(markers.map((m) => m.name), ["Constantinople"]);
 });
 
@@ -249,7 +249,7 @@ Deno.test("selectCitiesForYear は同名都市（Brest 仏/白露等）を人口
 // ---------------------------------------------------------------------------
 
 Deno.test("buildCitiesData は SNAPSHOT_YEARS 全てを年キーに持つ", () => {
-  const rows = [row("Rome", 12.48, 41.89, { 900: 40000, 1914: 500000 })];
+  const rows = [row("Rome", 12.48, 41.89, { 1000: 40000, 1914: 500000 })];
   const data = buildCitiesData(rows, SNAPSHOT_YEARS);
   assertEquals(
     Object.keys(data.years),
@@ -284,7 +284,7 @@ Deno.test("validateCitiesData は正しいデータで空配列を返す", () =>
 
 Deno.test("validateCitiesData は年キーの過不足を検出する", () => {
   const missing = validData();
-  delete missing.years["900"];
+  delete missing.years["1000"];
   assert(
     validateCitiesData(missing, SNAPSHOT_YEARS, EUROPE_BBOX).length > 0,
   );
@@ -294,7 +294,7 @@ Deno.test("validateCitiesData は年キーの過不足を検出する", () => {
 });
 
 Deno.test("validateCitiesData の件数契約は全件採用の実測レンジ（20〜609 件）を許容する", () => {
-  // TASK-66: 契約を「人口上位 15〜25 件」から「候補全件（実測 900 年 20 件〜
+  // TASK-66: 契約を「人口上位 15〜25 件」から「候補全件（実測 1000 年 59 件〜
   // 1880 年 609 件）」に合わせて改定した。600 件規模の年が違反にならないこと。
   const data = validData();
   data.years["1880"] = Array.from({ length: 609 }, (_, i) => ({
@@ -308,13 +308,13 @@ Deno.test("validateCitiesData の件数契約は全件採用の実測レンジ�
 
 Deno.test("validateCitiesData は都市数が契約レンジ外（下限未満・上限超過）を検出する", () => {
   const tooFew = validData();
-  tooFew.years["900"] = tooFew.years["900"].slice(
+  tooFew.years["1000"] = tooFew.years["1000"].slice(
     0,
     MIN_CITIES_PER_YEAR - 1,
   );
   assert(validateCitiesData(tooFew, SNAPSHOT_YEARS, EUROPE_BBOX).length > 0);
   const tooMany = validData();
-  tooMany.years["900"] = Array.from(
+  tooMany.years["1000"] = Array.from(
     { length: MAX_CITIES_PER_YEAR + 1 },
     (_, i) => ({
       name: `X${i}`,
@@ -326,10 +326,10 @@ Deno.test("validateCitiesData は都市数が契約レンジ外（下限未満�
   assert(validateCitiesData(tooMany, SNAPSHOT_YEARS, EUROPE_BBOX).length > 0);
 });
 
-Deno.test("MIN/MAX_CITIES_PER_YEAR は全件採用の実測レンジ（20〜609 件）を包含する", () => {
-  // 元データの薄い 900〜1100 年（20〜59 件）が下限違反にならないこと、
+Deno.test("MIN/MAX_CITIES_PER_YEAR は全件採用の実測レンジ（44〜609 件）を包含する", () => {
+  // 元データの薄い 1000〜1100 年（44〜59 件）が下限違反にならないこと、
   // 最多の 1880 年（609 件）が上限違反にならないこと。
-  assert(MIN_CITIES_PER_YEAR <= 20, "下限が 900 年の実測 20 件を上回っている");
+  assert(MIN_CITIES_PER_YEAR <= 44, "下限が 1100 年の実測 44 件を上回っている");
   assert(
     MAX_CITIES_PER_YEAR >= 609,
     "上限が 1880 年の実測 609 件を下回っている",
@@ -338,22 +338,25 @@ Deno.test("MIN/MAX_CITIES_PER_YEAR は全件採用の実測レンジ（20〜609 
 
 Deno.test("validateCitiesData は bbox 外の座標を検出する", () => {
   const data = validData();
-  data.years["900"][0] = { ...data.years["900"][0], lat: 30 };
+  data.years["1000"][0] = { ...data.years["1000"][0], lat: 30 };
   assert(validateCitiesData(data, SNAPSHOT_YEARS, EUROPE_BBOX).length > 0);
 });
 
 Deno.test("validateCitiesData は年内の name 重複を検出する", () => {
   const data = validData();
-  data.years["900"][1] = { ...data.years["900"][1], name: "City00" };
+  data.years["1000"][1] = { ...data.years["1000"][1], name: "City00" };
   assert(validateCitiesData(data, SNAPSHOT_YEARS, EUROPE_BBOX).length > 0);
 });
 
 Deno.test("validateCitiesData は population が正整数でも null でもない値を検出する", () => {
   const zero = validData();
-  zero.years["900"][0] = { ...zero.years["900"][0], population: 0 };
+  zero.years["1000"][0] = { ...zero.years["1000"][0], population: 0 };
   assert(validateCitiesData(zero, SNAPSHOT_YEARS, EUROPE_BBOX).length > 0);
   const nullable = validData();
-  nullable.years["900"][0] = { ...nullable.years["900"][0], population: null };
+  nullable.years["1000"][0] = {
+    ...nullable.years["1000"][0],
+    population: null,
+  };
   assertEquals(
     validateCitiesData(nullable, SNAPSHOT_YEARS, EUROPE_BBOX),
     [],
@@ -386,7 +389,7 @@ Deno.test("data/cities.json は候補全件を採用している（代表年の�
   // 現行ルール（bbox / 窓 / 除外 / rename / 同名統合）で集計した実測値。
   // 従来の上位 23 件選定のままだとどの年もこの件数に届かない。
   const expected: Record<string, number> = {
-    "900": 20,
+    "1000": 59,
     "1200": 109,
     "1500": 157,
     "1880": 609,
@@ -400,10 +403,10 @@ Deno.test("data/cities.json は候補全件を採用している（代表年の�
   }
 });
 
-Deno.test("data/cities.json は代表都市を含む（900/1500: Constantinople、1500: Paris/Venice、1914: London/Berlin）", () => {
+Deno.test("data/cities.json は代表都市を含む（1000/1500: Constantinople、1500: Paris/Venice、1914: London/Berlin）", () => {
   const names = (year: number) =>
     generated.years[String(year)].map((m) => m.name);
-  assert(names(900).includes("Constantinople"));
+  assert(names(1000).includes("Constantinople"));
   assert(names(1500).includes("Constantinople"));
   assert(names(1500).includes("Paris"));
   assert(names(1500).includes("Venice"));

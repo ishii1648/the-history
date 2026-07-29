@@ -271,6 +271,64 @@ export const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
   features: [],
 };
 
+/**
+ * 年代キャッシュの保持上限（ローダ 1 本あたりの年代数。TASK-129）。
+ *
+ * 年代切替 1 回は最大 7 本の GeoJSON（base / hre / fiefs / outlines /
+ * baseFill / italyFiefs / cliopatriaFiefs、main.ts の複合ローダ構成）を
+ * ローダ 1 本 = 1 ファイル系統で読み込む。上限なしだと全 19 年代の巡回で
+ * 19 年 × 7 本 = 最大 133 個の FeatureCollection がヒープに残り続け（パース
+ * 済み GeoJSON は元テキストの数倍を占める）、メモリ制約の厳しいモバイルで
+ * タブクラッシュの懸念がある。
+ *
+ * 4 年なら保持は最大 4 × 7 = 28 個（無制限時の約 2 割）に収まり、かつ
+ * スライダーで隣接年代を行き来する典型操作（現在年 ± 数年分）は
+ * キャッシュヒットのまま賄える。解放済みの年代は再選択時に再 fetch する
+ * （HTTP キャッシュが効くため再取得コストはネットワーク往復に限られる）。
+ */
+export const YEAR_CACHE_MAX_YEARS = 4;
+
+/** 年代キーの LRU キャッシュ（保持数上限つき。TASK-129） */
+export interface YearCache<V> {
+  /** 値を返し、その年代を「最近使った」扱いにする */
+  get(year: number): V | undefined;
+  /** 値を格納する。上限超過時は最も古く使われた年代を解放する */
+  set(year: number, value: V): void;
+  /** 年代が保持中か（退避順は更新しない） */
+  has(year: number): boolean;
+}
+
+/**
+ * 年代キーの LRU キャッシュを作る（TASK-129）。
+ * Map の挿入順を「使った順」に写す定番の実装: get / set のたびに再挿入して
+ * 末尾へ回し、上限超過時は先頭（= 最も古く使われた年代）を削除する。
+ * createYearDataLoader と withSuzerainOverrides（suzerain_extent.ts）の
+ * 双方で使い、年代 GeoJSON を保持する全キャッシュに同じ上限を効かせる。
+ */
+export function createYearCache<V>(
+  maxYears: number = YEAR_CACHE_MAX_YEARS,
+): YearCache<V> {
+  const map = new Map<number, V>();
+  return {
+    has: (year) => map.has(year),
+    get(year) {
+      if (!map.has(year)) return undefined;
+      const value = map.get(year) as V;
+      map.delete(year);
+      map.set(year, value);
+      return value;
+    },
+    set(year, value) {
+      map.delete(year);
+      map.set(year, value);
+      if (map.size > maxYears) {
+        const oldest = map.keys().next().value;
+        if (oldest !== undefined) map.delete(oldest);
+      }
+    },
+  };
+}
+
 /** fetch の最小契約（テストでモックできるよう Response 全体には依存しない） */
 export interface FetchResponseLike {
   ok: boolean;
@@ -292,6 +350,8 @@ export interface YearDataLoader {
 /**
  * 年代 GeoJSON のメモリキャッシュ付きローダを作る。
  * - 取得済み年代はキャッシュから即返す
+ * - キャッシュは LRU（保持上限 YEAR_CACHE_MAX_YEARS 年）。上限超過時は
+ *   最も古く使われた年代を解放し、再選択時は再 fetch する（TASK-129）
  * - 同一年代への並行呼び出しは 1 回の fetch に集約する（inflight 共有）
  * - 失敗時はキャッシュも inflight も残さず、再試行できるようにする
  * fetch 部を引数で受けることで DOM 非依存にテストできる。
@@ -301,7 +361,7 @@ export function createYearDataLoader(
   fetchFn: FetchLike,
   urlFor: (year: number) => string = dataUrlFor,
 ): YearDataLoader {
-  const cache = new Map<number, FeatureCollection>();
+  const cache = createYearCache<FeatureCollection>();
   const inflight = new Map<number, Promise<FeatureCollection>>();
 
   return {
@@ -417,7 +477,7 @@ export function createFranceFiefOverlayLoader(
 /**
  * 中世イタリア諸侯領オーバーレイ用のローダを作る（TASK-96）。
  * HRE 領邦・仏諸侯領オーバーレイと同じ機構（createOverlayLoader）に載せることで、
- * 非対象年（900・1500 以降）は fetch せず空 FC を返し、ベースマップの
+ * 非対象年（1500 以降）は fetch せず空 FC を返し、ベースマップの
  * ヴェネツィア共和国・教皇領・ミラノ公国と二重表示にならないことを構造的に
  * 保証する。
  */
@@ -438,7 +498,7 @@ export function createItalyFiefOverlayLoader(
 /**
  * Cliopatria 領邦オーバーレイ用のローダを作る（TASK-110）。
  * 既存 3 系統と同じ機構（createOverlayLoader）に載せることで、
- * - 非対象年（900・1500 以降）は fetch せず空 FC を返し、base の主権国家
+ * - 非対象年（1500 以降）は fetch せず空 FC を返し、base の主権国家
  *   ポリゴンと二重表示にならないことを構造的に保証する
  * - 取得失敗・**データ未生成**（cliopatria_fiefs_flat_* がまだ無い環境）は
  *   reject せず warn + 空 FC に落ちるので、年代切替も base の表示も壊れない

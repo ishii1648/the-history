@@ -185,8 +185,8 @@ async function loadYear(year: number): Promise<FeatureCollection> {
   return JSON.parse(await Deno.readTextFile(url)) as FeatureCollection;
 }
 
-Deno.test("実データ: 検出結果は監査対象の 20 年代をすべて含み、宗主は自己参照を含まない", async () => {
-  assertEquals(YEARS.length, 20);
+Deno.test("実データ: 検出結果は監査対象の 19 年代をすべて含み、宗主は自己参照を含まない", async () => {
+  assertEquals(YEARS.length, 19);
   const records = new Map<number, readonly PowerRecord[]>();
   for (const year of YEARS) {
     records.set(year, recordsOf(await loadYear(year)));

@@ -5,9 +5,11 @@ import {
   assertThrows,
 } from "@std/assert";
 import {
+  chooseEncoding,
   DEFAULT_PORT,
   DEFAULT_ROOT,
   formatPortInUseMessage,
+  parseAcceptEncoding,
   parseLsofPids,
   parsePsOutput,
   parseServeArgs,
@@ -15,6 +17,7 @@ import {
   type ServeFn,
   type ServerHandle,
   startServer,
+  withCompression,
 } from "./serve.ts";
 
 // ---- parseServeArgs ----
@@ -268,4 +271,248 @@ Deno.test({
       blocker.close();
     }
   },
+});
+
+// ---- TASK-128: 圧縮配信 ----
+
+// Chrome が実際に送る Accept-Encoding ヘッダ
+const CHROME_ACCEPT_ENCODING = "gzip, deflate, br, zstd";
+
+// ---- parseAcceptEncoding ----
+
+Deno.test("parseAcceptEncoding: null（ヘッダ無し）なら空配列", () => {
+  assertEquals(parseAcceptEncoding(null), []);
+});
+
+Deno.test("parseAcceptEncoding: Chrome の実ヘッダを名前の配列にする", () => {
+  assertEquals(parseAcceptEncoding(CHROME_ACCEPT_ENCODING), [
+    "gzip",
+    "deflate",
+    "br",
+    "zstd",
+  ]);
+});
+
+Deno.test("parseAcceptEncoding: q=0 の符号化方式は除外する", () => {
+  assertEquals(parseAcceptEncoding("gzip;q=0, br"), ["br"]);
+});
+
+Deno.test("parseAcceptEncoding: q 値付き（q>0）は含める", () => {
+  assertEquals(parseAcceptEncoding("gzip;q=0.5, identity;q=1.0"), [
+    "gzip",
+    "identity",
+  ]);
+});
+
+Deno.test("parseAcceptEncoding: 大文字・余分な空白を正規化する", () => {
+  assertEquals(parseAcceptEncoding("  GZip ,  BR "), ["gzip", "br"]);
+});
+
+// ---- chooseEncoding ----
+
+Deno.test("chooseEncoding: テキスト系拡張子（.html/.css/.js/.json/.geojson）は gzip", () => {
+  for (
+    const path of [
+      "/index.html",
+      "/app.css",
+      "/app.js",
+      "/data/index.json",
+      "/data/base_outline_1000.geojson",
+    ]
+  ) {
+    assertEquals(
+      chooseEncoding({
+        pathname: path,
+        contentType: null,
+        acceptEncoding: CHROME_ACCEPT_ENCODING,
+      }),
+      "gzip",
+      path,
+    );
+  }
+});
+
+Deno.test("chooseEncoding: 圧縮済みバイナリ（.pmtiles/.png/.jpg/.woff2）は無圧縮", () => {
+  for (
+    const path of [
+      "/europe.pmtiles",
+      "/europe-dem.pmtiles",
+      "/icon.png",
+      "/photo.jpg",
+      "/font.woff2",
+    ]
+  ) {
+    assertEquals(
+      chooseEncoding({
+        pathname: path,
+        contentType: "application/octet-stream",
+        acceptEncoding: CHROME_ACCEPT_ENCODING,
+      }),
+      "identity",
+      path,
+    );
+  }
+});
+
+Deno.test("chooseEncoding: 拡張子なしパス（/）でも Content-Type がテキスト系なら gzip", () => {
+  assertEquals(
+    chooseEncoding({
+      pathname: "/",
+      contentType: "text/html; charset=UTF-8",
+      acceptEncoding: CHROME_ACCEPT_ENCODING,
+    }),
+    "gzip",
+  );
+});
+
+Deno.test("chooseEncoding: Content-Type が application/geo+json なら gzip", () => {
+  assertEquals(
+    chooseEncoding({
+      pathname: "/data/rivers",
+      contentType: "application/geo+json",
+      acceptEncoding: CHROME_ACCEPT_ENCODING,
+    }),
+    "gzip",
+  );
+});
+
+Deno.test("chooseEncoding: Accept-Encoding が無い場合は無圧縮", () => {
+  assertEquals(
+    chooseEncoding({
+      pathname: "/app.js",
+      contentType: "text/javascript",
+      acceptEncoding: null,
+    }),
+    "identity",
+  );
+});
+
+Deno.test("chooseEncoding: Accept-Encoding に gzip が含まれない場合は無圧縮", () => {
+  assertEquals(
+    chooseEncoding({
+      pathname: "/app.js",
+      contentType: "text/javascript",
+      acceptEncoding: "br, zstd",
+    }),
+    "identity",
+  );
+});
+
+Deno.test("chooseEncoding: Accept-Encoding のワイルドカード * は gzip を許可する", () => {
+  assertEquals(
+    chooseEncoding({
+      pathname: "/app.js",
+      contentType: "text/javascript",
+      acceptEncoding: "*",
+    }),
+    "gzip",
+  );
+});
+
+// ---- withCompression ----
+
+async function gunzip(body: ReadableStream<Uint8Array>): Promise<string> {
+  const decompressed = body.pipeThrough(
+    new DecompressionStream("gzip") as unknown as ReadableWritablePair<
+      Uint8Array<ArrayBuffer>,
+      Uint8Array<ArrayBufferLike>
+    >,
+  );
+  return await new Response(decompressed).text();
+}
+
+function requestFor(path: string, acceptEncoding?: string): Request {
+  return new Request(`http://localhost${path}`, {
+    headers: acceptEncoding ? { "Accept-Encoding": acceptEncoding } : {},
+  });
+}
+
+Deno.test("withCompression: テキスト応答は gzip され、往復で内容が一致する", async () => {
+  const original = JSON.stringify({ hello: "world".repeat(100) });
+  const handler = withCompression(() =>
+    new Response(original, {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  );
+  const res = await handler(
+    requestFor("/data/index.json", CHROME_ACCEPT_ENCODING),
+  );
+  assertEquals(res.headers.get("Content-Encoding"), "gzip");
+  assertEquals(res.headers.get("Content-Length"), null);
+  assertMatch(res.headers.get("Vary") ?? "", /Accept-Encoding/);
+  assertEquals(await gunzip(res.body!), original);
+});
+
+Deno.test("withCompression: pmtiles（圧縮済みバイナリ）は素通しする", async () => {
+  const handler = withCompression(() =>
+    new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: { "Content-Type": "application/octet-stream" },
+    })
+  );
+  const res = await handler(
+    requestFor("/europe.pmtiles", CHROME_ACCEPT_ENCODING),
+  );
+  assertEquals(res.headers.get("Content-Encoding"), null);
+  assertEquals(
+    new Uint8Array(await res.arrayBuffer()),
+    new Uint8Array([1, 2, 3]),
+  );
+});
+
+Deno.test("withCompression: 206 Partial Content（Range 応答）は圧縮しない", async () => {
+  const handler = withCompression(() =>
+    new Response("chunk", {
+      status: 206,
+      headers: { "Content-Type": "text/html" },
+    })
+  );
+  const res = await handler(requestFor("/index.html", CHROME_ACCEPT_ENCODING));
+  assertEquals(res.headers.get("Content-Encoding"), null);
+  assertEquals(await res.text(), "chunk");
+});
+
+Deno.test("withCompression: 304 Not Modified（body 無し）は素通しする", async () => {
+  const handler = withCompression(() =>
+    new Response(null, {
+      status: 304,
+      headers: { "Content-Type": "text/html" },
+    })
+  );
+  const res = await handler(requestFor("/index.html", CHROME_ACCEPT_ENCODING));
+  assertEquals(res.status, 304);
+  assertEquals(res.headers.get("Content-Encoding"), null);
+});
+
+Deno.test("withCompression: Accept-Encoding 無しのリクエストには圧縮しない", async () => {
+  const handler = withCompression(() =>
+    new Response("plain", {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    })
+  );
+  const res = await handler(requestFor("/index.html"));
+  assertEquals(res.headers.get("Content-Encoding"), null);
+  assertEquals(await res.text(), "plain");
+});
+
+Deno.test("withCompression: 既に Content-Encoding が付いた応答は二重圧縮しない", async () => {
+  const handler = withCompression(() =>
+    new Response(new Uint8Array([31, 139]), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+      },
+    })
+  );
+  const res = await handler(
+    requestFor("/data/index.json", CHROME_ACCEPT_ENCODING),
+  );
+  assertEquals(res.headers.get("Content-Encoding"), "gzip");
+  assertEquals(
+    new Uint8Array(await res.arrayBuffer()),
+    new Uint8Array([31, 139]),
+  );
 });

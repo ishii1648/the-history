@@ -143,6 +143,7 @@ import {
   filterVisibleRiverLabels,
   RIVER_HIT_LINE_COLOR,
   RIVER_HIT_LINE_WIDTH_PX,
+  RIVER_LABEL_COLLISION_BACKGROUND_COLOR,
   riverLabelAnchors,
   riverLabelColor,
   type RiverLabelDatum,
@@ -153,6 +154,7 @@ import {
   toggleRiverSelection,
 } from "./rivers.ts";
 import {
+  allCityPositions,
   buildCityLabelData,
   buildCityMarkerData,
   CITIES_DATA_URL,
@@ -180,10 +182,8 @@ import {
 } from "./loading_state.ts";
 import {
   BASE_OUTLINE_YEARS,
-  BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
   CLIOPATRIA_FIEF_OVERLAY_YEARS,
-  DEM_PMTILES_URL,
   FALLBACK_STYLE_URL,
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_ALL_OVERLAY_YEARS,
@@ -197,6 +197,10 @@ import {
   MIN_ZOOM,
   SNAPSHOT_YEARS,
 } from "./config.ts";
+import {
+  resolveBasemapPmtilesUrl,
+  resolveDemPmtilesUrl,
+} from "./pmtiles_url.ts";
 import { indexOfYear, keyToStep, stepYear, yearAtIndex } from "./timeline.ts";
 import {
   type AppState,
@@ -281,12 +285,20 @@ const initialState = decodeState(
 );
 const initialYear = initialState.year;
 
+// TASK-127: PMTiles の配信元を実行時に解決する。本番/プレビュー
+// （zeitreises.com / *.pages.dev）は R2 カスタムドメイン、ローカル開発は
+// 従来どおり同一オリジンの /europe.pmtiles（判定は src/pmtiles_url.ts）。
+const basemapPmtilesUrl = resolveBasemapPmtilesUrl(
+  globalThis.location.hostname,
+);
+const demPmtilesUrl = resolveDemPmtilesUrl(globalThis.location.hostname);
+
 // PMTiles プロトコルを MapLibre に登録（1 回だけ）
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 
 // アーカイブを登録しておくと pmtiles:// の解決とヘッダ取得を共有できる
-const archive = new PMTiles(BASEMAP_PMTILES_URL);
+const archive = new PMTiles(basemapPmtilesUrl);
 protocol.add(archive);
 
 // TASK-34: 地形 DEM（hillshade 用）の PMTiles アーカイブも登録する。
@@ -294,7 +306,7 @@ protocol.add(archive);
 // 握りつぶして hillshade なしの従来表示で継続する（basemap と違いフォール
 // バックはしない。dem ソースのタイル取得エラーも fallback.ts の判定が
 // sourceId で除外する）。
-const demArchive = new PMTiles(DEM_PMTILES_URL);
+const demArchive = new PMTiles(demPmtilesUrl);
 protocol.add(demArchive);
 demArchive.getHeader().catch((error: unknown) => {
   console.warn(
@@ -306,7 +318,10 @@ demArchive.getHeader().catch((error: unknown) => {
 
 const map = new maplibregl.Map({
   container: mapContainer,
-  style: buildBasemapStyle(BASEMAP_PMTILES_URL) as StyleSpecification,
+  style: buildBasemapStyle(
+    basemapPmtilesUrl,
+    demPmtilesUrl,
+  ) as StyleSpecification,
   center: initialState.center,
   zoom: initialState.zoom,
   minZoom: MIN_ZOOM,
@@ -1255,15 +1270,28 @@ function labelLayerBaseProps() {
 }
 
 /**
- * 河川名ラベルのデータ + characterSet をメモ化する（TASK-50）。
- * riversData・nameJa は起動時に一度ロードされたあと year に関わらず不変な
- * ため、hover/selection だけを変える renderLayers 呼び出しでは引数の参照が
- * 前回と同じになり、riverLabelAnchors と characterSetFrom の再計算を
- * スキップできる。
+ * 全年代の都市座標 union をメモ化する（TASK-136）。citiesData の参照は
+ * 起動時ロード後に不変なので、実質 1 回（初期値 { years: {} } → ロード完了で
+ * もう 1 回）だけ計算される。河川ラベルのアンカー回避（riverLabelAnchors の
+ * avoidPoints）に渡す。
+ */
+const memoizedCityAvoidPoints = memoizeLatest(allCityPositions);
+
+/**
+ * 河川名ラベルのデータ + characterSet をメモ化する（TASK-50 / TASK-136）。
+ * riversData・nameJa・都市座標 union（memoizedCityAvoidPoints の安定参照）は
+ * 起動時に一度ロードされたあと year に関わらず不変なため、hover/selection
+ * だけを変える renderLayers 呼び出しでは引数の参照が前回と同じになり、
+ * riverLabelAnchors と characterSetFrom の再計算をスキップできる
+ * （citiesData のロード完了時に 1 度だけ再計算される）。
  */
 const memoizedRiverLabelData = memoizeLatest(
-  (fc: FeatureCollection, ja: Record<string, string>) => {
-    const data = riverLabelAnchors(fc, ja);
+  (
+    fc: FeatureCollection,
+    ja: Record<string, string>,
+    avoidPoints: readonly [number, number][],
+  ) => {
+    const data = riverLabelAnchors(fc, ja, avoidPoints);
     return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
   },
 );
@@ -1310,6 +1338,7 @@ function buildRiverLabelLayer(): TextLayer<
   const { data: anchors, characterSet } = memoizedRiverLabelData(
     riversData,
     nameJa,
+    memoizedCityAvoidPoints(citiesData),
   );
   const data = memoizedVisibleRiverLabels(
     anchors,
@@ -1325,6 +1354,13 @@ function buildRiverLabelLayer(): TextLayer<
     // HRE 外縁の赤境界線との重なり対策。背景パネルは撤去済み）・衝突制御は
     // 共通 base props
     ...labelLayerBaseProps(),
+    // TASK-136: 自己衝突対策。衝突 FBO の実体になる不可視背景クアッドを
+    // 敷く。これが無いと FBO にはグリフ字形しか描かれず、テキスト中央
+    // （= 衝突判定のサンプル点）が文字間の空白に落ちるラベル（ライン川 =
+    // 「イ|ン」境界）が自分自身の可視判定に失敗して永遠に表示されない。
+    // 詳細は rivers.ts RIVER_LABEL_COLLISION_BACKGROUND_COLOR を参照
+    background: true,
+    getBackgroundColor: [...RIVER_LABEL_COLLISION_BACKGROUND_COLOR] as Rgba,
     id: RIVER_LABEL_LAYER_ID,
     data,
     pickable: false,
@@ -2148,7 +2184,7 @@ const memoizedPowerLabelData = memoizeLatest(
     // fiefs が空 FC なのでラベルも 0 件になる（二重ラベルにならない）。
     // TASK-78 AC #1: 諸侯領にほぼ完全内包される base 勢力（1000〜1300 の
     // Britany）は、同じ土地の諸侯領ラベル（ブルターニュ公領）と二重表示に
-    // なるため base 側のラベルだけ落とす。抑制対象が無い年（900・1400 以降や
+    // なるため base 側のラベルだけ落とす。抑制対象が無い年（1400 以降や
     // 対応表の取得失敗時）は同一参照が返り、polylabel のメモ化も効き続ける。
     // TASK-122: 抑制対象を FeatureCollection から落とすのではなく datum に
     // suppressed の印だけ付ける。諸侯領ラベルを出していないズーム段では抑制を
@@ -3248,20 +3284,31 @@ map.on("load", () => {
     selected: string | null;
     zoomStep: number;
     visibleLabels: string[];
+    visibleAnchors: { name: string; position: [number, number] }[];
   };
 }).__getRiverLabelDebug = () => {
-  const { data } = memoizedRiverLabelData(riversData, nameJa);
+  const { data } = memoizedRiverLabelData(
+    riversData,
+    nameJa,
+    memoizedCityAvoidPoints(citiesData),
+  );
+  const visible = filterVisibleRiverLabels(
+    data,
+    hoveredRiverName,
+    selectedRiverName,
+    zoomStep,
+  );
   return {
     hovered: hoveredRiverName,
     selected: selectedRiverName,
     // TASK-123: ズーム段で常時表示が変わるため、判定に使った段も返す
     zoomStep,
-    visibleLabels: filterVisibleRiverLabels(
-      data,
-      hoveredRiverName,
-      selectedRiverName,
-      zoomStep,
-    ).map((d) => d.name),
+    visibleLabels: visible.map((d) => d.name),
+    // TASK-136: アンカー回避の実機検証用に描画位置も返す（読み取り専用）
+    visibleAnchors: visible.map((d) => ({
+      name: d.name,
+      position: d.position,
+    })),
   };
 };
 

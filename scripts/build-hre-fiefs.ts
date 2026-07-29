@@ -84,13 +84,15 @@ export const HRE_FIEF_BBOX: readonly [number, number, number, number] = [
 /**
  * 生成対象年。SNAPSHOT_YEARS のうち OHM に領邦データが十分にある中世年代。
  * 許可リスト内で有効な領邦の実測件数と合計面積（クリップ前・球面近似）:
- * 900 = 6 件 / 247,289 km²、1000 = 19 / 544,855、1100 = 23 / 542,256、
+ * 1000 = 19 件 / 544,855 km²、1100 = 23 / 542,256、
  * 1200 = 26 / 122,184、1279 = 40 / 110,706、1300 = 52 / 151,447、
  * 1400 = 63 / 239,371、1492 = 73 / 226,502。
  *
- * 900 年は対象外（HRE_FIEF_EXCLUSIONS.year900）。1200 年は 1100 年から面積が
- * 1/4 に落ちる「谷」だが収録する（HRE_FIEF_EXCLUSIONS 参照の判断根拠は
- * HRE_FIEF_YEAR_1200_NOTE）。
+ * かつて最古のスナップショット年だった 900 年は当初から生成対象外
+ * （神聖ローマ帝国の成立は 962 年で 900 年時点は東フランク王国。有効な領邦も
+ * 6 件のみだった）で、TASK-119 で 900 年はスナップショット年自体が廃止された。
+ * 1200 年は 1100 年から面積が 1/4 に落ちる「谷」だが収録する
+ * （判断根拠は HRE_FIEF_YEAR_1200_NOTE）。
  *
  * Roller 由来の HRE_OVERLAY_YEARS（1500〜1700）とは互いに素で、同一年に
  * 2 系統の HRE 領邦が並ぶことはない。
@@ -139,7 +141,9 @@ export const HRE_FIEF_SIZE_LIMIT_BYTES = 200 * 1000;
  * 収録を見送った対象の分類と根拠（AC3）。
  * bbox 内の boundary=administrative から admin_level 4 / 5・対象年に有効・
  * name:en ありで絞ると 171 件が残り、そのうち 72 件をここに挙げる分類で落とし、
- * さらに 900 年専用の 1 件を外して許可リスト HRE_FIEF_NAMES（98 件）にした。
+ * さらに 900 年にしか掛からない 1 件（Duchy of Lotharingia）を外して許可リスト
+ * HRE_FIEF_NAMES（98 件）にした。900 年自体は TASK-119 でスナップショット年から
+ * 廃止されたため、現在は「どの生成対象年にも掛からない」領邦にあたる。
  */
 export const HRE_FIEF_EXCLUSIONS: Record<string, string> = {
   freeImperialCities:
@@ -186,12 +190,14 @@ export const HRE_FIEF_EXCLUSIONS: Record<string, string> = {
     "Golden Ambrosian Republic（史実は 1447〜1450 のミラノ市共和国）が " +
     "1492 年でも有効判定になる。OHM 側の end_date 誤りと判断して落とし、" +
     "結果として 1492 年はミラノが空白になる（1400 年は Duchy of Milan で収録）。",
-  year900:
-    "900 年は生成対象にしない。神聖ローマ帝国の成立は 962 年で 900 年時点は" +
-    "東フランク王国であり、許可リストで有効なのも 6 件（Duchy of Lotharingia / " +
-    "Duchy of Saxony / March of Verona の 3 件で面積の 99.7% を占め、残る 3 件は " +
-    "Hersfeld 452 km² / Worms 145 km² / Werden 106 km² の点に近い領域）にとどまる。" +
-    "これに伴い 900 年にしか掛からない Duchy of Lotharingia は許可リストからも外した。",
+  outOfSnapshotYears:
+    "Duchy of Lotharingia（OHM の有効期間 0900-08-13〜0959）は生成対象年の" +
+    "いずれにも掛からないため許可リストに入れない。かつては最古のスナップ" +
+    "ショット年 900 に掛かる唯一の領邦だったが、900 年は帝国成立（962 年）前で" +
+    "生成対象にしておらず（有効 6 件のうち面積の 99.7% を Lotharingia / " +
+    "Duchy of Saxony / March of Verona の 3 件が占め、残る 3 件は Hersfeld " +
+    "452 km² / Worms 145 km² / Werden 106 km² の点に近い領域だった）、" +
+    "TASK-119 で 900 年はスナップショット年自体が廃止された。",
 };
 
 /**
@@ -251,8 +257,9 @@ export function hreFiefExclusionReason(
 /**
  * 採用する領邦の英語名（name:en）許可リスト（昇順・98 件）。
  * bbox 内の admin_level 4 / 5 かつ対象年に有効な 171 件から、
- * HRE_FIEF_EXCLUSIONS の分類で 72 件を落とし、さらに 900 年にしか掛からない
- * Duchy of Lotharingia（0900-08-13〜0959）を除いて確定した実測ベースのリスト。
+ * HRE_FIEF_EXCLUSIONS の分類で 72 件を落とし、さらに生成対象年のいずれにも
+ * 掛からない Duchy of Lotharingia（0900-08-13〜0959。
+ * HRE_FIEF_EXCLUSIONS.outOfSnapshotYears）を除いて確定した実測ベースのリスト。
  * 全 98 件が HRE_FIEF_YEARS のいずれかの生成物に実際に現れる。
  *
  * 採用の分類（帝国等族のうち領域を持つもの）:

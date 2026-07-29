@@ -153,6 +153,38 @@ export function cityEntriesForYear(
 }
 
 /**
+ * 全年代の都市座標の和集合を返す（純粋関数、TASK-136）。
+ *
+ * 河川ラベルのアンカー回避（rivers.ts riverLabelAnchors の avoidPoints）用。
+ * 表示年の都市だけでなく union を使うのは、河川アンカーを年代非依存
+ * （TASK-50 のメモ化 = 起動後 1 度だけ計算）に保つため。union から
+ * 離れた点はどの年代の都市からも離れているので、年代切替でラベルが跳ばない。
+ *
+ * - 同一座標（lon,lat 完全一致）は 1 件に重複排除する
+ * - 不正エントリ・不正形の年（非配列等）は cityEntriesForYear と同じ基準で
+ *   1 件/1 年単位で除外して継続する
+ * - 決定的: 年キーの列挙順（JS の整数風キーは数値昇順）× 配列順で安定
+ */
+export function allCityPositions(data: CitiesData): [number, number][] {
+  const years = (data as unknown as Record<string, unknown> | null)?.years;
+  if (typeof years !== "object" || years === null) return [];
+  const seen = new Set<string>();
+  const positions: [number, number][] = [];
+  for (const list of Object.values(years)) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      const entry = normalizeCityEntry(item);
+      if (entry === null) continue;
+      const key = `${entry.lon},${entry.lat}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      positions.push([entry.lon, entry.lat]);
+    }
+  }
+  return positions;
+}
+
+/**
  * 最遠〜初期ズーム（z4 以下）で表示する都市数の上限（TASK-66 AC #3）。
  *
  * 設計根拠: 現行データ（scripts/build-cities.ts）は各年

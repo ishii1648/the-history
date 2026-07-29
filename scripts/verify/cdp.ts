@@ -34,6 +34,15 @@
 
 import { isAbsolute, join, toFileUrl } from "@std/path";
 import { DEFAULT_PORT } from "../serve.ts";
+import {
+  buildDeviceMetricsParams,
+  buildTapEvents,
+  buildTouchEmulationParams,
+  buildWindowSizeArg,
+  DEVICE_PRESETS,
+  type EmulationConfig,
+  resolveDevicePreset,
+} from "./emulation.ts";
 
 /**
  * `deno task serve` が既定で配信する URL。ポート番号の定義元は
@@ -52,12 +61,22 @@ function resolveChromeBin(): string {
 
 export interface CdpApi {
   navigate(url: string): Promise<void>;
+  /**
+   * ブラウザ HTTP キャッシュの有効/無効を切り替える（TASK-128）。
+   * CLI が最初に navigate した後に再 navigate して計測するハーネスでは、
+   * 無効化しないと 2 回目のロードが 304 revalidation だらけになり
+   * コールドロードの転送量を測れない。
+   */
+  setCacheDisabled(disabled: boolean): Promise<void>;
   evaluate<T = unknown>(expr: string): Promise<T>;
   waitFor(expr: string, timeoutMs?: number): Promise<void>;
   waitForAppReady(timeoutMs?: number): Promise<void>;
   /** クリックを伴わないマウス移動（ホバー強調の確認に使う。TASK-90） */
   hover(x: number, y: number): Promise<void>;
   click(x: number, y: number): Promise<void>;
+  /** タップ相当のタッチ入力（Input.dispatchTouchEvent。TASK-131）。
+   * タッチエミュレーション有効時（EmulationConfig.touch）に使う。 */
+  tap(x: number, y: number): Promise<void>;
   keys(key: string, count?: number): Promise<void>;
   screenshot(path: string): Promise<void>;
   close(): Promise<void>;
@@ -143,6 +162,23 @@ export function resolveKeyCode(
 export function buildWaitForExpr(expr: string): string {
   return `Boolean(${expr})`;
 }
+
+// ---- デバイスエミュレーション（TASK-131） ----
+//
+// 純ロジックの実体は emulation.ts（checkScript が value import しても
+// cdp.ts との循環参照にならないよう分離）。従来どおり cdp.ts からも
+// import できるように再 export する。
+
+export {
+  buildDeviceMetricsParams,
+  buildTapEvents,
+  buildTouchEmulationParams,
+  buildWindowSizeArg,
+  DEVICE_PRESETS,
+  MOBILE_PRESET,
+  resolveDevicePreset,
+} from "./emulation.ts";
+export type { EmulationConfig } from "./emulation.ts";
 
 /** send() のデフォルトタイムアウト。呼び出し側の waitFor（10〜30s、1 回の
  * evaluate は即応答想定）と干渉しないよう、単発コマンドの応答としては十分
@@ -290,25 +326,43 @@ export function createCdpSession(
 }
 
 const CLI_USAGE =
-  "Usage: deno run -A scripts/verify/cdp.ts <url> <checkScript.ts>\n" +
-  "  (引数順は任意。http(s):// で始まる引数を URL、それ以外を checkScript と\n" +
-  "   みなす。標準スモークは `deno task verify:smoke <url>`)";
+  "Usage: deno run -A scripts/verify/cdp.ts [--device=<preset>] <url> <checkScript.ts>\n" +
+  "  (引数順は任意。http(s):// で始まる引数を URL、-- で始まらない引数を\n" +
+  "   checkScript とみなす。標準スモークは `deno task verify:smoke <url>`、\n" +
+  `   モバイル条件は --device=<preset>（${
+    Object.keys(DEVICE_PRESETS).join(", ")
+  }）)`;
 
 /**
- * CLI 引数から url と checkScript パスを解決する。順不同で受け付ける
- * （`deno task verify:smoke <url>` はタスク定義の checkScript の後ろに URL が
- * 付くため）。重複する余分な引数は無視する。どちらかが欠ければ usage を含む
- * 例外を投げる。
+ * CLI 引数から url・checkScript パス・エミュレーション設定を解決する。
+ * 順不同で受け付ける（`deno task verify:smoke <url>` はタスク定義の
+ * checkScript の後ろに URL が付くため）。重複する余分な引数は無視する。
+ * url / checkScript のどちらかが欠ける、または未知の -- フラグがあれば
+ * usage を含む例外を投げる。`--device=<preset>` 指定時のみ emulation キーを
+ * 持ち、未指定時はキー自体を持たない（デスクトップ既定。TASK-131）。
  */
 export function parseCliArgs(
   args: string[],
-): { url: string; checkScriptPath: string } {
-  const url = args.find((a) => /^https?:\/\//.test(a));
-  const checkScriptPath = args.find((a) => !/^https?:\/\//.test(a));
+): { url: string; checkScriptPath: string; emulation?: EmulationConfig } {
+  let emulation: EmulationConfig | undefined;
+  const positional: string[] = [];
+  for (const arg of args) {
+    if (arg.startsWith("--device=")) {
+      emulation = resolveDevicePreset(arg.slice("--device=".length));
+    } else if (arg.startsWith("--")) {
+      throw new Error(`不明なオプション: ${arg}\n${CLI_USAGE}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+  const url = positional.find((a) => /^https?:\/\//.test(a));
+  const checkScriptPath = positional.find((a) => !/^https?:\/\//.test(a));
   if (!url || !checkScriptPath) {
     throw new Error(CLI_USAGE);
   }
-  return { url, checkScriptPath };
+  return emulation === undefined
+    ? { url, checkScriptPath }
+    : { url, checkScriptPath, emulation };
 }
 
 /**
@@ -354,7 +408,13 @@ async function waitForCdpReady(
   throw new Error(`CDP endpoint not ready on port ${port}: ${lastErr}`);
 }
 
-export async function launch(): Promise<CdpApi> {
+export interface LaunchOptions {
+  /** 画面・端末条件のエミュレーション（未指定ならデスクトップ既定のまま）。 */
+  emulation?: EmulationConfig;
+}
+
+export async function launch(options: LaunchOptions = {}): Promise<CdpApi> {
+  const { emulation } = options;
   const port = await findFreePort();
   const userDataDir = await Deno.makeTempDir({ prefix: "cdp-verify-" });
 
@@ -362,7 +422,7 @@ export async function launch(): Promise<CdpApi> {
     args: [
       "--headless=new",
       `--remote-debugging-port=${port}`,
-      "--window-size=1600,900",
+      buildWindowSizeArg(emulation),
       `--user-data-dir=${userDataDir}`,
       "about:blank",
     ],
@@ -395,10 +455,29 @@ export async function launch(): Promise<CdpApi> {
   await send("Page.enable");
   await send("Runtime.enable");
 
+  // エミュレーション指定時のみ画面・端末条件を上書きする（TASK-131）。
+  // 未指定（デスクトップ既定）では Emulation ドメインを一切呼ばず、
+  // 従来の挙動を変えない。
+  if (emulation) {
+    await send(
+      "Emulation.setDeviceMetricsOverride",
+      buildDeviceMetricsParams(emulation),
+    );
+    await send(
+      "Emulation.setTouchEmulationEnabled",
+      buildTouchEmulationParams(emulation),
+    );
+  }
+
   async function navigate(url: string): Promise<void> {
     const loaded = once("Page.loadEventFired");
     await send("Page.navigate", { url });
     await loaded;
+  }
+
+  async function setCacheDisabled(disabled: boolean): Promise<void> {
+    await send("Network.enable");
+    await send("Network.setCacheDisabled", { cacheDisabled: disabled });
   }
 
   async function evaluate<T = unknown>(expr: string): Promise<T> {
@@ -447,6 +526,12 @@ export async function launch(): Promise<CdpApi> {
       button: "left",
       clickCount: 1,
     });
+  }
+
+  async function tap(x: number, y: number): Promise<void> {
+    for (const event of buildTapEvents(x, y)) {
+      await send("Input.dispatchTouchEvent", event);
+    }
   }
 
   async function keys(key: string, count = 1): Promise<void> {
@@ -501,11 +586,13 @@ export async function launch(): Promise<CdpApi> {
 
   return {
     navigate,
+    setCacheDisabled,
     evaluate,
     waitFor,
     waitForAppReady,
     hover,
     click,
+    tap,
     keys,
     screenshot,
     close,
@@ -514,20 +601,24 @@ export async function launch(): Promise<CdpApi> {
 
 // ---- CLI エントリポイント ----
 if (import.meta.main) {
-  let cli: { url: string; checkScriptPath: string };
+  let cli: {
+    url: string;
+    checkScriptPath: string;
+    emulation?: EmulationConfig;
+  };
   try {
     cli = parseCliArgs(Deno.args);
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
     Deno.exit(1);
   }
-  const { url, checkScriptPath } = cli;
+  const { url, checkScriptPath, emulation } = cli;
   const mod = await import(resolveCheckScriptUrl(checkScriptPath));
   if (typeof mod.run !== "function") {
     console.error(`checkScript must export an async function run(api)`);
     Deno.exit(1);
   }
-  const api = await launch();
+  const api = await launch({ emulation });
   try {
     await api.navigate(url);
     await mod.run(api);

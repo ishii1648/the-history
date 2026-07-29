@@ -99,11 +99,10 @@ export const HRE_OVERLAY_YEARS: readonly number[] = [
  * import は行わない規約のため値を重複定義し、同値性は build-france-fiefs_test.ts
  * で担保する）。
  *
- * 900 は Anjou / Maine の 2 件しか有効な諸侯領が無く面として成立せず、1400 以降は
- * 百年戦争期に多くの伯領が消滅して王領へ併合され、OHM 側の収録も admin_level 2
- * （主権国家）へ移るため対象外。1400 以降はベースマップ（europe_<year>）の
- * France ポリゴンが実態に一致するので、オーバーレイを重ねると同じ領域が二重に
- * 表示されるだけになる（AC #4）。
+ * 1400 以降は百年戦争期に多くの伯領が消滅して王領へ併合され、OHM 側の収録も
+ * admin_level 2（主権国家）へ移るため対象外。1400 以降はベースマップ
+ * （europe_<year>）の France ポリゴンが実態に一致するので、オーバーレイを
+ * 重ねると同じ領域が二重に表示されるだけになる（AC #4）。
  *
  * HRE_OVERLAY_YEARS（1500〜1700）とは互いに素だが、TASK-86 で追加した
  * HRE_FIEF_OVERLAY_YEARS（1000〜1492）・TASK-96 で追加した
@@ -129,12 +128,8 @@ export const FRANCE_FIEF_OVERLAY_YEARS: readonly number[] = [
  * scripts/build-hre-fiefs.ts の HRE_FIEF_YEARS と同値（src → scripts の import は
  * 行わない規約のため値を重複定義し、同値性は build-hre-fiefs_test.ts で担保する）。
  *
- * 900 は対象外: OHM 側に admin_level 4/5 の領邦が 1 件しか無く面として成立しない
- * （scripts/build-hre-fiefs.ts HRE_FIEF_EXCLUSIONS.year900）。この年だけは
- * 従来どおり base の帝国ポリゴンが単一の領域として塗られる
- * （data/known-limitations.json の hre-territories-pre-1500 が説明する）。
- *
- * 1500 以降は Roller 由来の HRE_OVERLAY_YEARS が引き継ぐ。両者は互いに素で、
+ * 最古年は SNAPSHOT_YEARS と同じ 1000。1500 以降は Roller 由来の
+ * HRE_OVERLAY_YEARS が引き継ぐ。両者は互いに素で、
  * 1492↔1500 の切替では同じ hre-powers レイヤー・同じラベル色・同じ帝国範囲強調の
  * ままデータ出典だけが替わる（TASK-86 AC #5）。
  */
@@ -168,7 +163,7 @@ export const HRE_ALL_OVERLAY_YEARS: readonly number[] = [
  * import は行わない規約のため値を重複定義し、同値性は build-italy-fiefs_test.ts
  * で担保する）。
  *
- * 900 は対象外: OHM 側に admin_level 3/4/6 の面が 1 件も無い。1000 は 3 件
+ * 最古年は SNAPSHOT_YEARS と同じ 1000。1000 は 3 件
  * （トスカーナ辺境伯領・スポレート公国・モンフェッラート辺境伯領）と少ないが、
  * 前 2 者だけで中部イタリアの大半を覆うため面として成立する。
  *
@@ -208,8 +203,8 @@ export const ITALY_FIEF_OVERLAY_YEARS: readonly number[] = [
  * ブルク・ボヘミア王国・ザクセン選帝侯領）。同じ領邦が OHM 側と両方に出る
  * ことはないため、二重塗り・重複ラベルは構造的に生じない。
  *
- * 900 を持たないのは既存 3 系統と同じ理由（面として成立しない）で、1500 以降を
- * 持たないのも同じ（base（europe_<year>）が主権国家を個別収録するため、
+ * 最古年は SNAPSHOT_YEARS と同じ 1000。1500 以降を持たないのは既存 3 系統と
+ * 同じ理由（base（europe_<year>）が主権国家を個別収録するため、
  * オーバーレイは二重表示にしかならない）。1200 は仏のみ: Cliopatria は
  * 1200 年の帝国を Holy Roman Empire 一枚岩でモデル化しており内部領邦が
  * 0 件のため（この空白は data/known-limitations.json に残る）。
@@ -250,9 +245,12 @@ export const BASE_OUTLINE_YEARS: readonly number[] = [
   ]),
 ].sort((a, b) => a - b);
 
-/** 歴史的国境ポリゴンが存在する年代スナップショット一覧（昇順） */
+/**
+ * 歴史的国境ポリゴンが存在する年代スナップショット一覧（昇順）。
+ * TASK-119: 900 年は諸侯領オーバーレイ 4 系統すべてが成立せず情報量が他年代と
+ * 揃わないため廃止し、タイムラインの最古年を 1000 にした。
+ */
 export const SNAPSHOT_YEARS: readonly number[] = [
-  900,
   1000,
   1100,
   1200,

@@ -93,7 +93,7 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
     "data/cliopatria_fiefs_1492.geojson",
   ]);
   // 対象外年は 1 件も無い
-  assertEquals(fiefsPathsFor(900), []);
+  assertEquals(fiefsPathsFor(1530), []);
 });
 
 Deno.test("生成済みの fief-dedupe.json は HRE 領邦年代を含み、帝国本体のラベルは抑制しない（TASK-86 AC #3/#5）", () => {

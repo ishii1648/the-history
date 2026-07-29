@@ -4,7 +4,8 @@
  * - index.html / app.css を dist/ にコピー
  */
 
-import { SNAPSHOT_YEARS } from "../src/config.ts";
+import { FALLBACK_STYLE_URL, SNAPSHOT_YEARS } from "../src/config.ts";
+import { TILES_ORIGIN } from "../src/pmtiles_url.ts";
 import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
@@ -176,6 +177,51 @@ export function getDataCopyTargets(
     }
   }
   return targets;
+}
+
+/**
+ * Cloudflare Pages の `_headers` ファイル内容を返す（純粋関数。TASK-127）。
+ *
+ * - Cache-Control: no-cache — 全アセットをエッジ/ブラウザで再検証（304）運用に
+ *   する（docs/app-spec.md §3.4。部分キャッシュ不整合による表示破壊の防止）
+ * - Content-Security-Policy（docs/app-spec.md §6）:
+ *   - connect-src はアプリが実際に fetch する外部オリジンのみ:
+ *     R2 タイル配信（TILES_ORIGIN）と PMTiles 失敗時フォールバックの
+ *     OpenFreeMap（FALLBACK_STYLE_URL のオリジン。style JSON / TileJSON /
+ *     タイル / glyphs / sprite すべて同一オリジンで配信されることを確認済み）
+ *   - script-src 'self'（インラインスクリプトなし）
+ *   - worker-src 'self' blob: — MapLibre/deck.gl が blob URL から Worker を
+ *     生成する。child-src は worker-src 未対応の旧 Safari 向けフォールバック
+ *   - img-src に data: blob: — MapLibre の画像リソース（フォールバック
+ *     スタイルの sprite 等）が blob/data URL 経由で読み込まれるため
+ *   - style-src に 'unsafe-inline' — MapLibre/deck.gl はランタイムで
+ *     インラインスタイルを操作する。script-src が 'self' で固定されている限り
+ *     XSS 面での後退は小さく、本番のみで発生する描画破壊（ローカル開発では
+ *     CSP が適用されず再現不能）を避ける方を優先する
+ */
+export function buildHeadersContent(): string {
+  const fallbackOrigin = new URL(FALLBACK_STYLE_URL).origin;
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    `connect-src 'self' ${TILES_ORIGIN} ${fallbackOrigin}`,
+    "worker-src 'self' blob:",
+    "child-src 'self' blob:",
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+  return [
+    "/*",
+    "  Cache-Control: no-cache",
+    `  Content-Security-Policy: ${csp}`,
+    "  X-Content-Type-Options: nosniff",
+    "",
+  ].join("\n");
 }
 
 /** `deno bundle` に渡す引数一覧を返す（純粋関数） */
@@ -374,6 +420,8 @@ async function main(): Promise<void> {
   await Deno.mkdir(DIST_DIR, { recursive: true });
   await bundle(ENTRY, BUNDLE_OUT);
   await stripNodeImports(BUNDLE_OUT);
+  // TASK-127: Cloudflare Pages のヘッダ定義（CSP・Cache-Control）を生成する
+  await Deno.writeTextFile(`${DIST_DIR}/_headers`, buildHeadersContent());
   await copyStaticFiles(DIST_DIR);
   await copyDataFiles(DIST_DIR);
   await copyOptionalFiles(DIST_DIR);

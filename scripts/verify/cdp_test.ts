@@ -1,13 +1,21 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { DEFAULT_PORT } from "../serve.ts";
 import {
+  buildDeviceMetricsParams,
+  buildTapEvents,
+  buildTouchEmulationParams,
   buildWaitForExpr,
+  buildWindowSizeArg,
   createCdpSession,
   DEFAULT_APP_URL,
+  DEVICE_PRESETS,
+  type EmulationConfig,
+  MOBILE_PRESET,
   parseCliArgs,
   parseEvaluateResult,
   pickPageTargetUrl,
   resolveCheckScriptUrl,
+  resolveDevicePreset,
   resolveKeyCode,
 } from "./cdp.ts";
 
@@ -210,6 +218,141 @@ Deno.test("parseCliArgs: URL が無ければ usage エラーを投げる", () =>
 Deno.test("parseCliArgs: checkScript が無ければ usage エラーを投げる", () => {
   assertThrows(
     () => parseCliArgs(["http://localhost:8000/"]),
+    Error,
+    "Usage:",
+  );
+});
+
+// ---- デバイスエミュレーション（TASK-131） ----
+
+Deno.test("MOBILE_PRESET: 幅 375 / iPhone 相当の高さ / DPR 3 / mobile / touch が定義されている", () => {
+  assertEquals(MOBILE_PRESET, {
+    width: 375,
+    height: 812,
+    deviceScaleFactor: 3,
+    mobile: true,
+    touch: true,
+  });
+});
+
+Deno.test("DEVICE_PRESETS: mobile プリセットが登録されている", () => {
+  assertEquals(DEVICE_PRESETS.mobile, MOBILE_PRESET);
+});
+
+Deno.test("resolveDevicePreset: 既知のプリセット名で設定を返す", () => {
+  assertEquals(resolveDevicePreset("mobile"), MOBILE_PRESET);
+});
+
+Deno.test("resolveDevicePreset: 未知のプリセット名は既知の名前を列挙して例外を投げる", () => {
+  assertThrows(
+    () => resolveDevicePreset("tablet"),
+    Error,
+    'unknown device preset "tablet"',
+  );
+  assertThrows(() => resolveDevicePreset("tablet"), Error, "mobile");
+});
+
+Deno.test("buildWindowSizeArg: エミュレーション未指定ならデスクトップ既定 1600,900 のまま", () => {
+  assertEquals(buildWindowSizeArg(undefined), "--window-size=1600,900");
+  assertEquals(buildWindowSizeArg(), "--window-size=1600,900");
+});
+
+Deno.test("buildWindowSizeArg: エミュレーション指定時はその width/height を使う", () => {
+  assertEquals(buildWindowSizeArg(MOBILE_PRESET), "--window-size=375,812");
+});
+
+Deno.test("buildDeviceMetricsParams: Emulation.setDeviceMetricsOverride のパラメータを組み立てる（touch は含めない）", () => {
+  assertEquals(buildDeviceMetricsParams(MOBILE_PRESET), {
+    width: 375,
+    height: 812,
+    deviceScaleFactor: 3,
+    mobile: true,
+  });
+});
+
+Deno.test("buildTouchEmulationParams: touch=true なら enabled/maxTouchPoints を返す", () => {
+  assertEquals(buildTouchEmulationParams(MOBILE_PRESET), {
+    enabled: true,
+    maxTouchPoints: 5,
+  });
+});
+
+Deno.test("buildTouchEmulationParams: touch=false なら enabled: false を返す", () => {
+  const noTouch: EmulationConfig = { ...MOBILE_PRESET, touch: false };
+  assertEquals(buildTouchEmulationParams(noTouch), {
+    enabled: false,
+    maxTouchPoints: 5,
+  });
+});
+
+Deno.test("buildTapEvents: touchStart（座標 1 点）→ touchEnd（空）の 2 イベントを組み立てる", () => {
+  assertEquals(buildTapEvents(120, 340), [
+    { type: "touchStart", touchPoints: [{ x: 120, y: 340 }] },
+    { type: "touchEnd", touchPoints: [] },
+  ]);
+});
+
+// ---- parseCliArgs の --device フラグ（TASK-131） ----
+
+Deno.test("parseCliArgs: --device=mobile でエミュレーション設定が解決される", () => {
+  assertEquals(
+    parseCliArgs([
+      "--device=mobile",
+      "http://localhost:8131/",
+      "scripts/verify/checks/mobile-smoke.ts",
+    ]),
+    {
+      url: "http://localhost:8131/",
+      checkScriptPath: "scripts/verify/checks/mobile-smoke.ts",
+      emulation: MOBILE_PRESET,
+    },
+  );
+});
+
+Deno.test("parseCliArgs: --device が末尾でも解決される（deno task で URL が後置される形）", () => {
+  assertEquals(
+    parseCliArgs([
+      "scripts/verify/checks/mobile-smoke.ts",
+      "http://localhost:8131/",
+      "--device=mobile",
+    ]),
+    {
+      url: "http://localhost:8131/",
+      checkScriptPath: "scripts/verify/checks/mobile-smoke.ts",
+      emulation: MOBILE_PRESET,
+    },
+  );
+});
+
+Deno.test("parseCliArgs: --device 未指定なら emulation キーを持たない（デスクトップ既定）", () => {
+  const parsed = parseCliArgs([
+    "http://localhost:8000/",
+    "scripts/verify/checks/smoke.ts",
+  ]);
+  assertEquals("emulation" in parsed, false);
+});
+
+Deno.test("parseCliArgs: 未知の --device 値はエラーを投げる", () => {
+  assertThrows(
+    () =>
+      parseCliArgs([
+        "--device=tablet",
+        "http://localhost:8000/",
+        "scripts/verify/checks/smoke.ts",
+      ]),
+    Error,
+    'unknown device preset "tablet"',
+  );
+});
+
+Deno.test("parseCliArgs: 未知の -- フラグは usage エラーを投げる（checkScript と誤認しない）", () => {
+  assertThrows(
+    () =>
+      parseCliArgs([
+        "--emulate=mobile",
+        "http://localhost:8000/",
+        "scripts/verify/checks/smoke.ts",
+      ]),
     Error,
     "Usage:",
   );

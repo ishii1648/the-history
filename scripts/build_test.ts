@@ -1,12 +1,15 @@
 import { assert, assertEquals } from "@std/assert";
 import {
   buildBundleArgs,
+  buildHeadersContent,
   findNodeImports,
   getDataCopyTargets,
   getOptionalCopyTargets,
   getStaticCopyTargets,
   neutralizeNodeImports,
 } from "./build.ts";
+import { FALLBACK_STYLE_URL } from "../src/config.ts";
+import { TILES_ORIGIN } from "../src/pmtiles_url.ts";
 
 Deno.test("getStaticCopyTargets は index.html / app.css / vendor CSS を dist/ にコピーする対象を返す", () => {
   const targets = getStaticCopyTargets("dist");
@@ -44,7 +47,9 @@ Deno.test("getOptionalCopyTargets は distDir を反映する", () => {
 });
 
 Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON を dist/data/ にコピーする対象を返す", () => {
-  const targets = getDataCopyTargets("dist", [900, 1000], [1500, 1530], [1200]);
+  const targets = getDataCopyTargets("dist", [1000, 1100], [1500, 1530], [
+    1200,
+  ]);
   assertEquals(targets, [
     { from: "data/index.json", to: "dist/data/index.json" },
     { from: "data/colors.json", to: "dist/data/colors.json" },
@@ -69,8 +74,8 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
       from: "data/known-limitations.json",
       to: "dist/data/known-limitations.json",
     },
-    { from: "data/europe_900.geojson", to: "dist/data/europe_900.geojson" },
     { from: "data/europe_1000.geojson", to: "dist/data/europe_1000.geojson" },
+    { from: "data/europe_1100.geojson", to: "dist/data/europe_1100.geojson" },
     // TASK-19: HRE 主要領邦オーバーレイ用の GeoJSON（deno task build-hre で生成）
     { from: "data/hre_1500.geojson", to: "dist/data/hre_1500.geojson" },
     { from: "data/hre_1530.geojson", to: "dist/data/hre_1530.geojson" },
@@ -95,7 +100,7 @@ Deno.test("getDataCopyTargets は index.json / colors.json と各年代 GeoJSON 
 });
 
 Deno.test("getDataCopyTargets は fiefYears 省略時に fief-dedupe と base_outline を含めない（TASK-78 AC #3）", () => {
-  const targets = getDataCopyTargets("dist", [900], [1500]);
+  const targets = getDataCopyTargets("dist", [1000], [1500]);
   assertEquals(
     targets.filter((t) =>
       t.from.includes("fief-dedupe") || t.from.includes("base_outline")
@@ -140,7 +145,7 @@ Deno.test("getDataCopyTargets は distDir を反映する", () => {
 });
 
 Deno.test("getDataCopyTargets は fiefYears 省略時に france_fiefs を含めない（後方互換）", () => {
-  const targets = getDataCopyTargets("dist", [900], [1500]);
+  const targets = getDataCopyTargets("dist", [1000], [1500]);
   assertEquals(
     targets.filter((t) => t.from.includes("france_fiefs")),
     [],
@@ -332,7 +337,7 @@ Deno.test("getDataCopyTargets は europe_flat をオーバーレイ年の和集�
 });
 
 Deno.test("getDataCopyTargets は fiefYears 省略時に europe_flat を含めない（TASK-92）", () => {
-  const targets = getDataCopyTargets("dist", [900], [1500]);
+  const targets = getDataCopyTargets("dist", [1000], [1500]);
   assertEquals(targets.filter((t) => t.from.includes("europe_flat")), []);
 });
 
@@ -366,7 +371,7 @@ Deno.test("getDataCopyTargets は italyFiefYears の italy_fiefs_flat をコピ�
 });
 
 Deno.test("getDataCopyTargets は italyFiefYears 省略時に italy_fiefs を含めない（後方互換。TASK-96）", () => {
-  const targets = getDataCopyTargets("dist", [900], [1500]);
+  const targets = getDataCopyTargets("dist", [1000], [1500]);
   assertEquals(targets.filter((t) => t.from.includes("italy_fiefs")), []);
 });
 
@@ -394,5 +399,76 @@ Deno.test("getDataCopyTargets は base_outline / europe_flat を 3 系統の年�
       "data/europe_flat_1400.geojson",
       "data/europe_flat_1492.geojson",
     ],
+  );
+});
+
+// --- TASK-127: Cloudflare Pages 用 _headers（CSP・Cache-Control）---
+// _headers は buildHeadersContent() を単一の情報源として dist/ 直下に生成する。
+// connect-src の許可オリジンはアプリが実際に接続する外部先（R2 タイル配信の
+// TILES_ORIGIN と OpenFreeMap フォールバックの FALLBACK_STYLE_URL のオリジン）
+// だけに絞り、定数から導出することでドリフトを防ぐ。
+
+Deno.test("buildHeadersContent は /* ルールで始まる Pages の _headers 形式を返す", () => {
+  const lines = buildHeadersContent().split("\n");
+  assertEquals(lines[0], "/*");
+  // ヘッダ行は 2 スペースのインデント（Pages の _headers 仕様）
+  assert(
+    lines.slice(1).filter((l) => l !== "").every((l) => l.startsWith("  ")),
+  );
+});
+
+Deno.test("buildHeadersContent は全アセットに Cache-Control: no-cache を付ける（AC #6・docs/app-spec.md §3.4）", () => {
+  assert(buildHeadersContent().includes("Cache-Control: no-cache"));
+});
+
+Deno.test("buildHeadersContent の CSP: connect-src は self + R2 タイル + OpenFreeMap のみ（AC #3）", () => {
+  const content = buildHeadersContent();
+  const csp = content
+    .split("\n")
+    .find((l) => l.includes("Content-Security-Policy:"));
+  assert(csp !== undefined, "Content-Security-Policy ヘッダがあること");
+  const connectSrc = csp
+    .split(";")
+    .map((d) => d.trim())
+    .find((d) => d.startsWith("connect-src"));
+  assert(connectSrc !== undefined, "connect-src ディレクティブがあること");
+  const sources = connectSrc.split(/\s+/).slice(1);
+  assertEquals(sources, [
+    "'self'",
+    TILES_ORIGIN,
+    new URL(FALLBACK_STYLE_URL).origin,
+  ]);
+});
+
+Deno.test("buildHeadersContent の CSP: script-src 'self' / worker-src 'self' blob:（AC #3）", () => {
+  const content = buildHeadersContent();
+  const csp = content
+    .split("\n")
+    .find((l) => l.includes("Content-Security-Policy:"))!;
+  const directives = csp
+    .slice(csp.indexOf("Content-Security-Policy:"))
+    .replace("Content-Security-Policy:", "")
+    .split(";")
+    .map((d) => d.trim());
+  assert(directives.includes("script-src 'self'"), "script-src 'self'");
+  assert(
+    directives.includes("worker-src 'self' blob:"),
+    "worker-src 'self' blob:（MapLibre/deck.gl の blob Worker 用）",
+  );
+  // worker-src 未対応の旧 Safari 向けフォールバック
+  assert(
+    directives.includes("child-src 'self' blob:"),
+    "child-src 'self' blob:",
+  );
+});
+
+Deno.test("buildHeadersContent の CSP: 外部オリジンは connect-src の 2 つ以外に現れない", () => {
+  const csp = buildHeadersContent()
+    .split("\n")
+    .find((l) => l.includes("Content-Security-Policy:"))!;
+  const externals = csp.match(/https?:\/\/[^\s;]+/g) ?? [];
+  assertEquals(
+    [...new Set(externals)].sort(),
+    [TILES_ORIGIN, new URL(FALLBACK_STYLE_URL).origin].sort(),
   );
 });

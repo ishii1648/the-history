@@ -1,0 +1,192 @@
+# TASK-127: Cloudflare Pages + R2 への本番デプロイ。
+#
+# 構成（docs/app-spec.md §3.1 / §6）:
+# - build ジョブ: テスト + `deno task build` で dist/ を生成し artifact 化する。
+#   本番シークレットは一切渡さない（AC #4）。
+# - deploy ジョブ: CLOUDFLARE_API_TOKEN はこのジョブの env にのみ現れる。
+#   1. R2 バケット zeitreise-tiles へ PMTiles を同期（未配置または
+#      workflow_dispatch の refresh_tiles 指定時のみ生成し、sha256 サイドカー
+#      比較で変更が無ければアップロードをスキップする。サイズが大きいため）
+#   2. `wrangler pages deploy` で dist/ を Pages プロジェクト zeitreise へ配信
+#
+# R2 へのアップロードは S3 互換 API（aws CLI）で行う。europe-dem.pmtiles
+# （約 305 MiB）が `wrangler r2 object put` の 300 MiB 上限を超えるため、
+# マルチパート対応の S3 API を使う。S3 資格情報は登録済みの API トークンから
+# 導出する（Access Key ID = トークン ID、Secret = トークン値の SHA-256。
+# https://developers.cloudflare.com/r2/api/tokens/）。
+
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      refresh_tiles:
+        description: "PMTiles を再生成し、変更があれば R2 へ再アップロードする"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# 本番デプロイは直列化する（追い越し・巻き戻りを防ぐためキャンセルもしない）
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          # ci.yml と同じ理由で開発環境と同一バージョンにピン留め（決定性の確保）
+          deno-version: "2.7.14"
+
+      # デプロイ前の最終ゲート（ci.yml と同一のテスト権限）
+      - name: deno task test
+        run: deno task test
+
+      - name: deno task build
+        run: deno task build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    # AC #4: 本番シークレットはこのジョブの env にのみ現れる
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Account ID は秘密情報ではない（docs/cloudflare-provisioning.md / TASK-127）
+      CLOUDFLARE_ACCOUNT_ID: da40f700e2fa3c06e86e30e8c29150bf
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: "2.7.14"
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      - name: Sync PMTiles to R2 (zeitreise-tiles)
+        env:
+          REFRESH_TILES: ${{ github.event_name == 'workflow_dispatch' && inputs.refresh_tiles && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          TILES_BASE="https://tiles.zeitreises.com"
+          BUCKET="zeitreise-tiles"
+          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          # --- API トークンから R2 の S3 資格情報を導出する ---
+          # Access Key ID: トークン ID（verify エンドポイントで取得。
+          # ユーザートークン/アカウントトークンの両形式を順に試す）
+          verify_id() {
+            curl -sf -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$1" \
+              | jq -r '.result.id // empty'
+          }
+          TOKEN_ID="$(verify_id "https://api.cloudflare.com/client/v4/user/tokens/verify" || true)"
+          if [ -z "${TOKEN_ID}" ]; then
+            TOKEN_ID="$(verify_id "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/tokens/verify" || true)"
+          fi
+          if [ -z "${TOKEN_ID}" ]; then
+            echo "::error::API トークンの verify に失敗しました。R2 用の S3 資格情報を導出できません（トークンに R2 権限があるか確認してください）"
+            exit 1
+          fi
+          export AWS_ACCESS_KEY_ID="${TOKEN_ID}"
+          AWS_SECRET_ACCESS_KEY="$(printf '%s' "${CLOUDFLARE_API_TOKEN}" | sha256sum | cut -d' ' -f1)"
+          echo "::add-mask::${AWS_SECRET_ACCESS_KEY}"
+          export AWS_SECRET_ACCESS_KEY
+          export AWS_DEFAULT_REGION=auto
+          # aws CLI v2.23+ の既定チェックサムは R2 と非互換になり得るため抑止する
+          export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
+          export AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+
+          # --- バケット CORS（アプリのオリジンからの Range fetch を許可）---
+          # 冪等なので毎デプロイで適用する。失敗時はタイルが本番で読めないため
+          # 明示的に fail させる
+          aws s3api put-bucket-cors --bucket "${BUCKET}" \
+            --cors-configuration "file://.github/r2-cors.json" \
+            --endpoint-url "${ENDPOINT}"
+
+          # --- 生成の要否判定 ---
+          # 既にカスタムドメインで配信済み（HEAD 200）かつ refresh 指定なしなら
+          # 生成もアップロードも行わない（PMTiles は不変に近い運用。app-spec §3.4）
+          need_object() {
+            if [ "${REFRESH_TILES}" = "true" ]; then
+              return 0
+            fi
+            if curl -sfI "${TILES_BASE}/$1" > /dev/null; then
+              return 1
+            fi
+            return 0
+          }
+          NEED_BASEMAP=false
+          NEED_DEM=false
+          if need_object europe.pmtiles; then NEED_BASEMAP=true; fi
+          if need_object europe-dem.pmtiles; then NEED_DEM=true; fi
+          echo "basemap: need=${NEED_BASEMAP} / dem: need=${NEED_DEM} (refresh=${REFRESH_TILES})"
+
+          # --- 生成 ---
+          if [ "${NEED_BASEMAP}" = "true" ]; then
+            # deno task extract-pmtiles が呼ぶ go-pmtiles CLI を導入する
+            curl -sSfL -o /tmp/go-pmtiles.tar.gz \
+              "https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Linux_x86_64.tar.gz"
+            mkdir -p /tmp/go-pmtiles
+            tar -xzf /tmp/go-pmtiles.tar.gz -C /tmp/go-pmtiles
+            sudo install /tmp/go-pmtiles/pmtiles /usr/local/bin/pmtiles
+            deno task extract-pmtiles
+          fi
+          if [ "${NEED_DEM}" = "true" ]; then
+            deno task extract-dem
+          fi
+
+          # --- 変更があった場合のみアップロード（sha256 サイドカー比較）---
+          upload_if_changed() {
+            name="$1"
+            file="data/$1"
+            local_sha="$(sha256sum "${file}" | cut -d' ' -f1)"
+            remote_sha="$(curl -sf "${TILES_BASE}/${name}.sha256" || true)"
+            if [ "${local_sha}" = "${remote_sha}" ]; then
+              echo "${name}: 変更なし（sha256 一致）につきアップロードをスキップ"
+              return 0
+            fi
+            aws s3 cp "${file}" "s3://${BUCKET}/${name}" \
+              --endpoint-url "${ENDPOINT}" \
+              --cache-control no-cache \
+              --content-type application/octet-stream
+            printf '%s' "${local_sha}" > "/tmp/${name}.sha256"
+            aws s3 cp "/tmp/${name}.sha256" "s3://${BUCKET}/${name}.sha256" \
+              --endpoint-url "${ENDPOINT}" \
+              --cache-control no-cache \
+              --content-type text/plain
+            echo "${name}: アップロード完了（sha256=${local_sha}）"
+          }
+          if [ "${NEED_BASEMAP}" = "true" ]; then upload_if_changed europe.pmtiles; fi
+          if [ "${NEED_DEM}" = "true" ]; then upload_if_changed europe-dem.pmtiles; fi
+
+      - name: Deploy dist to Cloudflare Pages (zeitreise)
+        run: |
+          npx --yes wrangler@4.114.0 pages deploy dist \
+            --project-name=zeitreise \
+            --branch=main \
+            --commit-dirty=true

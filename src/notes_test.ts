@@ -100,7 +100,7 @@ Deno.test("notesForYear は points の非文字列要素を 1 件単位で除外
 
 Deno.test("notesHeadingFor は「1500 年」形式の見出しを返す", () => {
   assertEquals(notesHeadingFor(1500), "1500 年");
-  assertEquals(notesHeadingFor(900), "900 年");
+  assertEquals(notesHeadingFor(1000), "1000 年");
 });
 
 // ---- 折りたたみ状態 reducer（toggle / escape のみ。outside-click は非採用）----

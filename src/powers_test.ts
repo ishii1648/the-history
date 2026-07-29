@@ -31,6 +31,8 @@ import {
   LINE_COLOR,
   powerFillDataFor,
   type Rgba,
+  YEAR_CACHE_MAX_YEARS,
+  type YearDataLoader,
   type YearLayerData,
 } from "./powers.ts";
 import {
@@ -139,7 +141,7 @@ Deno.test("LINE_COLOR はインク（焦茶）系で、白系ではない", () =
 
 Deno.test("dataUrlFor は同一オリジンの GeoJSON パスを返す", () => {
   assertEquals(dataUrlFor(1000), "/data/europe_1000.geojson");
-  assertEquals(dataUrlFor(900), "/data/europe_900.geojson");
+  assertEquals(dataUrlFor(1914), "/data/europe_1914.geojson");
 });
 
 function fakeCollection(name: string): FeatureCollection {
@@ -216,6 +218,74 @@ Deno.test("createYearDataLoader は非 ok レスポンスで reject し、キャ
   // 失敗後は再試行できる（inflight が残らない）
   await assertRejects(() => loader.load(1000));
   assertEquals(count, 2);
+});
+
+// ---- 年代キャッシュの保持上限（LRU 退避、TASK-129） ----
+
+/** テスト用: URL ごとの fetch 回数を数える年代ローダを作る */
+function countingLoader(): {
+  loader: YearDataLoader;
+  countFor: (year: number) => number;
+} {
+  const counts = new Map<string, number>();
+  const loader = createYearDataLoader((url) => {
+    counts.set(url, (counts.get(url) ?? 0) + 1);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(url)),
+    });
+  });
+  return { loader, countFor: (year) => counts.get(dataUrlFor(year)) ?? 0 };
+}
+
+/** 先頭年 from から連続する n 年分の年代リスト（テスト用） */
+function yearsFrom(from: number, n: number): number[] {
+  return Array.from({ length: n }, (_, i) => from + i);
+}
+
+Deno.test("YEAR_CACHE_MAX_YEARS は 2 以上かつ全年代数未満の整数（TASK-129 AC #2）", () => {
+  assert(Number.isInteger(YEAR_CACHE_MAX_YEARS));
+  assert(YEAR_CACHE_MAX_YEARS >= 2);
+  assert(YEAR_CACHE_MAX_YEARS < SNAPSHOT_YEARS.length);
+});
+
+Deno.test("createYearDataLoader は上限超過で最も古く使われた年代を解放する（TASK-129 AC #1）", async () => {
+  const { loader } = countingLoader();
+  const years = yearsFrom(1000, YEAR_CACHE_MAX_YEARS + 1);
+  for (const y of years) await loader.load(y);
+  assert(!loader.has(years[0]));
+  for (const y of years.slice(1)) assert(loader.has(y));
+});
+
+Deno.test("createYearDataLoader はキャッシュヒットした年代を退避順の最後尾へ回す（LRU、TASK-129 AC #1）", async () => {
+  const { loader } = countingLoader();
+  const years = yearsFrom(1000, YEAR_CACHE_MAX_YEARS);
+  for (const y of years) await loader.load(y);
+  // 最古の years[0] をキャッシュヒットで「最近使った」に更新してから上限超過
+  await loader.load(years[0]);
+  await loader.load(2000);
+  assert(loader.has(years[0]));
+  assert(!loader.has(years[1]));
+  assert(loader.has(2000));
+});
+
+Deno.test("createYearDataLoader は解放済み年代の再ロードで再 fetch して返す（TASK-129 AC #3）", async () => {
+  const { loader, countFor } = countingLoader();
+  const years = yearsFrom(1000, YEAR_CACHE_MAX_YEARS + 1);
+  for (const y of years) await loader.load(y);
+  assertEquals(countFor(years[0]), 1);
+  const fc = await loader.load(years[0]);
+  assertEquals(countFor(years[0]), 2);
+  assertEquals(fc.features[0].properties?.NAME, dataUrlFor(years[0]));
+  assert(loader.has(years[0]));
+});
+
+Deno.test("createYearDataLoader は上限到達後も並行呼び出しを 1 fetch に集約する（TASK-129 AC #4）", async () => {
+  const { loader, countFor } = countingLoader();
+  for (const y of yearsFrom(1000, YEAR_CACHE_MAX_YEARS)) await loader.load(y);
+  await Promise.all([loader.load(2000), loader.load(2000)]);
+  assertEquals(countFor(2000), 1);
 });
 
 Deno.test("Rgba 型は 4 要素タプル", () => {
@@ -365,9 +435,9 @@ Deno.test("hasHreOverlay は HRE_ALL_OVERLAY_YEARS で中世・近世の双方�
       `${year} で HRE オーバーレイが無い`,
     );
   }
-  // 900 は TASK-85 の対象外（OHM 側に面として成立する領邦が無い）
-  assert(!hasHreOverlay(900, HRE_ALL_OVERLAY_YEARS));
+  // 1715 以降はベースマップがドイツ諸邦を個別収録するため対象外
   assert(!hasHreOverlay(1715, HRE_ALL_OVERLAY_YEARS));
+  assert(!hasHreOverlay(1914, HRE_ALL_OVERLAY_YEARS));
 });
 
 Deno.test("hasHreOverlay は対象年のみ true を返す", () => {
@@ -447,7 +517,7 @@ Deno.test("createHreOverlayLoader は中世年代で hre_fiefs_flat を fetch �
   ]);
 });
 
-Deno.test("createHreOverlayLoader は 900 年で fetch せず空 FC を返す（TASK-86 AC #6）", async () => {
+Deno.test("createHreOverlayLoader は非対象年（1715）で fetch せず空 FC を返す（TASK-86 AC #6）", async () => {
   const calls: string[] = [];
   const loader = createHreOverlayLoader(
     (url) => {
@@ -462,7 +532,7 @@ Deno.test("createHreOverlayLoader は 900 年で fetch せず空 FC を返す（
     () => {},
     HRE_FIEF_OVERLAY_YEARS,
   );
-  assertEquals(await loader.load(900), EMPTY_FEATURE_COLLECTION);
+  assertEquals(await loader.load(1715), EMPTY_FEATURE_COLLECTION);
   assertEquals(calls, []);
 });
 
@@ -707,7 +777,7 @@ Deno.test("hasFranceFiefOverlay は中世の対象年のみ true を返す（TAS
     assert(hasFranceFiefOverlay(year, FRANCE_FIEF_OVERLAY_YEARS));
   }
   // 近世以降（ベースマップの France ポリゴンだけで表現される年）は対象外
-  for (const year of [900, 1400, 1492, 1500, 1650, 1700, 1815, 1914]) {
+  for (const year of [1400, 1492, 1500, 1650, 1700, 1815, 1914]) {
     assert(
       !hasFranceFiefOverlay(year, FRANCE_FIEF_OVERLAY_YEARS),
       `${year} でフランス諸侯オーバーレイが有効になってはいけない`,
@@ -866,7 +936,7 @@ Deno.test("hasBaseOutline は諸侯領オーバーレイ対象年のみ true（T
   for (const year of FRANCE_FIEF_OVERLAY_YEARS) {
     assert(hasBaseOutline(year, FRANCE_FIEF_OVERLAY_YEARS));
   }
-  for (const year of [900, 1400, 1492, 1500, 1914]) {
+  for (const year of [1400, 1492, 1500, 1914]) {
     assert(!hasBaseOutline(year, FRANCE_FIEF_OVERLAY_YEARS));
   }
 });
@@ -1107,8 +1177,8 @@ Deno.test("hasItalyFiefOverlay は対象年（1000〜1492）のみ true を返�
   for (const year of ITALY_FIEF_OVERLAY_YEARS) {
     assert(hasItalyFiefOverlay(year, ITALY_FIEF_OVERLAY_YEARS));
   }
-  // 900 は OHM に面が無く、1500 以降は base が主権国家として個別収録する
-  for (const year of [900, 1500, 1650, 1914]) {
+  // 1500 以降は base が主権国家として個別収録する
+  for (const year of [1500, 1650, 1914]) {
     assert(!hasItalyFiefOverlay(year, ITALY_FIEF_OVERLAY_YEARS));
   }
 });
@@ -1123,8 +1193,8 @@ Deno.test("createItalyFiefOverlayLoader は非対象年で fetch せず空 FC �
       json: () => Promise.resolve(fakeCollection("Republic of Florence")),
     });
   }, ITALY_FIEF_OVERLAY_YEARS);
-  assertEquals(await loader.load(900), EMPTY_FEATURE_COLLECTION);
   assertEquals(await loader.load(1500), EMPTY_FEATURE_COLLECTION);
+  assertEquals(await loader.load(1914), EMPTY_FEATURE_COLLECTION);
   assertEquals(calls, []);
   // 非対象年は fetch 不要なので「取得済み」扱い（スピナーを出さない）
   assert(loader.has(1500));
@@ -1247,8 +1317,8 @@ Deno.test("hasCliopatriaFiefOverlay は対象年（1000〜1492）のみ true を
   for (const year of CLIOPATRIA_FIEF_OVERLAY_YEARS) {
     assert(hasCliopatriaFiefOverlay(year, CLIOPATRIA_FIEF_OVERLAY_YEARS));
   }
-  // 900 は Cliopatria 側にも内部領邦が乏しく、1500 以降は base が担う
-  for (const year of [900, 1500, 1650, 1914]) {
+  // 1500 以降は base が主権国家を個別収録するため対象外
+  for (const year of [1500, 1650, 1914]) {
     assert(!hasCliopatriaFiefOverlay(year, CLIOPATRIA_FIEF_OVERLAY_YEARS));
   }
 });
@@ -1263,8 +1333,8 @@ Deno.test("createCliopatriaFiefOverlayLoader は非対象年で fetch せず空 
       json: () => Promise.resolve(fakeCollection("Duchy of Aquitaine")),
     });
   }, CLIOPATRIA_FIEF_OVERLAY_YEARS);
-  assertEquals(await loader.load(900), EMPTY_FEATURE_COLLECTION);
   assertEquals(await loader.load(1500), EMPTY_FEATURE_COLLECTION);
+  assertEquals(await loader.load(1914), EMPTY_FEATURE_COLLECTION);
   assertEquals(calls, []);
   assert(loader.has(1500));
 });
