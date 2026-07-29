@@ -31,6 +31,8 @@ import {
   LINE_COLOR,
   powerFillDataFor,
   type Rgba,
+  YEAR_CACHE_MAX_YEARS,
+  type YearDataLoader,
   type YearLayerData,
 } from "./powers.ts";
 import {
@@ -216,6 +218,74 @@ Deno.test("createYearDataLoader は非 ok レスポンスで reject し、キャ
   // 失敗後は再試行できる（inflight が残らない）
   await assertRejects(() => loader.load(1000));
   assertEquals(count, 2);
+});
+
+// ---- 年代キャッシュの保持上限（LRU 退避、TASK-129） ----
+
+/** テスト用: URL ごとの fetch 回数を数える年代ローダを作る */
+function countingLoader(): {
+  loader: YearDataLoader;
+  countFor: (year: number) => number;
+} {
+  const counts = new Map<string, number>();
+  const loader = createYearDataLoader((url) => {
+    counts.set(url, (counts.get(url) ?? 0) + 1);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(url)),
+    });
+  });
+  return { loader, countFor: (year) => counts.get(dataUrlFor(year)) ?? 0 };
+}
+
+/** 先頭年 from から連続する n 年分の年代リスト（テスト用） */
+function yearsFrom(from: number, n: number): number[] {
+  return Array.from({ length: n }, (_, i) => from + i);
+}
+
+Deno.test("YEAR_CACHE_MAX_YEARS は 2 以上かつ全年代数未満の整数（TASK-129 AC #2）", () => {
+  assert(Number.isInteger(YEAR_CACHE_MAX_YEARS));
+  assert(YEAR_CACHE_MAX_YEARS >= 2);
+  assert(YEAR_CACHE_MAX_YEARS < SNAPSHOT_YEARS.length);
+});
+
+Deno.test("createYearDataLoader は上限超過で最も古く使われた年代を解放する（TASK-129 AC #1）", async () => {
+  const { loader } = countingLoader();
+  const years = yearsFrom(1000, YEAR_CACHE_MAX_YEARS + 1);
+  for (const y of years) await loader.load(y);
+  assert(!loader.has(years[0]));
+  for (const y of years.slice(1)) assert(loader.has(y));
+});
+
+Deno.test("createYearDataLoader はキャッシュヒットした年代を退避順の最後尾へ回す（LRU、TASK-129 AC #1）", async () => {
+  const { loader } = countingLoader();
+  const years = yearsFrom(1000, YEAR_CACHE_MAX_YEARS);
+  for (const y of years) await loader.load(y);
+  // 最古の years[0] をキャッシュヒットで「最近使った」に更新してから上限超過
+  await loader.load(years[0]);
+  await loader.load(2000);
+  assert(loader.has(years[0]));
+  assert(!loader.has(years[1]));
+  assert(loader.has(2000));
+});
+
+Deno.test("createYearDataLoader は解放済み年代の再ロードで再 fetch して返す（TASK-129 AC #3）", async () => {
+  const { loader, countFor } = countingLoader();
+  const years = yearsFrom(1000, YEAR_CACHE_MAX_YEARS + 1);
+  for (const y of years) await loader.load(y);
+  assertEquals(countFor(years[0]), 1);
+  const fc = await loader.load(years[0]);
+  assertEquals(countFor(years[0]), 2);
+  assertEquals(fc.features[0].properties?.NAME, dataUrlFor(years[0]));
+  assert(loader.has(years[0]));
+});
+
+Deno.test("createYearDataLoader は上限到達後も並行呼び出しを 1 fetch に集約する（TASK-129 AC #4）", async () => {
+  const { loader, countFor } = countingLoader();
+  for (const y of yearsFrom(1000, YEAR_CACHE_MAX_YEARS)) await loader.load(y);
+  await Promise.all([loader.load(2000), loader.load(2000)]);
+  assertEquals(countFor(2000), 1);
 });
 
 Deno.test("Rgba 型は 4 要素タプル", () => {

@@ -10,7 +10,9 @@ import {
   resolveSuzerainKey,
   suzerainExtentKey,
   type SuzerainOverrides,
+  withSuzerainOverrides,
 } from "./suzerain_extent.ts";
+import { YEAR_CACHE_MAX_YEARS, type YearDataLoader } from "./powers.ts";
 import {
   CITY_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
@@ -862,4 +864,53 @@ Deno.test("実データ: base のどの勢力にも載らない伊諸侯領は�
       `${year} Lordship of Piombino`,
     );
   }
+});
+
+// ---- withSuzerainOverrides のキャッシュ上限（LRU 退避、TASK-129） ----
+
+/** テスト用: 年ごとの load 回数を数える内側ローダ */
+function countingInnerLoader(): {
+  loader: YearDataLoader;
+  calls: number[];
+} {
+  const calls: number[] = [];
+  const loader: YearDataLoader = {
+    has: () => false,
+    load(year) {
+      calls.push(year);
+      const fc: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: { NAME: `Y${year}`, SUBJECTO: null },
+            geometry: { type: "Point", coordinates: [0, 0] },
+          },
+        ],
+      };
+      return Promise.resolve(fc);
+    },
+  };
+  return { loader, calls };
+}
+
+Deno.test("withSuzerainOverrides のキャッシュも上限超過で最古の年代を解放する（TASK-129）", async () => {
+  const { loader: inner, calls } = countingInnerLoader();
+  const wrapped = withSuzerainOverrides(inner, () => EMPTY_SUZERAIN_OVERRIDES);
+  const years = Array.from(
+    { length: YEAR_CACHE_MAX_YEARS + 1 },
+    (_, i) => 1000 + i,
+  );
+  for (const y of years) await wrapped.load(y);
+  // 最古の years[0] は解放済み → 内側ローダへ再度取りに行く
+  await wrapped.load(years[0]);
+  assertEquals(calls.filter((y) => y === years[0]).length, 2);
+});
+
+Deno.test("withSuzerainOverrides は保持中の年代では同一インスタンスを返し続ける（TASK-129）", async () => {
+  const { loader: inner } = countingInnerLoader();
+  const wrapped = withSuzerainOverrides(inner, () => EMPTY_SUZERAIN_OVERRIDES);
+  const first = await wrapped.load(1200);
+  const second = await wrapped.load(1200);
+  assertStrictEquals(second, first);
 });
