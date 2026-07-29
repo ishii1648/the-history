@@ -11,12 +11,16 @@ import {
   DEVICE_PRESETS,
   type EmulationConfig,
   MOBILE_PRESET,
+  openBrokerSession,
+  parseBrokerSessionResponse,
   parseCliArgs,
   parseEvaluateResult,
   pickPageTargetUrl,
+  resolveBrokerConfig,
   resolveCheckScriptUrl,
   resolveDevicePreset,
   resolveKeyCode,
+  rewriteWsUrlHost,
 } from "./cdp.ts";
 
 Deno.test("DEFAULT_APP_URL は dev サーバの既定ポート（scripts/serve.ts の DEFAULT_PORT）に追従する", () => {
@@ -386,6 +390,185 @@ Deno.test("resolveCheckScriptUrl: 絶対パスは cwd に依存せず file:// UR
     resolveCheckScriptUrl("/abs path/smoke.ts", "/ignored"),
     "file:///abs%20path/smoke.ts",
   );
+});
+
+// ---- リモート CDP モード（CDP_BROKER。旧 TASK-155 / Issue #169） ----
+
+Deno.test("resolveBrokerConfig: 未設定（undefined）ならローカルモード（null）", () => {
+  assertEquals(resolveBrokerConfig(undefined), null);
+});
+
+Deno.test("resolveBrokerConfig: 空文字・空白のみならローカルモード（null）", () => {
+  assertEquals(resolveBrokerConfig(""), null);
+  assertEquals(resolveBrokerConfig("   "), null);
+});
+
+Deno.test("resolveBrokerConfig: http(s) の broker URL を baseUrl として返す", () => {
+  assertEquals(resolveBrokerConfig("http://192.168.5.2:8377"), {
+    baseUrl: "http://192.168.5.2:8377",
+  });
+  assertEquals(resolveBrokerConfig("https://broker.example:9000"), {
+    baseUrl: "https://broker.example:9000",
+  });
+});
+
+Deno.test("resolveBrokerConfig: 末尾スラッシュ・前後空白を正規化する", () => {
+  assertEquals(resolveBrokerConfig(" http://192.168.5.2:8377/ "), {
+    baseUrl: "http://192.168.5.2:8377",
+  });
+});
+
+Deno.test("resolveBrokerConfig: http(s) 以外のスキーム・不正 URL は例外を投げる", () => {
+  assertThrows(
+    () => resolveBrokerConfig("ws://192.168.5.2:8377"),
+    Error,
+    "CDP_BROKER",
+  );
+  assertThrows(() => resolveBrokerConfig("not a url"), Error, "CDP_BROKER");
+});
+
+Deno.test("rewriteWsUrlHost: ws URL の host を broker の host に書き換える（ws のポートは保持）", () => {
+  assertEquals(
+    rewriteWsUrlHost(
+      "ws://127.0.0.1:52345/devtools/page/ABC",
+      "http://192.168.5.2:8377",
+    ),
+    "ws://192.168.5.2:52345/devtools/page/ABC",
+  );
+});
+
+Deno.test("rewriteWsUrlHost: スキーム（wss）とパス・クエリを保持する", () => {
+  assertEquals(
+    rewriteWsUrlHost(
+      "wss://localhost:9222/devtools/page/XYZ?x=1",
+      "https://broker.example:9000",
+    ),
+    "wss://broker.example:9222/devtools/page/XYZ?x=1",
+  );
+});
+
+Deno.test("parseBrokerSessionResponse: id と webSocketDebuggerUrl を取り出す", () => {
+  assertEquals(
+    parseBrokerSessionResponse({
+      id: "s1",
+      webSocketDebuggerUrl: "ws://127.0.0.1:52345/devtools/page/ABC",
+    }),
+    {
+      id: "s1",
+      webSocketDebuggerUrl: "ws://127.0.0.1:52345/devtools/page/ABC",
+    },
+  );
+});
+
+Deno.test("parseBrokerSessionResponse: id が欠けていれば例外を投げる", () => {
+  assertThrows(
+    () => parseBrokerSessionResponse({ webSocketDebuggerUrl: "ws://x" }),
+    Error,
+    "broker",
+  );
+});
+
+Deno.test("parseBrokerSessionResponse: webSocketDebuggerUrl が欠けていれば例外を投げる", () => {
+  assertThrows(() => parseBrokerSessionResponse({ id: "s1" }), Error, "broker");
+});
+
+Deno.test("parseBrokerSessionResponse: オブジェクトでない応答は例外を投げる", () => {
+  assertThrows(() => parseBrokerSessionResponse(null), Error, "broker");
+  assertThrows(() => parseBrokerSessionResponse("ok"), Error, "broker");
+});
+
+/** モック broker: fetch 呼び出しを記録し、決められた応答を返す。 */
+function createMockBrokerFetch(
+  responses: { post?: Response; del?: Response } = {},
+) {
+  const calls: { url: string; method: string }[] = [];
+  const fetchFn = (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    calls.push({ url, method });
+    if (method === "POST") {
+      return Promise.resolve(
+        responses.post ??
+          Response.json({
+            id: "sess-1",
+            webSocketDebuggerUrl: "ws://127.0.0.1:52345/devtools/page/ABC",
+          }),
+      );
+    }
+    if (method === "DELETE") {
+      return Promise.resolve(
+        responses.del ?? new Response(null, {
+          status: 204,
+        }),
+      );
+    }
+    return Promise.reject(new Error(`unexpected method ${method}`));
+  };
+  return { calls, fetchFn };
+}
+
+Deno.test("openBrokerSession: POST /session で取得した ws URL を broker host へ書き換えて返す", async () => {
+  const { calls, fetchFn } = createMockBrokerFetch();
+  const conn = await openBrokerSession(
+    { baseUrl: "http://192.168.5.2:8377" },
+    fetchFn,
+  );
+  assertEquals(calls, [
+    { url: "http://192.168.5.2:8377/session", method: "POST" },
+  ]);
+  assertEquals(conn.wsUrl, "ws://192.168.5.2:52345/devtools/page/ABC");
+  await conn.cleanup();
+});
+
+Deno.test("openBrokerSession: cleanup() が DELETE /session/:id を呼ぶ（AC #3）", async () => {
+  const { calls, fetchFn } = createMockBrokerFetch();
+  const conn = await openBrokerSession(
+    { baseUrl: "http://192.168.5.2:8377" },
+    fetchFn,
+  );
+  await conn.cleanup();
+  assertEquals(calls[1], {
+    url: "http://192.168.5.2:8377/session/sess-1",
+    method: "DELETE",
+  });
+});
+
+Deno.test("openBrokerSession: POST が非 2xx なら status 付きで例外を投げる", async () => {
+  const { fetchFn } = createMockBrokerFetch({
+    post: new Response("boom", { status: 500 }),
+  });
+  await assertRejects(
+    () => openBrokerSession({ baseUrl: "http://192.168.5.2:8377" }, fetchFn),
+    Error,
+    "500",
+  );
+});
+
+Deno.test("openBrokerSession: cleanup() は DELETE 失敗でも例外を投げない（best-effort）", async () => {
+  let posted = false;
+  const fetchFn = (
+    _input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    if ((init?.method ?? "GET") === "POST" && !posted) {
+      posted = true;
+      return Promise.resolve(
+        Response.json({
+          id: "sess-1",
+          webSocketDebuggerUrl: "ws://127.0.0.1:52345/devtools/page/ABC",
+        }),
+      );
+    }
+    return Promise.reject(new Error("network down"));
+  };
+  const conn = await openBrokerSession(
+    { baseUrl: "http://192.168.5.2:8377" },
+    fetchFn,
+  );
+  await conn.cleanup();
 });
 
 Deno.test({
