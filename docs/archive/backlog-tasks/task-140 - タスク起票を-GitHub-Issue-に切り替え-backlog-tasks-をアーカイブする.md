@@ -1,7 +1,7 @@
 ---
 id: TASK-140
 title: タスク起票を GitHub Issue に切り替え backlog/tasks をアーカイブする
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-28 17:38'
@@ -30,11 +30,11 @@ ordinal: 121000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 新規タスクが task-intake スキルの手順で Issue として起票でき、既定ソースの deno task next-tasks が Issue 由来の候補を返す
-- [ ] #2 backlog/tasks/ が docs/archive/backlog-tasks/ へ移設され、git log --follow で履歴が追え、TASK-N 索引の README がある
-- [ ] #3 未終端タスクが全件 Issue 化され、旧 ID・アーカイブパスと Issue 番号が相互リンクされている
-- [ ] #4 重複確認手順が search API を使わず issue list 1 コール + ローカルマッチである
-- [ ] #5 切替前の両ソース候補集合の一致確認が Implementation Notes に記録されている
+- [x] #1 新規タスクが task-intake スキルの手順で Issue として起票でき、既定ソースの deno task next-tasks が Issue 由来の候補を返す
+- [x] #2 backlog/tasks/ が docs/archive/backlog-tasks/ へ移設され、git log --follow で履歴が追え、TASK-N 索引の README がある
+- [x] #3 未終端タスクが全件 Issue 化され、旧 ID・アーカイブパスと Issue 番号が相互リンクされている
+- [x] #4 重複確認手順が search API を使わず issue list 1 コール + ローカルマッチである
+- [x] #5 切替前の両ソース候補集合の一致確認が Implementation Notes に記録されている
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -48,3 +48,14 @@ ordinal: 121000
 
 並列化判定: 一部あり（subagent = ファイル作業と移行スクリプト、mainagent = gh 実行と切替検証。gh 権限が mainagent に限られるための役割分担）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes（mainagent 記録・切替タスクのため移設後ファイルへ直接記載）
+
+- subagent がファイル作業を実施: task-intake スキル全面書き換え（gh issue create --body-file・issue list 1 コール + ローカルマッチ、AC#4）、backlog/tasks + archive 計 156 件を docs/archive/backlog-tasks/ へ git mv（全件 rename 100%・AC#2、TASK-N 索引 README 付き）、移行スクリプト（抽出・トポソート・相互リンク書き戻し・dry-run、テスト 19 件 red → green）、TASK_SOURCE 既定を github へ、CLAUDE.md / development-style 更新（agent-loop 本体は TASK-141 へ保留）
+- mainagent が gh 実行: 不足ラベル 3 件（area:src-layer-builders / src-picking / src-approximate-borders）を作成後、移行本実行。未終端 7 件を Issue 化: TASK-141→#165, TASK-148→#166, TASK-149→#167, TASK-150→#168, TASK-155→#169, TASK-156→#170, TASK-142→#171（旧 backlog アーカイブ由来 3 件は取りやめ相当として明示除外）。相互リンク（アーカイブ md の「移行先: #N」+ Issue 本文末尾の旧 ID・パス）を確認（AC#3）
+- AC#5 両ソース比較: 切替前 baseline（main db5fec9 上で TASK_SOURCE=backlog）= tasks {TASK-140, TASK-148} / skipped {149, 150, 155}。切替後（github 既定）= tasks {#165(旧141), #166(旧148), #169(旧155)} / skipped {#167, #168, #170}。差分は TASK-140 自身の終端化に起因するもののみ（140 が Done になったことで依存していた 141 が解禁・docs 枠が 155 に回った）で、集合は等価と判定
+- AC#1: 既定ソースの deno task next-tasks が Issue 由来候補（#165 等）を返すことを確認。起票経路は移行スクリプトが task-intake と同一の gh issue create --body-file 経路を 7 件実行し全件成功（次イテレーション以降の実起票が追加の実証になる）
+
+## Final Summary
+
+起票フローを GitHub Issue へ切替。task-intake スキル・移行スクリプト・TASK_SOURCE 既定変更・ドキュメント更新をファイル作業として実装し、未終端 7 タスクを依存トポソート順に Issue 化（#165〜#171、相互リンク付き）。両ソース候補集合の等価性を切替前後で確認。backlog タスク 156 件は履歴保持で docs/archive/backlog-tasks/ へ凍結。
