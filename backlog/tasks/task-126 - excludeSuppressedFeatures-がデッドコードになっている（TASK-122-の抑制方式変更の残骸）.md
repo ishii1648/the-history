@@ -1,9 +1,11 @@
 ---
 id: TASK-126
 title: excludeSuppressedFeatures がデッドコードになっている（TASK-122 の抑制方式変更の残骸）
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 16:37'
+updated_date: '2026-07-29 16:55'
 labels:
   - 'area:src-fief-dedupe'
   - 'area:src-main'
@@ -50,3 +52,14 @@ TASK-78（base ラベル抑制の導入）・TASK-122（抑制方式の変更）
 - [ ] #3 suppressedPowerNames など現役の関数が失われていない
 - [ ] #4 deno test が green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. src/fief_dedupe.ts の excludeSuppressedFeatures の参照を全走査し、アプリから呼ばれていないことを確認
+2. 判断: 削除を第一候補（TASK-122 で抑制の実装が labels.ts の suppressed マーキング + filterPowerLabelsByZoom に移っており、残すと「これが抑制の実装」と誤読される。suppressedPowerNames は現役なので残す）。根拠を記録
+3. TDD: 削除に伴う fief_dedupe_test.ts の該当テスト削除と、suppressedPowerNames の現役テスト維持を確認
+4. deno fmt --check / lint / test / build green
+
+並列化判定: 見送り（理由: 単一関数の削除判断のみ）
+<!-- SECTION:PLAN:END -->
