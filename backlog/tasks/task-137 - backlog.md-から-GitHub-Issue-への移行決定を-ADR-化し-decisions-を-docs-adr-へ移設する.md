@@ -1,9 +1,11 @@
 ---
 id: TASK-137
 title: backlog.md から GitHub Issue への移行決定を ADR 化し decisions を docs/adr/ へ移設する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 17:37'
+updated_date: '2026-07-29 17:19'
 labels:
   - 'area:docs'
 dependencies: []
@@ -31,3 +33,16 @@ ordinal: 118000
 - [ ] #4 docs/development-style.md の decision 運用記述が docs/adr/ 方式に更新されている
 - [ ] #5 docs/ 配下の既存文書から decision への参照がリンク切れになっていない
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. backlog/decisions/ 27 件を docs/adr/00NN-<slug>.md へ git mv で移設（番号保持・git log --follow で履歴が追えることを確認）。frontmatter を ADR 標準（status/date）に正規化、本文の Context/Decision/Consequences は不変
+2. 移行決定の ADR（次番号）を新規作成: 代替案 3 案と不採用理由・受容トレードオフ・将来課題（スナップショット鏡方式）をタスク記載の確定事項どおり記録
+3. docs/adr/README.md に一覧と採番規約を記載
+4. docs/development-style.md 2.1 章を docs/adr/ 方式へ書き換え（agent-loop 手順の書き換えは後続タスクの範囲なので触らない）
+5. docs/ 配下の decision 参照のリンク切れを grep で検証
+6. deno fmt --check / lint / test green
+
+並列化判定: 見送り（理由: 移設と参照更新が一体の変更）
+<!-- SECTION:PLAN:END -->
