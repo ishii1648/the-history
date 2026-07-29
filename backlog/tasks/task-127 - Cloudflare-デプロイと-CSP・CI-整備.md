@@ -1,11 +1,11 @@
 ---
 id: TASK-127
 title: Cloudflare デプロイと CSP・CI 整備
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-20 04:24'
-updated_date: '2026-07-28 18:44'
+updated_date: '2026-07-29 15:44'
 labels:
   - 'area:workflow'
   - 'area:app'
@@ -41,7 +41,7 @@ Renovate 設定は本タスクから分離した（TASK-134）。
 - [x] #4 CI のビルドジョブに本番シークレットが渡らず、デプロイが分離ジョブで実施される（CLOUDFLARE_API_TOKEN が deploy ジョブ以外の env に現れない）
 - [x] #5 本番ビルドの BASEMAP_PMTILES_URL / DEM_PMTILES_URL が R2 カスタムドメインを指し、ローカル開発では従来どおり同一オリジンの /europe.pmtiles で動作する
 - [x] #6 _headers の Cache-Control が docs/app-spec.md のキャッシュ方針（エッジでの再検証）に沿う
-- [ ] #7 スマートフォンの実機ブラウザで https://zeitreises.com を開き、地図描画と年代切替が動作することを確認する
+- [x] #7 スマートフォンの実機ブラウザで https://zeitreises.com を開き、地図描画と年代切替が動作することを確認する
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -68,4 +68,12 @@ Renovate 設定は本タスクから分離した（TASK-134）。
 - 本番検証（mainagent、Deploy run 30388189332 success 後）: AC#1 = https://zeitreises.com で地図描画・年代切替 1200→1500→1000 を CDP 実走。AC#2 = 両 pmtiles が 206（europe 203MB / dem 319MB）。AC#3 = CSP ヘッダ適用・securitypolicyviolation リスナーで違反ゼロ・R2 から 38 リソース取得・フォールバック未発動・エラートーストなし（static.cloudflareinsights.com への接続は Cloudflare の NEL/Report-To 由来でブラウザレベル送信のため CSP 対象外・無害）。AC#6 = Cache-Control: no-cache 実測
 - AC#7（スマホ実機）のみ未検証。ユーザーへ依頼中
 - 残課題: 旧 Pages プロジェクト the-history の削除可否はユーザー判断待ち
+
+AC#7: ユーザーがスマートフォン実機で https://zeitreises.com を開き、地図描画と年代切替の動作を確認（2026-07-30）。残課題の旧 Pages プロジェクト the-history の削除可否は引き続きユーザー判断待ち（タスク外の運用事項として申し送り）。
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Cloudflare Pages + R2 への本番デプロイを実装。build（シークレット無し）/deploy（トークンは deploy ジョブのみ）の 2 ジョブ構成、R2 同期は sha256 比較・S3 互換 API、PMTiles URL は location.hostname の実行時判定、_headers で CSP・Cache-Control: no-cache を配信。本番検証: zeitreises.com で地図描画・年代切替、R2 206 Range、CSP 違反ゼロ、スマホ実機確認（ユーザー、2026-07-30）。
+<!-- SECTION:FINAL_SUMMARY:END -->
