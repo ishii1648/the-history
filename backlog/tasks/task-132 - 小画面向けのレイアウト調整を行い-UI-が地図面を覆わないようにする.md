@@ -1,9 +1,11 @@
 ---
 id: TASK-132
 title: 小画面向けのレイアウト調整を行い UI が地図面を覆わないようにする
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 16:43'
+updated_date: '2026-07-29 16:55'
 labels:
   - 'area:app'
 dependencies:
@@ -27,3 +29,15 @@ app.css には @media によるブレークポイントが 1 つも存在せず�
 - [ ] #5 デスクトップ幅での既存レイアウトが変化しない
 - [ ] #6 TASK-131 のモバイル条件スクリーンショットで before/after を確認する
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. TASK-131 の申し送り（情報パネル × タイムライン交差・タイムラインが画面高 65% 占有・下端 attribution 折り返しとトグル被り）を起点に app.css の現状を読む
+2. 小画面ブレークポイント（例: max-width 480px）を設計。タイムラインの縮小/配置調整・情報パネルの幅と位置・下端要素の整理。当たり判定 44px 以上（AC#4）
+3. 実装は app.css（+必要なら index.html の構造微調整）。デスクトップ幅の既存レイアウト不変（AC#5）
+4. verify:smoke:mobile と TASK-131 のスクリーンショットで before/after 確認（AC#6、ポート 8132）。重なり計測（AC#3）とデスクトップ smoke 非退行
+5. deno fmt --check / lint / test / build green
+
+並列化判定: 見送り（理由: app.css 中心の一体的なレイアウト調整）
+<!-- SECTION:PLAN:END -->
