@@ -1,11 +1,11 @@
 ---
 id: TASK-151
 title: ブリテン諸島の政体データを OpenHistoricalMap から取得するビルドパイプラインを追加する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-29 15:59'
-updated_date: '2026-07-29 16:55'
+updated_date: '2026-07-29 17:14'
 labels:
   - 'area:scripts-fiefs'
   - 'area:data-fiefs'
@@ -39,12 +39,12 @@ Cliopatria にもウェールズ諸王国（Gwynedd / Powys / Brycheiniog / Morg
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 / 1500 / 1530 / 1600 / 1650 / 1700 のうち収録対象がある年について data/britain_fiefs_<year>.geojson が生成される
-- [ ] #2 1000 年の生成物にウェールズ諸王国（Gwynedd・Powys・Deheubarth 等）とアイルランド諸王国（Dublin・Leinster・Meath）の feature が含まれる
-- [ ] #3 1600 / 1650 / 1700 の生成物にアイルランドの政体（Kingdom of Ireland・Irish Catholic Confederation）の feature が含まれる
-- [ ] #4 取得対象はリレーション ID の静的な許可リストと存続区間の包含判定だけで決まり、ネットワークに依存しないテストが green になる
-- [ ] #5 収録しない対象（複合体・重複・上流の配置ずれ等）とその根拠がスクリプト内に記録されている
-- [ ] #6 生成物が build-fief-flat / build-fief-dedupe の既存チェーンで処理でき deno test が green
+- [x] #1 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 / 1500 / 1530 / 1600 / 1650 / 1700 のうち収録対象がある年について data/britain_fiefs_<year>.geojson が生成される
+- [x] #2 1000 年の生成物にウェールズ諸王国（Gwynedd・Powys・Deheubarth 等）とアイルランド諸王国（Dublin・Leinster・Meath）の feature が含まれる
+- [x] #3 1600 / 1650 / 1700 の生成物にアイルランドの政体（Kingdom of Ireland・Irish Catholic Confederation）の feature が含まれる
+- [x] #4 取得対象はリレーション ID の静的な許可リストと存続区間の包含判定だけで決まり、ネットワークに依存しないテストが green になる
+- [x] #5 収録しない対象（複合体・重複・上流の配置ずれ等）とその根拠がスクリプト内に記録されている
+- [x] #6 生成物が build-fief-flat / build-fief-dedupe の既存チェーンで処理でき deno test が green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -58,3 +58,21 @@ Cliopatria にもウェールズ諸王国（Gwynedd / Powys / Brycheiniog / Morg
 
 並列化判定: 見送り（理由: 単一パイプライン追加で、許可リスト・取得・検証が直列依存）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## 実装記録（mainagent レビュー済み）
+- 方式: リレーション ID の静的許可リスト BRITAIN_FIEF_ALLOWLIST（21 件・存続区間ピン留め）を唯一の真実とし、britainFiefIdsForYear が閉区間包含判定で年別集合を返す。仏（name）・伊（name+期間）と違い ID 方式なのは全対象が admin_level=2 で base と同 level・Kingdom of Ireland が同名 2 リレーションのため
+- AC#1: 12 年全てに収録対象があり britain_fiefs_<year>.geojson 12 ファイル生成（Overpass ID 指定 geom クエリ、21/21 取得、429/504 指数後退リトライ）。AC#2: 1000 年に Gwynedd/Powys/Deheubarth/Dublin/Leinster/Meath 等 11 件。AC#3: 1600=Kingdom of Ireland(2802031)+Leinster+Man、1650=Irish Catholic Confederation+Man、1700=Kingdom of Ireland(2697729)+Man
+- AC#4: 年別期待 ID 集合を静的に固定したネットワーク非依存テスト（純粋関数 20 件）。タグ drift は metadata 記録のみで判定に不使用
+- AC#5: BRITAIN_FIEF_EXCLUSIONS の 4 分類（base 既存の Scotland 等 / 1715 以降は base 分離済み / lvl4 構成国は別タスク / Principality of Wales は OHM 不在 = 史実整合）+ 二重防波堤 BRITAIN_FIEF_EXCLUDED_IDS。テストが網羅と非交差を固定
+- AC#6: build-fief-flat に buildBritainFiefFlat（keep-smaller、1600 の Leinster ⊂ Kingdom of Ireland 内包 12,700km² を解消）、build-attribution に britain パターン追加。dedupe は適用可能性をテストで担保し、union 入力登録は表示（TASK-153）と同時に行う判断（登録すると表示前に base へ穴が開くため）
+- 座標 COORD_PRECISION=3 準拠・既存データへの差分ゼロ・1524 → main 取り込み後 1521 passed（mainagent 独立検証）
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+OHM からブリテン諸島の政体を取得する build-britain-fiefs パイプラインを追加。ID 許可リスト（21 件）× 閉区間判定で 12 年分の britain_fiefs_<year>.geojson + flat を生成し、attribution チェーンに接続。1000 年のウェールズ・アイルランド諸王国と 1600/1650/1700 のアイルランド政体を収録、除外対象は 4 分類の根拠付きで記録。表示は TASK-153。1521 passed。
+<!-- SECTION:FINAL_SUMMARY:END -->
