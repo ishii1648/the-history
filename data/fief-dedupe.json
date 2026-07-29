@@ -90,13 +90,14 @@
       "Burgandy": 0.0736,
       "Corsica": 0.9983,
       "Denmark": 0.0072,
+      "Duchy of Bohemia": 1,
       "Duchy of Normandy": 1,
       "Dutchy of Benevento": 0.0298,
       "Holy Roman Empire": 0.7257,
       "Hungary": 0.0036,
       "Kingdom of France": 0.7842,
       "Papal States": 0.4707,
-      "Poland": 0.2951,
+      "Poland": 0.0875,
       "Prussians": 0.0535,
       "Venice": 0.5405
     },
@@ -110,8 +111,9 @@
       "Dutchy of Benevento": 0.0298,
       "Holy Roman Empire": 0.1865,
       "Kingdom of France": 0.7786,
+      "Moravia": 0.9998,
       "Papal States": 0.4395,
-      "Poland": 0.0755
+      "Poland": 0.0052
     },
     "1279": {
       "Britany": 1,
