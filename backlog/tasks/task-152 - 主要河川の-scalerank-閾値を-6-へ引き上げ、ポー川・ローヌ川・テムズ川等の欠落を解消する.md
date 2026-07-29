@@ -1,11 +1,11 @@
 ---
 id: TASK-152
 title: 主要河川の scalerank 閾値を 6 へ引き上げ、ポー川・ローヌ川・テムズ川等の欠落を解消する
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-29 15:59'
-updated_date: '2026-07-29 17:39'
+updated_date: '2026-07-29 18:02'
 labels:
   - 'area:scripts'
   - 'area:data'
@@ -46,14 +46,14 @@ ordinal: 125000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 MAX_SCALERANK が 6 になり、data/rivers.geojson に Po・Rhône・Garonne・Don・Thames の各 feature が含まれる
-- [ ] #2 scripts/build-rivers_test.ts の SOURCE_RIVER_NAMES スナップショットが再生成され、既存の 3 つの回帰テスト（正準名の name-ja.json 登録・日本語表示名の収束・死んだエイリアス検出）が green である
-- [ ] #3 rank 6 で新規に現れる全ソース名が data/name-ja.json に日本語名を持つ
-- [ ] #4 国境またぎの呼称違い（Tisa/Tisza 等）が実データの端点座標一致で検証され、継続区間であれば RIVER_NAME_ALIASES に登録されている
-- [ ] #5 data/rivers.geojson が RIVERS_SIZE_LIMIT_BYTES 以下に収まっている
-- [ ] #6 build-rivers.ts の MAX_SCALERANK に関するコメントが、6 を採用した根拠（rank 6 に欧州史の主要河川が含まれる）へ更新されている
-- [ ] #7 運河・分流（Ferenc Csatorna・Soroksari Duna）の採否が判断され、除外する場合はその根拠がコード内に記録されている
-- [ ] #8 実機で地図を開き、ポー川・ローヌ川・テムズ川がラベル付きで描画されクリック/ホバー強調が全区間に及ぶことを確認済みである
+- [x] #1 MAX_SCALERANK が 6 になり、data/rivers.geojson に Po・Rhône・Garonne・Don・Thames の各 feature が含まれる
+- [x] #2 scripts/build-rivers_test.ts の SOURCE_RIVER_NAMES スナップショットが再生成され、既存の 3 つの回帰テスト（正準名の name-ja.json 登録・日本語表示名の収束・死んだエイリアス検出）が green である
+- [x] #3 rank 6 で新規に現れる全ソース名が data/name-ja.json に日本語名を持つ
+- [x] #4 国境またぎの呼称違い（Tisa/Tisza 等）が実データの端点座標一致で検証され、継続区間であれば RIVER_NAME_ALIASES に登録されている
+- [x] #5 data/rivers.geojson が RIVERS_SIZE_LIMIT_BYTES 以下に収まっている
+- [x] #6 build-rivers.ts の MAX_SCALERANK に関するコメントが、6 を採用した根拠（rank 6 に欧州史の主要河川が含まれる）へ更新されている
+- [x] #7 運河・分流（Ferenc Csatorna・Soroksari Duna）の採否が判断され、除外する場合はその根拠がコード内に記録されている
+- [x] #8 実機で地図を開き、ポー川・ローヌ川・テムズ川がラベル付きで描画されクリック/ホバー強調が全区間に及ぶことを確認済みである
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -68,3 +68,22 @@ ordinal: 125000
 
 並列化判定: 見送り（理由: 閾値変更 → 再生成 → 訳・エイリアス → 実機確認が直列）
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## 実装記録（mainagent レビュー済み）
+- MAX_SCALERANK 5 → 6。rivers.geojson 48 → 77 features（正準名 30 → 50 河川）、42,540 → 64,134 バイト（上限の 43%・tolerance=0.005 不変）
+- AC#4: Tisza（ハンガリー）南端と Tisa（セルビア）北端が [20.178851, 46.260846] で完全一致 = 単一連続ラインを確認しエイリアス登録（正準は流路の大半を占める Tisza）。Douro は 50m 版に feature 不在（Duero がポルト近郊 W8.67° まで達する単一 feature）でエイリアス不要 — Dniester/Drava も同様、実測を ALIASES コメントに記録
+- AC#7: Ferenc Csatorna は 1793〜1802 築造の人工運河で本アプリの年代では anachronism → EXCLUDED_WATERWAY_NAMES + excludeArtificialWaterways（純粋関数・テスト付き）で除外。Soroksari Duna はドナウの自然分流で採用（Waal/Nederrijn/Bratul 系の採用前例と整合）
+- AC#3: 日本語名 20 件追加。Kem は「ケミ川（カレリア）」として Kemijoki（ケミ川）との表示名衝突を回避（回帰テスト (ii) が検出）
+- 波及: Po の中点アンカーがピアチェンツァ 0.053° で TASK-136 の都市回避対象入り → 0.42° の代替点へ移動（テストで Rhine と同列に固定）。rivers.ts のズーム段コメントを z4=27/z5=35/z6=50 本へ更新。ADR-0003・data-inventory README 追随
+- AC#8 実機（ポート 8152）: Po（z5・200km 遠点 probe 含む全区間強調）・Rhône（z5・複数 feature）・Thames（z6）のラベル描画 + hover/selected 確認。z4 概観の密度も問題なし
+- AC#2: SOURCE_RIVER_NAMES 37 → 58 名・回帰テスト 3 種 green。1557 → main 取り込み後 1587 passed（mainagent 独立検証）
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+MAX_SCALERANK を 6 へ引き上げ、ポー川・ローヌ川・ガロンヌ川・ドン川・テムズ川等 20 河川を追加（77 features・サイズ上限の 43%）。Tisa/Tisza は端点一致でエイリアス統合、Douro は不在を実測記録、フランツ運河は根拠付きで除外。日本語名 20 件・Po アンカーの都市回避連動・実機での描画/強調確認済み。1587 passed。
+<!-- SECTION:FINAL_SUMMARY:END -->
