@@ -411,6 +411,20 @@ CDP 経由の入力イベントで無人実行する。ヘッドレス実行の�
 はアプリ初期化完了前は初期値を返すレースがあるため、目的の値になるまで `waitFor`
 で明示的に待つこと。
 
+**リモート CDP モード（Issue #169）**: agent-loop セッションを Linux pod（kind
+on colima 等、実 GPU 描画を持たない環境）で動かす二拠点運用では、 環境変数
+`CDP_BROKER` にホスト側 chrome-broker の HTTP ベース URL（例:
+`http://192.168.5.2:8377`）を指定する。指定時、ハーネスはローカルで Chrome を
+spawn せず、broker へ `POST /session` してセッション
+（`{ id, webSocketDebuggerUrl }`）を取得し、ws URL の host を broker の host
+へ書き換えて外部 Chrome の CDP エンドポイントに接続する（実 GPU 描画は ホスト側
+Chrome が担う）。`close()` は `DELETE /session/{id}` で
+セッションを破棄する（失敗時は broker 側 TTL の孤児掃除に委ねる）。broker
+本体（launchd 常駐サービス）と plist は k8s-lab リポジトリ側の管理。
+`CDP_BROKER` 未設定時は従来のローカル spawn のままで、フォールバック連鎖上の
+位置づけも変わらない（ヘッドレス CDP［ローカル spawn またはリモート broker］→
+機械的スモークチェック）。
+
 Chrome を起動できない環境（バイナリ欠如・サンドボックス等でヘッドレス CDP も
 claude-in-chrome も使えない場合）は、ビルド成果物・データ出力のスモーク
 チェック（生成物の存在・件数・スキーマ等の機械的な確認）で代替する。検証
