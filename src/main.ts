@@ -61,11 +61,21 @@ import {
 } from "./info.ts";
 import {
   EMPTY_FIEF_DEDUPE_TABLE,
-  FIEF_DEDUPE_DATA_URL,
   type FiefDedupeTable,
-  parseFiefDedupeTable,
   suppressedPowerNames,
 } from "./fief_dedupe.ts";
+import {
+  loadCities,
+  loadColors,
+  loadFiefDedupe,
+  loadKnownLimitations,
+  loadMountains,
+  loadNameJa,
+  loadNotes,
+  loadOverrides,
+  loadPeaks,
+  loadRivers,
+} from "./data_loading.ts";
 import {
   buildLabelData,
   characterSetFrom,
@@ -88,7 +98,6 @@ import { labelCollisionExtensions } from "./label_collision.ts";
 import {
   createSuzerainExtentCache,
   EMPTY_SUZERAIN_OVERRIDES,
-  parseSuzerainOverrides,
   suzerainExtentKey,
   type SuzerainOverrides,
   withSuzerainOverrides,
@@ -105,7 +114,6 @@ import {
   mountainOutlineColor,
   mountainOutlineWidth,
   mountainPickLabel,
-  MOUNTAINS_DATA_URL,
   toggleMountainSelection,
 } from "./mountains.ts";
 import {
@@ -126,7 +134,6 @@ import {
   type PeakMarkerDatum,
   peakMarkerSize,
   peakPickLabel,
-  PEAKS_DATA_URL,
   togglePeakSelection,
 } from "./peaks.ts";
 import {
@@ -139,14 +146,12 @@ import {
   riverLineColor,
   riverLineWidth,
   riverNameFor,
-  RIVERS_DATA_URL,
   toggleRiverSelection,
 } from "./rivers.ts";
 import {
   allCityPositions,
   buildCityLabelData,
   buildCityMarkerData,
-  CITIES_DATA_URL,
   type CitiesData,
   CITY_HIT_FILL_COLOR,
   CITY_HIT_RADIUS_PX,
@@ -199,20 +204,16 @@ import { wireCollapsiblePanel } from "./collapsible.ts";
 import {
   createNotesState,
   isNotesPanelHidden,
-  NOTES_DATA_URL,
   notesAriaExpanded,
   type NotesData,
   type NotesEvent,
   notesForYear,
   notesHeadingFor,
-  parseNotesData,
   reduceNotesEvent,
 } from "./notes.ts";
 import {
-  KNOWN_LIMITATIONS_DATA_URL,
   type KnownLimitation,
   knownLimitationEntries,
-  parseKnownLimitations,
 } from "./known_limitations.ts";
 import {
   CITY_HIT_LAYER_ID,
@@ -2525,27 +2526,6 @@ function setupKnownLimitationsUI(): void {
 
 setupKnownLimitationsUI();
 
-/**
- * known-limitations.json（データの既知の制限一覧）を取得する（TASK-46）。
- * 失敗・未生成・全件不正のときは revealKnownLimitations を呼ばないため
- * トグルボタンごと非表示になる（従来表示を一切変えない。notes.json と同じ方針）。
- */
-async function loadKnownLimitations(): Promise<void> {
-  try {
-    const res = await fetch(KNOWN_LIMITATIONS_DATA_URL);
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    const parsed = parseKnownLimitations(await res.json());
-    if (parsed.length === 0) throw new Error("limitations が空または不正");
-    revealKnownLimitations(parsed);
-  } catch (error) {
-    console.warn(
-      `known-limitations.json の取得に失敗しました。制限事項なしで継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
 // ---- 年代ごとの歴史解説パネル（TASK-33）----
 
 /**
@@ -2925,176 +2905,6 @@ function setupTimeline(): void {
 
 setupTimeline();
 
-/** colors.json を取得する。失敗時は空マップのままデフォルト色で継続する */
-async function loadColors(): Promise<void> {
-  try {
-    const res = await fetch("/data/colors.json");
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    colors = await res.json() as Record<string, string>;
-  } catch (error) {
-    console.warn(
-      `colors.json の取得に失敗しました。デフォルト色で継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
-/**
- * name-overrides.json を取得する。失敗時は空マップのまま生値で継続する。
- * ラベル整形（displayLabel）が SUBJECTO の綴りゆれを正規化するのに使い、
- * 宗主補正（suzerains）は勢力圏の外枠・色キー・表示ラベルで使う（TASK-94）。
- * initPowerLayer は switchYear より前にこれを待つため、年代データへ補正を
- * 適用する withSuzerainOverrides から見て overrides は常に確定済み。
- */
-async function loadOverrides(): Promise<void> {
-  try {
-    const res = await fetch("/data/name-overrides.json");
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    overrides = parseSuzerainOverrides(await res.json());
-  } catch (error) {
-    console.warn(
-      `name-overrides.json の取得に失敗しました。SUBJECTO 生値で継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
-/**
- * name-ja.json（英語 NAME → 日本語名）を取得する（TASK-23）。
- * 失敗時は空マップのまま英語表記で継続する。
- */
-async function loadNameJa(): Promise<void> {
-  try {
-    const res = await fetch("/data/name-ja.json");
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    nameJa = await res.json() as Record<string, string>;
-  } catch (error) {
-    console.warn(
-      `name-ja.json の取得に失敗しました。英語表記で継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
-/**
- * fief-dedupe.json（諸侯領による base 勢力の被覆率表）を取得する（TASK-78）。
- * 失敗・未生成・不正形のときは空表のままにし、base ラベルの抑制を一切行わない
- * （= TASK-78 以前の表示。colors.json 等と同じ縮退方針）。
- */
-async function loadFiefDedupe(): Promise<void> {
-  try {
-    const res = await fetch(FIEF_DEDUPE_DATA_URL);
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    fiefDedupe = parseFiefDedupeTable(await res.json());
-  } catch (error) {
-    console.warn(
-      `fief-dedupe.json の取得に失敗しました。諸侯領と base の二重ラベルを抑制せず継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
-/**
- * rivers.geojson（主要河川ライン）を取得する（TASK-24）。
- * 失敗時は空 FeatureCollection のまま河川なしで継続する（colors.json 等と同様）。
- */
-async function loadRivers(): Promise<void> {
-  try {
-    const res = await fetch(RIVERS_DATA_URL);
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    riversData = await res.json() as FeatureCollection;
-  } catch (error) {
-    console.warn(
-      `rivers.geojson の取得に失敗しました。河川なしで継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
-/**
- * mountains.geojson（主要山脈ポリゴン）を取得する（TASK-97）。
- * 失敗・未生成時は空 FeatureCollection のまま山脈ラベルなしで継続する
- * （河川と同じ縮退方針）。
- */
-async function loadMountains(): Promise<void> {
-  try {
-    const res = await fetch(MOUNTAINS_DATA_URL);
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    mountainsData = await res.json() as FeatureCollection;
-  } catch (error) {
-    console.warn(
-      `mountains.geojson の取得に失敗しました。山脈ラベルなしで継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
-/**
- * peaks.geojson（主要山峰の Point）を取得する（TASK-99）。
- * 失敗・未生成時は空 FeatureCollection のまま山峰なしで継続する
- * （河川・山脈と同じ縮退方針）。形の検証は表示時の peakEntries が行うため、
- * ここでは丸ごと保持する。
- */
-async function loadPeaks(): Promise<void> {
-  try {
-    const res = await fetch(PEAKS_DATA_URL);
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    peaksData = await res.json() as FeatureCollection;
-  } catch (error) {
-    console.warn(
-      `peaks.geojson の取得に失敗しました。山峰なしで継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
-/**
- * cities.json（年 → 主要都市配列）を取得する（TASK-27）。
- * 失敗・未生成時は空のまま都市なしで継続する（colors.json 等と同様）。
- * 形の検証は表示時の cityEntriesForYear が行うため、ここでは丸ごと保持する。
- */
-async function loadCities(): Promise<void> {
-  try {
-    const res = await fetch(CITIES_DATA_URL);
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    citiesData = await res.json() as CitiesData;
-  } catch (error) {
-    console.warn(
-      `cities.json の取得に失敗しました。都市なしで継続します: ${
-        String(error)
-      }`,
-    );
-  }
-}
-
-/**
- * notes.json（年 → 歴史解説）を取得する（TASK-33）。
- * 失敗・未生成・不正形（parseNotesData が null）のときは notesData を null の
- * まま維持し、revealNotesToggle を呼ばないためトグルボタンごと非表示になる
- * （従来表示を一切変えない）。
- */
-async function loadNotes(): Promise<void> {
-  try {
-    const res = await fetch(NOTES_DATA_URL);
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    const parsed = parseNotesData(await res.json());
-    if (parsed === null) throw new Error("years が不正または空");
-    notesData = parsed;
-    revealNotesToggle();
-  } catch (error) {
-    console.warn(
-      `notes.json の取得に失敗しました。解説なしで継続します: ${String(error)}`,
-    );
-  }
-}
-
 /** 初期年代の勢力圏を描画する。例外で地図全体を落とさない */
 async function initPowerLayer(): Promise<void> {
   try {
@@ -3105,22 +2915,53 @@ async function initPowerLayer(): Promise<void> {
     // TASK-33: notes.json も初期描画前に揃え、初回の年確定（applyFn →
     // reflectYearToNotes）の時点で解説を描画できるようにする。
     // TASK-46: known-limitations.json も同様に揃え、初回描画前にトグルを出す。
-    await Promise.all([
+    // TASK-145: ローダ本体は src/data_loading.ts（返り値型 + fetch 注入）へ
+    // 抽出した。モジュール変数への代入（状態の所有）と成功時フックの発火は
+    // decision-29 の方針どおりここに残す。
+    const [
+      loadedColors,
+      loadedOverrides,
+      loadedNameJa,
+      loadedRivers,
+      // TASK-97: mountains.geojson も初期描画前に揃え、初回から山脈名を重ねる
+      loadedMountains,
+      // TASK-99: peaks.geojson も同様に揃え、初回から山峰マーカーを重ねる
+      loadedPeaks,
+      loadedCities,
+      loadedNotes,
+      loadedLimitations,
+      // TASK-78: 初期年（1000）が諸侯領オーバーレイ対象年なので、初期描画前に
+      // 被覆率表を揃えて 1 フレーム目から二重ラベルを出さないようにする
+      loadedFiefDedupe,
+    ] = await Promise.all([
       loadColors(),
       loadOverrides(),
       loadNameJa(),
       loadRivers(),
-      // TASK-97: mountains.geojson も初期描画前に揃え、初回から山脈名を重ねる
       loadMountains(),
-      // TASK-99: peaks.geojson も同様に揃え、初回から山峰マーカーを重ねる
       loadPeaks(),
       loadCities(),
       loadNotes(),
       loadKnownLimitations(),
-      // TASK-78: 初期年（1000）が諸侯領オーバーレイ対象年なので、初期描画前に
-      // 被覆率表を揃えて 1 フレーム目から二重ラベルを出さないようにする
       loadFiefDedupe(),
     ]);
+    colors = loadedColors;
+    overrides = loadedOverrides;
+    nameJa = loadedNameJa;
+    riversData = loadedRivers;
+    mountainsData = loadedMountains;
+    peaksData = loadedPeaks;
+    citiesData = loadedCities;
+    // notes は取得成功時（null でない）だけ反映し、トグルボタンを表示する
+    if (loadedNotes !== null) {
+      notesData = loadedNotes;
+      revealNotesToggle();
+    }
+    // known-limitations は 1 件以上のときだけトグルを表示する（0 件 = 縮退）
+    if (loadedLimitations.length > 0) {
+      revealKnownLimitations(loadedLimitations);
+    }
+    fiefDedupe = loadedFiefDedupe;
     await switchYear(initialYear);
   } catch (error) {
     console.error(`勢力圏レイヤーの初期化に失敗しました: ${String(error)}`);
