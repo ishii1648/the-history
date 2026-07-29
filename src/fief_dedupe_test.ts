@@ -1,30 +1,12 @@
-import { assert, assertEquals, assertStrictEquals } from "@std/assert";
-import type { Feature, FeatureCollection } from "geojson";
+import { assert, assertEquals } from "@std/assert";
 import {
   coverageFor,
   EMPTY_FIEF_DEDUPE_TABLE,
-  excludeSuppressedFeatures,
   FIEF_COVERAGE_SUPPRESS_THRESHOLD,
   FIEF_DEDUPE_DATA_URL,
   parseFiefDedupeTable,
   suppressedPowerNames,
 } from "./fief_dedupe.ts";
-
-/** NAME だけを持つポリゴン feature（ジオメトリは判定に使われない） */
-function power(name: string | null): Feature {
-  return {
-    type: "Feature",
-    properties: name === null ? {} : { NAME: name },
-    geometry: {
-      type: "Polygon",
-      coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
-    },
-  };
-}
-
-function fc(features: Feature[]): FeatureCollection {
-  return { type: "FeatureCollection", features };
-}
 
 Deno.test("FIEF_DEDUPE_DATA_URL は data/ 配下の対応表を指す", () => {
   assertEquals(FIEF_DEDUPE_DATA_URL, "/data/fief-dedupe.json");
@@ -108,27 +90,4 @@ Deno.test("suppressedPowerNames は閾値を引数で上書きできる", () => 
   const table = parseFiefDedupeTable({ years: { "1200": { "Half": 0.5 } } });
   assert(suppressedPowerNames(table, 1200, 0.4).has("Half"));
   assert(!suppressedPowerNames(table, 1200, 0.6).has("Half"));
-});
-
-Deno.test("excludeSuppressedFeatures は抑制対象が無ければ同一参照を返す（メモ化を壊さない）", () => {
-  const input = fc([power("Britany"), power("France")]);
-  assertStrictEquals(excludeSuppressedFeatures(input, new Set()), input);
-});
-
-Deno.test("excludeSuppressedFeatures は抑制対象の NAME を持つ feature だけを除く", () => {
-  const input = fc([power("Britany"), power("France"), power(null)]);
-  const result = excludeSuppressedFeatures(input, new Set(["Britany"]));
-  assertEquals(result.features.length, 2);
-  assertEquals(result.features[0].properties?.NAME, "France");
-  assertEquals(result.features[1].properties?.NAME, undefined);
-  // 入力は変更しない
-  assertEquals(input.features.length, 3);
-});
-
-Deno.test("excludeSuppressedFeatures は抑制対象が入力に無ければ同一参照を返す", () => {
-  const input = fc([power("France")]);
-  assertStrictEquals(
-    excludeSuppressedFeatures(input, new Set(["Britany"])),
-    input,
-  );
 });

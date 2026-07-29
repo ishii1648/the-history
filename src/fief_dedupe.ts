@@ -3,18 +3,20 @@
  * （TASK-78）。DOM / deck.gl 非依存。
  *
  * 扱うのは「被覆率表（data/fief-dedupe.json、scripts/build-fief-dedupe.ts が
- * 生成）を読んで、どの base 勢力のラベルを抑制するか」だけ。境界線側の重複は
- * 線を幾何的に切り出した data/base_outline_<year>.geojson（同スクリプトが生成、
- * ローダは powers.ts の createBaseOutlineLoader）で解決しており、こちらの
- * 表とは独立に効く。
+ * 生成）を読んで、どの base 勢力のラベルを抑制するか（NAME 集合の算出）」だけ。
+ * 抑制の**適用**はこのモジュールでは行わない: TASK-122 以降、labels.ts の
+ * buildLabelData が suppressedPowerNames の集合を受けて LabelDatum に
+ * suppressed の印を付け、filterPowerLabelsByZoom がズーム段に応じて実際に
+ * 出すかを決める（旧 excludeSuppressedFeatures は TASK-126 で削除）。
+ * 境界線側の重複は線を幾何的に切り出した data/base_outline_<year>.geojson
+ * （同スクリプトが生成、ローダは powers.ts の createBaseOutlineLoader）で
+ * 解決しており、こちらの表とは独立に効く。
  *
  * 被覆率 = 「その base 勢力の面積のうち、諸侯領 union に覆われている割合」。
  * 1.0 に近い勢力は諸侯領オーバーレイで同じ土地が完全に描き直されているため、
  * base 側のラベルは諸侯領ラベルと同一実体の二重表示になる（1200 年の
  * 「ブルターニュ」と「ブルターニュ公領」）。
  */
-
-import type { Feature, FeatureCollection } from "geojson";
 
 /** 被覆率表の配信 URL（同一オリジン） */
 export const FIEF_DEDUPE_DATA_URL = "/data/fief-dedupe.json";
@@ -103,32 +105,4 @@ export function suppressedPowerNames(
     if (ratio >= threshold) names.add(name);
   }
   return names;
-}
-
-/** properties.NAME を取り出す。空文字・非文字列は null */
-function nameOf(feature: Feature): string | null {
-  const value = feature.properties?.NAME;
-  return typeof value === "string" && value !== "" ? value : null;
-}
-
-/**
- * 抑制対象 NAME の feature を除いた FeatureCollection を返す（純粋関数）。
- * 除く対象が無ければ入力と同一参照を返す: 呼び出し側（main.ts の
- * memoizedPowerLabelData）は引数の参照同値でラベルデータをキャッシュするため、
- * 毎回新しい配列を作ると polylabel の再計算が走ってしまう（TASK-50 の方針）。
- *
- * 抑制するのはラベル生成用の feature だけで、勢力ポリゴンの塗り・picking に
- * 使う FeatureCollection には適用しない（base の塗りとホバー/クリックは維持する）。
- */
-export function excludeSuppressedFeatures(
-  fc: FeatureCollection,
-  suppressed: ReadonlySet<string>,
-): FeatureCollection {
-  if (suppressed.size === 0) return fc;
-  const kept = fc.features.filter((feature) => {
-    const name = nameOf(feature);
-    return name === null || !suppressed.has(name);
-  });
-  if (kept.length === fc.features.length) return fc;
-  return { ...fc, features: kept };
 }
