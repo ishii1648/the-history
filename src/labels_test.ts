@@ -15,6 +15,7 @@ import {
   HRE_LABEL_COLOR,
   HRE_SUZERAIN_NAME,
   isHreSuzerainFeature,
+  LABEL_COLLISION_BACKGROUND_COLOR,
   LABEL_COLLISION_FADE_CUTOFF,
   LABEL_COLLISION_INJECT_HOOK,
   LABEL_FONT_FAMILY,
@@ -23,6 +24,7 @@ import {
   LABEL_OUTLINE_WIDTH,
   LABEL_SDF_RADIUS,
   labelAnchorFor,
+  labelCollisionBackgroundProps,
   labelCollisionCutoffInject,
   labelColorFor,
   labelPriorityFor,
@@ -485,6 +487,33 @@ Deno.test("labelTextStyleProps は背景パネルを描かない（background: f
   assert(
     !keys.includes("getBackgroundColor") && !keys.includes("backgroundPadding"),
     `背景パネル props が残っている: ${keys.join(", ")}`,
+  );
+});
+
+// ---- TASK-143: 自己衝突対策の不可視背景クアッドを全ラベル層へ一般化 ----
+// CollisionFilterExtension の可視判定はアンカー画素の 5x5 サンプルを見るが、
+// 背景の無い TextLayer は衝突 FBO にグリフ形状しか残らず、アンカーがグリフの
+// 空白（「ー」の上下・「イ|ン」の文字間・「・」の周囲）に落ちるラベルは自分の
+// 可視判定に永遠に失敗する（TASK-136 のライン川、TASK-143 実機監査のローマ・
+// ボローニャ・ボヘミア王国など計 11 件）。河川層だけだった TASK-136 の対処を
+// 衝突参加の全ラベル層に広げる。
+
+Deno.test("LABEL_COLLISION_BACKGROUND_COLOR: alpha 1 の不可視背景（0 だと衝突 FBO に描かれない）", () => {
+  // alpha 0 は SDF/picking 系 shader の alpha==0 discard で衝突 FBO に載らず、
+  // 対策として機能しない。1（1/255）は目視では識別不能な下限値
+  assertEquals(LABEL_COLLISION_BACKGROUND_COLOR, [0, 0, 0, 1]);
+});
+
+Deno.test("labelCollisionBackgroundProps は不可視背景クアッドを敷く（TASK-143）", () => {
+  const a = labelCollisionBackgroundProps();
+  const b = labelCollisionBackgroundProps();
+  assertEquals(a.background, true);
+  assertEquals(a.getBackgroundColor, [...LABEL_COLLISION_BACKGROUND_COLOR]);
+  // deck.gl にモジュール定数の参照をそのまま渡さない（破壊的変更の防止）
+  assert(a.getBackgroundColor !== b.getBackgroundColor);
+  assert(
+    (a.getBackgroundColor as unknown) !==
+      (LABEL_COLLISION_BACKGROUND_COLOR as unknown),
   );
 });
 

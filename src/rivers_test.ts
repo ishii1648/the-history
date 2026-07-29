@@ -16,7 +16,6 @@ import {
   RIVER_HOVERED_LINE_COLOR,
   RIVER_HOVERED_LINE_WIDTH_PX,
   RIVER_LABEL_CITY_CLEARANCE_DEG,
-  RIVER_LABEL_COLLISION_BACKGROUND_COLOR,
   RIVER_LINE_COLOR,
   RIVER_LINE_WIDTH_PX,
   RIVER_SELECTED_LINE_COLOR,
@@ -488,11 +487,10 @@ Deno.test("riverLabelAnchors: 回避点込みでもホバー連続移動でア�
   assertEquals(calls, 1);
 });
 
-Deno.test("RIVER_LABEL_COLLISION_BACKGROUND_COLOR: alpha 1 の不可視背景（自己衝突対策。0 だと衝突 FBO に描かれない）", () => {
-  // alpha 0 は picking シェーダの alpha==0 discard で衝突 FBO から消えるため
-  // 1 が下限。1/255 は目視では完全に不可視（TASK-136 実機確認済み）
-  assertEquals(RIVER_LABEL_COLLISION_BACKGROUND_COLOR, [0, 0, 0, 1]);
-});
+// 自己衝突対策の不可視背景（TASK-136 の RIVER_LABEL_COLLISION_BACKGROUND_COLOR）
+// は TASK-143 で全ラベル層へ一般化され labels.ts へ移した。値の固定は
+// labels_test.ts（LABEL_COLLISION_BACKGROUND_COLOR / labelCollisionBackgroundProps）
+// が担う。
 
 // ---- filterVisibleRiverLabels（TASK-69）----
 
