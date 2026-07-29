@@ -1,9 +1,10 @@
 ---
-id: decision-11
-title: 動作確認はヘッドレス Chrome + CDP を標準とし claude-in-chrome は最終手段とする
-date: '2026-07-24 14:46'
 status: accepted
+date: '2026-07-24 14:46'
 ---
+
+# decision-11: 動作確認はヘッドレス Chrome + CDP を標準とし claude-in-chrome は最終手段とする
+
 ## Context
 
 agent-loop のマージ後動作確認は claude-in-chrome 拡張で行っていたが、(1) ツール呼び出し毎の権限確認で HITL が頻発し自律ループが停止する、(2) 地図の描画（rAF）が可視ウィンドウに依存し、ウィンドウが隠れると検証がブロックされる、(3) クリック精度が ±5px 程度で小さな UI 要素（都市ドット等）を狙えない、という 3 つの構造的制約があった（TASK-58）。

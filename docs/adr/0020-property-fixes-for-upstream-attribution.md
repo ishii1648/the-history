@@ -1,9 +1,9 @@
 ---
-id: decision-20
-title: 上流データの帰属の誤りは propertyFixes で正し、suzerains は上流に無い関係の追加に限る
-date: '2026-07-27 13:10'
 status: accepted
+date: '2026-07-27 13:10'
 ---
+
+# decision-20: 上流データの帰属の誤りは propertyFixes で正し、suzerains は上流に無い関係の追加に限る
 
 ## Context
 

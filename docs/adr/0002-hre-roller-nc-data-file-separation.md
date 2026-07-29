@@ -1,9 +1,10 @@
 ---
-id: decision-2
-title: HRE 領邦データ（ETH Zürich Roller・CC BY-NC-SA）は GPL 派生データとファイル分離
-date: '2026-07-21 15:52'
 status: accepted
+date: '2026-07-21 15:52'
 ---
+
+# decision-2: HRE 領邦データ（ETH Zürich Roller・CC BY-NC-SA）は GPL 派生データとファイル分離
+
 ## Context
 
 historical-basemaps は神聖ローマ帝国（HRE）を単一 feature で表現しており、内部領邦を表示できない。調査の結果、HRE 領邦粒度を満たす唯一のオープンデータは ETH Zürich の Roller データセット（DOI 10.3929/ethz-b-000472583）だったが、ライセンスが CC BY-NC-SA 4.0 で NC（非営利）条項を含む（TASK-19）。リポジトリ本体は GPL-3.0 派生データ（decision-1）を含む。

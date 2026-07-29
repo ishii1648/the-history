@@ -1,9 +1,10 @@
 ---
-id: decision-13
-title: 中世フランス諸侯領データに OpenHistoricalMap（CC0・Overpass API）を採用し欠落は明示する
-date: '2026-07-26 07:36'
 status: accepted
+date: '2026-07-26 07:36'
 ---
+
+# decision-13: 中世フランス諸侯領データに OpenHistoricalMap（CC0・Overpass API）を採用し欠落は明示する
+
 ## Context
 
 中世フランスの諸侯領（ノルマンディー公領・アキテーヌ公領など）を地図に表示したいが、既存ソースではカバーできない。europe_<year>.geojson（historical-basemaps, GPL-3.0）は中世フランスをほぼ一枚岩（Kingdom of France + Britany）で持ち、HRE 領邦データ（ETH Roller, CC BY-NC-SA）はフランスを一切カバーしない。Euratlas は諸侯レベルまで網羅した最高品質だが有償・再配布制限で OSS リポジトリにコミットできず（TASK-37 と同じ結論）、Wikimedia の地図の自前デジタイズは工数が過大（TASK-70）。

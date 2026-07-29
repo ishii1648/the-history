@@ -1,9 +1,10 @@
 ---
-id: decision-16
-title: base 境界は概略境界として MapLibre line レイヤーで不確かさを表現する
+status: accepted
 date: '2026-07-26 12:48'
-status: Accepted
 ---
+
+# decision-16: base 境界は概略境界として MapLibre line レイヤーで不確かさを表現する
+
 ## Context
 
 base 境界（aourednik/historical-basemaps）は全 feature が BORDERPRECISION=1（approximate）で、提供者自身が全境界を概略と宣言している。従来の 1px のくっきり線は精密測量の誤ったメッセージを与え、数百 km の直線近似（1200 年の仏↔アンジュー 277 km 等）が特に不自然に見えていた（TASK-80）。粗さは元データ由来であり simplify 起因ではないことは検証済み。

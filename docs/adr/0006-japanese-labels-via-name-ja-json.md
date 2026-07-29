@@ -1,9 +1,10 @@
 ---
-id: decision-6
-title: 日本語表記はデータを英語のまま維持し表示層で name-ja.json を適用する
-date: '2026-07-21 15:52'
 status: accepted
+date: '2026-07-21 15:52'
 ---
+
+# decision-6: 日本語表記はデータを英語のまま維持し表示層で name-ja.json を適用する
+
 ## Context
 
 地図ラベル・ツールチップ・情報パネルを日本語表記にしたい。一方、データの NAME/SUBJECTO を日本語に書き換えると、colors.json のキー・SUBJECTO 参照・上流データとの突合が全て壊れる（TASK-23）。

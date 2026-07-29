@@ -1,9 +1,9 @@
 ---
-id: decision-25
-title: 確度 B の帰属は「宙に浮いた宗主」を判定基準にして propertyFixes で正規化する
-date: '2026-07-27 17:38'
 status: accepted
+date: '2026-07-27 17:38'
 ---
+
+# decision-25: 確度 B の帰属は「宙に浮いた宗主」を判定基準にして propertyFixes で正規化する
 
 ## Context
 

@@ -1,9 +1,9 @@
 ---
-id: decision-22
-title: 面の地物は勢力より上で pickable にし、当たり領域をアンカー円に絞る
-date: '2026-07-27 15:48'
 status: accepted
+date: '2026-07-27 15:48'
 ---
+
+# decision-22: 面の地物は勢力より上で pickable にし、当たり領域をアンカー円に絞る
 
 ## Context
 

@@ -1,9 +1,10 @@
 ---
-id: decision-1
-title: 勢力圏データソースに aourednik/historical-basemaps をコミット固定で採用
-date: '2026-07-21 15:52'
 status: accepted
+date: '2026-07-21 15:52'
 ---
+
+# decision-1: 勢力圏データソースに aourednik/historical-basemaps をコミット固定で採用
+
 ## Context
 
 勢力圏（国境）ポリゴンの時系列データとして、年代別 world GeoJSON を提供するオープンデータが必要だった（TASK-2）。上流リポジトリは随時更新されるため、参照が動くと成果物の再現性が失われる。

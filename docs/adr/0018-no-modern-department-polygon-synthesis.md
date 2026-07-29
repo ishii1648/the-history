@@ -1,9 +1,10 @@
 ---
-id: decision-18
-title: 現代県ポリゴン合成による中世諸侯領の自作は行わない（出典なきジオメトリ生成の禁止を維持）
+status: accepted
 date: '2026-07-26 15:24'
-status: Accepted
 ---
+
+# decision-18: 現代県ポリゴン合成による中世諸侯領の自作は行わない（出典なきジオメトリ生成の禁止を維持）
+
 ## Context
 
 南仏・中央部の諸侯領（Toulouse / Foix / Armagnac / Auvergne / Bourbon / Nevers）と王領は OHM に実データが無く（TASK-70/87/88 で 3 回実測、boundary=administrative 4,923 件でゼロヒット）、現代の県（département）ポリゴン union で合成する案を TASK-88 で定量評価した。実測: 通説的な 6 県合成のトゥールーズ伯領は base（historical-basemaps）と IoU 28.5%（12 県まで広げても 41.6%）、1200 年の南仏空白 208,326 km² のうち埋まるのは 12.7〜27.7%、出典のある OHM 由来 Aquitaine/Gascony と 6,306 km² の新たな重なりを作り、頂点密度は周囲の 4 倍（2018 年 IGN 県境）で TASK-80 の「全境界は概略」表現と正面衝突する。

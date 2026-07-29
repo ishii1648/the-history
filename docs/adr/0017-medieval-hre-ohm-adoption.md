@@ -1,9 +1,10 @@
 ---
-id: decision-17
-title: 中世（1000〜1492）の HRE 領邦データは OHM（CC0）を採用し、1500 以降の Roller は維持する
+status: accepted
 date: '2026-07-26 13:55'
-status: Accepted
 ---
+
+# decision-17: 中世（1000〜1492）の HRE 領邦データは OHM（CC0）を採用し、1500 以降の Roller は維持する
+
 ## Context
 
 TASK-37（2026-07-23）は「900〜1492 年の HRE 領邦を表示できるオープンデータは存在しない」と結論したが、これは OHM Wiki の自己申告に基づくもので実クエリを投げていなかった。TASK-70 で OHM 取得パイプラインが整った後の実測（帝国中核域 bbox の boundary=administrative 34,005 件）で、1000〜1492 年に有効な領邦データが実在することを確認し、TASK-85 で取り込んだ（TASK-37 の結論を訂正）。

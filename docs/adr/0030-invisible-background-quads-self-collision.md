@@ -1,9 +1,10 @@
 ---
-id: decision-30
-title: 衝突参加の全ラベル層に不可視背景クアッドを敷き自己衝突を構造的に防ぐ
-date: '2026-07-29 16:51'
 status: accepted
+date: '2026-07-29 16:51'
 ---
+
+# decision-30: 衝突参加の全ラベル層に不可視背景クアッドを敷き自己衝突を構造的に防ぐ
+
 ## Context
 
 CollisionFilterExtension（deck.gl 9.3.7）の可視判定は「衝突 FBO 上の

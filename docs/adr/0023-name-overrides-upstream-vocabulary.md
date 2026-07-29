@@ -1,9 +1,9 @@
 ---
-id: decision-23
-title: 消滅済み・過大な勢力の NAME は上流の語彙へ propertyFixes で上書きし、形状の限界は known-limitations で補う
-date: '2026-07-27 16:34'
 status: accepted
+date: '2026-07-27 16:34'
 ---
+
+# decision-23: 消滅済み・過大な勢力の NAME は上流の語彙へ propertyFixes で上書きし、形状の限界は known-limitations で補う
 
 ## Context
 

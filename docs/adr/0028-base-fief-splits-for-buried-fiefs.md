@@ -1,9 +1,10 @@
 ---
-id: decision-28
-title: 帝国塗りに埋もれた封土の是正は BASE_FIEF_SPLITS の切り出しと propertyFixes を併用する
-date: '2026-07-28 17:20'
 status: accepted
+date: '2026-07-28 17:20'
 ---
+
+# decision-28: 帝国塗りに埋もれた封土の是正は BASE_FIEF_SPLITS の切り出しと propertyFixes を併用する
+
 ## Context
 
 decision-20 は base の帰属誤りの是正手段を「上流が持つ値の誤り →

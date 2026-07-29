@@ -1,9 +1,10 @@
 ---
-id: decision-4
-title: 都市データに Reba et al. 2016 Historical Urban Population（CC BY 4.0）を採用
-date: '2026-07-21 15:52'
 status: accepted
+date: '2026-07-21 15:52'
 ---
+
+# decision-4: 都市データに Reba et al. 2016 Historical Urban Population（CC BY 4.0）を採用
+
 ## Context
 
 各年代スナップショットの主要都市を表示するため、歴史的都市の位置・人口データが必要だった。既存データソース（historical-basemaps / ETH Roller）には都市位置が含まれない（TASK-27）。

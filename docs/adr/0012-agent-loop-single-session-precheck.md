@@ -1,9 +1,10 @@
 ---
-id: decision-12
-title: agent-loop は開始前の単一セッション事前チェックを必須とし、暴走時は daemon ジョブの無効化で停止する
-date: '2026-07-24 16:09'
 status: accepted
+date: '2026-07-24 16:09'
 ---
+
+# decision-12: agent-loop は開始前の単一セッション事前チェックを必須とし、暴走時は daemon ジョブの無効化で停止する
+
 ## Context
 
 2026-07-24〜25、`/agent-loop` を実行するセッションが複数並走し、同一

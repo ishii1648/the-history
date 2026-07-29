@@ -1,9 +1,10 @@
 ---
-id: decision-19
-title: 宗主-封臣の外枠は SUBJECTO 由来の宗主キー union とし、宗主補正は歴史的に明白な関係に限る
+status: accepted
 date: '2026-07-26 16:57'
-status: Accepted
 ---
+
+# decision-19: 宗主-封臣の外枠は SUBJECTO 由来の宗主キー union とし、宗主補正は歴史的に明白な関係に限る
+
 ## Context
 
 勢力圏の一体性を示す外枠強調は HRE 専用実装（TASK-30）しかなく、1200 年のフランス王国をクリックしてもブルターニュ公国（史実ではフランス王の封臣だが base データの SUBJECTO は独立扱い）が含まれなかった。TASK-94 でユーザー判断により範囲仕様を確定し一般化した。

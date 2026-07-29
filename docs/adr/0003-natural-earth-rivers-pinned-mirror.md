@@ -1,9 +1,10 @@
 ---
-id: decision-3
-title: 河川データに Natural Earth 50m rivers をコミット固定ミラーから採用
-date: '2026-07-21 15:52'
 status: accepted
+date: '2026-07-21 15:52'
 ---
+
+# decision-3: 河川データに Natural Earth 50m rivers をコミット固定ミラーから採用
+
 ## Context
 
 Protomaps ベースマップの water_river レイヤーは minzoom 9 だが、アプリの MAX_ZOOM は 8 のため河川が原理的に一度も描画されず、仕様（地形・海岸線・河川の表示）に違反していた。低ズームの Protomaps タイルには河川ライン形状自体が含まれないため、minzoom の変更では解決しない（TASK-21）。

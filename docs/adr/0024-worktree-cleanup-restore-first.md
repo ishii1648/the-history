@@ -1,9 +1,10 @@
 ---
-id: decision-24
-title: subagent worktree の後始末は復元を通常経路とし、--force は loop の使い捨て足場に限定して許す
-date: '2026-07-27 16:59'
 status: accepted
+date: '2026-07-27 16:59'
 ---
+
+# decision-24: subagent worktree の後始末は復元を通常経路とし、--force は loop の使い捨て足場に限定して許す
+
 ## Context
 
 TASK-112 で `deno task cleanup-branches` を整備した際、他セッションのブランチ・

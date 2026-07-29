@@ -1,9 +1,9 @@
 ---
-id: decision-27
-title: 諸侯領の宗主は base の包含で決め、suzerains は色に効くため使わない
-date: '2026-07-28 15:52'
 status: accepted
+date: '2026-07-28 15:52'
 ---
+
+# decision-27: 諸侯領の宗主は base の包含で決め、suzerains は色に効くため使わない
 
 ## Context
 

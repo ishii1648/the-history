@@ -1,9 +1,10 @@
 ---
-id: decision-9
-title: ベースマップの水系ライン描画を廃止し河川表示を deck オーバーレイへ一本化
-date: '2026-07-23 13:31'
 status: accepted
+date: '2026-07-23 13:31'
 ---
+
+# decision-9: ベースマップの水系ライン描画を廃止し河川表示を deck オーバーレイへ一本化
+
 ## Context
 
 TASK-36 の実機調査で、ベースマップ（Protomaps @protomaps/basemaps）の water_river / water_stream レイヤーが描く詳細な川筋と、deck.gl の pickable 河川（Natural Earth 50m, data/rivers.geojson）の経路が場所により大きく乖離する（zoom 6 のヴィスワ川北部で最大 ~200 CSS px）ことが判明した。ユーザーは視認できるベースマップ側の川筋をクリックするため、乖離区間では picking 半径をいくら広げても河川を選択できない「デコイ」問題が生じていた（TASK-44）。

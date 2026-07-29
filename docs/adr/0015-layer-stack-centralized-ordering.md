@@ -1,9 +1,10 @@
 ---
-id: decision-15
-title: deck レイヤーの重ね順は layer_stack.ts で一元管理し、政治ポリゴンは水面下・ラベルは overlaid 分離とする
+status: accepted
 date: '2026-07-26 09:48'
-status: Accepted
 ---
+
+# decision-15: deck レイヤーの重ね順は layer_stack.ts で一元管理し、政治ポリゴンは水面下・ラベルは overlaid 分離とする
+
 ## Context
 
 TASK-77 で、ベースマップ（現代海岸線）と政治ポリゴン（粗い海岸線）の解像度差による海へのはみ出し（西欧域で ≈2.5 万 km²）を、interleaved MapboxOverlay の beforeId で政治ポリゴン 3 層（powers / france-fiefs / hre-powers）を水面ポリゴン直下へ差し込み隠す方式を採った。実装過程で、beforeId により interleaved のレイヤーグループが分割されると CollisionFilterExtension の衝突マップがラベル抜きで再描画され全ラベルが消える問題を実機で特定し、ラベル 3 層（power/river/city-labels）のみ overlaid の別オーバーレイへ分離して解決した。

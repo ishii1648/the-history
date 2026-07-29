@@ -1,9 +1,9 @@
 ---
-id: decision-21
-title: ラベルの衝突フェードは二値化し、重なりの解消に COLLISION_SIZE_SCALE を使わない
-date: '2026-07-27 13:52'
 status: accepted
+date: '2026-07-27 13:52'
 ---
+
+# decision-21: ラベルの衝突フェードは二値化し、重なりの解消に COLLISION_SIZE_SCALE を使わない
 
 ## Context
 
