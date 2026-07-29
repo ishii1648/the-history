@@ -1,9 +1,11 @@
 ---
 id: TASK-130
 title: GeoJSON の座標精度をズーム上限に見合う桁数まで下げてデータサイズを削減する
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-28 16:43'
+updated_date: '2026-07-29 15:46'
 labels:
   - 'area:data'
   - 'area:scripts-data'
@@ -27,3 +29,15 @@ scripts/build-data.ts の COORD_PRECISION は 5（小数第5位・緯度経度�
 - [ ] #4 境界線の見た目が劣化していないことを地図表示で確認する（ズーム 8 での海岸線・国境の判読性）
 - [ ] #5 TASK-128 の計測ハーネスで初期ロードと年代切替の転送量を before/after 比較し、結果を記録する
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. MAX_ZOOM=8 の 1px 相当距離を算出し、COORD_PRECISION の適正桁数を決める（根拠コメント、AC#1）
+2. TDD: 丸め桁の期待をテストで固定してから scripts/build-data.ts の COORD_PRECISION を変更
+3. 全データ再生成（build-data → 派生パイプライン → build-attribution）。simplify トレランスの揺り戻しを実測確認し、data/ 合計サイズの変化を記録（AC#2）
+4. 既存テスト green（AC#3）。CDP でズーム 8 の海岸線・国境の判読性を before/after スクリーンショット比較（AC#4、ポート 8130）
+5. verify:perf で初期ロード・年代切替転送量を before/after 比較し記録（AC#5）
+
+並列化判定: 見送り（理由: 定数変更 → 再生成 → 実測が直列依存）
+<!-- SECTION:PLAN:END -->
