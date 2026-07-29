@@ -28,14 +28,15 @@
     "extract-pmtiles": "deno run --allow-net=build-metadata.protomaps.dev --allow-run=pmtiles --allow-read scripts/extract-pmtiles.ts",
     "extract-dem": "deno run --allow-net=s3.amazonaws.com --allow-read --allow-write scripts/extract-dem.ts",
     "next-task": "deno run --allow-read scripts/next_task.ts",
+    "setup-issue-labels": "deno run --allow-read=docs --allow-run=gh scripts/setup-issue-labels.ts",
     "next-tasks": "deno run --allow-read scripts/next_tasks.ts",
     "cleanup-branches": "deno run --allow-run=git scripts/cleanup_branches.ts",
     "serve": "deno run --allow-net --allow-read --allow-run=lsof,ps scripts/serve.ts",
     "verify:smoke": "deno run -A scripts/verify/cdp.ts scripts/verify/checks/smoke.ts",
     "verify:smoke:mobile": "deno run -A scripts/verify/cdp.ts --device=mobile scripts/verify/checks/mobile-smoke.ts",
     "verify:perf": "deno run -A scripts/verify/cdp.ts scripts/verify/checks/perf.ts",
-    "test": "deno test --allow-read=data --allow-env=NODE_ENV",
-    "test:watch": "deno test --allow-read=data --allow-env=NODE_ENV --watch"
+    "test": "deno test --allow-read=data,docs --allow-env=NODE_ENV",
+    "test:watch": "deno test --allow-read=data,docs --allow-env=NODE_ENV --watch"
   },
   "imports": {
     "@deck.gl/core": "npm:@deck.gl/core@^9.3.7",

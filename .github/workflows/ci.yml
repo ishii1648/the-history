@@ -48,7 +48,9 @@ jobs:
         # TASK-108: label_collision_test.ts が @deck.gl/core を読み込み、その
         # debug モジュールが process.env.NODE_ENV を参照するため、この 1 変数
         # だけ env 読み取りを許可する（他の環境変数・ネットワークは不許可のまま）
-        run: deno test --allow-read=data --allow-env=NODE_ENV
+        # TASK-138: setup-issue-labels_test.ts が area ラベルの同期検証で
+        # docs/development-style.md を読むため、docs の読み取りも許可する
+        run: deno test --allow-read=data,docs --allow-env=NODE_ENV
 
       - name: deno task build
         if: steps.check_deno_config.outputs.exists == 'true'
