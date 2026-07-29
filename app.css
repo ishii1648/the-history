@@ -680,3 +680,172 @@ body {
 .error-toast-close:hover {
   background: rgba(244, 236, 215, 0.3);
 }
+
+/* =========================================================================
+   TASK-132: 小画面（スマートフォン縦持ち）向けブレークポイント
+
+   閾値 480px の根拠（375x812 の実測に基づく）:
+   - デスクトップ配置では左端の縦タイムラインの右端が x≈108px、右上の
+     情報パネルは右アンカーで最大 320px + 右余白 16px。両者が横方向に分離
+     できるのは視野幅 108 + 320 + 16 + 余白 ≈ 460px 以上のときで、それ未満の
+     幅ではデスクトップ配置のまま重なりを解消できない。460px を上回る直近の
+     一般的なブレークポイント 480px を採用し、主要スマートフォンの論理幅
+     （320〜430px）を全て包含する。481px 以上は既存レイアウトを 1px も
+     変えない（AC #5。変更はこの @media 内に閉じる）。
+
+   小画面の配置（下から上へ。基準 375x812、y は実測値）:
+   - y≈758..802: maplibre attribution（コンパクト表示だが初期状態は展開。
+     最初のドラッグまで開いたままなので、開いた状態を基準に帯を空ける）
+   - y≈706..750: トグル行 = ⓘ（左）・⚠（その右）・「解説」（右端）。全て 44px
+   - y≈636..698: タイムライン（縦帯 92x531 → 下端の横帯 359x62 へ変換）
+   - それより上（画面の約 78%）は情報パネル（タップ時のみ・高さ 38dvh 上限）
+     以外に常時 UI が無く、地図が主役になる（AC #1）
+   ========================================================================= */
+@media (max-width: 480px) {
+  /* --- タイムライン: 左端の縦帯 → 下端の横帯（AC #2） ---
+     縦帯は幅 92px x 高さ 531px（画面高の 65%）で左端の中央帯を常時覆い、
+     右上の情報パネルとも交差していた。横帯にすると 359x62（占有面積は約 45%
+     減）で、地図の中央部を一切覆わない。writing-mode を横書きへ戻すことで
+     range は「左=古い / 右=新しい」になり、時間軸の慣習とも一致する。 */
+  .timeline {
+    left: 8px;
+    right: 8px;
+    top: auto;
+    /* トグル行（bottom 62px + 高さ 44px）の上に 8px の余白を挟む */
+    bottom: 114px;
+    transform: none;
+    flex-direction: row;
+    gap: 10px;
+    padding: 8px 10px;
+  }
+
+  .timeline-year {
+    /* 横帯の高さを 44px ボタンで決めるため、年号は一回り小さくする */
+    font-size: 20px;
+    flex: 0 0 auto;
+  }
+
+  .timeline-controls {
+    flex: 1 1 auto;
+    flex-direction: row;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .timeline-btn {
+    /* タップ当たり判定 44px（AC #4） */
+    width: 44px;
+    height: 44px;
+    /* 縦帯の▲（上=古い）/▼（下=新しい）を横帯の◀（左=古い）/▶（右=新しい）に
+       向け直す。HTML のグリフはそのままに回転だけで済ませる（円形ボタンなので
+       枠の見た目は変わらない） */
+    transform: rotate(-90deg);
+  }
+
+  .timeline-slider {
+    /* 縦向き化（writing-mode: vertical-lr）を横書きへ戻す。min が左端に
+       来るため index 0 = 1000 が左になり「左=古い」の並びと一致する */
+    writing-mode: horizontal-tb;
+    flex: 1 1 auto;
+    min-width: 0;
+    /* 縦帯用の clamp(200px, 46vh, 460px) を無効化し、入力ボックス自体を
+       44px にしてタップ当たり判定を確保する（AC #4。トラックは中央に描画） */
+    height: 44px;
+  }
+
+  /* --- 情報パネル: 高さ上限を画面の 38% に抑える（AC #1/#3） ---
+     38dvh の根拠: 下端アンカーの解説パネル（同じく 38dvh 上限。下端 y =
+     100dvh - 114px）と同時に開いても、
+       情報パネル下端 = 16px + 38dvh、解説パネル上端 = 62dvh - 114px
+     の間に 24dvh - 130px の隙間が残る。これは画面高 542px 以上（iPhone SE
+     初代の 568px を含む）で正になり、互いに重ならない。 */
+  .info-panel {
+    max-height: 38vh;
+    max-height: 38dvh;
+  }
+
+  .info-panel-close {
+    /* タップ当たり判定 44px（AC #4） */
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  /* --- 左下トグル群: 44px 化して attribution の帯の上に横並び（AC #3/#4） ---
+     maplibre の attribution はコンパクト表示でも初期状態は展開されており
+     （maplibregl-compact-show。最初のドラッグまで開いたまま）、375px 幅では
+     2 行 x 高さ 44px（y≈758..802）に折り返して左下のⓘ・⚠と右下の「解説」に
+     重なっていた（TASK-131 実測）。下端の y≈750 以下を attribution 専用の
+     帯として空け、トグル群は bottom 62px（= 余白 10 + attribution 44 + 8）の
+     行へ揃える。⚠は縦積みをやめてⓘの右隣に置き、縦方向の占有を減らす。 */
+  .corner-toggle-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .footer-toggle {
+    font-size: 19px;
+  }
+
+  .app-footer {
+    left: 8px;
+    bottom: 62px;
+    /* 展開ポップオーバーは下端アンカーの解説パネル（15）と同じ領域に開く。
+       解説パネルは outside-click で閉じない（notes.ts の方針）ため両者は
+       同時に開き得るが、ⓘ/⚠のポップオーバーは root 外クリックで必ず閉じる
+       ので「開いている 2 枚のうち新しい方」が常にポップオーバー側になる。
+       直前に開いた方を読めるようにするため、小画面では解説パネルより前面
+       （情報パネルの 20 よりは下）に上げる。 */
+    z-index: 16;
+  }
+
+  .known-limitations {
+    /* ⓘ（left 8 + 44px）の右隣へ 8px 空けて横並びにする */
+    left: 60px;
+    bottom: 62px;
+    z-index: 17;
+  }
+
+  .known-limitations-toggle {
+    font-size: 18px;
+  }
+
+  /* ポップオーバー共通: アンカーが bottom 62px + トグル 44px へ移ったため、
+     高さ上限の基準を更新する（62 + 44 + 吹き出しの隙間 6 = 112px）。
+     上端余白は「情報パネルの下端（16px + 38dvh）+ 8px」まで下げ、情報パネルが
+     最大高でもポップオーバーと重ならないようにする（AC #3。dvh 未対応
+     ブラウザでの calc 全体の無効化を避けるため vh で書く。vh >= dvh なので
+     余白が増える安全側に倒れる） */
+  .popover-card {
+    --popover-bottom-gap: 112px;
+    --popover-top-gap: calc(38vh + 24px);
+  }
+
+  .known-limitations-content {
+    /* アンカーの ⚠ が left 60px にあるため、左アンカーのままだと
+       max-width: calc(100vw - 32px) のカードが右へはみ出す。ⓘのポップオーバー
+       と同じ x=8px 起点に揃える（60 - 52 = 8） */
+    left: -52px;
+    /* ⓘと同じ行にアンカーが揃ったので、基準も .popover-card と同じ値になる */
+    --popover-bottom-gap: 112px;
+  }
+
+  /* --- 解説トグル: attribution の帯を避けてトグル行の右端へ（AC #3/#4） --- */
+  .notes {
+    right: 8px;
+    bottom: 62px;
+  }
+
+  .notes-toggle {
+    /* タップ当たり判定 44px（AC #4。幅はラベル + パディングで 44px を超える） */
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .notes-panel {
+    /* 情報パネルと同時に開いても重ならない高さ上限（根拠は .info-panel の
+       コメント参照） */
+    max-height: 38vh;
+    max-height: 38dvh;
+  }
+}

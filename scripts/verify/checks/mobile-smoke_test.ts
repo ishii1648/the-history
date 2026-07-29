@@ -2,11 +2,14 @@ import { assertEquals } from "@std/assert";
 import { MOBILE_PRESET } from "../cdp.ts";
 import {
   findOverlaps,
+  findSmallTapTargets,
+  MIN_TAP_TARGET_PX,
   MOBILE_SCREENSHOT_PATH,
   MOBILE_TAP_SCREENSHOT_PATH,
   OVERLAP_MIN_AREA_PX,
   type Rect,
   rectOverlapArea,
+  TAP_TARGET_SELECTORS,
   UI_OVERLAP_SELECTORS,
   type UiRect,
 } from "./mobile-smoke.ts";
@@ -102,10 +105,63 @@ Deno.test("UI_OVERLAP_SELECTORS: モバイルで地図面を占有しうる主�
       ".footer-toggle",
       ".known-limitations-toggle",
       ".notes-toggle",
+      // TASK-132: maplibre の attribution は初期表示で展開されており
+      // （maplibregl-compact-show）、TASK-131 で下端トグル群との衝突を実測した。
+      // AC #3 の対象なので監視に含める。
+      ".maplibregl-ctrl-attrib",
     ]
   ) {
     assertEquals(
       UI_OVERLAP_SELECTORS.includes(selector),
+      true,
+      `missing ${selector}`,
+    );
+  }
+});
+
+// ---- findSmallTapTargets（タップ当たり判定の検査。TASK-132 AC #4） ----
+
+Deno.test("MIN_TAP_TARGET_PX: タップ当たり判定の下限は 44px（AC #4）", () => {
+  assertEquals(MIN_TAP_TARGET_PX, 44);
+});
+
+Deno.test("findSmallTapTargets: 幅または高さが下限未満の要素を寸法付きで列挙する", () => {
+  const rects: UiRect[] = [
+    // 28x28 の丸トグル（幅・高さとも不足）
+    { selector: ".footer-toggle", rect: rect(8, 778, 36, 806) },
+    // 58x27 のピル型トグル（高さのみ不足）
+    { selector: ".notes-toggle", rect: rect(309, 751, 367, 778) },
+    // 44x44 ちょうど（合格）
+    { selector: "#timeline-prev", rect: rect(0, 0, 44, 44) },
+  ];
+  assertEquals(findSmallTapTargets(rects), [
+    { selector: ".footer-toggle", width: 28, height: 28 },
+    { selector: ".notes-toggle", width: 58, height: 27 },
+  ]);
+});
+
+Deno.test("findSmallTapTargets: 全て 44px 以上なら空配列を返す", () => {
+  const rects: UiRect[] = [
+    { selector: "a", rect: rect(0, 0, 44, 44) },
+    { selector: "b", rect: rect(0, 0, 200, 48) },
+  ];
+  assertEquals(findSmallTapTargets(rects), []);
+});
+
+Deno.test("TAP_TARGET_SELECTORS: 主要なタップ対象を検査に含む（AC #4）", () => {
+  for (
+    const selector of [
+      "#timeline-prev",
+      "#timeline-next",
+      ".timeline-slider",
+      ".footer-toggle",
+      ".known-limitations-toggle",
+      ".notes-toggle",
+      ".info-panel-close",
+    ]
+  ) {
+    assertEquals(
+      TAP_TARGET_SELECTORS.includes(selector),
       true,
       `missing ${selector}`,
     );
