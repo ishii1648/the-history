@@ -156,7 +156,7 @@ Deno.test("attributionForDocument は base 系だけ中身から区分を決め�
   assertEquals(attributionForDocument("colors.json", {}), null);
 });
 
-Deno.test("諸侯領オーバーレイ（raw / flat の 3 系統）は OHM の出典に解決する", () => {
+Deno.test("諸侯領オーバーレイ（raw / flat の 4 系統）は OHM の出典に解決する", () => {
   for (
     const name of [
       "france_fiefs_1200.geojson",
@@ -165,6 +165,8 @@ Deno.test("諸侯領オーバーレイ（raw / flat の 3 系統）は OHM の�
       "hre_fiefs_flat_1200.geojson",
       "italy_fiefs_1200.geojson",
       "italy_fiefs_flat_1200.geojson",
+      "britain_fiefs_1200.geojson",
+      "britain_fiefs_flat_1200.geojson",
     ]
   ) {
     const attribution = attributionForDataFile(name);

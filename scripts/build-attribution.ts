@@ -180,7 +180,10 @@ export const DATA_ATTRIBUTIONS = {
     license: SOURCE_LICENSE,
     commit: SOURCE_COMMIT,
   },
-  /** 仏・独・伊の諸侯領オーバーレイ（Overpass 由来のためコミットは無い） */
+  /**
+   * 仏・独・伊・ブリテン諸島の諸侯領・政体オーバーレイ
+   * （Overpass 由来のためコミットは無い）
+   */
   openHistoricalMap: {
     source: "OpenHistoricalMap",
     sourceUrl: OHM_SOURCE_HOMEPAGE,
@@ -259,7 +262,10 @@ const FILE_PATTERNS: readonly (readonly [RegExp, DatasetKey])[] = [
   [/^europe_\d+\.geojson$/, "historicalBasemaps"],
   [/^europe_flat_\d+\.geojson$/, "historicalBasemaps"],
   [/^base_outline_\d+\.geojson$/, "historicalBasemaps"],
-  [/^(?:france|hre|italy)_fiefs_(?:flat_)?\d+\.geojson$/, "openHistoricalMap"],
+  [
+    /^(?:france|hre|italy|britain)_fiefs_(?:flat_)?\d+\.geojson$/,
+    "openHistoricalMap",
+  ],
   [/^cliopatria_fiefs_(?:flat_)?\d+\.geojson$/, "cliopatria"],
   [/^hre_\d+\.geojson$/, "ethHreTerritories"],
   [/^rivers\.geojson$/, "naturalEarthRivers"],
