@@ -85,6 +85,7 @@ import {
   fiefLabelsVisibleAt,
   filterPowerLabelsByZoom,
   isHreSuzerainFeature,
+  labelCollisionBackgroundProps,
   type LabelDatum,
   labelTextStyleProps,
   MOUNTAIN_LABEL_COLOR,
@@ -143,7 +144,6 @@ import {
   filterVisibleRiverLabels,
   RIVER_HIT_LINE_COLOR,
   RIVER_HIT_LINE_WIDTH_PX,
-  RIVER_LABEL_COLLISION_BACKGROUND_COLOR,
   riverLabelAnchors,
   riverLabelColor,
   type RiverLabelDatum,
@@ -1263,6 +1263,15 @@ function labelLayerBaseProps() {
   return {
     sizeUnits: "pixels" as const,
     ...labelTextStyleProps(),
+    // TASK-143: 自己衝突対策。衝突 FBO の実体になる不可視背景クアッドを
+    // 全ラベル層に敷く（TASK-136 の河川層での対処の一般化）。これが無いと
+    // FBO にはグリフ字形しか描かれず、アンカー画素（= 衝突判定のサンプル点）
+    // がグリフの空白に落ちるラベル（「ライン川」「ローマ」「ボヘミア王国」等）
+    // が自分自身の可視判定に失敗して永遠に表示されない。
+    // labelTextStyleProps の background: false（TASK-72 の「見える背景パネルを
+    // 持たない」契約）をこちらが上書きするため、スプレッド順は必ず後にする。
+    // 詳細は labels.ts LABEL_COLLISION_BACKGROUND_COLOR を参照
+    ...labelCollisionBackgroundProps(),
     extensions: labelCollisionExtensions(),
     collisionTestProps: { sizeScale: COLLISION_SIZE_SCALE },
     getCollisionPriority: (d: LabelDatum) => d.priority,
@@ -1351,16 +1360,10 @@ function buildRiverLabelLayer(): TextLayer<
     CollisionFilterExtensionProps<RiverLabelDatum>
   >({
     // フォント・クリーム halo（TASK-72: ライン/ワール/レク川合流部の密集や
-    // HRE 外縁の赤境界線との重なり対策。背景パネルは撤去済み）・衝突制御は
-    // 共通 base props
+    // HRE 外縁の赤境界線との重なり対策。背景パネルは撤去済み）・衝突制御・
+    // 自己衝突対策の不可視背景クアッド（TASK-136 でこの層に導入 → TASK-143 で
+    // 全ラベル層へ一般化して base props に移設）は共通 base props
     ...labelLayerBaseProps(),
-    // TASK-136: 自己衝突対策。衝突 FBO の実体になる不可視背景クアッドを
-    // 敷く。これが無いと FBO にはグリフ字形しか描かれず、テキスト中央
-    // （= 衝突判定のサンプル点）が文字間の空白に落ちるラベル（ライン川 =
-    // 「イ|ン」境界）が自分自身の可視判定に失敗して永遠に表示されない。
-    // 詳細は rivers.ts RIVER_LABEL_COLLISION_BACKGROUND_COLOR を参照
-    background: true,
-    getBackgroundColor: [...RIVER_LABEL_COLLISION_BACKGROUND_COLOR] as Rgba,
     id: RIVER_LABEL_LAYER_ID,
     data,
     pickable: false,

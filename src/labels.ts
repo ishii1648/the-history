@@ -355,6 +355,62 @@ export function labelTextStyleProps(): {
 }
 
 /**
+ * 全ラベル層共通の衝突用背景クアッド色（ほぼ不可視の alpha 1。TASK-143）。
+ *
+ * CollisionFilterExtension の可視判定は「衝突 FBO 上の自アンカー画素
+ * （±2px の 5x5 サンプル）が自分の描画で占められているか」を見るが、
+ * TASK-72 で背景パネルを撤去して以降、背景の無い TextLayer は衝突 FBO に
+ * グリフの字形しか残さない（SDF 透明部は picking 系シェーダの alpha==0
+ * discard で描かれない）。そのためアンカーがグリフの空白に落ちるラベルは
+ * **自分自身の可視判定に永遠に失敗して一度も描画されない**。該当するのは
+ * - 偶数文字数でテキスト中央が文字間空白になるもの（TASK-136 の「ライン川」
+ *   = イ|ン 境界。都市の「ルーアン」「カイセリ」「メス」、勢力の
+ *   「ボヘミア王国」= ミ|ア 境界など）
+ * - 中央の文字が「ー」「・」でアンカー行にインクが無いもの（都市の
+ *   「ローマ」「ボローニャ」「ヴェリコ・タルノヴォ」など。都市・山峰は
+ *   getPixelOffset で文字列がアンカーの上へずれるため、アンカー行は
+ *   グリフ下部にあたり「ー」の横棒から外れる）
+ * TASK-143 の実機監査（1000/1200/1300 × z4〜z7 の 106 ビュー、色検出 +
+ * 目視）で 11 件が該当した。
+ *
+ * 対策は TASK-136 が河川層で実証したものの一般化: TextLayer の background を
+ * 有効化し、テキスト矩形を埋める背景クアッドを衝突 FBO の実体にする。alpha は
+ * 0 だと上記の discard で FBO に描かれないため、目視では識別不能な 1 を使う。
+ * 矩形は従来のグリフ描画を包む範囲なので、他ラベルとの衝突関係は「字形の
+ * 隙間頼み」がなくなる方向にのみ変わる。実機 before/after 比較
+ * （1000/1200/1300 × z4〜z7 の 69 ビュー、色検出 + 目視）では、被疑 11 件が
+ * 全て描画されるようになる一方、表示ラベル総数はほぼ全ビューで同数以上
+ * （増加最大 +5、減少は 4 ビューで各 -1）。相手の字形の隙間に偶然頼って
+ * 出ていた低優先ラベル（z4 のライン川 1300・ポルトガル 1300 等 17 ビュー
+ * ケース）は優先度どおり間引かれるようになるが、いずれも隣接ズーム段では
+ * 表示されることを確認済み。
+ */
+export const LABEL_COLLISION_BACKGROUND_COLOR: LabelColor = [0, 0, 0, 1];
+
+/**
+ * 衝突参加の全ラベル TextLayer に敷く不可視背景クアッドの props（純粋関数、
+ * TASK-143）。main.ts の labelLayerBaseProps が CollisionFilterExtension と
+ * 組で展開する（背景クアッドは衝突 FBO の実体を作る対策なので、衝突に参加
+ * しない層 = 山峰マーカー ▲ には敷かない）。
+ *
+ * labelTextStyleProps（background: false）と分けるのは、TASK-72 の「見える
+ * 背景パネルは持たない」という描画スタイルの契約を保ったまま、衝突対策の
+ * 不可視クアッドだけを追加するため。スプレッド順は必ずこちらを後にする。
+ *
+ * 配列（getBackgroundColor）は呼び出しごとに複製して返し、deck.gl に
+ * モジュール定数の参照をそのまま渡さない。
+ */
+export function labelCollisionBackgroundProps(): {
+  background: true;
+  getBackgroundColor: number[];
+} {
+  return {
+    background: true,
+    getBackgroundColor: [...LABEL_COLLISION_BACKGROUND_COLOR],
+  };
+}
+
+/**
  * CollisionFilterExtension の collisionTestProps.sizeScale（TASK-54 案B、
  * TASK-72 で再調整）。衝突判定領域を実表示より広く取ることで、ケルン
  * 大司教領・ザクセン選帝侯領/公領のような密集地帯で下位優先のラベルを

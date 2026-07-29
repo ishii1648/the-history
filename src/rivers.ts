@@ -123,27 +123,12 @@ export const RIVER_HIT_LINE_COLOR: Rgba = [0, 0, 0, 0];
 export const RIVER_CLICK_TOLERANCE_PX = RIVER_HIT_LINE_WIDTH_PX / 2 +
   PICKING_RADIUS_PX;
 
-/**
- * 河川名ラベルの背景色（ほぼ不可視の alpha 1。TASK-136 自己衝突対策）。
- *
- * CollisionFilterExtension の可視判定は「衝突 FBO のアンカー画素（±2px の
- * 5x5 サンプル）が自分の描画で占められているか」を見る。TASK-72 で背景
- * パネルを撤去して以降、衝突 FBO にはグリフの字形そのもの（SDF の透明部は
- * picking シェーダの alpha==0 discard で描かれない）しか残らないため、
- * テキスト中央（= アンカー）がグリフの空白に当たるラベルは**自分自身の
- * 判定に失敗して常に非表示**になる。「ライン川」は偶数 4 文字でテキスト
- * 中央が「イ|ン」の文字間空白に落ちる唯一の河川名で、TASK-69 以前から
- * 一度も描画されていなかった（実機で 3 文字の「ライン」に変えると同じ
- * アンカーで描画されることを確認済み = 位置ではなく字形の問題）。
- *
- * 対策: TextLayer の background を有効化し、テキスト矩形を埋める背景
- * クアッドを衝突 FBO の実体にする。alpha は 0 だと上記の discard で FBO に
- * 描かれないため、目視では識別不能な 1 を使う。矩形は従来のグリフ描画を
- * 包む範囲なので、他ラベルとの衝突関係は「字形の隙間頼み」がなくなる方向
- * にのみ変わる（実機 1000/1200/1300 年 × z4〜z6 で既存河川ラベルの表示に
- * 退行がないことを確認済み）。
- */
-export const RIVER_LABEL_COLLISION_BACKGROUND_COLOR: Rgba = [0, 0, 0, 1];
+// 自己衝突対策の不可視背景クアッド（TASK-136 でこの層に導入した
+// RIVER_LABEL_COLLISION_BACKGROUND_COLOR）は、TASK-143 で全ラベル層へ
+// 一般化して labels.ts の LABEL_COLLISION_BACKGROUND_COLOR /
+// labelCollisionBackgroundProps に移した。「ライン川」（偶数 4 文字で
+// テキスト中央が「イ|ン」の文字間空白に落ち、自分の可視判定に常に失敗して
+// 一度も描画されない）の解消経緯もそちらの doc コメントを参照。
 
 /** properties から河川名（name）を取り出す。欠落・空文字・非文字列は null */
 export function riverNameFor(props: GeoJsonProperties): string | null {
