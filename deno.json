@@ -31,6 +31,7 @@
     "cleanup-branches": "deno run --allow-run=git scripts/cleanup_branches.ts",
     "serve": "deno run --allow-net --allow-read --allow-run=lsof,ps scripts/serve.ts",
     "verify:smoke": "deno run -A scripts/verify/cdp.ts scripts/verify/checks/smoke.ts",
+    "verify:smoke:mobile": "deno run -A scripts/verify/cdp.ts --device=mobile scripts/verify/checks/mobile-smoke.ts",
     "verify:perf": "deno run -A scripts/verify/cdp.ts scripts/verify/checks/perf.ts",
     "test": "deno test --allow-read=data --allow-env=NODE_ENV",
     "test:watch": "deno test --allow-read=data --allow-env=NODE_ENV --watch"
