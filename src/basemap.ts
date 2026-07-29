@@ -248,6 +248,62 @@ export interface BasemapStyle {
 export const HILLSHADE_LAYER_ID = "hillshade";
 
 /**
+ * hillshade を有効にするビューポート短辺の下限（CSS px）（TASK-133）。
+ *
+ * 768 は iPad 縦持ちの論理幅（768/810/834pt 系の下端）で、一般的な
+ * 「タブレット以上」のブレークポイント。これ未満の短辺はスマートフォン
+ * 相当（TASK-131 の MOBILE_PRESET は 375x812 で短辺 375）とみなす。
+ * 小画面では hillshade の判読寄与が小さい割に、DEM タイル（terrarium
+ * 256px raster）のテクスチャが GPU メモリと帯域を消費し、deck.gl の
+ * ポリゴン・ラベルと合わせた描画負荷を押し上げるため、閾値未満では
+ * hillshade を含めない。
+ */
+export const HILLSHADE_MIN_SHORT_SIDE_PX = 768;
+
+/**
+ * hillshade 有効判定の入力（TASK-133）。いずれもブラウザで実測できる値:
+ * - viewportWidthPx / viewportHeightPx: globalThis.innerWidth / innerHeight
+ * - maxTouchPoints: navigator.maxTouchPoints（取得不能なら 0 を渡す）
+ */
+export interface HillshadeDeviceInput {
+  /** ビューポート幅（CSS px） */
+  viewportWidthPx: number;
+  /** ビューポート高さ（CSS px） */
+  viewportHeightPx: number;
+  /** タッチ接点数（0 = タッチ非対応 = デスクトップとみなす） */
+  maxTouchPoints: number;
+}
+
+/**
+ * 端末条件から DEM hillshade を有効にすべきかを返す純粋関数（TASK-133）。
+ *
+ * 判定基準: 「タッチ対応端末（maxTouchPoints > 0）かつビューポート短辺が
+ * {@linkcode HILLSHADE_MIN_SHORT_SIDE_PX} 未満」のときだけ無効。それ以外は
+ * 従来どおり有効（AC #4: デスクトップ既定 1600x900 は不変）。
+ *
+ * 各入力の選定根拠:
+ * - ビューポート短辺: 「表示が小さく起伏表現の判読寄与が小さい」ことの直接の
+ *   指標。min(width, height) で判定するため、画面回転（縦持ち/横持ち）で
+ *   有効/無効が反転しない。
+ * - maxTouchPoints: 小画面条件だけだと、デスクトップでウィンドウを小さく
+ *   リサイズした場合まで hillshade が消えてしまう。タッチ入力の有無を掛け
+ *   合わせることで、無効化の対象を実際のモバイル端末（GPU メモリ・帯域の
+ *   制約が動機。TASK-131 の MOBILE_PRESET は touch 有効）に限定する。
+ * - navigator.deviceMemory は採用しない: Chrome 系限定（Safari/Firefox は
+ *   undefined）かつ 8GB で上限クランプされる近似値のため、同一端末でも
+ *   ブラウザによって判定が変わり、決定的な基準にならない。
+ *
+ * 判定はアプリ起動時に 1 度だけ行う想定（スタイルの組み立て・PMTiles
+ * アーカイブ登録の入力になるため）。短辺基準は回転で不変なので、起動後の
+ * 端末回転で判定が陳腐化することもない。
+ */
+export function shouldEnableHillshade(input: HillshadeDeviceInput): boolean {
+  const shortSidePx = Math.min(input.viewportWidthPx, input.viewportHeightPx);
+  const isTouchDevice = input.maxTouchPoints > 0;
+  return !(isTouchDevice && shortSidePx < HILLSHADE_MIN_SHORT_SIDE_PX);
+}
+
+/**
  * hillshade-exaggeration のズーム停止点（TASK-98）。`[zoom, exaggeration]`。
  *
  * 広域（z4 前後）は勢力ポリゴンの塗り越しに山脈の骨格を読ませたいので強く、
@@ -375,40 +431,52 @@ export function splitWaterAndAddCoastline(
  * タイル取得失敗でスタイル全体を落とさず、hillshade が描画されないだけで
  * 従来表示を維持する（dem ソースのエラーで OpenFreeMap へフォールバック
  * しないことは src/fallback.ts が担保する）。
+ *
+ * TASK-133: hillshadeEnabled = false（モバイル小画面。判定は
+ * shouldEnableHillshade）のときは DEM ソースと hillshade レイヤー自体を
+ * スタイルに含めない。ソースが存在しなければ MapLibre が DEM PMTiles への
+ * リクエスト（ヘッダ・タイル）を発行する経路が存在しないため、「無効時は
+ * DEM への一切のリクエストが発生しない」（AC #5）が構造的に保証される。
  */
 export function buildBasemapStyle(
   pmtilesUrl: string,
   // TASK-127: 本番は R2 カスタムドメインの絶対 URL に差し替える。
   // 省略時は従来どおり同一オリジン（ローカル開発・既存テストの互換）
   demPmtilesUrl: string = DEM_PMTILES_URL,
+  // TASK-133: 省略時は従来どおり hillshade を含める（デスクトップ既定。AC #4）
+  hillshadeEnabled: boolean = true,
 ): BasemapStyle {
   // TASK-73: light flavor をそのまま使わず、羊皮紙トーンへ上書きした flavor
   // から生成する（配色の定義は PARCHMENT_FLAVOR_OVERRIDES に集約）。
   const flavor = parchmentFlavor();
   const allLayers = layers(BASEMAP_SOURCE_ID, flavor);
+  const sources: BasemapStyle["sources"] = {
+    [BASEMAP_SOURCE_ID]: {
+      type: "vector",
+      url: `pmtiles://${pmtilesUrl}`,
+      attribution:
+        '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+    },
+  };
+  if (hillshadeEnabled) {
+    sources[DEM_SOURCE_ID] = {
+      type: "raster-dem",
+      url: `pmtiles://${demPmtilesUrl}`,
+      encoding: "terrarium",
+      // terrarium（AWS Terrain Tiles）は 256px タイル
+      tileSize: 256,
+      attribution:
+        '<a href="https://registry.opendata.aws/terrain-tiles/">Terrain Tiles</a> (Mapzen)',
+    };
+  }
+  const baseLayers = filterBasemapLayers(
+    allLayers,
+  ) as BasemapStyle["layers"];
   return {
     version: 8,
-    sources: {
-      [BASEMAP_SOURCE_ID]: {
-        type: "vector",
-        url: `pmtiles://${pmtilesUrl}`,
-        attribution:
-          '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
-      },
-      [DEM_SOURCE_ID]: {
-        type: "raster-dem",
-        url: `pmtiles://${demPmtilesUrl}`,
-        encoding: "terrarium",
-        // terrarium（AWS Terrain Tiles）は 256px タイル
-        tileSize: 256,
-        attribution:
-          '<a href="https://registry.opendata.aws/terrain-tiles/">Terrain Tiles</a> (Mapzen)',
-      },
-    },
+    sources,
     layers: splitWaterAndAddCoastline(
-      insertHillshade(
-        filterBasemapLayers(allLayers) as BasemapStyle["layers"],
-      ),
+      hillshadeEnabled ? insertHillshade(baseLayers) : baseLayers,
     ),
   };
 }

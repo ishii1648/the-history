@@ -11,7 +11,11 @@ import type { Layer, PickingInfo } from "@deck.gl/core";
 import { GeoJsonLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { CollisionFilterExtensionProps } from "@deck.gl/extensions";
 import type { Feature, FeatureCollection } from "geojson";
-import { buildBasemapStyle, WATER_LAYER_ID } from "./basemap.ts";
+import {
+  buildBasemapStyle,
+  shouldEnableHillshade,
+  WATER_LAYER_ID,
+} from "./basemap.ts";
 import {
   approximateBorderBeforeId,
   approximateBorderStackIsValid,
@@ -293,6 +297,17 @@ const basemapPmtilesUrl = resolveBasemapPmtilesUrl(
 );
 const demPmtilesUrl = resolveDemPmtilesUrl(globalThis.location.hostname);
 
+// TASK-133: モバイル小画面（タッチ端末かつビューポート短辺 < 768px。判定基準の
+// 根拠は basemap.ts の shouldEnableHillshade）では DEM hillshade を無効にして
+// GPU メモリ・帯域の消費を抑える。判定は起動時に 1 度だけ行う（スタイルの
+// 組み立てと PMTiles アーカイブ登録の入力になるため。短辺基準は画面回転で
+// 不変なので、回転で判定が陳腐化することはない）。
+const hillshadeEnabled = shouldEnableHillshade({
+  viewportWidthPx: globalThis.innerWidth,
+  viewportHeightPx: globalThis.innerHeight,
+  maxTouchPoints: globalThis.navigator?.maxTouchPoints ?? 0,
+});
+
 // PMTiles プロトコルを MapLibre に登録（1 回だけ）
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
@@ -306,21 +321,27 @@ protocol.add(archive);
 // 握りつぶして hillshade なしの従来表示で継続する（basemap と違いフォール
 // バックはしない。dem ソースのタイル取得エラーも fallback.ts の判定が
 // sourceId で除外する）。
-const demArchive = new PMTiles(demPmtilesUrl);
-protocol.add(demArchive);
-demArchive.getHeader().catch((error: unknown) => {
-  console.warn(
-    `DEM PMTiles が利用できないため hillshade なしで継続します: ${
-      String(error)
-    }`,
-  );
-});
+// TASK-133: hillshade 無効時はアーカイブ登録・ヘッダ取得ごと行わない。
+// スタイル側にも DEM ソースが無い（buildBasemapStyle）ため、DEM PMTiles への
+// リクエストは一切発生しない（AC #5）。
+if (hillshadeEnabled) {
+  const demArchive = new PMTiles(demPmtilesUrl);
+  protocol.add(demArchive);
+  demArchive.getHeader().catch((error: unknown) => {
+    console.warn(
+      `DEM PMTiles が利用できないため hillshade なしで継続します: ${
+        String(error)
+      }`,
+    );
+  });
+}
 
 const map = new maplibregl.Map({
   container: mapContainer,
   style: buildBasemapStyle(
     basemapPmtilesUrl,
     demPmtilesUrl,
+    hillshadeEnabled,
   ) as StyleSpecification,
   center: initialState.center,
   zoom: initialState.zoom,
