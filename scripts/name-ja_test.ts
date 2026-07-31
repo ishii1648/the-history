@@ -200,6 +200,9 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Duchy of Lower Lotharingia",
   "Duchy of Luxembourg",
   "Duchy of Massa and Carrara",
+  // #187: 以下の近世 HRE 領邦は data/hre_fiefs_1715/1783/1800.geojson 由来
+  "Duchy of Mecklenburg-Schwerin",
+  "Duchy of Mecklenburg-Strelitz",
   "Duchy of Milan",
   "Duchy of Mirandola",
   "Duchy of Modena and Reggio",
@@ -226,6 +229,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Electorate of Bavaria",
   "Electorate of Brandenburg",
   "Electorate of Cologne",
+  "Electorate of Mainz",
   "Electorate of Saxony",
   "Electorate of Saxony(-Wittenberg)",
   "Electorate of the Palatinate",
@@ -268,6 +272,8 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Hamburg",
   "Hanover",
   "Helvetic Republic",
+  "Hesse-Darmstadt",
+  "Hesse-Kassel",
   "Hohenzollern",
   "Holstein",
   "Holy Roman Empire",
@@ -356,6 +362,9 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "March of Montferrat",
   "March of Tuscany",
   "March of Verona",
+  "Margraviate of Baden",
+  "Margraviate of Baden-Baden",
+  "Margraviate of Baden-Durlach",
   "Margraviate of Mantua",
   "Marquisate of Saluzzo",
   "Maskat",
@@ -372,6 +381,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Morocco",
   "Naples",
   "Nassau",
+  "Nassau-Weilburg",
   "Navarre",
   "Nederrijn",
   "Netherlands",
@@ -411,6 +421,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Prince-Bishopric of Freising",
   "Prince-Bishopric of Lübeck",
   "Prince-Bishopric of Minden",
+  "Prince-Bishopric of Münster",
   "Prince-Bishopric of Paderborn",
   "Prince-Bishopric of Passau",
   "Prince-Bishopric of Regensburg",
@@ -660,6 +671,36 @@ Deno.test("中世 HRE 領邦が TASK-32 の称号規約に沿った日本語表�
   };
   for (const [name, ja] of Object.entries(expected)) {
     assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+});
+
+Deno.test("近世 HRE 領邦（1715/1783/1800 年）が称号規約に沿った日本語表記で登録されている（#187 AC）", () => {
+  // scripts/build-hre-fiefs.ts の HRE_FIEF_EARLY_MODERN_NAMES 全 17 件。
+  // OHM の name:en が称号を持たないヘッセン・ナッサウも、日本語では実態の称号
+  // （方伯領・侯領）を付けて既存の領邦表記（TASK-32 規約）と揃える。
+  const expected: Record<string, string> = {
+    "Duchy of Mecklenburg-Schwerin": "メクレンブルク＝シュヴェリーン公領",
+    "Duchy of Mecklenburg-Strelitz": "メクレンブルク＝シュトレーリッツ公領",
+    "Electorate of Bavaria": "バイエルン選帝侯領",
+    "Electorate of Brandenburg": "ブランデンブルク選帝侯領",
+    "Electorate of Cologne": "ケルン選帝侯領",
+    "Electorate of Mainz": "マインツ選帝侯領",
+    "Electorate of Saxony": "ザクセン選帝侯領",
+    "Hesse-Darmstadt": "ヘッセン＝ダルムシュタット方伯領",
+    "Hesse-Kassel": "ヘッセン＝カッセル方伯領",
+    "Margraviate of Baden": "バーデン辺境伯領",
+    "Margraviate of Baden-Baden": "バーデン＝バーデン辺境伯領",
+    "Margraviate of Baden-Durlach": "バーデン＝ドゥルラハ辺境伯領",
+    "Nassau-Weilburg": "ナッサウ＝ヴァイルブルク侯領",
+    "Prince-Archbishopric of Salzburg": "ザルツブルク大司教領",
+    "Prince-Bishopric of Bamberg": "バンベルク司教領",
+    "Prince-Bishopric of Münster": "ミュンスター司教領",
+    "Prince-Bishopric of Würzburg": "ヴュルツブルク司教領",
+  };
+  assertEquals(Object.keys(expected).length, 17);
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+    assert(ja.endsWith("領"), `${name} の訳に称号が無い: ${ja}`);
   }
 });
 

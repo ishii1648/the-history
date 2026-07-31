@@ -498,6 +498,9 @@ export function installDebugHooks(
     return {
       year,
       overlay,
+      // #187 で OHM 由来年代は中世 + 近世（1715〜1800）に広がったが、CDP 検証
+      // スクリプトが参照する識別子は互換のため据え置く（ohm-medieval = OHM 由来
+      // hre_fiefs_flat_*、roller-early-modern = Roller 由来 hre_*）
       source: !overlay
         ? "none"
         : HRE_FIEF_OVERLAY_YEARS.includes(year)

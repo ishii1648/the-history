@@ -93,11 +93,11 @@ export function dataUrlFor(year: number): string {
 /**
  * HRE（神聖ローマ帝国）領邦オーバーレイ GeoJSON の配信 URL を返す（純粋関数）。
  *
- * 出典が年代で 2 系統に分かれる（TASK-86）:
- * - 中世（medievalFiefYears ∈ config.HRE_FIEF_OVERLAY_YEARS = 1000〜1492）:
- *   OpenHistoricalMap 由来の hre_fiefs_flat_<year>（生成は
+ * 出典が年代で 2 系統に分かれる（TASK-86 / #187）:
+ * - OHM 年代（ohmFiefYears ∈ config.HRE_FIEF_OVERLAY_YEARS = 中世 1000〜1492 +
+ *   近世 1715〜1800）: OpenHistoricalMap 由来の hre_fiefs_flat_<year>（生成は
  *   scripts/build-hre-fiefs.ts → scripts/build-fief-flat.ts）
- * - 近世（それ以外 = config.HRE_OVERLAY_YEARS = 1500〜1700）: ETH Zürich
+ * - Roller 年代（それ以外 = config.HRE_OVERLAY_YEARS = 1500〜1700）: ETH Zürich
  *   Roller 由来の hre_<year>（生成は scripts/build-hre.ts）
  *
  * どちらも properties は NAME / SUBJECTO / PARTOF 互換なので、レイヤー
@@ -105,13 +105,13 @@ export function dataUrlFor(year: number): string {
  * 経路で処理される。参照するのは flat（領邦同士の重なりを排他化した派生データ）で、
  * franceFiefDataUrlFor と同じ理由（半透明の塗りが二重に濃くならないようにする）。
  *
- * medievalFiefYears を省略すると従来どおり全年代で hre_<year> を指す。
+ * ohmFiefYears を省略すると従来どおり全年代で hre_<year> を指す。
  */
 export function hreDataUrlFor(
   year: number,
-  medievalFiefYears: readonly number[] = [],
+  ohmFiefYears: readonly number[] = [],
 ): string {
-  return medievalFiefYears.includes(year)
+  return ohmFiefYears.includes(year)
     ? `/data/hre_fiefs_flat_${year}.geojson`
     : `/data/hre_${year}.geojson`;
 }
@@ -461,8 +461,9 @@ function createOverlayLoader(
  * HRE 領邦オーバーレイ用のローダを作る（TASK-19）。
  * 挙動は createOverlayLoader（非対象年は空 FC・取得失敗は warn + 空 FC）に従う。
  *
- * TASK-86: overlayYears には中世・近世を合わせた config.HRE_ALL_OVERLAY_YEARS を、
- * medievalFiefYears には OHM 由来の config.HRE_FIEF_OVERLAY_YEARS を渡す。
+ * TASK-86: overlayYears には OHM 年代と Roller 年代を合わせた
+ * config.HRE_ALL_OVERLAY_YEARS を、ohmFiefYears には OHM 由来の
+ * config.HRE_FIEF_OVERLAY_YEARS（中世 1000〜1492 + 近世 1715〜1800、#187）を渡す。
  * 「オーバーレイがあるか」と「どの出典のファイルを引くか」を 1 つのローダ内で
  * 分離することで、呼び出し側（main.ts）は年代をまたいで同一の hre スロットだけを
  * 見ればよく、UI（レイヤー・ラベル色・帝国範囲強調・picking）に年代分岐が入らない。
@@ -471,12 +472,12 @@ export function createHreOverlayLoader(
   fetchFn: FetchLike,
   overlayYears: readonly number[],
   warnFn: (message: string) => void = console.warn,
-  medievalFiefYears: readonly number[] = [],
+  ohmFiefYears: readonly number[] = [],
 ): YearDataLoader {
   return createOverlayLoader(
     fetchFn,
     overlayYears,
-    (year) => hreDataUrlFor(year, medievalFiefYears),
+    (year) => hreDataUrlFor(year, ohmFiefYears),
     "HRE オーバーレイ",
     warnFn,
   );

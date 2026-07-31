@@ -99,8 +99,12 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
   // 半透明が二重に重なって濃くなる（既存 4 系統と同じ二重塗りの解消方針）。
   assertEquals(fiefsPathsFor(1530), ["data/britain_fiefs_1530.geojson"]);
   assertEquals(fiefsPathsFor(1600), ["data/britain_fiefs_1600.geojson"]);
+  // #187: 1715 以降は HRE 領邦（OHM 由来の近世 3 年代）のみが対象
+  assertEquals(fiefsPathsFor(1715), ["data/hre_fiefs_1715.geojson"]);
+  assertEquals(fiefsPathsFor(1783), ["data/hre_fiefs_1783.geojson"]);
+  assertEquals(fiefsPathsFor(1800), ["data/hre_fiefs_1800.geojson"]);
   // 対象外年は 1 件も無い
-  assertEquals(fiefsPathsFor(1715), []);
+  assertEquals(fiefsPathsFor(1815), []);
 });
 
 Deno.test("生成済みの fief-dedupe.json は HRE 領邦年代を含み、帝国本体のラベルは抑制しない（TASK-86 AC #3/#5）", () => {

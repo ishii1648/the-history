@@ -99,6 +99,24 @@
         "fiefs": [
           "data/britain_fiefs_1700.geojson"
         ]
+      },
+      "1715": {
+        "base": "data/europe_1715.geojson",
+        "fiefs": [
+          "data/hre_fiefs_1715.geojson"
+        ]
+      },
+      "1783": {
+        "base": "data/europe_1783.geojson",
+        "fiefs": [
+          "data/hre_fiefs_1783.geojson"
+        ]
+      },
+      "1800": {
+        "base": "data/europe_1800.geojson",
+        "fiefs": [
+          "data/hre_fiefs_1800.geojson"
+        ]
       }
     },
     "coveragePrecision": 4,
@@ -222,6 +240,54 @@
     },
     "1700": {
       "England and Ireland": 0.3657
+    },
+    "1715": {
+      "Austrian Empire": 0.0103,
+      "Baden": 0.2452,
+      "Brandenburg": 0.4716,
+      "Dutch Republic": 0.0072,
+      "Hanover": 0.1228,
+      "Holy Roman Empire": 0.337,
+      "Lübeck": 0.6333,
+      "Oldenburg": 0.0251,
+      "Sweden": 0.0011,
+      "Venice": 0.0075
+    },
+    "1783": {
+      "Anhalt": 0.1312,
+      "Austrian Empire": 0.0171,
+      "Baden": 0.2618,
+      "Bavaria": 0.2422,
+      "Brunswick": 0.1566,
+      "France": 0.0011,
+      "Hanover": 0.4781,
+      "Lübeck": 0.5207,
+      "Mecklenburg-Schwerin": 0.9524,
+      "Mecklenburg-Strelitz": 0.1138,
+      "Netherlands": 0.0072,
+      "Oldenburg": 0.3799,
+      "Prussia": 0.2605,
+      "Saxony": 0.8653,
+      "Thuringia": 0.355,
+      "Waldeck": 0.6784
+    },
+    "1800": {
+      "Anhalt": 0.1312,
+      "Austrian Empire": 0.0171,
+      "Baden": 0.2198,
+      "Batavian Republic": 0.0066,
+      "Bavaria": 0.0199,
+      "Brunswick": 0.0164,
+      "Hanover": 0.4346,
+      "Lübeck": 0.5207,
+      "Mecklenburg-Schwerin": 0.9524,
+      "Mecklenburg-Strelitz": 0.1138,
+      "Oldenburg": 0.3799,
+      "Prussia": 0.123,
+      "Saxony": 0.8652,
+      "Swabia": 0.2549,
+      "Thuringia": 0.2324,
+      "Waldeck": 0.3395
     }
   }
 }
