@@ -30,7 +30,7 @@ import { ADOPTED_PEAK_NAMES } from "./build-peaks.ts";
 // データ変更時は下記コマンドで再生成して手動更新する運用とする。
 //
 // 再生成コマンド（リポジトリルートで実行）:
-//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')+glob.glob('data/italy_fiefs_*.geojson')+glob.glob('data/cliopatria_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
+//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')+glob.glob('data/italy_fiefs_*.geojson')+glob.glob('data/cliopatria_fiefs_*.geojson')+glob.glob('data/britain_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
 const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Abdelouadides",
   "Afghanistan",
@@ -85,6 +85,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Bremen",
   "Britany",
   "Brunswick",
+  "Brycheiniog",
   "Bulgar Khanate",
   "Bulgaria",
   "Burgandy",
@@ -170,6 +171,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Danube",
   "Daugava",
   "Dauphiné of Viennois",
+  "Deheubarth",
   "Denmark",
   "Denmark-Norway",
   "Derbent",
@@ -282,6 +284,8 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Imperial Abbey of Thorn",
   "Imperial Abbey of Werden",
   "Imperial Hungary",
+  "Irish Catholic Confederation",
+  "Isle of Man",
   "Italy",
   "Kakheti-Hereti",
   "Kalmar Union",
@@ -300,11 +304,19 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Kievan Rus",
   "Kimek-Kipchak khaganate",
   "Kingdom of Bohemia",
+  "Kingdom of Dublin",
   "Kingdom of France",
+  "Kingdom of Galloway",
   "Kingdom of Georgia",
+  "Kingdom of Glywysing/Morgannwg",
+  "Kingdom of Gwynedd",
   "Kingdom of Hungary",
   "Kingdom of Ireland",
+  "Kingdom of Leinster",
+  "Kingdom of Meath",
+  "Kingdom of Powys",
   "Kingdom of Sardinia",
+  "Kingdom of Strathclyde",
   "Kingdom of the Two Sicilies",
   "Kingfom of Italy",
   "Kokemäenjoki",
@@ -322,12 +334,15 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Loire",
   "Lombardy",
   "Lordship of Cottbus",
+  "Lordship of Eastern Meath",
   "Lordship of Lucca",
+  "Lordship of Meath",
   "Lordship of Oneglia",
   "Lordship of Piombino",
   "Lordship of Rimini",
   "Lordship of Ruppin",
   "Lordship of Verona",
+  "Lordship of Western Meath",
   "Lucca",
   "Luxembourg",
   "Lübeck",
@@ -430,6 +445,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Republic of Siena",
   "Republic of the Seven Zenden",
   "Rhine",
+  "Rhwng Gwy a Hafren",
   "Rhône",
   "Romania",
   // TASK-110: Cliopatria の "Kingdom of France"（= 王の直轄領）を base の
@@ -461,7 +477,9 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Shirvan",
   "Siberians",
   "Sicily",
+  "Sodor",
   "Soroksari Duna",
+  "Southern Powys",
   "Spain",
   "Spanish Morocco",
   "Sukhona",
@@ -726,6 +744,41 @@ Deno.test("帝国内の称号を持つ領邦の訳は全て『〜領』で終わ
     .filter(([, ja]) => !ja.endsWith("領"))
     .map(([name, ja]) => `${name} -> ${ja}`);
   assertEquals(offenders, []);
+});
+
+Deno.test("ブリテン諸島の政体 19 件が日本語表記で登録されている（#172 AC #3）", () => {
+  // TASK-151 の許可リスト（scripts/build-britain-fiefs.ts）全 19 政体名。
+  // 称号は NAME の英語表記に従う（Kingdom → 王国 / Lordship → 卿領。
+  // アングロ・ノルマン期アイルランドの Lordship は日本語文献の慣用
+  // 「アイルランド卿領」に合わせて「〜卿領」とし、イタリアのシニョリーア
+  // 「〜領主領」とは訳し分ける）。称号を持たないウェールズ語名
+  // （Deheubarth 等）は音写のみ。Sodor はノルド語 Suðreyjar（南諸島）由来の
+  // 「マン島と諸島の王国」の別名なので、補足を丸括弧で付す。
+  const expected: Record<string, string> = {
+    "Kingdom of Gwynedd": "グウィネズ王国",
+    "Kingdom of Powys": "ポウィス王国",
+    "Southern Powys": "南ポウィス",
+    "Deheubarth": "デヘイバース",
+    "Brycheiniog": "ブリチェイニョグ",
+    "Kingdom of Glywysing/Morgannwg": "グリウィシング（モーガンヌグ）王国",
+    "Rhwng Gwy a Hafren": "ルング・グイ・ア・ハヴレン",
+    "Kingdom of Dublin": "ダブリン王国",
+    "Kingdom of Leinster": "レンスター王国",
+    "Kingdom of Meath": "ミース王国",
+    "Lordship of Meath": "ミース卿領",
+    "Lordship of Eastern Meath": "東ミース卿領",
+    "Lordship of Western Meath": "西ミース卿領",
+    "Kingdom of Ireland": "アイルランド王国",
+    "Irish Catholic Confederation": "アイルランド・カトリック同盟",
+    "Kingdom of Strathclyde": "ストラスクライド王国",
+    "Kingdom of Galloway": "ギャロウェイ王国",
+    "Sodor": "ソドール王国（マン島と諸島）",
+    "Isle of Man": "マン島",
+  };
+  assertEquals(Object.keys(expected).length, 19);
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
 });
 
 Deno.test("主要山脈の日本語表記が登録されている（TASK-97 AC #1）", () => {

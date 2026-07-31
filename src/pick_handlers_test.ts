@@ -26,6 +26,7 @@ import {
   powerHighlightKeyFromPick,
 } from "./pick_handlers.ts";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -136,6 +137,7 @@ function createHarness() {
     fiefs: fc([], { source: "fiefs" }),
     italyFiefs: fc([], { source: "italy" }),
     cliopatriaFiefs: fc([], { source: "cliopatria" }),
+    britainFiefs: fc([], { source: "britain" }),
   };
   const riversData = fc([riverFeature], { source: "rivers" });
   const mountainsData = fc([], { source: "mountains" });
@@ -263,6 +265,12 @@ Deno.test("pickedLabel はレイヤー種別ごとに表示ラベルを整形す
     handlers.pickedLabel(pick(POWER_LAYER_ID, normandyFeature)),
     displayLabel(normandyFeature.properties, {}, NAME_JA),
   );
+  // #172: ブリテン諸島の政体も同じ displayLabel 経路（SUBJECTO を持たないため
+  // 宗主なしの NAME 表記になる）
+  assertEquals(
+    handlers.pickedLabel(pick(BRITAIN_FIEF_LAYER_ID, normandyFeature)),
+    displayLabel(normandyFeature.properties, {}, NAME_JA),
+  );
   // picking なし・対象外レイヤーは null
   assertEquals(handlers.pickedLabel(emptyPick()), null);
   assertEquals(handlers.pickedLabel(pick("power-labels", riverFeature)), null);
@@ -306,6 +314,11 @@ Deno.test("pickedMetadata はラベルと同じレイヤー分岐で出典を解
   assertEquals(
     handlers.pickedMetadata(pick(CLIOPATRIA_FIEF_LAYER_ID, franceFeature)),
     { source: "cliopatria" },
+  );
+  // #172: ブリテン諸島の政体もレイヤー単位で出典（OHM / CC0）を引く
+  assertEquals(
+    handlers.pickedMetadata(pick(BRITAIN_FIEF_LAYER_ID, franceFeature)),
+    { source: "britain" },
   );
   // 対象外・picking なしは undefined = 出典欄を出さない
   assertEquals(handlers.pickedMetadata(emptyPick()), undefined);

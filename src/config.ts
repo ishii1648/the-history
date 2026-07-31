@@ -220,9 +220,52 @@ export const CLIOPATRIA_FIEF_OVERLAY_YEARS: readonly number[] = [
 ];
 
 /**
+ * ブリテン諸島の政体オーバーレイ（britain_fiefs_flat_<year>.geojson）が存在する
+ * 年代（昇順、TASK-151 / #172）。出典は OpenHistoricalMap（CC0）。
+ *
+ * scripts/build-britain-fiefs.ts の BRITAIN_FIEF_YEARS と同値（src → scripts の
+ * import は行わない規約のため値を重複定義し、同値性は build-britain-fiefs_test.ts
+ * で担保する）。
+ *
+ * 収録するのは base（europe_<year>）に無い政体だけ:
+ * 1000〜1279 はウェールズ諸王国（グウィネズ・ポウィス・デヘイバース等）と
+ * アイルランド諸王国（ダブリン・レンスター・ミース）、1300〜1530 は残存する
+ * アイルランド東部の政体とマン島、1600〜1700 はアイルランドの政体
+ * （アイルランド王国・アイルランド・カトリック同盟）。いずれも当時の独立
+ * 主権政体（または係争地）で、仏諸侯領のような「王国内部の諸侯領」とは
+ * 意味論が異なるが、SUBJECTO を持たない properties（NAME 単独の色キー・
+ * 宗主表示なし）がそのまま「独立勢力として振る舞う」表現になるため、既存の
+ * オーバーレイ機構（TASK-71/86/96/110）にそのまま載せる。
+ *
+ * 既存 4 系統と違い**近世（1500〜1700）も対象**に含む。base がイングランドと
+ * アイルランドを単一勢力（England and Ireland）で塗り続けるため、二重表示では
+ * なく「base が描き分けない政体を識別可能にする」補完になる（1600/1650/1700 の
+ * アイルランド）。1715 以降は base が United Kingdom と Kingdom of Ireland を
+ * 分けて収録するため含めない。ウェールズは 1283 年のエドワード 1 世による征服
+ * 以降、上流に独立実体が存在しない（data/known-limitations.json に明示）。
+ */
+export const BRITAIN_FIEF_OVERLAY_YEARS: readonly number[] = [
+  1000,
+  1100,
+  1200,
+  1279,
+  1300,
+  1400,
+  1492,
+  1500,
+  1530,
+  1600,
+  1650,
+  1700,
+];
+
+/**
  * base 境界線オーバーレイ（base_outline_<year>.geojson）が存在する年代
- * （昇順、TASK-78/86/96）。諸侯領・領邦オーバーレイのいずれかがある年、すなわち
- * FRANCE_FIEF_OVERLAY_YEARS ∪ HRE_FIEF_OVERLAY_YEARS ∪ ITALY_FIEF_OVERLAY_YEARS。
+ * （昇順、TASK-78/86/96、#172）。諸侯領・領邦オーバーレイのいずれかがある年、
+ * すなわち FRANCE_FIEF_OVERLAY_YEARS ∪ HRE_FIEF_OVERLAY_YEARS ∪
+ * ITALY_FIEF_OVERLAY_YEARS ∪ BRITAIN_FIEF_OVERLAY_YEARS。
+ * #172 でブリテン諸島（1000〜1700）が加わり、近世（1500〜1700）にも派生データ
+ * （base_outline_* / europe_flat_*）が生成されるようになった。
  *
  * この派生データは「base ポリゴンの環のうちオーバーレイ union の外側だけ」を
  * 持つため、オーバーレイがある年は base の輪郭がオーバーレイの内側を走らなくなる
@@ -242,6 +285,7 @@ export const BASE_OUTLINE_YEARS: readonly number[] = [
     ...FRANCE_FIEF_OVERLAY_YEARS,
     ...HRE_FIEF_OVERLAY_YEARS,
     ...ITALY_FIEF_OVERLAY_YEARS,
+    ...BRITAIN_FIEF_OVERLAY_YEARS,
   ]),
 ].sort((a, b) => a - b);
 

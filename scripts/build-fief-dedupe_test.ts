@@ -76,24 +76,31 @@ Deno.test("FIEF_DEDUPE_YEARS は base 境界線オーバーレイの対象年（
   assert(FIEF_DEDUPE_YEARS.includes(1492));
 });
 
-Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力を全て返す（TASK-86/96/110）", () => {
-  // 同時表示年は仏諸侯領・HRE 領邦・伊諸侯領 + Cliopatria の 4 系統
+Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力を全て返す（TASK-86/96/110、#172）", () => {
+  // 同時表示年は仏諸侯領・HRE 領邦・伊諸侯領 + Cliopatria + ブリテンの 5 系統
   assertEquals(fiefsPathsFor(1200), [
     "data/france_fiefs_1200.geojson",
     "data/hre_fiefs_1200.geojson",
     "data/italy_fiefs_1200.geojson",
     "data/cliopatria_fiefs_1200.geojson",
+    "data/britain_fiefs_1200.geojson",
   ]);
-  // 1400 以降は HRE 領邦・伊諸侯領・Cliopatria（仏諸侯領は 1300 まで）。
+  // 1400 以降は HRE 領邦・伊諸侯領・Cliopatria + ブリテン（仏諸侯領は 1300 まで）。
   // TASK-110: Cliopatria を外すと 1400 / 1492 のバイエルン公領などの下に
   // base 塗りが残り、半透明が二重に重なって濃くなる。
   assertEquals(fiefsPathsFor(1492), [
     "data/hre_fiefs_1492.geojson",
     "data/italy_fiefs_1492.geojson",
     "data/cliopatria_fiefs_1492.geojson",
+    "data/britain_fiefs_1492.geojson",
   ]);
+  // #172: 近世（1500〜1700）はブリテンのみが対象。これを登録しないと
+  // 1600 以降の England and Ireland の下に base 塗りが残り、アイルランド王国の
+  // 半透明が二重に重なって濃くなる（既存 4 系統と同じ二重塗りの解消方針）。
+  assertEquals(fiefsPathsFor(1530), ["data/britain_fiefs_1530.geojson"]);
+  assertEquals(fiefsPathsFor(1600), ["data/britain_fiefs_1600.geojson"]);
   // 対象外年は 1 件も無い
-  assertEquals(fiefsPathsFor(1530), []);
+  assertEquals(fiefsPathsFor(1715), []);
 });
 
 Deno.test("生成済みの fief-dedupe.json は HRE 領邦年代を含み、帝国本体のラベルは抑制しない（TASK-86 AC #3/#5）", () => {

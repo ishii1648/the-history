@@ -3,10 +3,12 @@ import type { FeatureCollection } from "geojson";
 import {
   baseFillDataUrlFor,
   baseOutlineDataUrlFor,
+  britainFiefDataUrlFor,
   cliopatriaFiefDataUrlFor,
   colorKeyFor,
   createBaseFillLoader,
   createBaseOutlineLoader,
+  createBritainFiefOverlayLoader,
   createCliopatriaFiefOverlayLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
@@ -21,6 +23,7 @@ import {
   fillColorFor,
   franceFiefDataUrlFor,
   hasBaseOutline,
+  hasBritainFiefOverlay,
   hasCliopatriaFiefOverlay,
   hasFranceFiefOverlay,
   hasHreOverlay,
@@ -36,6 +39,7 @@ import {
   type YearLayerData,
 } from "./powers.ts";
 import {
+  BRITAIN_FIEF_OVERLAY_YEARS,
   CLIOPATRIA_FIEF_OVERLAY_YEARS,
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_ALL_OVERLAY_YEARS,
@@ -744,6 +748,7 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     baseFill: EMPTY_FEATURE_COLLECTION,
     italyFiefs: EMPTY_FEATURE_COLLECTION,
     cliopatriaFiefs: EMPTY_FEATURE_COLLECTION,
+    britainFiefs: EMPTY_FEATURE_COLLECTION,
   });
   d1400.resolve({
     base: fakeCollection("F"),
@@ -753,6 +758,7 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     baseFill: EMPTY_FEATURE_COLLECTION,
     italyFiefs: EMPTY_FEATURE_COLLECTION,
     cliopatriaFiefs: EMPTY_FEATURE_COLLECTION,
+    britainFiefs: EMPTY_FEATURE_COLLECTION,
   });
   await Promise.all([p1, p2]);
   assertEquals(applied, [{ year: 1500, hreCount: 1 }]);
@@ -1438,4 +1444,146 @@ Deno.test("createCombinedYearLoader は Cliopatria ローダを省略しても�
   );
   const data = await loader.load(1200);
   assertEquals(data.cliopatriaFiefs, EMPTY_FEATURE_COLLECTION);
+});
+
+// ---- ブリテン諸島の政体オーバーレイ（#172）----
+
+Deno.test("britainFiefDataUrlFor はブリテン諸島オーバーレイ GeoJSON のパスを返す（#172）", () => {
+  // 参照先は重なりを排他化した flat（scripts/build-fief-flat.ts）。
+  // 生データ britain_fiefs_<year> は派生データの入力で、配信もしない。
+  assertEquals(
+    britainFiefDataUrlFor(1000),
+    "/data/britain_fiefs_flat_1000.geojson",
+  );
+  assertEquals(
+    britainFiefDataUrlFor(1700),
+    "/data/britain_fiefs_flat_1700.geojson",
+  );
+});
+
+Deno.test("hasBritainFiefOverlay は対象年（1000〜1700 の 12 年）でのみ true（#172）", () => {
+  for (const year of BRITAIN_FIEF_OVERLAY_YEARS) {
+    assert(hasBritainFiefOverlay(year, BRITAIN_FIEF_OVERLAY_YEARS));
+  }
+  // 1715 以降は base が UK とアイルランド王国を分けて収録するため対象外
+  for (const year of [1715, 1783, 1800, 1815, 1914]) {
+    assert(!hasBritainFiefOverlay(year, BRITAIN_FIEF_OVERLAY_YEARS));
+  }
+});
+
+Deno.test("createBritainFiefOverlayLoader は非対象年では fetch せず空 FC を返す（#172）", async () => {
+  let count = 0;
+  const loader = createBritainFiefOverlayLoader(() => {
+    count++;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("X")),
+    });
+  }, BRITAIN_FIEF_OVERLAY_YEARS);
+  assertEquals(await loader.load(1715), EMPTY_FEATURE_COLLECTION);
+  assertEquals(count, 0);
+  assert(loader.has(1715));
+});
+
+Deno.test("createBritainFiefOverlayLoader は対象年で britain_fiefs_flat を fetch して返す（キャッシュあり）（#172）", async () => {
+  const calls: string[] = [];
+  const loader = createBritainFiefOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Kingdom of Gwynedd")),
+    });
+  }, BRITAIN_FIEF_OVERLAY_YEARS);
+  const data = await loader.load(1000);
+  assertEquals(data.features[0].properties?.NAME, "Kingdom of Gwynedd");
+  assertEquals(calls, ["/data/britain_fiefs_flat_1000.geojson"]);
+  await loader.load(1000);
+  assertEquals(calls, ["/data/britain_fiefs_flat_1000.geojson"]);
+});
+
+Deno.test("createBritainFiefOverlayLoader は取得失敗時に warn して空 FC で縮退する（#172）", async () => {
+  const warns: string[] = [];
+  let count = 0;
+  const loader = createBritainFiefOverlayLoader(
+    () => {
+      count++;
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      });
+    },
+    BRITAIN_FIEF_OVERLAY_YEARS,
+    (msg) => warns.push(msg),
+  );
+  assertEquals(await loader.load(1000), EMPTY_FEATURE_COLLECTION);
+  assertEquals(warns.length, 1);
+  assert(!loader.has(1000));
+  // 失敗はキャッシュされず、次のロードで再試行される
+  await loader.load(1000);
+  assertEquals(count, 2);
+});
+
+Deno.test("createCombinedYearLoader はブリテン諸島オーバーレイも同時に返す（#172）", async () => {
+  const calls: string[] = [];
+  const fetchFn = (url: string) => {
+    calls.push(url);
+    const name = url.includes("britain_fiefs")
+      ? "Kingdom of Gwynedd"
+      : url.includes("cliopatria_fiefs")
+      ? "Duchy of Aquitaine"
+      : "Kingdom of France";
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(name)),
+    });
+  };
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(
+      fetchFn,
+      HRE_ALL_OVERLAY_YEARS,
+      () => {},
+      HRE_FIEF_OVERLAY_YEARS,
+    ),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+    undefined,
+    undefined,
+    createItalyFiefOverlayLoader(fetchFn, ITALY_FIEF_OVERLAY_YEARS),
+    createCliopatriaFiefOverlayLoader(fetchFn, CLIOPATRIA_FIEF_OVERLAY_YEARS),
+    createBritainFiefOverlayLoader(fetchFn, BRITAIN_FIEF_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1000);
+  assertEquals(
+    data.britainFiefs.features[0].properties?.NAME,
+    "Kingdom of Gwynedd",
+  );
+  assert(calls.includes("/data/britain_fiefs_flat_1000.geojson"));
+  // 近世（1600）はブリテンだけが対象で、中世限定のオーバーレイは空 FC のまま
+  const early = await loader.load(1600);
+  assertEquals(
+    early.britainFiefs.features[0].properties?.NAME,
+    "Kingdom of Gwynedd",
+  );
+  assertEquals(early.fiefs, EMPTY_FEATURE_COLLECTION);
+  assertEquals(early.italyFiefs, EMPTY_FEATURE_COLLECTION);
+  assertEquals(early.cliopatriaFiefs, EMPTY_FEATURE_COLLECTION);
+});
+
+Deno.test("createCombinedYearLoader はブリテンローダを省略しても従来どおり動く（後方互換・未生成時の縮退。#172）", async () => {
+  const fetchFn = (url: string) =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(url)),
+    });
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.britainFiefs, EMPTY_FEATURE_COLLECTION);
 });

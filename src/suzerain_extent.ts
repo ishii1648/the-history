@@ -63,6 +63,7 @@ import type {
   Polygon,
 } from "geojson";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -100,12 +101,20 @@ const EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
 
 /**
  * 包含する base 勢力から外枠を引く諸侯領オーバーレイのレイヤー
- * （TASK-120・伊諸侯領は TASK-121）。
+ * （TASK-120・伊諸侯領は TASK-121・ブリテン諸島は #172）。
+ *
+ * ブリテン諸島の政体（britain-fiefs）は SUBJECTO を持たないため、伊諸侯領と
+ * 同じく「その政体のラベル地点を base のどの勢力が塗っているか」で宗主キーを
+ * 決める。実データでは 1000〜1200 のウェールズ・アイルランド諸王国が base の
+ * Celtic kingdoms、1279〜1300 が English territory、1600〜1700 のアイルランド
+ * 王国が England and Ireland へ解決する。「base の塗りがそのまま答えになる」
+ * 規則（TASK-121）により、独立か従属かの史実解釈を実装者が持ち込まずに済む。
  */
 const FIEF_EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
   FRANCE_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
+  BRITAIN_FIEF_LAYER_ID,
 ];
 
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */

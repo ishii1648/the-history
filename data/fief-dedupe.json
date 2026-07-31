@@ -8,7 +8,8 @@
           "data/france_fiefs_1000.geojson",
           "data/hre_fiefs_1000.geojson",
           "data/italy_fiefs_1000.geojson",
-          "data/cliopatria_fiefs_1000.geojson"
+          "data/cliopatria_fiefs_1000.geojson",
+          "data/britain_fiefs_1000.geojson"
         ]
       },
       "1100": {
@@ -17,7 +18,8 @@
           "data/france_fiefs_1100.geojson",
           "data/hre_fiefs_1100.geojson",
           "data/italy_fiefs_1100.geojson",
-          "data/cliopatria_fiefs_1100.geojson"
+          "data/cliopatria_fiefs_1100.geojson",
+          "data/britain_fiefs_1100.geojson"
         ]
       },
       "1200": {
@@ -26,7 +28,8 @@
           "data/france_fiefs_1200.geojson",
           "data/hre_fiefs_1200.geojson",
           "data/italy_fiefs_1200.geojson",
-          "data/cliopatria_fiefs_1200.geojson"
+          "data/cliopatria_fiefs_1200.geojson",
+          "data/britain_fiefs_1200.geojson"
         ]
       },
       "1279": {
@@ -35,7 +38,8 @@
           "data/france_fiefs_1279.geojson",
           "data/hre_fiefs_1279.geojson",
           "data/italy_fiefs_1279.geojson",
-          "data/cliopatria_fiefs_1279.geojson"
+          "data/cliopatria_fiefs_1279.geojson",
+          "data/britain_fiefs_1279.geojson"
         ]
       },
       "1300": {
@@ -44,7 +48,8 @@
           "data/france_fiefs_1300.geojson",
           "data/hre_fiefs_1300.geojson",
           "data/italy_fiefs_1300.geojson",
-          "data/cliopatria_fiefs_1300.geojson"
+          "data/cliopatria_fiefs_1300.geojson",
+          "data/britain_fiefs_1300.geojson"
         ]
       },
       "1400": {
@@ -52,7 +57,8 @@
         "fiefs": [
           "data/hre_fiefs_1400.geojson",
           "data/italy_fiefs_1400.geojson",
-          "data/cliopatria_fiefs_1400.geojson"
+          "data/cliopatria_fiefs_1400.geojson",
+          "data/britain_fiefs_1400.geojson"
         ]
       },
       "1492": {
@@ -60,7 +66,38 @@
         "fiefs": [
           "data/hre_fiefs_1492.geojson",
           "data/italy_fiefs_1492.geojson",
-          "data/cliopatria_fiefs_1492.geojson"
+          "data/cliopatria_fiefs_1492.geojson",
+          "data/britain_fiefs_1492.geojson"
+        ]
+      },
+      "1500": {
+        "base": "data/europe_1500.geojson",
+        "fiefs": [
+          "data/britain_fiefs_1500.geojson"
+        ]
+      },
+      "1530": {
+        "base": "data/europe_1530.geojson",
+        "fiefs": [
+          "data/britain_fiefs_1530.geojson"
+        ]
+      },
+      "1600": {
+        "base": "data/europe_1600.geojson",
+        "fiefs": [
+          "data/britain_fiefs_1600.geojson"
+        ]
+      },
+      "1650": {
+        "base": "data/europe_1650.geojson",
+        "fiefs": [
+          "data/britain_fiefs_1650.geojson"
+        ]
+      },
+      "1700": {
+        "base": "data/europe_1700.geojson",
+        "fiefs": [
+          "data/britain_fiefs_1700.geojson"
         ]
       }
     },
@@ -72,22 +109,26 @@
       "Aragón": 0.0021,
       "Britany": 1,
       "Burgandy": 0.0234,
+      "Celtic kingdoms": 0.3405,
       "Croatia": 0.0281,
       "Denmark-Norway": 0.0043,
       "Duchy of Normandy": 1,
       "Duchy of Swabia": 0.969,
       "Dutchy of Benevento": 0.0607,
+      "England": 0.0013,
       "Holy Roman Empire": 0.7158,
       "Kingdom of France": 0.7846,
       "Magyars": 0.0025,
       "Poland": 0.0254,
       "Pomerania": 0.5523,
+      "Scotland": 0.2625,
       "Venice": 0.8298
     },
     "1100": {
       "Aragón": 0.0021,
       "Britany": 1,
       "Burgandy": 0.0736,
+      "Celtic kingdoms": 0.3097,
       "Corsica": 0.9983,
       "Denmark": 0.0072,
       "Duchy of Bohemia": 1,
@@ -99,6 +140,7 @@
       "Papal States": 0.4707,
       "Poland": 0.0875,
       "Prussians": 0.0535,
+      "Scotland": 0.0326,
       "Venice": 0.5405
     },
     "1200": {
@@ -106,6 +148,7 @@
       "Aragón": 0.0012,
       "Britany": 1,
       "Burgandy": 0.1043,
+      "Celtic kingdoms": 0.2249,
       "Comté de Toulouse": 0.5407,
       "Corsica": 0.9983,
       "Dutchy of Benevento": 0.0298,
@@ -113,7 +156,8 @@
       "Kingdom of France": 0.7786,
       "Moravia": 0.9998,
       "Papal States": 0.4395,
-      "Poland": 0.0052
+      "Poland": 0.0052,
+      "Scotland": 0.0326
     },
     "1279": {
       "Britany": 1,
@@ -122,7 +166,7 @@
       "County of Artois": 0.9991,
       "County of Flanders": 0.9999,
       "Denmark": 0.0019,
-      "English territory": 0.0746,
+      "English territory": 0.1537,
       "France": 0.4261,
       "Holy Roman Empire": 0.2962,
       "Hungary": 0.0013,
@@ -137,7 +181,7 @@
       "County of Artois": 0.9991,
       "County of Flanders": 0.9999,
       "Denmark": 0.002,
-      "English territory": 0.0879,
+      "English territory": 0.1485,
       "France": 0.4601,
       "Holy Roman Empire": 0.3106,
       "Hungary": 0.0176,
@@ -147,6 +191,7 @@
     },
     "1400": {
       "Corsica": 0.9983,
+      "English territory": 0.0407,
       "France": 0.0158,
       "Holy Roman Empire": 0.4579,
       "Kingdom of Hungary": 0.0039,
@@ -154,6 +199,7 @@
       "Poland-Lithuania": 0.0048
     },
     "1492": {
+      "England": 0.052,
       "France": 0.0166,
       "Holy Roman Empire": 0.5058,
       "Imperial Hungary": 0.0044,
@@ -161,6 +207,21 @@
       "Poland-Lithuania": 0.0056,
       "Swiss Confederation": 0.0976,
       "Venice": 0.0318
+    },
+    "1500": {
+      "England": 0.052
+    },
+    "1530": {
+      "England and Ireland": 0.0522
+    },
+    "1600": {
+      "England and Ireland": 0.3648
+    },
+    "1650": {
+      "England and Ireland": 0.3663
+    },
+    "1700": {
+      "England and Ireland": 0.3657
     }
   }
 }

@@ -271,6 +271,7 @@ export function createPoliticalLayerBuilders() {
       fiefs: FeatureCollection,
       italyFiefs: FeatureCollection,
       cliopatriaFiefs: FeatureCollection,
+      britainFiefs: FeatureCollection,
       ja: Record<string, string>,
       dedupe: FiefDedupeTable,
     ) => {
@@ -303,6 +304,12 @@ export function createPoliticalLayerBuilders() {
         // バイエルンだけ藍紫・隣の OHM 由来領邦は臙脂、という凡例の破れが出る。
         ...buildLabelData(cliopatriaLabelGroups.hre, ja, "hre"),
         ...buildLabelData(cliopatriaLabelGroups.fief, ja, "fief"),
+        // #172: ブリテン諸島の政体も kind=fief（藍紫）。「base が描き分けない
+        // 政体をオーバーレイ由来の区画として重ねている」ことをラベル色で
+        // 開示する（仏・伊諸侯領と同じ記号）。base 側の Celtic kingdoms /
+        // England and Ireland との二重ラベルは fief-dedupe.json の被覆率が
+        // 抑制を判断する（部分被覆の年は両方のラベルが出るのが正しい）。
+        ...buildLabelData(britainFiefs, ja, "fief"),
       ];
       // TASK-122 AC #7: characterSet はズームで絞り込む**前**の全 datum から
       // 作る。表示中の datum から作ると、ズームインで諸侯領ラベルが増えた瞬間に
@@ -338,6 +345,7 @@ export function createPoliticalLayerBuilders() {
     fiefs: FeatureCollection,
     italyFiefs: FeatureCollection,
     cliopatriaFiefs: FeatureCollection,
+    britainFiefs: FeatureCollection,
   ): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
     const { year, zoomStep, selectedPowerKey, hoveredPowerKey } = ctx;
     // TextLayer は 1 枚のまま・衝突制御（共有空間・priority）も従来どおり。
@@ -348,6 +356,7 @@ export function createPoliticalLayerBuilders() {
       fiefs,
       italyFiefs,
       cliopatriaFiefs,
+      britainFiefs,
       ctx.nameJa,
       ctx.fiefDedupe,
     );

@@ -27,6 +27,7 @@ import type { PickingInfo } from "@deck.gl/core";
 import type { Feature, FeatureCollection } from "geojson";
 import { displayLabel, type SourceLine, sourceLines } from "./info.ts";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -137,6 +138,7 @@ export interface PickYearView {
   fiefs: FeatureCollection;
   italyFiefs: FeatureCollection;
   cliopatriaFiefs: FeatureCollection;
+  britainFiefs: FeatureCollection;
 }
 
 /**
@@ -268,13 +270,16 @@ export function createPickHandlers(deps: PickHandlerDeps) {
     if (
       layerId === POWER_LAYER_ID || layerId === HRE_LAYER_ID ||
       layerId === FRANCE_FIEF_LAYER_ID || layerId === ITALY_FIEF_LAYER_ID ||
-      layerId === CLIOPATRIA_FIEF_LAYER_ID
+      layerId === CLIOPATRIA_FIEF_LAYER_ID ||
+      layerId === BRITAIN_FIEF_LAYER_ID
     ) {
       // TASK-71/96: フランス諸侯領・イタリア諸侯領は SUBJECTO を持たないため
       // displayLabel は NAME の日本語表記（称号付き）をそのまま返す
       // （宗主国込み表記にはならない）
       // TASK-110: Cliopatria 由来の領邦は SUBJECTO を持つものがあり、その場合は
       // HRE 領邦と同じく「宗主国込み」の表記になる（displayLabel の既存規則）
+      // #172: ブリテン諸島の政体も SUBJECTO を持たず、独立主権政体として
+      // 宗主なしの NAME 表記になる
       return displayLabel(
         feature.properties,
         deps.getOverrides().renames,
@@ -328,6 +333,11 @@ export function createPickHandlers(deps: PickHandlerDeps) {
     // 区別できる）が成立する。metadata の中身は解釈せず sourceLines に委ねる。
     if (layerId === CLIOPATRIA_FIEF_LAYER_ID) {
       return collectionMetadata(currentView.cliopatriaFiefs);
+    }
+    // #172: ブリテン諸島の政体はレイヤー単位で OHM（CC0）の出典を引く
+    // （britain_fiefs_flat_* の metadata。AC #5 の出典・ライセンス表示）。
+    if (layerId === BRITAIN_FIEF_LAYER_ID) {
+      return collectionMetadata(currentView.britainFiefs);
     }
     return undefined;
   }

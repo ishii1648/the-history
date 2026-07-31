@@ -18,6 +18,7 @@ import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
 import { CLIOPATRIA_FIEF_YEARS } from "./build-cliopatria-fiefs.ts";
+import { BRITAIN_FIEF_YEARS } from "./build-britain-fiefs.ts";
 
 const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;
@@ -392,6 +393,12 @@ async function loadCollections(): Promise<FeatureCollection[]> {
     // 持つので hre_fiefs と同じ複合キーになり、既存の色割当規則がそのまま効く。
     ...CLIOPATRIA_FIEF_YEARS.map((year) =>
       `${DATA_DIR}/cliopatria_fiefs_${year}.geojson`
+    ),
+    // #172: ブリテン諸島の政体（TASK-151、`deno task build-britain-fiefs` で
+    // 生成）。SUBJECTO を持たないため france_fiefs と同じ NAME キーの独立
+    // プロービング色になる。
+    ...BRITAIN_FIEF_YEARS.map((year) =>
+      `${DATA_DIR}/britain_fiefs_${year}.geojson`
     ),
   ];
   for (const path of optionalPaths) {

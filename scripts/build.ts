@@ -11,6 +11,7 @@ import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
 import { CLIOPATRIA_FIEF_YEARS } from "./build-cliopatria-fiefs.ts";
+import { BRITAIN_FIEF_YEARS } from "./build-britain-fiefs.ts";
 
 const ENTRY = "src/main.ts";
 const DIST_DIR = "dist";
@@ -62,6 +63,7 @@ export function getDataCopyTargets(
   hreFiefYears: readonly number[] = [],
   italyFiefYears: readonly number[] = [],
   cliopatriaFiefYears: readonly number[] = [],
+  britainFiefYears: readonly number[] = [],
 ): Array<{ from: string; to: string }> {
   const targets: Array<{ from: string; to: string }> = [
     { from: "data/index.json", to: `${distDir}/data/index.json` },
@@ -146,15 +148,27 @@ export function getDataCopyTargets(
       to: `${distDir}/data/cliopatria_fiefs_flat_${year}.geojson`,
     });
   }
-  // TASK-78/86/96/110: オーバーレイとの二重輪郭・二重ラベルを解消する派生データ
-  // （deno task build-fief-dedupe で生成）。オーバーレイがある年にしか存在しない
-  // ため、いずれの年集合も空なら 1 件も含めない（対象外年の描画は従来のまま）。
+  // #172: ブリテン諸島の政体オーバーレイ（deno task build-britain-fiefs で
+  // 生成、TASK-151）。他の系統と同じく、配信するのは重なりを排他化した派生
+  // データ（britain_fiefs_flat_<year>）で、ランタイムの参照先（powers.ts
+  // britainFiefDataUrlFor）と一致させる。
+  for (const year of britainFiefYears) {
+    targets.push({
+      from: `data/britain_fiefs_flat_${year}.geojson`,
+      to: `${distDir}/data/britain_fiefs_flat_${year}.geojson`,
+    });
+  }
+  // TASK-78/86/96/110、#172: オーバーレイとの二重輪郭・二重ラベルを解消する
+  // 派生データ（deno task build-fief-dedupe で生成）。オーバーレイがある年に
+  // しか存在しないため、いずれの年集合も空なら 1 件も含めない（対象外年の
+  // 描画は従来のまま）。#172 のブリテンにより近世（1500〜1700）も対象になる。
   const outlineYears = [
     ...new Set([
       ...fiefYears,
       ...hreFiefYears,
       ...italyFiefYears,
       ...cliopatriaFiefYears,
+      ...britainFiefYears,
     ]),
   ].sort((a, b) => a - b);
   if (outlineYears.length > 0) {
@@ -385,6 +399,7 @@ async function copyDataFiles(distDir: string): Promise<void> {
       HRE_FIEF_YEARS,
       ITALY_FIEF_YEARS,
       CLIOPATRIA_FIEF_YEARS,
+      BRITAIN_FIEF_YEARS,
     )
   ) {
     await Deno.copyFile(from, to);

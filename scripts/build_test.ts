@@ -174,6 +174,68 @@ Deno.test("getDataCopyTargets は hreFiefYears の hre_fiefs_flat をコピー�
   );
 });
 
+Deno.test("getDataCopyTargets は britainFiefYears の britain_fiefs_flat をコピー対象に含める（#172）", () => {
+  const targets = getDataCopyTargets(
+    "dist",
+    [1600],
+    [1600],
+    [],
+    [],
+    [],
+    [],
+    [1600, 1700],
+  );
+  assertEquals(
+    targets.filter((t) => t.from.includes("britain_fiefs_flat")),
+    [
+      {
+        from: "data/britain_fiefs_flat_1600.geojson",
+        to: "dist/data/britain_fiefs_flat_1600.geojson",
+      },
+      {
+        from: "data/britain_fiefs_flat_1700.geojson",
+        to: "dist/data/britain_fiefs_flat_1700.geojson",
+      },
+    ],
+  );
+  // OHM 由来の生データ（britain_fiefs_<year>）は派生データの入力なので
+  // dist に含めない
+  assertEquals(
+    targets.filter((t) => /britain_fiefs_\d/.test(t.from)),
+    [],
+  );
+  // #172: 近世（1600〜1700）もブリテンのオーバーレイがあるため、二重塗り・
+  // 二重輪郭を解消する派生データ（fief-dedupe / base_outline / europe_flat）が
+  // ブリテンの年集合からも導出される
+  assertEquals(
+    targets.filter((t) => t.from.includes("fief-dedupe")).length,
+    1,
+  );
+  assertEquals(
+    targets.filter((t) =>
+      t.from.includes("base_outline") || t.from.includes("europe_flat")
+    ),
+    [
+      {
+        from: "data/base_outline_1600.geojson",
+        to: "dist/data/base_outline_1600.geojson",
+      },
+      {
+        from: "data/europe_flat_1600.geojson",
+        to: "dist/data/europe_flat_1600.geojson",
+      },
+      {
+        from: "data/base_outline_1700.geojson",
+        to: "dist/data/base_outline_1700.geojson",
+      },
+      {
+        from: "data/europe_flat_1700.geojson",
+        to: "dist/data/europe_flat_1700.geojson",
+      },
+    ],
+  );
+});
+
 Deno.test("getDataCopyTargets は base_outline を仏諸侯領年と HRE 領邦年の和集合で出す（TASK-86 AC #3）", () => {
   const targets = getDataCopyTargets(
     "dist",
