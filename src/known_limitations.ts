@@ -3,7 +3,8 @@
  *
  * データは /data/known-limitations.json（コードと分離して管理し、今後の制限事項
  * 追加はデータ編集のみで可能にする。AC #3）で、
- * `{ "limitations": [{ id, years?: { from, to }, text }] }` の形を持つ。
+ * `{ "limitations": [{ id, years?: { from, to }, text, summary? }] }` の形を持つ。
+ * summary は #175 で追加した「既定表示用の短い要約」（text は展開時の詳細）。
  * fetch 由来で信頼できないため、ここでは「壊れたデータを安全に受け流す」
  * パース/バリデーションと、任意機能として「年代該当判定」だけを提供する
  * （notes.ts / footer.ts と同じ構成方針）。
@@ -33,8 +34,13 @@ export interface KnownLimitation {
   readonly id: string;
   /** 該当する年代範囲。省略時は常時該当（例: 全年代で共通の制限） */
   readonly years?: KnownLimitationYears;
-  /** 制限事項の説明文（UI にそのまま表示） */
+  /** 制限事項の詳細説明文（#175 以降は項目の「詳細」展開時に表示） */
   readonly text: string;
+  /**
+   * 既定表示用の短い要約（2 文程度・全角 120 字以内。#175）。省略時は
+   * knownLimitationSummary が text 冒頭から代替を導出する（縮退）。
+   */
+  readonly summary?: string;
 }
 
 /** 非空文字列かどうか */
@@ -63,18 +69,24 @@ function parseLimitation(raw: unknown): KnownLimitation | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return null;
   }
-  const { id, text, years } = raw as {
+  const { id, text, years, summary } = raw as {
     id?: unknown;
     text?: unknown;
     years?: unknown;
+    summary?: unknown;
   };
   if (!isNonEmptyString(id) || !isNonEmptyString(text)) return null;
 
-  if (years === undefined) return { id, text };
+  // summary は任意項目だが、指定されていて壊れている（非文字列・空文字）
+  // 場合は years と同じ規律で不正なエントリとして除外する（#175）
+  if (summary !== undefined && !isNonEmptyString(summary)) return null;
+
+  const base = summary === undefined ? { id, text } : { id, text, summary };
+  if (years === undefined) return base;
 
   const parsedYears = parseYears(years);
   if (parsedYears === undefined) return null;
-  return { id, text, years: parsedYears };
+  return { ...base, years: parsedYears };
 }
 
 /**
@@ -143,4 +155,52 @@ export function knownLimitationEntries(
     ...limitation,
     active: isKnownLimitationActiveForYear(limitation, year),
   }));
+}
+
+/**
+ * 一覧に既定表示する項目を返す（#175）。TASK-52 の「全件表示 + 該当強調」
+ * では 1 項目 400〜1000 字の長文が全年代分並んで実質読めなかったため、
+ * 表示中の年代に該当する項目だけへ絞り込む方針へ転換した。非該当項目には
+ * showAll=true（UI の「他の年代の制限も表示」トグル）で到達できる。
+ * 順序は入力の limitations と同一のまま維持する。
+ */
+export function visibleKnownLimitationEntries(
+  limitations: readonly KnownLimitation[],
+  year: number,
+  showAll: boolean,
+): KnownLimitationEntry[] {
+  const entries = knownLimitationEntries(limitations, year);
+  return showAll ? entries : entries.filter((entry) => entry.active);
+}
+
+/** 要約の上限文字数（AC #3: 2 文程度・全角 120 字以内。#175） */
+export const KNOWN_LIMITATION_SUMMARY_MAX_CHARS = 120;
+
+/**
+ * 項目の既定表示に使う要約を返す（#175）。summary があればそのまま、
+ * 欠落時は text の先頭 1 文（句点まで）で代替する縮退を行う。代替文が
+ * 上限を超える場合は上限 - 1 文字 + 「…」に切り詰める（サロゲートペアを
+ * 壊さないようコードポイント単位で数える）。
+ */
+export function knownLimitationSummary(limitation: KnownLimitation): string {
+  if (limitation.summary !== undefined) return limitation.summary;
+  const periodIndex = limitation.text.indexOf("。");
+  const sentence = periodIndex >= 0
+    ? limitation.text.slice(0, periodIndex + 1)
+    : limitation.text;
+  const chars = [...sentence];
+  if (chars.length <= KNOWN_LIMITATION_SUMMARY_MAX_CHARS) return sentence;
+  return chars.slice(0, KNOWN_LIMITATION_SUMMARY_MAX_CHARS - 1).join("") + "…";
+}
+
+/**
+ * 年代範囲の表示ラベルを組み立てる（#175。「他の年代の制限も表示」時に
+ * 非該当項目がいつの制限かを示す）。years 省略時は常時該当なので「全年代」。
+ */
+export function formatKnownLimitationYears(
+  years: KnownLimitationYears | undefined,
+): string {
+  if (years === undefined) return "全年代";
+  if (years.from === years.to) return `${years.from}年`;
+  return `${years.from}〜${years.to}年`;
 }

@@ -23,6 +23,30 @@ Deno.test("known-limitations.json は全エントリがパーサの検証を通�
   assert(parsed.length > 0);
 });
 
+// #175: パネルは既定で要約（summary）だけを表示する。全エントリに要約が
+// 執筆済みで、AC #3 の「2 文程度・全角 120 字以内」を満たすことをデータ側で
+// 保証する（欠落時は text 冒頭で縮退表示されるが、それはあくまで壊れた
+// データへの防御であり、リポジトリ内のデータは常に要約を持つ）。
+Deno.test("全エントリが要約（summary）を持ち 2 文以内・全角 120 字以内である（#175 AC #3）", () => {
+  for (const entry of knownLimitations.limitations) {
+    const { summary } = entry as { id: string; summary?: unknown };
+    assert(
+      typeof summary === "string" && summary.length > 0,
+      `${entry.id} に summary が無い`,
+    );
+    const chars = [...summary].length;
+    assert(
+      chars <= 120,
+      `${entry.id} の summary が ${chars} 字で 120 字を超えている`,
+    );
+    const sentences = (summary.match(/。/g) ?? []).length;
+    assert(
+      sentences >= 1 && sentences <= 2,
+      `${entry.id} の summary が 2 文以内でない（句点 ${sentences} 個）`,
+    );
+  }
+});
+
 Deno.test("id は一覧内で一意である", () => {
   const ids = knownLimitations.limitations.map((entry) => entry.id);
   assertEquals(new Set(ids).size, ids.length);

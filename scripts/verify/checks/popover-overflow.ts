@@ -29,8 +29,10 @@ export const KNOWN_LIMITATIONS_SCREENSHOT =
 export const FOOTER_SCREENSHOT = "scripts/verify/checks/.popover-footer.png";
 
 /**
- * 項目数が最大になる年代。known-limitations は全件表示（該当年代のみ強調）なので
- * 件数自体は年代に依存しないが、TASK-117 の実測条件（1400 年）に揃える。
+ * 計測に使う年代。#175 で known-limitations は「表示中の年代に該当する項目
+ * だけを要約で表示」へ変わったため件数は年代に依存するが、1400 年は常時該当
+ * + 中世系の制限が多数該当する busiest 級の年代であり、TASK-117 の実測条件
+ * （1400 年）とも揃うのでそのまま使う。
  */
 export const PROBE_YEAR = 1400;
 
@@ -207,15 +209,18 @@ export async function run(api: CdpApi): Promise<void> {
 
   await api.waitForAppReady(30000);
   await api.waitFor("window.__getYear && window.__getYear() === 1000", 15000);
-  await api.evaluate(`window.__setYear(${PROBE_YEAR})`);
-  await api.waitFor(`window.__getYear() === ${PROBE_YEAR}`, 15000);
-
-  // ---- ⚠ 既知の制限（項目数が多く、TASK-117 の再現対象） ----
-  // トグルは known-limitations.json のロード成功後に表示される
+  // トグルは known-limitations.json のロード成功（reveal）後に表示される。
+  // initPowerLayer は reveal の後に switchYear(initialYear) をもう一度発行する
+  // ため、reveal 前に __setYear すると後着の 1000 要求が勝って PROBE_YEAR の
+  // 計測にならない（#175 で実測）。reveal 完了を待ってから年代を切り替える。
   await api.waitFor(
     "!document.getElementById('known-limitations-toggle').hidden",
     15000,
   );
+  await api.evaluate(`window.__setYear(${PROBE_YEAR})`);
+  await api.waitFor(`window.__getYear() === ${PROBE_YEAR}`, 15000);
+
+  // ---- ⚠ 既知の制限（項目数が多く、TASK-117 の再現対象） ----
   await api.evaluate(clickByIdExpr("known-limitations-toggle"));
   await api.waitFor(
     "document.querySelectorAll('#known-limitations-list li').length > 0 && " +
