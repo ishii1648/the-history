@@ -18,6 +18,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   SNAPSHOT_YEARS,
+  SOVEREIGN_FIEF_OVERLAY_YEARS,
 } from "./config.ts";
 
 Deno.test("INITIAL_CENTER はヨーロッパ中心付近の [15, 50] である", () => {
@@ -317,13 +318,14 @@ Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は BASE_OUTLINE_YEARS の部分集合�
   }
 });
 
-Deno.test("BASE_OUTLINE_YEARS は 4 系統のオーバーレイ年代の和集合で昇順・重複なし（TASK-86/96、#172 でブリテンを追加）", () => {
+Deno.test("BASE_OUTLINE_YEARS は 5 系統のオーバーレイ年代の和集合で昇順・重複なし（TASK-86/96、#172 でブリテン・#189 で主権政体を追加）", () => {
   const expected = [
     ...new Set([
       ...FRANCE_FIEF_OVERLAY_YEARS,
       ...HRE_FIEF_OVERLAY_YEARS,
       ...ITALY_FIEF_OVERLAY_YEARS,
       ...BRITAIN_FIEF_OVERLAY_YEARS,
+      ...SOVEREIGN_FIEF_OVERLAY_YEARS,
     ]),
   ].sort((a, b) => a - b);
   assertEquals([...BASE_OUTLINE_YEARS], expected);
@@ -380,6 +382,61 @@ Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は AC の対象年（1000〜1279 のウ�
 
 Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は BASE_OUTLINE_YEARS の部分集合（全対象年に base_outline / europe_flat が存在する）（#172）", () => {
   for (const year of BRITAIN_FIEF_OVERLAY_YEARS) {
+    assert(
+      BASE_OUTLINE_YEARS.includes(year),
+      `${year} の base_outline / europe_flat が存在しない`,
+    );
+  }
+});
+
+// ---- 主権政体オーバーレイ（#189）----
+
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は #189 が生成した 14 年代である", () => {
+  assertEquals([...SOVEREIGN_FIEF_OVERLAY_YEARS], [
+    1200,
+    1400,
+    1492,
+    1500,
+    1530,
+    1600,
+    1650,
+    1700,
+    1715,
+    1783,
+    1800,
+    1815,
+    1880,
+    1900,
+  ]);
+});
+
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS の部分集合（#189）", () => {
+  const sorted = [...SOVEREIGN_FIEF_OVERLAY_YEARS].sort((a, b) => a - b);
+  assertEquals([...SOVEREIGN_FIEF_OVERLAY_YEARS], sorted);
+  assertEquals(
+    new Set(SOVEREIGN_FIEF_OVERLAY_YEARS).size,
+    SOVEREIGN_FIEF_OVERLAY_YEARS.length,
+  );
+  for (const year of SOVEREIGN_FIEF_OVERLAY_YEARS) {
+    assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
+});
+
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は 1914 を含まない（base が後継の主権国家を個別収録する年代。#189）", () => {
+  assert(!SOVEREIGN_FIEF_OVERLAY_YEARS.includes(1914));
+});
+
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は AC の対象年（1650〜1715 のクリミア、1400 のモスクワ、1815〜1900 のフィンランド、1880 のクレタ）を含む（#189）", () => {
+  for (const year of [1400, 1650, 1700, 1715, 1815, 1880, 1900]) {
+    assert(
+      SOVEREIGN_FIEF_OVERLAY_YEARS.includes(year),
+      `${year} は目視確認対象の年`,
+    );
+  }
+});
+
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は BASE_OUTLINE_YEARS の部分集合（全対象年に base_outline / europe_flat が存在する）（#189）", () => {
+  for (const year of SOVEREIGN_FIEF_OVERLAY_YEARS) {
     assert(
       BASE_OUTLINE_YEARS.includes(year),
       `${year} の base_outline / europe_flat が存在しない`,

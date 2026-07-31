@@ -39,6 +39,7 @@ import {
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 import { APPROXIMATE_BORDER_LAYER_IDS } from "./approximate_borders.ts";
 
@@ -49,10 +50,10 @@ import { APPROXIMATE_BORDER_LAYER_IDS } from "./approximate_borders.ts";
 export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
 
 /**
- * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 6 枚）。
- * 相対順（powers → britain-fiefs → cliopatria-fiefs → italy-fiefs →
- * france-fiefs → hre-powers）は同一 beforeId のグループ内で deck レイヤー
- * 配列順が保たれるため従来と変わらない。
+ * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 7 枚）。
+ * 相対順（powers → sovereign-fiefs → britain-fiefs → cliopatria-fiefs →
+ * italy-fiefs → france-fiefs → hre-powers）は同一 beforeId のグループ内で
+ * deck レイヤー配列順が保たれるため従来と変わらない。
  *
  * TASK-78 の base 境界線オーバーレイ（deck の base-outlines）は TASK-80 で
  * MapLibre の line レイヤー（approximate_borders.ts）へ移したため、ここには
@@ -73,12 +74,17 @@ export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
  * 海岸線はベースマップと OHM 由来ポリゴンで解像度が異なり、base と同じく
  * 海へはみ出すため、水面より上に置くと海上に塗りが露出する。
  *
+ * #189: 主権政体オーバーレイも同じ扱いにする。バルト海（フィンランド）・
+ * 黒海（クリミア）・アドリア海（ラグーザ・モンテネグロ）・エーゲ海（クレタ・
+ * イオニア諸島）の海岸線が同様に海へはみ出す。
+ *
  * hre-extent（帝国範囲の強調輪郭）は含めない: 常時表示ではなくトグルで出す
  * 強調記号であり、水面より下だと海側の輪郭が切れて「どこからどこまでが帝国か」の
  * 表現が壊れるため、従来どおり水面より上に残す。
  */
 export const UNDER_WATER_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
   BRITAIN_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,

@@ -1,4 +1,9 @@
-import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
+import {
+  assert,
+  assertAlmostEquals,
+  assertEquals,
+  assertThrows,
+} from "@std/assert";
 import area from "@turf/area";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import type {
@@ -23,7 +28,7 @@ import {
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_FIEF_OVERLAY_YEARS,
 } from "../src/config.ts";
-import { FIEF_DEDUPE_YEARS } from "./build-fief-dedupe.ts";
+import { FIEF_DEDUPE_YEARS, parseTargetYears } from "./build-fief-dedupe.ts";
 import dedupeTable from "../data/fief-dedupe.json" with { type: "json" };
 import {
   FIEF_COVERAGE_SUPPRESS_THRESHOLD,
@@ -74,6 +79,16 @@ Deno.test("FIEF_DEDUPE_YEARS は base 境界線オーバーレイの対象年（
   // TASK-86 で HRE 領邦だけがある 1400 / 1492 が加わった
   assert(FIEF_DEDUPE_YEARS.includes(1400));
   assert(FIEF_DEDUPE_YEARS.includes(1492));
+  // #189: 主権政体オーバーレイで 1815 / 1880 / 1900 が加わった
+  assert(FIEF_DEDUPE_YEARS.includes(1815));
+  assert(FIEF_DEDUPE_YEARS.includes(1880));
+  assert(FIEF_DEDUPE_YEARS.includes(1900));
+});
+
+Deno.test("parseTargetYears: 年指定で対象年を絞れる（#189。既存年のバイト不変の構造的保証）", () => {
+  assertEquals(parseTargetYears([]), [...FIEF_DEDUPE_YEARS]);
+  assertEquals(parseTargetYears(["1880", "1815", "1880"]), [1815, 1880]);
+  assertThrows(() => parseTargetYears(["1914"]));
 });
 
 Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力を全て返す（TASK-86/96/110、#172）", () => {
@@ -84,6 +99,7 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
     "data/italy_fiefs_1200.geojson",
     "data/cliopatria_fiefs_1200.geojson",
     "data/britain_fiefs_1200.geojson",
+    "data/sovereign_fiefs_1200.geojson",
   ]);
   // 1400 以降は HRE 領邦・伊諸侯領・Cliopatria + ブリテン（仏諸侯領は 1300 まで）。
   // TASK-110: Cliopatria を外すと 1400 / 1492 のバイエルン公領などの下に
@@ -93,6 +109,7 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
     "data/italy_fiefs_1492.geojson",
     "data/cliopatria_fiefs_1492.geojson",
     "data/britain_fiefs_1492.geojson",
+    "data/sovereign_fiefs_1492.geojson",
   ]);
   // #188: 1500 年は伊諸侯領（近世初頭拡張）+ ブリテン。伊を登録しないと
   // base の Holy Roman Empire 一括塗りが北・中伊の諸邦の下に残り、
@@ -100,18 +117,41 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
   assertEquals(fiefsPathsFor(1500), [
     "data/italy_fiefs_1500.geojson",
     "data/britain_fiefs_1500.geojson",
+    "data/sovereign_fiefs_1500.geojson",
   ]);
   // #172: 近世（1530〜1700）はブリテンのみが対象。これを登録しないと
   // 1600 以降の England and Ireland の下に base 塗りが残り、アイルランド王国の
   // 半透明が二重に重なって濃くなる（既存 4 系統と同じ二重塗りの解消方針）。
-  assertEquals(fiefsPathsFor(1530), ["data/britain_fiefs_1530.geojson"]);
-  assertEquals(fiefsPathsFor(1600), ["data/britain_fiefs_1600.geojson"]);
-  // #187: 1715 以降は HRE 領邦（OHM 由来の近世 3 年代）のみが対象
-  assertEquals(fiefsPathsFor(1715), ["data/hre_fiefs_1715.geojson"]);
-  assertEquals(fiefsPathsFor(1783), ["data/hre_fiefs_1783.geojson"]);
-  assertEquals(fiefsPathsFor(1800), ["data/hre_fiefs_1800.geojson"]);
+  assertEquals(fiefsPathsFor(1530), [
+    "data/britain_fiefs_1530.geojson",
+    "data/sovereign_fiefs_1530.geojson",
+  ]);
+  assertEquals(fiefsPathsFor(1600), [
+    "data/britain_fiefs_1600.geojson",
+    "data/sovereign_fiefs_1600.geojson",
+  ]);
+  // #187: 1715 以降は HRE 領邦（OHM 由来の近世 3 年代）に加え、#189 の
+  // 主権政体オーバーレイが対象。これを登録しないとハンガリー王国・
+  // クリミア・ハン国などの下に base の一枚岩塗りが残り、半透明が二重に
+  // 重なって濃くなる。
+  assertEquals(fiefsPathsFor(1715), [
+    "data/hre_fiefs_1715.geojson",
+    "data/sovereign_fiefs_1715.geojson",
+  ]);
+  assertEquals(fiefsPathsFor(1783), [
+    "data/hre_fiefs_1783.geojson",
+    "data/sovereign_fiefs_1783.geojson",
+  ]);
+  assertEquals(fiefsPathsFor(1800), [
+    "data/hre_fiefs_1800.geojson",
+    "data/sovereign_fiefs_1800.geojson",
+  ]);
+  // #189: 1815〜1900 は主権政体オーバーレイのみが対象
+  assertEquals(fiefsPathsFor(1815), ["data/sovereign_fiefs_1815.geojson"]);
+  assertEquals(fiefsPathsFor(1880), ["data/sovereign_fiefs_1880.geojson"]);
+  assertEquals(fiefsPathsFor(1900), ["data/sovereign_fiefs_1900.geojson"]);
   // 対象外年は 1 件も無い
-  assertEquals(fiefsPathsFor(1815), []);
+  assertEquals(fiefsPathsFor(1914), []);
 });
 
 Deno.test("生成済みの fief-dedupe.json は HRE 領邦年代を含み、帝国本体のラベルは抑制しない（TASK-86 AC #3/#5）", () => {

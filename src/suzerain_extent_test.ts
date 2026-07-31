@@ -22,6 +22,7 @@ import {
   ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
   RIVERS_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 
 const HRE = "Holy Roman Empire";
@@ -296,6 +297,32 @@ Deno.test("suzerainExtentKey は britain-fiefs の政体も包含する base 勢
     suzerainExtentKey(
       BRITAIN_FIEF_LAYER_ID,
       feature({ NAME: "Sodor" }, box(20, 20)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    null,
+  );
+});
+
+Deno.test("suzerainExtentKey は sovereign-fiefs の政体も包含する base 勢力の宗主キーへ解決する（#189）", () => {
+  // #189 の生成物は SUBJECTO を持たない（仏諸侯領と同型）ため、宗主キーは
+  // 「その政体のラベル地点を base のどの勢力が塗っているか」で決まる。実データ
+  // では 1650 年のクリミア・ハン国が base の Ottoman Empire へ、1815 年の
+  // フィンランド大公国が Russian Empire へ解決する（TASK-121 と同じ規則）。
+  assertEquals(
+    suzerainExtentKey(
+      SOVEREIGN_FIEF_LAYER_ID,
+      feature({ NAME: "Crimean Khanate" }, box(1, 1)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    "France",
+  );
+  // base のどの勢力にも包含されない場合は外枠なし
+  assertEquals(
+    suzerainExtentKey(
+      SOVEREIGN_FIEF_LAYER_ID,
+      feature({ NAME: "Grand Duchy of Finland" }, box(20, 20)),
       FIEF_BASE,
       EMPTY_SUZERAIN_OVERRIDES,
     ),

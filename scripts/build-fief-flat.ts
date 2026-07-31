@@ -23,6 +23,10 @@
  * - data/britain_fiefs_flat_<year>.geojson（year ∈ BRITAIN_FIEF_FLAT_YEARS、
  *   TASK-151）… 同じ扱いのブリテン諸島の政体。削り方針は "keep-smaller"。
  *   地図への表示は後続 TASK-153 で、ここではデータチェーンにだけ載せる。
+ * - data/sovereign_fiefs_flat_<year>.geojson（year ∈ SOVEREIGN_FIEF_FLAT_YEARS、
+ *   #189）… 同じ扱いの中東欧・バルカン・東欧の主権政体。削り方針は
+ *   "keep-smaller"。全系統の最後に flat 化し、他系統との重なりは常に本系統から
+ *   差し引く（buildSovereignFiefFlat の解説を参照）。
  *
  * ## なぜ必要か
  * 諸侯領は 1 枚のレイヤーに半透明（src/powers.ts FILL_ALPHA=128）で描かれる。
@@ -80,6 +84,7 @@ import { serializeWithAttribution } from "./build-attribution.ts";
 import { COORD_PRECISION } from "./build-data.ts";
 import { cleanFeatureCollection, formatCleanStats } from "./clean-polygons.ts";
 import { BRITAIN_FIEF_YEARS } from "./build-britain-fiefs.ts";
+import { SOVEREIGN_FIEF_YEARS } from "./build-sovereign-fiefs.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
 import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
@@ -115,6 +120,13 @@ export const CLIOPATRIA_FIEF_FLAT_YEARS: readonly number[] =
  * build-britain-fiefs.ts の対象年と同一。
  */
 export const BRITAIN_FIEF_FLAT_YEARS: readonly number[] = BRITAIN_FIEF_YEARS;
+
+/**
+ * 主権政体オーバーレイ（OHM 由来・#189）の生成対象年。
+ * build-sovereign-fiefs.ts の対象年と同一。
+ */
+export const SOVEREIGN_FIEF_FLAT_YEARS: readonly number[] =
+  SOVEREIGN_FIEF_YEARS;
 
 /**
  * 重なりを解消するとき「どちら側のジオメトリを削るか」の方針（TASK-86）。
@@ -533,6 +545,16 @@ export function britainFlatPathFor(year: number): string {
   return `data/britain_fiefs_flat_${year}.geojson`;
 }
 
+/** 入力（build-sovereign-fiefs.ts の生成物）のパス（#189） */
+export function sovereignRawPathFor(year: number): string {
+  return `data/sovereign_fiefs_${year}.geojson`;
+}
+
+/** 出力（主権政体・重なり解消済み）のパス（#189） */
+export function sovereignFlatPathFor(year: number): string {
+  return `data/sovereign_fiefs_flat_${year}.geojson`;
+}
+
 /** *_flat_<year>.geojson に埋め込むメタデータ */
 export interface FiefFlatMetadata {
   generatedBy: string;
@@ -876,12 +898,84 @@ async function buildBritainFiefFlat(): Promise<void> {
   }
 }
 
+/**
+ * 主権政体オーバーレイの flat 化（#189）。全系統の **最後** に実行する。
+ *
+ * 削り方針は "keep-smaller"（帝国・伊・Cliopatria・ブリテンと同じ）。実データの
+ * 重なりは 1715 年の「トランシルヴァニア ⊂ 名目上の隣接領」のような広域と
+ * 局所の入れ子になりうるため、小さい側（＝より個別性の高い情報）の形・色・
+ * ラベル・picking を丸ごと残す。
+ *
+ * レイヤーをまたぐ重なりは **常に主権政体側から差し引く**。同時表示になる
+ * 既存 5 系統（仏・伊・帝国・Cliopatria・ブリテン）は西欧〜中欧に集中し、
+ * 中東欧・バルカン・東欧の主権政体とは実測で交わらない（1715〜1800 年の
+ * hre_fiefs のザルツブルク大司教領等ともハンガリー西縁で接するだけ）が、
+ * 境界の解像度差による微小な重なりが将来の再生成で入り込んでも、後から
+ * 追加した本系統が下がる構造にしておく（buildCliopatriaFiefFlat と同じ原則。
+ * 同じ重なりを両側から削ると土地が誰にも塗られない隙間になる）。
+ */
+async function buildSovereignFiefFlat(): Promise<void> {
+  for (const year of SOVEREIGN_FIEF_FLAT_YEARS) {
+    const raw = await readCollection(sovereignRawPathFor(year));
+    const resolved = resolveOverlaps(raw, console.warn, "keep-smaller");
+    const externalPaths = [
+      ...(FIEF_FLAT_YEARS.includes(year) ? [flatPathFor(year)] : []),
+      ...(ITALY_FIEF_FLAT_YEARS.includes(year) ? [italyFlatPathFor(year)] : []),
+      ...(HRE_FIEF_FLAT_YEARS.includes(year) ? [hreFlatPathFor(year)] : []),
+      ...(CLIOPATRIA_FIEF_FLAT_YEARS.includes(year)
+        ? [cliopatriaFlatPathFor(year)]
+        : []),
+      ...(BRITAIN_FIEF_FLAT_YEARS.includes(year)
+        ? [britainFlatPathFor(year)]
+        : []),
+    ];
+    const externals = await Promise.all(externalPaths.map(readCollection));
+    const subtracted = externals.length === 0
+      ? { fc: resolved.fc, removals: [] as ExternalRemoval[] }
+      : subtractOverlay(
+        resolved.fc,
+        externals.flatMap((c) => c.features),
+      );
+    const unpinched = unpinch(subtracted.fc);
+    const metadata: FiefFlatMetadata = {
+      generatedBy: "scripts/build-fief-flat.ts",
+      input: sovereignRawPathFor(year),
+      year,
+      cutPolicy: "keep-smaller",
+      containmentCoverageThreshold: CONTAINMENT_COVERAGE_THRESHOLD,
+      minOverlapAreaM2: MIN_OVERLAP_AREA_M2,
+      sliverAreaLimitM2: SLIVER_AREA_LIMIT_M2,
+      resolutions: resolved.resolutions,
+      ...(externalPaths.length === 0 ? {} : {
+        externalInputs: externalPaths,
+        externalRemovals: subtracted.removals,
+      }),
+    };
+    const outPath = sovereignFlatPathFor(year);
+    const json = serializeWithAttribution(outPath, {
+      ...cleanFlat(unpinched, outPath),
+      metadata,
+    });
+    await Deno.writeTextFile(outPath, json);
+    console.log(
+      `${outPath}: ${json.length} bytes, features=${unpinched.features.length}, 解消=${resolved.resolutions.length} 件, 他レイヤー差引=${subtracted.removals.length} 件`,
+    );
+    logResolutions(resolved.resolutions);
+    for (const r of subtracted.removals) {
+      console.log(
+        `  他オーバーレイ  ${r.cutName} -= ${r.externalName} (${r.overlapKm2} km²)`,
+      );
+    }
+  }
+}
+
 async function main(): Promise<void> {
   await buildFranceFiefFlat();
   await buildItalyFiefFlat();
   await buildHreFiefFlat();
   await buildCliopatriaFiefFlat();
   await buildBritainFiefFlat();
+  await buildSovereignFiefFlat();
 }
 
 if (import.meta.main) {

@@ -34,6 +34,7 @@ import {
   hasFranceFiefOverlay,
   hasHreOverlay,
   hasItalyFiefOverlay,
+  hasSovereignFiefOverlay,
   powerFillDataFor,
 } from "./powers.ts";
 import type { FiefDedupeTable } from "./fief_dedupe.ts";
@@ -68,6 +69,7 @@ import {
   ITALY_FIEF_LAYER_ID,
   PICKING_RADIUS_PX,
   POWER_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 import { ACTIVE_FILL_COLOR, isPowerActive } from "./power_highlight.ts";
 import {
@@ -77,6 +79,7 @@ import {
   HRE_ALL_OVERLAY_YEARS,
   HRE_FIEF_OVERLAY_YEARS,
   ITALY_FIEF_OVERLAY_YEARS,
+  SOVEREIGN_FIEF_OVERLAY_YEARS,
 } from "./config.ts";
 
 /**
@@ -94,6 +97,7 @@ export interface DebugYearView {
   italyFiefs: FeatureCollection;
   cliopatriaFiefs: FeatureCollection;
   britainFiefs: FeatureCollection;
+  sovereignFiefs: FeatureCollection;
 }
 
 /**
@@ -166,6 +170,7 @@ export interface DebugHookDeps {
     italyFiefs: FeatureCollection,
     cliopatriaFiefs: FeatureCollection,
     britainFiefs: FeatureCollection,
+    sovereignFiefs: FeatureCollection,
     ja: Record<string, string>,
     dedupe: FiefDedupeTable,
   ) => { data: readonly LabelDatum[]; characterSet: readonly string[] };
@@ -266,6 +271,13 @@ export interface DebugHooksTarget {
     source: unknown;
     labels: string[];
   };
+  __getSovereignFiefDebug?: () => {
+    year: number;
+    overlay: boolean;
+    featureCount: number;
+    source: unknown;
+    labels: string[];
+  };
   __getApproximateBorderDebug?: () => {
     year: number;
     sourcePresent: boolean;
@@ -294,7 +306,7 @@ export interface DebugHooksTarget {
   __getCityScreenPositions?: () => { name: string; x: number; y: number }[];
 }
 
-/** インストールする 16 件のフック名（ヘッドレス検証の契約。変更禁止） */
+/** インストールする 17 件のフック名（ヘッドレス検証の契約。変更禁止） */
 export const DEBUG_HOOK_NAMES: readonly (keyof DebugHooksTarget)[] = [
   "__setYear",
   "__getYear",
@@ -308,6 +320,7 @@ export const DEBUG_HOOK_NAMES: readonly (keyof DebugHooksTarget)[] = [
   "__getItalyFiefDebug",
   "__getCliopatriaFiefDebug",
   "__getBritainFiefDebug",
+  "__getSovereignFiefDebug",
   "__getApproximateBorderDebug",
   "__probePick",
   "__getPowerHighlightDebug",
@@ -415,6 +428,7 @@ export function installDebugHooks(
         view.italyFiefs,
         view.cliopatriaFiefs,
         view.britainFiefs,
+        view.sovereignFiefs,
         deps.getNameJa(),
         deps.getFiefDedupe(),
       );
@@ -577,6 +591,26 @@ export function installDebugHooks(
     };
   };
 
+  // #189: ヘッドレス CDP 検証用に主権政体オーバーレイの表示状態を公開する
+  // （__getBritainFiefDebug と同型の読み取り専用フック）。ハンガリー王国・
+  // クリミア・ハン国・フィンランド大公国などの表示は labels の内容で、
+  // 出典・ライセンス（OpenHistoricalMap / CC0-1.0）は source の内容で
+  // 確認できる。
+  target.__getSovereignFiefDebug = () => {
+    const year = deps.currentYear();
+    const sovereignFiefs = deps.getCurrentView()?.sovereignFiefs ??
+      EMPTY_FEATURE_COLLECTION;
+    return {
+      year,
+      overlay: hasSovereignFiefOverlay(year, SOVEREIGN_FIEF_OVERLAY_YEARS),
+      featureCount: sovereignFiefs.features.length,
+      source: deps.collectionMetadata(sovereignFiefs),
+      labels: buildLabelData(sovereignFiefs, deps.getNameJa(), "fief").map((
+        d,
+      ) => d.text),
+    };
+  };
+
   // TASK-80: ヘッドレス CDP 検証用に概略境界（MapLibre line レイヤー）の状態を
   // 公開する（__getCityDebug と同じ読み取り専用フック）。canvas のピクセルからは
   // 「どの区間がどの段で描かれているか」を数えられないため、段ごとの run 数と
@@ -673,6 +707,9 @@ export function installDebugHooks(
         ),
         [BRITAIN_FIEF_LAYER_ID]: countActive(
           view?.britainFiefs ?? EMPTY_FEATURE_COLLECTION,
+        ),
+        [SOVEREIGN_FIEF_LAYER_ID]: countActive(
+          view?.sovereignFiefs ?? EMPTY_FEATURE_COLLECTION,
         ),
       },
       // TASK-94: 外枠の対象（宗主キー）と、その外枠に含まれる base feature の

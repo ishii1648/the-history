@@ -27,6 +27,7 @@ import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
 import { CLIOPATRIA_FIEF_YEARS } from "./build-cliopatria-fiefs.ts";
 import { BRITAIN_FIEF_YEARS } from "./build-britain-fiefs.ts";
+import { SOVEREIGN_FIEF_YEARS } from "./build-sovereign-fiefs.ts";
 
 const DATA_DIR = "data";
 const OVERRIDES_PATH = `${DATA_DIR}/name-overrides.json`;
@@ -643,6 +644,14 @@ export async function loadYearCollections(): Promise<YearCollection[]> {
     ...BRITAIN_FIEF_YEARS.map((year) => ({
       year,
       path: `${DATA_DIR}/britain_fiefs_${year}.geojson`,
+    })),
+    // #189: 主権政体オーバーレイ（`deno task build-sovereign-fiefs` で生成）。
+    // SUBJECTO を持たないため NAME キーの独立プロービング色になる。NAME を
+    // base の呼称に合わせた政体（Kingdom of Hungary / Crimean Khanate 等）は
+    // base 側と同じキーに解決し、新しい色は「base に現れないキー」だけに付く。
+    ...SOVEREIGN_FIEF_YEARS.map((year) => ({
+      year,
+      path: `${DATA_DIR}/sovereign_fiefs_${year}.geojson`,
     })),
   ];
   for (const { year, path } of optionalEntries) {

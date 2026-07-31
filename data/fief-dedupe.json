@@ -29,7 +29,8 @@
           "data/hre_fiefs_1200.geojson",
           "data/italy_fiefs_1200.geojson",
           "data/cliopatria_fiefs_1200.geojson",
-          "data/britain_fiefs_1200.geojson"
+          "data/britain_fiefs_1200.geojson",
+          "data/sovereign_fiefs_1200.geojson"
         ]
       },
       "1279": {
@@ -58,7 +59,8 @@
           "data/hre_fiefs_1400.geojson",
           "data/italy_fiefs_1400.geojson",
           "data/cliopatria_fiefs_1400.geojson",
-          "data/britain_fiefs_1400.geojson"
+          "data/britain_fiefs_1400.geojson",
+          "data/sovereign_fiefs_1400.geojson"
         ]
       },
       "1492": {
@@ -67,56 +69,83 @@
           "data/hre_fiefs_1492.geojson",
           "data/italy_fiefs_1492.geojson",
           "data/cliopatria_fiefs_1492.geojson",
-          "data/britain_fiefs_1492.geojson"
+          "data/britain_fiefs_1492.geojson",
+          "data/sovereign_fiefs_1492.geojson"
         ]
       },
       "1500": {
         "base": "data/europe_1500.geojson",
         "fiefs": [
           "data/italy_fiefs_1500.geojson",
-          "data/britain_fiefs_1500.geojson"
+          "data/britain_fiefs_1500.geojson",
+          "data/sovereign_fiefs_1500.geojson"
         ]
       },
       "1530": {
         "base": "data/europe_1530.geojson",
         "fiefs": [
-          "data/britain_fiefs_1530.geojson"
+          "data/britain_fiefs_1530.geojson",
+          "data/sovereign_fiefs_1530.geojson"
         ]
       },
       "1600": {
         "base": "data/europe_1600.geojson",
         "fiefs": [
-          "data/britain_fiefs_1600.geojson"
+          "data/britain_fiefs_1600.geojson",
+          "data/sovereign_fiefs_1600.geojson"
         ]
       },
       "1650": {
         "base": "data/europe_1650.geojson",
         "fiefs": [
-          "data/britain_fiefs_1650.geojson"
+          "data/britain_fiefs_1650.geojson",
+          "data/sovereign_fiefs_1650.geojson"
         ]
       },
       "1700": {
         "base": "data/europe_1700.geojson",
         "fiefs": [
-          "data/britain_fiefs_1700.geojson"
+          "data/britain_fiefs_1700.geojson",
+          "data/sovereign_fiefs_1700.geojson"
         ]
       },
       "1715": {
         "base": "data/europe_1715.geojson",
         "fiefs": [
-          "data/hre_fiefs_1715.geojson"
+          "data/hre_fiefs_1715.geojson",
+          "data/sovereign_fiefs_1715.geojson"
         ]
       },
       "1783": {
         "base": "data/europe_1783.geojson",
         "fiefs": [
-          "data/hre_fiefs_1783.geojson"
+          "data/hre_fiefs_1783.geojson",
+          "data/sovereign_fiefs_1783.geojson"
         ]
       },
       "1800": {
         "base": "data/europe_1800.geojson",
         "fiefs": [
-          "data/hre_fiefs_1800.geojson"
+          "data/hre_fiefs_1800.geojson",
+          "data/sovereign_fiefs_1800.geojson"
+        ]
+      },
+      "1815": {
+        "base": "data/europe_1815.geojson",
+        "fiefs": [
+          "data/sovereign_fiefs_1815.geojson"
+        ]
+      },
+      "1880": {
+        "base": "data/europe_1880.geojson",
+        "fiefs": [
+          "data/sovereign_fiefs_1880.geojson"
+        ]
+      },
+      "1900": {
+        "base": "data/europe_1900.geojson",
+        "fiefs": [
+          "data/sovereign_fiefs_1900.geojson"
         ]
       }
     },
@@ -166,12 +195,14 @@
       "Angevin Empire": 0.5348,
       "Aragón": 0.0012,
       "Britany": 1,
+      "Bulgar Khanate": 0.2872,
       "Burgandy": 0.1043,
       "Celtic kingdoms": 0.2249,
       "Comté de Toulouse": 0.5407,
       "Corsica": 0.9983,
       "Dutchy of Benevento": 0.0298,
       "Holy Roman Empire": 0.1865,
+      "Hungary": 0.0063,
       "Kingdom of France": 0.7786,
       "Moravia": 0.9998,
       "Papal States": 0.4395,
@@ -209,11 +240,13 @@
       "Poland": 0.1629
     },
     "1400": {
+      "Blue Horde": 0.1216,
       "Corsica": 0.9983,
       "English territory": 0.0407,
       "France": 0.0158,
       "Holy Roman Empire": 0.4579,
       "Kingdom of Hungary": 0.0039,
+      "Novgorod": 0.0442,
       "Papal States": 0.0137,
       "Poland-Lithuania": 0.0048
     },
@@ -221,33 +254,42 @@
       "England": 0.052,
       "France": 0.0166,
       "Holy Roman Empire": 0.5058,
-      "Imperial Hungary": 0.0044,
+      "Imperial Hungary": 0.0099,
+      "Ottoman Empire": 0.0659,
       "Papal States": 0.1322,
-      "Poland-Lithuania": 0.0056,
+      "Poland-Lithuania": 0.0087,
       "Swiss Confederation": 0.0976,
       "Venice": 0.0318
     },
     "1500": {
       "England": 0.052,
       "Holy Roman Empire": 0.0855,
+      "Imperial Hungary": 0.0055,
+      "Ottoman Empire": 0.0659,
       "Papal States": 0.1322,
+      "Poland-Lithuania": 0.0035,
       "Swiss Confederation": 0.0026,
       "Venice": 0.0617
     },
     "1530": {
-      "England and Ireland": 0.0522
+      "England and Ireland": 0.0522,
+      "Ottoman Empire": 0.0277
     },
     "1600": {
-      "England and Ireland": 0.3648
+      "England and Ireland": 0.3648,
+      "Ottoman Empire": 0.0268
     },
     "1650": {
-      "England and Ireland": 0.3663
+      "England and Ireland": 0.3663,
+      "Ottoman Empire": 0.0623
     },
     "1700": {
-      "England and Ireland": 0.3657
+      "Austrian Empire": 0.0194,
+      "England and Ireland": 0.3657,
+      "Ottoman Empire": 0.0693
     },
     "1715": {
-      "Austrian Empire": 0.0103,
+      "Austrian Empire": 0.0767,
       "Baden": 0.2452,
       "Brandenburg": 0.4716,
       "Dutch Republic": 0.0072,
@@ -255,12 +297,13 @@
       "Holy Roman Empire": 0.337,
       "Lübeck": 0.6333,
       "Oldenburg": 0.0251,
+      "Ottoman Empire": 0.1099,
       "Sweden": 0.0011,
-      "Venice": 0.0075
+      "Venice": 0.0203
     },
     "1783": {
       "Anhalt": 0.1312,
-      "Austrian Empire": 0.0171,
+      "Austrian Empire": 0.423,
       "Baden": 0.2618,
       "Bavaria": 0.2422,
       "Brunswick": 0.1566,
@@ -271,6 +314,7 @@
       "Mecklenburg-Strelitz": 0.1138,
       "Netherlands": 0.0072,
       "Oldenburg": 0.3799,
+      "Ottoman Empire": 0.0565,
       "Prussia": 0.2605,
       "Saxony": 0.8653,
       "Thuringia": 0.355,
@@ -278,7 +322,7 @@
     },
     "1800": {
       "Anhalt": 0.1312,
-      "Austrian Empire": 0.0171,
+      "Austrian Empire": 0.4224,
       "Baden": 0.2198,
       "Batavian Republic": 0.0066,
       "Bavaria": 0.0199,
@@ -288,11 +332,28 @@
       "Mecklenburg-Schwerin": 0.9524,
       "Mecklenburg-Strelitz": 0.1138,
       "Oldenburg": 0.3799,
+      "Ottoman Empire": 0.0591,
       "Prussia": 0.123,
       "Saxony": 0.8652,
       "Swabia": 0.2549,
       "Thuringia": 0.2324,
       "Waldeck": 0.3395
+    },
+    "1815": {
+      "Austrian Empire": 0.4186,
+      "Ottoman Empire": 0.0802,
+      "Russian Empire": 0.0653,
+      "Sweden–Norway": 0.0057
+    },
+    "1880": {
+      "Bulgaria": 0.241,
+      "Russian Empire": 0.0576,
+      "Sweden–Norway": 0.0057
+    },
+    "1900": {
+      "Ottoman Empire": 0.0067,
+      "Russian Empire": 0.0585,
+      "Sweden–Norway": 0.0057
     }
   }
 }

@@ -239,6 +239,34 @@ export function hasBritainFiefOverlay(
 }
 
 /**
+ * 主権政体オーバーレイ GeoJSON の配信 URL を返す（純粋関数、#189）。
+ * 出典は OpenHistoricalMap（CC0、生成は scripts/build-sovereign-fiefs.ts →
+ * scripts/build-fief-flat.ts）。
+ *
+ * 参照先は生データ（sovereign_fiefs_<year>）ではなく、政体同士の重なりを
+ * 排他化した派生データ sovereign_fiefs_flat_<year>。理由は
+ * britainFiefDataUrlFor と同じで、半透明（FILL_ALPHA）の塗りが二重に
+ * 重ならないようにするため（1783〜1815 年のハンガリー王国とトランシル
+ * ヴァニアの境界スリバー等を flat 側が解消している。#189）。
+ */
+export function sovereignFiefDataUrlFor(year: number): string {
+  return `/data/sovereign_fiefs_flat_${year}.geojson`;
+}
+
+/**
+ * 指定年に主権政体オーバーレイが存在するか（純粋関数、#189）。
+ * 対象年は config.SOVEREIGN_FIEF_OVERLAY_YEARS。判定規則は hasHreOverlay /
+ * hasBritainFiefOverlay と同一だが、呼び出し側で「どのオーバーレイの話か」を
+ * 取り違えないよう別名で公開する。
+ */
+export function hasSovereignFiefOverlay(
+  year: number,
+  overlayYears: readonly number[],
+): boolean {
+  return overlayYears.includes(year);
+}
+
+/**
  * base 境界線オーバーレイ GeoJSON の配信 URL を返す（純粋関数、TASK-78）。
  * 中身は base 勢力ポリゴンの環を諸侯領 union の外側だけに切り出した LineString
  * 群（生成は scripts/build-fief-dedupe.ts）。諸侯領オーバーレイ対象年に限り、
@@ -302,14 +330,14 @@ export const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
 /**
  * 年代キャッシュの保持上限（ローダ 1 本あたりの年代数。TASK-129）。
  *
- * 年代切替 1 回は最大 8 本の GeoJSON（base / hre / fiefs / outlines /
- * baseFill / italyFiefs / cliopatriaFiefs / britainFiefs、main.ts の複合ローダ
- * 構成）をローダ 1 本 = 1 ファイル系統で読み込む。上限なしだと全 19 年代の
- * 巡回で 19 年 × 8 本 = 最大 152 個の FeatureCollection がヒープに残り続け
- * （パース済み GeoJSON は元テキストの数倍を占める）、メモリ制約の厳しい
- * モバイルでタブクラッシュの懸念がある。
+ * 年代切替 1 回は最大 9 本の GeoJSON（base / hre / fiefs / outlines /
+ * baseFill / italyFiefs / cliopatriaFiefs / britainFiefs / sovereignFiefs、
+ * main.ts の複合ローダ構成）をローダ 1 本 = 1 ファイル系統で読み込む。
+ * 上限なしだと全 19 年代の巡回で 19 年 × 9 本 = 最大 171 個の
+ * FeatureCollection がヒープに残り続け（パース済み GeoJSON は元テキストの
+ * 数倍を占める）、メモリ制約の厳しいモバイルでタブクラッシュの懸念がある。
  *
- * 4 年なら保持は最大 4 × 8 = 32 個（無制限時の約 2 割）に収まり、かつ
+ * 4 年なら保持は最大 4 × 9 = 36 個（無制限時の約 2 割）に収まり、かつ
  * スライダーで隣接年代を行き来する典型操作（現在年 ± 数年分）は
  * キャッシュヒットのまま賄える。解放済みの年代は再選択時に再 fetch する
  * （HTTP キャッシュが効くため再取得コストはネットワーク往復に限られる）。
@@ -570,6 +598,28 @@ export function createBritainFiefOverlayLoader(
 }
 
 /**
+ * 主権政体オーバーレイ用のローダを作る（#189）。
+ * 既存 5 系統と同じ機構（createOverlayLoader）に載せることで、
+ * - 非対象年（1914 等）は fetch せず空 FC を返し、base が個別収録する
+ *   後継国家（Finland ほか）と二重表示にならないことを構造的に保証する
+ * - 取得失敗・データ未生成は reject せず warn + 空 FC に落ちるので、
+ *   年代切替も base の表示も壊れない（既存オーバーレイと同じ縮退契約）
+ */
+export function createSovereignFiefOverlayLoader(
+  fetchFn: FetchLike,
+  overlayYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    overlayYears,
+    sovereignFiefDataUrlFor,
+    "主権政体オーバーレイ",
+    warnFn,
+  );
+}
+
+/**
  * base 境界線オーバーレイ用のローダを作る（TASK-78）。
  * HRE 領邦・諸侯領オーバーレイと同じ機構（createOverlayLoader）に載せるため、
  * 非対象年は fetch せず空 FC、取得失敗は warn + 空 FC になる。空 FC のときは
@@ -648,6 +698,11 @@ export interface YearLayerData {
    * FeatureCollection（非対象年・取得失敗・未生成時は空）
    */
   britainFiefs: FeatureCollection;
+  /**
+   * 主権政体オーバーレイ（sovereign_fiefs_flat_*、1200〜1900。#189）の
+   * FeatureCollection（非対象年・取得失敗・未生成時は空）
+   */
+  sovereignFiefs: FeatureCollection;
 }
 
 /** base + hre + fiefs をまとめてロードする複合ローダ */
@@ -668,7 +723,8 @@ export interface CombinedYearLoader {
  *
  * fiefLoader（TASK-71）・outlineLoader（TASK-78）・baseFillLoader（TASK-92）・
  * italyFiefLoader（TASK-96）・cliopatriaFiefLoader（TASK-110）・
- * britainFiefLoader（#172）は任意（それ以前の呼び出しと後方互換）。
+ * britainFiefLoader（#172）・sovereignFiefLoader（#189）は任意
+ * （それ以前の呼び出しと後方互換）。
  * 省略時はそれぞれ常に空 FC になり、従来どおりの挙動になる。
  */
 export function createCombinedYearLoader(
@@ -680,6 +736,7 @@ export function createCombinedYearLoader(
   italyFiefLoader?: YearDataLoader,
   cliopatriaFiefLoader?: YearDataLoader,
   britainFiefLoader?: YearDataLoader,
+  sovereignFiefLoader?: YearDataLoader,
 ): CombinedYearLoader {
   return {
     has: (year) =>
@@ -689,7 +746,8 @@ export function createCombinedYearLoader(
       (baseFillLoader === undefined || baseFillLoader.has(year)) &&
       (italyFiefLoader === undefined || italyFiefLoader.has(year)) &&
       (cliopatriaFiefLoader === undefined || cliopatriaFiefLoader.has(year)) &&
-      (britainFiefLoader === undefined || britainFiefLoader.has(year)),
+      (britainFiefLoader === undefined || britainFiefLoader.has(year)) &&
+      (sovereignFiefLoader === undefined || sovereignFiefLoader.has(year)),
     async load(year) {
       const [
         base,
@@ -700,6 +758,7 @@ export function createCombinedYearLoader(
         italyFiefs,
         cliopatriaFiefs,
         britainFiefs,
+        sovereignFiefs,
       ] = await Promise
         .all([
           baseLoader.load(year),
@@ -715,6 +774,8 @@ export function createCombinedYearLoader(
             Promise.resolve(EMPTY_FEATURE_COLLECTION),
           britainFiefLoader?.load(year) ??
             Promise.resolve(EMPTY_FEATURE_COLLECTION),
+          sovereignFiefLoader?.load(year) ??
+            Promise.resolve(EMPTY_FEATURE_COLLECTION),
         ]);
       return {
         base,
@@ -725,6 +786,7 @@ export function createCombinedYearLoader(
         italyFiefs,
         cliopatriaFiefs,
         britainFiefs,
+        sovereignFiefs,
       };
     },
   };

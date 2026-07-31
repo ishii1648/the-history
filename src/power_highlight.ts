@@ -24,6 +24,7 @@ import {
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 
 /**
@@ -38,6 +39,10 @@ import {
  *
  * #172: ブリテン諸島の政体も同じ扱い。SUBJECTO を持たないため強調キーは
  * NAME 単独になる（独立主権政体として振る舞う既存の仏諸侯領と同型）。
+ *
+ * #189: 主権政体オーバーレイも同じ扱い（SUBJECTO なし・NAME 単独キー）。
+ * NAME を base の呼称に合わせているため（Crimean Khanate 等）、年代を跨いで
+ * base 側と同じ政体が同じキーで強調される。
  */
 export const POWER_HIGHLIGHT_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
@@ -46,6 +51,7 @@ export const POWER_HIGHLIGHT_LAYER_IDS: readonly string[] = [
   ITALY_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   BRITAIN_FIEF_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 ];
 
 /**

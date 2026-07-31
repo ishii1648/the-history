@@ -44,6 +44,7 @@ import area from "@turf/area";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { serializeWithAttribution } from "./build-attribution.ts";
 import { BRITAIN_FIEF_YEARS } from "./build-britain-fiefs.ts";
+import { SOVEREIGN_FIEF_YEARS } from "./build-sovereign-fiefs.ts";
 import {
   CLIOPATRIA_FIEF_YEARS,
   cliopatriaRawPathFor,
@@ -430,6 +431,18 @@ export function britainFiefsPathFor(year: number): string {
 }
 
 /**
+ * 主権政体オーバーレイ（OHM 由来・#189）の入力パス。
+ *
+ * 年集合は scripts 側の SOVEREIGN_FIEF_YEARS を参照する（cliopatria・britain と
+ * 同じく、src → scripts の import を行わない規約の下で定数の二重成長を避ける。
+ * src/config.ts SOVEREIGN_FIEF_OVERLAY_YEARS との同値は
+ * build-sovereign-fiefs_test.ts で担保する）。
+ */
+export function sovereignFiefsPathFor(year: number): string {
+  return `data/sovereign_fiefs_${year}.geojson`;
+}
+
+/**
  * その年に存在するオーバーレイの入力パスを全て返す（純粋関数、TASK-86/96/110）。
  * 被覆率も境界線の切り出しも「その年に描かれるオーバーレイ全体」に対する判定
  * なので、仏諸侯領・HRE 領邦・伊諸侯領が揃う年（1000〜1300）は 3 件を返す。
@@ -459,6 +472,14 @@ export function fiefsPathsFor(year: number): string[] {
   if (BRITAIN_FIEF_YEARS.includes(year)) {
     paths.push(britainFiefsPathFor(year));
   }
+  // #189: 主権政体オーバーレイ（1200〜1900 の 14 年）。これを登録しないと
+  // base の一枚岩塗り（Ottoman / Austrian / Russian Empire・1200 年の
+  // Bulgar Khanate 等）がハンガリー王国・クリミア・ハン国・フィンランド
+  // 大公国などの下に残り、半透明が二重に重なって濃くなる。この年集合の
+  // 追加により FIEF_DEDUPE_YEARS が 1815 / 1880 / 1900 を含む 18 年へ広がる。
+  if (SOVEREIGN_FIEF_YEARS.includes(year)) {
+    paths.push(sovereignFiefsPathFor(year));
+  }
   return paths;
 }
 
@@ -483,10 +504,57 @@ async function readCollection(path: string): Promise<FeatureCollection> {
   return JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
 }
 
+/**
+ * CLI 引数から生成対象年を決める（純粋関数、#188 / #189 と同じ方式）。
+ * 引数なしなら全対象年（従来どおり）。年を並べる（例: `1815 1880 1900`）と
+ * その年の base_outline / europe_flat だけを生成・書き込みし、他の年の
+ * 生成物へ一切触れない（fief-dedupe.json は既存内容へ対象年をマージする）。
+ * 既存年の生成物のバイト不変を「再生成しない」ことで構造的に保証するための
+ * 仕組みで、対象年に無い年の指定はエラーにする。
+ */
+export function parseTargetYears(args: readonly string[]): number[] {
+  if (args.length === 0) return [...FIEF_DEDUPE_YEARS];
+  const years = args.map((arg) => Number.parseInt(arg, 10));
+  for (const year of years) {
+    if (!FIEF_DEDUPE_YEARS.includes(year)) {
+      throw new Error(`${year} は FIEF_DEDUPE_YEARS に含まれない年です`);
+    }
+  }
+  return [...new Set(years)].sort((a, b) => a - b);
+}
+
+/**
+ * 既存の fief-dedupe.json を読み、無ければ空の器を返す。
+ * 年指定の部分再生成（parseTargetYears）で対象外の年の被覆率・inputs を
+ * 保持するために使う。
+ */
+async function readExistingDedupe(): Promise<{
+  years: Record<string, Record<string, number>>;
+  inputs: Record<string, { base: string; fiefs: string[] }>;
+}> {
+  try {
+    const file = JSON.parse(
+      await Deno.readTextFile(DEDUPE_PATH),
+    ) as FiefDedupeFile;
+    return { years: file.years ?? {}, inputs: file.metadata?.inputs ?? {} };
+  } catch {
+    return { years: {}, inputs: {} };
+  }
+}
+
 async function main(): Promise<void> {
-  const years: Record<string, Record<string, number>> = {};
-  const inputs: Record<string, { base: string; fiefs: string[] }> = {};
-  for (const year of FIEF_DEDUPE_YEARS) {
+  const targetYears = parseTargetYears(Deno.args);
+  console.log(`target years: ${targetYears.join(", ")}`);
+  const { years, inputs } = await readExistingDedupe();
+  // 対象年集合から外れた年（オーバーレイ廃止など）が残骸として残らないよう、
+  // 現在の FIEF_DEDUPE_YEARS に無い年は捨てる
+  for (const key of Object.keys(years)) {
+    if (!FIEF_DEDUPE_YEARS.includes(Number(key))) {
+      delete years[key];
+      delete inputs[key];
+    }
+  }
+  for (const year of targetYears) {
     const base = await readCollection(basePathFor(year));
     const fiefPaths = fiefsPathsFor(year);
     const collections = await Promise.all(fiefPaths.map(readCollection));
@@ -561,14 +629,21 @@ async function main(): Promise<void> {
       `  ${year} 完全内包（>=0.9）: ${suppressed.join(", ") || "なし"}`,
     );
   }
+  // 年キーは常に昇順で書き出す（マージ後の挿入順に依存させない）
+  const sortByYear = <T>(record: Record<string, T>): Record<string, T> =>
+    Object.fromEntries(
+      Object.keys(record).sort((a, b) => Number(a) - Number(b)).map((
+        key,
+      ) => [key, record[key]]),
+    );
   const file: FiefDedupeFile = {
     metadata: {
       generatedBy: "scripts/build-fief-dedupe.ts",
-      inputs,
+      inputs: sortByYear(inputs),
       coveragePrecision: COVERAGE_PRECISION,
       minRecordedCoverage: MIN_RECORDED_COVERAGE,
     },
-    years,
+    years: sortByYear(years),
   };
   await Deno.writeTextFile(DEDUPE_PATH, JSON.stringify(file, null, 2) + "\n");
   console.log(`${DEDUPE_PATH}: years=${Object.keys(years).join(", ")}`);

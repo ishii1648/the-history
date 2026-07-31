@@ -117,6 +117,28 @@ export const CLIOPATRIA_FIEF_LAYER_ID = "cliopatria-fiefs";
  */
 export const BRITAIN_FIEF_LAYER_ID = "britain-fiefs";
 
+/**
+ * 主権政体オーバーレイのレイヤー ID（#189）。出典は OpenHistoricalMap
+ * （CC0、生成は scripts/build-sovereign-fiefs.ts → scripts/build-fief-flat.ts）。
+ *
+ * なぜ既存レイヤーへ合流させず独立レイヤーにするのか（BRITAIN_FIEF_LAYER_ID の
+ * 判断をそのまま踏襲する）:
+ * - 年集合が既存のどの系統とも食い違う（1200〜1900 の 14 年で、唯一 1815 以降
+ *   まで続く）。どれへ合流させてもレイヤー ID が実態を偽る。
+ * - hre-powers への合流は帰属の記述が壊れる。ハンガリー王国・クリミア・ハン国
+ *   などは帝国と無関係の主権政体で、SUBJECTO=Holy Roman Empire 前提の
+ *   レイヤーに混ぜられない。
+ * - 独立レイヤーの追加コストは PICKING_PRIORITY / UNDER_WATER_LAYER_IDS /
+ *   POWER_HIGHLIGHT_LAYER_IDS への各 1 行で、整合はいずれも既存の汎用テストが
+ *   そのまま検証する。
+ *
+ * PICKING_PRIORITY 上の位置は powers の直上（既存 5 系統の下）。主権政体は
+ * 既存オーバーレイと地理的にほぼ重ならないため相対順は表示・picking のどちらにも
+ * 影響しないが、「後から追加した層は最も影響の小さい最下段へ積む」既定
+ * （TASK-96 / TASK-110 / #172 と同じ判断）に従う。
+ */
+export const SOVEREIGN_FIEF_LAYER_ID = "sovereign-fiefs";
+
 /** 主要都市マーカー（ScatterplotLayer）のレイヤー ID（TASK-27） */
 export const CITY_LAYER_ID = "cities";
 
@@ -236,6 +258,7 @@ export const PICKING_PRIORITY: readonly string[] = [
   ITALY_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   BRITAIN_FIEF_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 ];
 

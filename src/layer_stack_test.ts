@@ -43,6 +43,7 @@ import {
   POWER_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 
 /** ベースマップ（Protomaps 羊皮紙スタイル）の実レイヤー id 列 */
@@ -66,7 +67,7 @@ Deno.test("WATER_STYLE_LAYER_ID はベースマップスタイルに実在する
   );
 });
 
-Deno.test("水面より下へ回すのは政治ポリゴン 6 枚のみ（TASK-80 で base 境界線は deck から外れた、TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦・#172 でブリテン諸島を追加）", () => {
+Deno.test("水面より下へ回すのは政治ポリゴン 7 枚のみ（TASK-80 で base 境界線は deck から外れた、TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦・#172 でブリテン諸島・#189 で主権政体を追加）", () => {
   // TASK-78 の base-outlines（deck の GeoJsonLayer）は TASK-80 で MapLibre の
   // line レイヤー（approximate-borders-*）へ移した。deck 側に線の層は無い。
   assertEquals(
@@ -78,8 +79,18 @@ Deno.test("水面より下へ回すのは政治ポリゴン 6 枚のみ（TASK-8
       HRE_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
       POWER_LAYER_ID,
+      SOVEREIGN_FIEF_LAYER_ID,
     ].sort(),
   );
+});
+
+Deno.test("主権政体の塗りも他の政治ポリゴンと同じ beforeId を得る（#189）", () => {
+  // バルト海・黒海・アドリア海・エーゲ海の海岸線が base と同じく海へはみ出す
+  // ため、水面の下へ回さないと海上に塗りが露出する（他の政治ポリゴンと同じ理由）
+  const ids = [WATER_INLAND_LAYER_ID, WATER_LAYER_ID];
+  const expected = underWaterBeforeId(POWER_LAYER_ID, ids);
+  assertEquals(underWaterBeforeId(SOVEREIGN_FIEF_LAYER_ID, ids), expected);
+  assertEquals(expected, WATER_LAYER_ID);
 });
 
 Deno.test("伊諸侯領の塗りも他の政治ポリゴンと同じ beforeId を得る（グループが分かれず相対順が保たれる。TASK-96）", () => {
@@ -466,6 +477,7 @@ Deno.test("beforeId の付与は picking 優先順（PICKING_PRIORITY）に影�
     ITALY_FIEF_LAYER_ID,
     CLIOPATRIA_FIEF_LAYER_ID,
     BRITAIN_FIEF_LAYER_ID,
+    SOVEREIGN_FIEF_LAYER_ID,
     POWER_LAYER_ID,
   ]);
 });

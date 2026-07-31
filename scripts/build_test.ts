@@ -236,6 +236,65 @@ Deno.test("getDataCopyTargets は britainFiefYears の britain_fiefs_flat をコ
   );
 });
 
+Deno.test("getDataCopyTargets は sovereignFiefYears の sovereign_fiefs_flat をコピー対象に含める（#189）", () => {
+  const targets = getDataCopyTargets(
+    "dist",
+    [1815],
+    [1815],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [1815, 1880],
+  );
+  assertEquals(
+    targets.filter((t) => t.from.includes("sovereign_fiefs_flat")),
+    [
+      {
+        from: "data/sovereign_fiefs_flat_1815.geojson",
+        to: "dist/data/sovereign_fiefs_flat_1815.geojson",
+      },
+      {
+        from: "data/sovereign_fiefs_flat_1880.geojson",
+        to: "dist/data/sovereign_fiefs_flat_1880.geojson",
+      },
+    ],
+  );
+  // OHM 由来の生データ（sovereign_fiefs_<year>）は派生データの入力なので
+  // dist に含めない
+  assertEquals(
+    targets.filter((t) => /sovereign_fiefs_\d/.test(t.from)),
+    [],
+  );
+  // #189: 1815 / 1880 / 1900 にも主権政体オーバーレイがあるため、二重塗り・
+  // 二重輪郭を解消する派生データ（base_outline / europe_flat）が主権政体の
+  // 年集合からも導出される
+  assertEquals(
+    targets.filter((t) =>
+      t.from.includes("base_outline") || t.from.includes("europe_flat")
+    ),
+    [
+      {
+        from: "data/base_outline_1815.geojson",
+        to: "dist/data/base_outline_1815.geojson",
+      },
+      {
+        from: "data/europe_flat_1815.geojson",
+        to: "dist/data/europe_flat_1815.geojson",
+      },
+      {
+        from: "data/base_outline_1880.geojson",
+        to: "dist/data/base_outline_1880.geojson",
+      },
+      {
+        from: "data/europe_flat_1880.geojson",
+        to: "dist/data/europe_flat_1880.geojson",
+      },
+    ],
+  );
+});
+
 Deno.test("getDataCopyTargets は base_outline を仏諸侯領年と HRE 領邦年の和集合で出す（TASK-86 AC #3）", () => {
   const targets = getDataCopyTargets(
     "dist",

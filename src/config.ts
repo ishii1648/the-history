@@ -273,12 +273,57 @@ export const BRITAIN_FIEF_OVERLAY_YEARS: readonly number[] = [
 ];
 
 /**
+ * 主権政体オーバーレイ（sovereign_fiefs_flat_<year>.geojson）が存在する年代
+ * （昇順、#189）。出典は OpenHistoricalMap（CC0）。
+ *
+ * scripts/build-sovereign-fiefs.ts の SOVEREIGN_FIEF_YEARS と同値（src →
+ * scripts の import は行わない規約のため値を重複定義し、同値性は
+ * build-sovereign-fiefs_test.ts で担保する）。
+ *
+ * base が近世以降のオスマン領・ハプスブルク領を一枚岩で塗るために現れない
+ * 主権政体（オスマン宗主下のワラキア公国・クリミア・ハン国・ラグーザ共和国、
+ * ハプスブルク統治下のハンガリー王国（1783〜1815）・トランシルヴァニア、
+ * ロシア帝国内のフィンランド大公国など）と、特定年だけの退行（1200 年の
+ * セルビア・1400 年のモスクワ大公国）・誤帰属（1880 年のクレタ = Bulgaria
+ * 塗り）を補完する。オスマン期（1530〜1715 年）のハンガリー王国は OHM の
+ * リレーションが label ノードのみで面を組めず補完できない
+ * （data/known-limitations.json に明示）。
+ * 収録するのは「その年の base に無い政体」だけで、base が同じ政体を個別収録
+ * する年は生成段階（excludedYears）で除外済み。二重塗り・重複ラベルは
+ * 構造的に生じない。
+ *
+ * 既存 5 系統と違い **1815〜1900 年も対象**に含む（フィンランド大公国・
+ * 東ルメリ自治州・クレタ）。これにより BASE_OUTLINE_YEARS（派生データの
+ * 年集合）が 1815 / 1880 / 1900 へ広がる。1914 年は base が Finland ほか
+ * 後継の主権国家を個別収録するため含めない。
+ */
+export const SOVEREIGN_FIEF_OVERLAY_YEARS: readonly number[] = [
+  1200,
+  1400,
+  1492,
+  1500,
+  1530,
+  1600,
+  1650,
+  1700,
+  1715,
+  1783,
+  1800,
+  1815,
+  1880,
+  1900,
+];
+
+/**
  * base 境界線オーバーレイ（base_outline_<year>.geojson）が存在する年代
- * （昇順、TASK-78/86/96、#172）。諸侯領・領邦オーバーレイのいずれかがある年、
- * すなわち FRANCE_FIEF_OVERLAY_YEARS ∪ HRE_FIEF_OVERLAY_YEARS ∪
- * ITALY_FIEF_OVERLAY_YEARS ∪ BRITAIN_FIEF_OVERLAY_YEARS。
+ * （昇順、TASK-78/86/96、#172、#189）。諸侯領・領邦・主権政体オーバーレイの
+ * いずれかがある年、すなわち FRANCE_FIEF_OVERLAY_YEARS ∪
+ * HRE_FIEF_OVERLAY_YEARS ∪ ITALY_FIEF_OVERLAY_YEARS ∪
+ * BRITAIN_FIEF_OVERLAY_YEARS ∪ SOVEREIGN_FIEF_OVERLAY_YEARS。
  * #172 でブリテン諸島（1000〜1700）が加わり、近世（1500〜1700）にも派生データ
- * （base_outline_* / europe_flat_*）が生成されるようになった。
+ * （base_outline_* / europe_flat_*）が生成されるようになった。#189 の
+ * 主権政体オーバーレイで 1815 / 1880 / 1900 も対象になり、全 18 年
+ * （1914 以外の全スナップショット年）が派生データを持つ。
  *
  * この派生データは「base ポリゴンの環のうちオーバーレイ union の外側だけ」を
  * 持つため、オーバーレイがある年は base の輪郭がオーバーレイの内側を走らなくなる
@@ -299,6 +344,7 @@ export const BASE_OUTLINE_YEARS: readonly number[] = [
     ...HRE_FIEF_OVERLAY_YEARS,
     ...ITALY_FIEF_OVERLAY_YEARS,
     ...BRITAIN_FIEF_OVERLAY_YEARS,
+    ...SOVEREIGN_FIEF_OVERLAY_YEARS,
   ]),
 ].sort((a, b) => a - b);
 

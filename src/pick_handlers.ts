@@ -41,6 +41,7 @@ import {
   PICKING_RADIUS_PX,
   POWER_LAYER_ID,
   resolveClickPick,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 import { EMPTY_FEATURE_COLLECTION, powerFillDataFor } from "./powers.ts";
 import { memoizeLatest } from "./memo.ts";
@@ -139,6 +140,7 @@ export interface PickYearView {
   italyFiefs: FeatureCollection;
   cliopatriaFiefs: FeatureCollection;
   britainFiefs: FeatureCollection;
+  sovereignFiefs: FeatureCollection;
 }
 
 /**
@@ -271,7 +273,8 @@ export function createPickHandlers(deps: PickHandlerDeps) {
       layerId === POWER_LAYER_ID || layerId === HRE_LAYER_ID ||
       layerId === FRANCE_FIEF_LAYER_ID || layerId === ITALY_FIEF_LAYER_ID ||
       layerId === CLIOPATRIA_FIEF_LAYER_ID ||
-      layerId === BRITAIN_FIEF_LAYER_ID
+      layerId === BRITAIN_FIEF_LAYER_ID ||
+      layerId === SOVEREIGN_FIEF_LAYER_ID
     ) {
       // TASK-71/96: フランス諸侯領・イタリア諸侯領は SUBJECTO を持たないため
       // displayLabel は NAME の日本語表記（称号付き）をそのまま返す
@@ -280,6 +283,7 @@ export function createPickHandlers(deps: PickHandlerDeps) {
       // HRE 領邦と同じく「宗主国込み」の表記になる（displayLabel の既存規則）
       // #172: ブリテン諸島の政体も SUBJECTO を持たず、独立主権政体として
       // 宗主なしの NAME 表記になる
+      // #189: 主権政体オーバーレイも同様（SUBJECTO なしの NAME 表記）
       return displayLabel(
         feature.properties,
         deps.getOverrides().renames,
@@ -338,6 +342,11 @@ export function createPickHandlers(deps: PickHandlerDeps) {
     // （britain_fiefs_flat_* の metadata。AC #5 の出典・ライセンス表示）。
     if (layerId === BRITAIN_FIEF_LAYER_ID) {
       return collectionMetadata(currentView.britainFiefs);
+    }
+    // #189: 主権政体オーバーレイもレイヤー単位で OHM（CC0）の出典を引く
+    // （sovereign_fiefs_flat_* の metadata）。
+    if (layerId === SOVEREIGN_FIEF_LAYER_ID) {
+      return collectionMetadata(currentView.sovereignFiefs);
     }
     return undefined;
   }
