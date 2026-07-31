@@ -1,28 +1,12 @@
 import maplibregl from "maplibre-gl";
-import type {
-  GeoJSONSource,
-  GeoJSONSourceSpecification,
-  LayerSpecification,
-  StyleSpecification,
-} from "maplibre-gl";
+import type { StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol } from "pmtiles";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Layer } from "@deck.gl/core";
 import type { Feature, FeatureCollection } from "geojson";
 import { buildBasemapStyle, shouldEnableHillshade } from "./basemap.ts";
-import {
-  approximateBorderBeforeId,
-  approximateBorderStackIsValid,
-  overlaySplitIsValid,
-  waterStackIsValid,
-} from "./layer_stack.ts";
-import {
-  APPROXIMATE_BORDER_SOURCE_ID,
-  approximateBorderLayerSpecs,
-  approximateBorderSourceSpec,
-  buildApproximateBorderData,
-  EMPTY_APPROXIMATE_BORDER_DATA,
-} from "./approximate_borders.ts";
+import { overlaySplitIsValid, waterStackIsValid } from "./layer_stack.ts";
+import { createApproximateBorderSync } from "./approximate_border_sync.ts";
 import {
   type BasemapErrorEvent,
   createFallbackState,
@@ -66,7 +50,6 @@ import {
   type SuzerainOverrides,
   withSuzerainOverrides,
 } from "./suzerain_extent.ts";
-import { memoizeLatest } from "./memo.ts";
 import type { CitiesData } from "./cities.ts";
 import {
   clearErrors,
@@ -274,15 +257,24 @@ map.on("error", (event) => {
 
 // TASK-80: 概略境界（MapLibre の line レイヤー）はスタイル側の状態なので、
 // スタイルが変わるたびに「存在するか・重ね順が正しいか」を確認して追いつかせる。
-// 具体的には (1) 起動時のスタイル読み込み、(2) OpenFreeMap へのフォールバック
-// （setStyle で source ごと消える）、(3) deck.gl が interleaved のレイヤー
-// グループを追加し直したとき（概略境界が塗りの下へ潜る）を拾う。
-// このハンドラ自身の addSource / addLayer も styledata を再発火させるが、
-// syncApproximateBorders は「すでに正しい」状態では何も変更しないため数回で
-// 収束する（概略境界を無条件に moveLayer で引き上げる実装にすると、deck.gl が
-// styledata でレイヤーグループを再挿入するのと無限に競合する。詳細は
-// layer_stack.ts の underWaterBeforeId）。
-map.on("styledata", syncApproximateBorders);
+// 同期本体・描画データのメモ化・再入ガード・styledata 購読の組み立ては
+// src/approximate_border_sync.ts へ抽出した（TASK-150）。状態の所有のうち
+// 「直近に反映した描画データ」だけはファクトリの closure が持ち（decision-29 の
+// U7 で許された例外）、map への操作・スタイルのレイヤー ID 列・currentView・
+// renderLayers への逆参照はここから getter / コールバックで注入する。
+// currentView / renderLayers はこの時点では未確定・未定義だが、closure が
+// 呼ばれるのはスタイルイベント・年代切替時なので安全に遅延参照できる。
+const approximateBorderSync = createApproximateBorderSync({
+  getStyleLayerIds: currentStyleLayerIds,
+  getSource: (id) => map.getSource(id),
+  addSource: (id, spec) => map.addSource(id, spec),
+  getLayer: (id) => map.getLayer(id),
+  addLayer: (spec, beforeId) => map.addLayer(spec, beforeId),
+  onStyleData: (listener) => map.on("styledata", listener),
+  hasCurrentView: () => currentView !== null,
+  requestRender: () => renderLayers(),
+  warn: (message) => console.warn(message),
+});
 
 // ---- 勢力圏ポリゴンレイヤー（TASK-5, docs/app-spec.md §3.3, §4.3）----
 
@@ -680,90 +672,10 @@ function politicalLayerContext(year: number): PoliticalLayerContext {
   };
 }
 
-/**
- * base 勢力の境界線（概略境界）の描画データをメモ化する（TASK-80）。
- *
- * 入力は「諸侯領オーバーレイ対象年（1000〜1300）なら TASK-78 の派生 base 輪郭
- * （outlines。諸侯領 union の外側だけに切り出した LineString 群）、それ以外の年
- * なら base 勢力ポリゴンの環」。前者を優先することで TASK-78 の二重輪郭解消
- * （諸侯領の内側を走る base 境界線を描かない）はそのまま維持される。
- *
- * memoizeLatest で包む理由は buildLabelData と同じ: applyRiverHover /
- * applyExtentKey / ズーム段の変化は currentView を差し替えずに renderLayers()
- * を呼ぶため、同じ参照が渡り続けてセグメント分割（1 年あたり 5〜7 千セグメント）
- * を再計算しない。年代切替でだけ参照が変わって再計算される。
- */
-const memoizedApproximateBorderData = memoizeLatest(
-  (base: FeatureCollection, outlines: FeatureCollection) =>
-    buildApproximateBorderData(
-      outlines.features.length > 0 ? outlines : base,
-    ),
-);
-
-/**
- * 直近に反映した概略境界の描画データ（TASK-80）。スタイル差し替え
- * （OpenFreeMap へのフォールバック）で source ごと消えた後の再登録や、
- * styledata 経由の位置再調整で「今描くべきデータ」を参照するために持つ。
- */
-let approximateBorderData: FeatureCollection = EMPTY_APPROXIMATE_BORDER_DATA;
-
-/**
- * 概略境界（MapLibre の line レイヤー 3 枚）をスタイルへ反映する（TASK-80）。
- *
- * MapLibre 側に持つ理由: deck.gl の GeoJsonLayer / PathLayer には blur も破線も
- * 無く、「にじんだ低 alpha の帯」を描けない（詳細は approximate_borders.ts）。
- *
- * 位置は海洋の水面（water）の直下。政治ポリゴンの塗りとの前後は deck 側の
- * beforeId が決める（underWaterBeforeId が概略境界の最下段を指すため、deck は
- * 自分のグループを概略境界の直下へ入れ直す）。deck レイヤーは構築時の props を
- * 持ち回るので、概略境界がまだ無い時点で作られた deck レイヤーは beforeId が
- * water のまま = 塗りが線の上に来る。その場合だけ renderLayers() で deck
- * レイヤーを作り直させる（順序が既に正しければ何もしないため、styledata の
- * 再発火は数回で収束する）。
- *
- * スタイル未読込・差し替え中は何もしない（styledata / renderLayers から
- * 何度でも呼ばれるので、次の機会に追いつく）。例外は握りつぶす: 概略境界が
- * 描けないことは地図全体を落とす理由にならない。
- */
-let syncingApproximateBorders = false;
-function syncApproximateBorders(): void {
-  // renderLayers → syncApproximateBorders → renderLayers の再入を止める
-  if (syncingApproximateBorders) return;
-  syncingApproximateBorders = true;
-  try {
-    const styleLayerIds = currentStyleLayerIds();
-    if (styleLayerIds.length === 0) return;
-    const source = map.getSource(APPROXIMATE_BORDER_SOURCE_ID);
-    if (source === undefined) {
-      map.addSource(
-        APPROXIMATE_BORDER_SOURCE_ID,
-        approximateBorderSourceSpec(
-          approximateBorderData,
-        ) as GeoJSONSourceSpecification,
-      );
-    } else {
-      (source as GeoJSONSource).setData(approximateBorderData);
-    }
-    const beforeId = approximateBorderBeforeId(styleLayerIds);
-    for (const spec of approximateBorderLayerSpecs()) {
-      if (map.getLayer(spec.id) === undefined) {
-        map.addLayer(spec as unknown as LayerSpecification, beforeId);
-      }
-    }
-    // 追加後の実際の順序を見て、塗りが線の上に来ていたら deck レイヤーを
-    // 作り直す（buildPowerLayer が beforeId を概略境界の直下へ再計算する）
-    if (
-      currentView !== null &&
-      !approximateBorderStackIsValid(currentStyleLayerIds())
-    ) {
-      renderLayers();
-    }
-  } catch (error) {
-    console.warn(`概略境界レイヤーの反映に失敗しました: ${String(error)}`);
-  } finally {
-    syncingApproximateBorders = false;
-  }
-}
+// 概略境界の同期本体（旧 syncApproximateBorders）・メモ化
+// （memoizedApproximateBorderData）・再入ガードは src/approximate_border_sync.ts
+// へ移した（TASK-150）。ファクトリ生成（approximateBorderSync）は styledata
+// 購読の組み立てと同じ場所（上の map 配線部）で行う。
 
 /**
  * 現在の年代データ + 河川 + 都市 + ラベルの全レイヤーを組み立てて overlay へ
@@ -943,9 +855,9 @@ function renderLayers(): void {
   labelOverlay.setProps({ layers: labelLayers });
   // TASK-80: base の境界線（概略境界）は MapLibre 側の line レイヤー。deck の
   // レイヤー反映後に同期することで、deck がグループを追加し直した場合でも
-  // 概略境界が塗りの上に来る位置へ引き上げられる。
-  approximateBorderData = memoizedApproximateBorderData(base, outlines);
-  syncApproximateBorders();
+  // 概略境界が塗りの上に来る位置へ引き上げられる（メモ化 + 同期の実体は
+  // approximate_border_sync.ts。TASK-150）。
+  approximateBorderSync.apply(base, outlines);
 }
 
 // 勢力名ラベル builder（buildLabelLayer + memoizedPowerLabelData /
@@ -1214,7 +1126,9 @@ installDebugHooks({
   getMountainsData: () => mountainsData,
   getPeaksData: () => peaksData,
   getRiversData: () => riversData,
-  getApproximateBorderData: () => approximateBorderData,
+  // TASK-150: 概略境界の描画データは approximate_border_sync.ts の closure が
+  // 所有する。読み取り用 getter を渡し、フックが常に現在値を読めるようにする。
+  getApproximateBorderData: approximateBorderSync.data,
   // TASK-149: 選択/ホバー状態は pick_handlers.ts の closure が所有する。
   // getter をそのまま渡し、フックが常に現在値を読めるようにする。
   getHoveredRiverName: pickHandlers.hoveredRiverName,
