@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(backlog *)",
       "Bash(gh pr merge *)",
       "Bash(gh issue list)",
       "Bash(gh issue list *)",
