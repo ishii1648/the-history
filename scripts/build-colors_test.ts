@@ -9,6 +9,7 @@ import {
   assignColor,
   assignColorHsl,
   buildColorMap,
+  buildColorMapAdditive,
   compositeKey,
   deriveSubjectColor,
   deriveSubjectColorHsl,
@@ -16,12 +17,14 @@ import {
   hslToHex,
   INDEPENDENT_SUBJECT_SUZERAINS,
   LIGHTNESSES,
+  loadYearCollections,
   PALETTE_SIZE,
   paletteHslForIndex,
   probeAssignSlots,
   SATURATIONS,
   shiftLightnessForSubject,
   SUBJECT_LIGHTNESS_SHIFT,
+  type YearCollection,
 } from "./build-colors.ts";
 import colorsJson from "../data/colors.json" with { type: "json" };
 
@@ -496,6 +499,199 @@ Deno.test("buildColorMap: feature の順序に依存せず同一結果を返す�
     buildColorMap([fc2], {
       renames: {},
     }),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 差分追加モード（Issue #193）: data/colors.json をスナップショット正とし、
+// 既存キーの色は変えず、新キーのみ fnv1a 自然スロット + 線形プロービング
+// （同年非衝突制約）で追加する。#172 の追加限定方式の正式化。
+// ---------------------------------------------------------------------------
+
+/** パレットのスロット番号から HEX を得る（テスト用ヘルパ） */
+function paletteHexAt(slot: number): string {
+  const { h, s, l } = paletteHslForIndex(slot);
+  return hslToHex(h, s, l);
+}
+
+/** year 1 件ぶんの YearCollection を組み立てる */
+function yearCollection(
+  year: number,
+  features: Array<ReturnType<typeof feature>>,
+): YearCollection {
+  return { year, collection: collection(features) };
+}
+
+Deno.test("buildColorMapAdditive: 既存キーの色をバイト単位で変えない（スナップショット正）", () => {
+  // スナップショットの色は「現行 build ならこうはならない」恣意的な値でも保持される
+  const snapshot = {
+    "France": "#123456",
+    "Naples|Aragon": "#abcdef",
+  };
+  const ycs = [
+    yearCollection(1000, [
+      feature({ NAME: "France", SUBJECTO: null }),
+      feature({ NAME: "Naples", SUBJECTO: "Aragon" }),
+      feature({ NAME: "Newland", SUBJECTO: null }),
+    ]),
+  ];
+  const map = buildColorMapAdditive(snapshot, ycs, { renames: {} });
+  assertEquals(map["France"], "#123456");
+  assertEquals(map["Naples|Aragon"], "#abcdef");
+  // 新キーは追加される
+  assert("Newland" in map);
+});
+
+Deno.test("buildColorMapAdditive: 新キーは同年衝突がなければ fnv1a 自然スロットの色になる", () => {
+  const ycs = [
+    yearCollection(1000, [feature({ NAME: "Newland", SUBJECTO: null })]),
+  ];
+  const map = buildColorMapAdditive({}, ycs, { renames: {} });
+  assertEquals(map["Newland"], assignColor("Newland"));
+});
+
+Deno.test("buildColorMapAdditive: 同年に同色の既存キーがあれば次スロットへプロービングする", () => {
+  const natural = fnv1a("Newland") % PALETTE_SIZE;
+  const snapshot = { "Oldland": paletteHexAt(natural) };
+  const ycs = [
+    yearCollection(1000, [
+      feature({ NAME: "Oldland", SUBJECTO: null }),
+      feature({ NAME: "Newland", SUBJECTO: null }),
+    ]),
+  ];
+  const map = buildColorMapAdditive(snapshot, ycs, { renames: {} });
+  assertEquals(map["Oldland"], paletteHexAt(natural));
+  assertEquals(map["Newland"], paletteHexAt((natural + 1) % PALETTE_SIZE));
+});
+
+Deno.test("buildColorMapAdditive: 別年の同色キーはブロックしない（パレット再利用・#172 実測と同型）", () => {
+  const natural = fnv1a("Newland") % PALETTE_SIZE;
+  const snapshot = { "Oldland": paletteHexAt(natural) };
+  const ycs = [
+    yearCollection(1000, [feature({ NAME: "Oldland", SUBJECTO: null })]),
+    yearCollection(1100, [feature({ NAME: "Newland", SUBJECTO: null })]),
+  ];
+  const map = buildColorMapAdditive(snapshot, ycs, { renames: {} });
+  // 年代が交差しないので自然スロットの色をそのまま再利用できる
+  assertEquals(map["Newland"], paletteHexAt(natural));
+  assertEquals(map["Newland"], map["Oldland"]);
+});
+
+Deno.test("buildColorMapAdditive: 新キー同士も同年では相異なる色になる", () => {
+  // Newland と自然スロットが衝突する別名を決定的に探す
+  const natural = fnv1a("Newland") % PALETTE_SIZE;
+  let other = "";
+  for (let i = 0; i < 100000; i++) {
+    const cand = `cand-${i}`;
+    if (cand !== "Newland" && fnv1a(cand) % PALETTE_SIZE === natural) {
+      other = cand;
+      break;
+    }
+  }
+  assert(other !== "", "自然スロットが衝突する名前が見つからない");
+  const ycs = [
+    yearCollection(1000, [
+      feature({ NAME: "Newland", SUBJECTO: null }),
+      feature({ NAME: other, SUBJECTO: null }),
+    ]),
+  ];
+  const map = buildColorMapAdditive({}, ycs, { renames: {} });
+  assert(map["Newland"] !== map[other]);
+  // ソート順で先の名前が自然スロットを取り、後の名前が +1 になる
+  const first = [other, "Newland"].sort()[0];
+  assertEquals(map[first], paletteHexAt(natural));
+});
+
+Deno.test("buildColorMapAdditive: 新しい属領キーはスナップショットの宗主色をパレット逆引きして明度シフトする", () => {
+  // 宗主のスナップショット色は自然スロットではなく任意のパレットスロット
+  // （プロービング後の実表示色）でも、その色から派生する
+  const suzerainSlot = 5;
+  const snapshot = { "Aragon": paletteHexAt(suzerainSlot) };
+  const ycs = [
+    yearCollection(1000, [
+      feature({ NAME: "Aragon", SUBJECTO: null }),
+      feature({ NAME: "Naples", SUBJECTO: "Aragon" }),
+    ]),
+  ];
+  const map = buildColorMapAdditive(snapshot, ycs, { renames: {} });
+  const shifted = shiftLightnessForSubject(paletteHslForIndex(suzerainSlot));
+  assertEquals(
+    map["Naples|Aragon"],
+    hslToHex(shifted.h, shifted.s, shifted.l),
+  );
+});
+
+Deno.test("buildColorMapAdditive: 現行データに無いキー（900 年由来等）は既定で保持する", () => {
+  const snapshot = { "Carolingian Empire": "#111111", "France": "#222222" };
+  const ycs = [
+    yearCollection(1000, [feature({ NAME: "France", SUBJECTO: null })]),
+  ];
+  const map = buildColorMapAdditive(snapshot, ycs, { renames: {} });
+  assertEquals(map["Carolingian Empire"], "#111111");
+  assertEquals(map["France"], "#222222");
+});
+
+Deno.test("buildColorMapAdditive: prune オプションで現行データに無いキーだけを取り除く", () => {
+  const snapshot = { "Carolingian Empire": "#111111", "France": "#222222" };
+  const ycs = [
+    yearCollection(1000, [feature({ NAME: "France", SUBJECTO: null })]),
+  ];
+  const map = buildColorMapAdditive(snapshot, ycs, { renames: {} }, new Set(), {
+    prune: true,
+  });
+  assert(!("Carolingian Empire" in map));
+  assertEquals(map["France"], "#222222");
+});
+
+Deno.test("buildColorMapAdditive: feature / 年の入力順に依存せず同一結果を返す（決定性）", () => {
+  const snapshot = { "France": "#123456" };
+  const a = [
+    yearCollection(1000, [
+      feature({ NAME: "France", SUBJECTO: null }),
+      feature({ NAME: "Newland", SUBJECTO: null }),
+      feature({ NAME: "Otherland", SUBJECTO: null }),
+    ]),
+    yearCollection(1100, [feature({ NAME: "Thirdland", SUBJECTO: null })]),
+  ];
+  const b = [
+    yearCollection(1100, [feature({ NAME: "Thirdland", SUBJECTO: null })]),
+    yearCollection(1000, [
+      feature({ NAME: "Otherland", SUBJECTO: null }),
+      feature({ NAME: "Newland", SUBJECTO: null }),
+      feature({ NAME: "France", SUBJECTO: null }),
+    ]),
+  ];
+  assertEquals(
+    buildColorMapAdditive(snapshot, a, { renames: {} }),
+    buildColorMapAdditive(snapshot, b, { renames: {} }),
+  );
+});
+
+Deno.test("buildColorMapAdditive: 実データに対して colors.json を一切変えない（ドリフト検出・#193 AC3）", async () => {
+  // 現行の全年代データ + colors.json スナップショットで差分追加を実行しても、
+  // 新キーが無い限り出力はスナップショットとバイト単位で一致する。
+  // これが崩れたら「build-colors の出力と colors.json が乖離した」ことを意味する。
+  const ycs = await loadYearCollections();
+  const overridesRaw = JSON.parse(
+    await Deno.readTextFile("data/name-overrides.json"),
+  );
+  const snapshot = colorsJson as Record<string, string>;
+  const map = buildColorMapAdditive(
+    snapshot,
+    ycs,
+    {
+      renames: overridesRaw.renames ?? {},
+      suzerains: overridesRaw.suzerains ?? {},
+    },
+    INDEPENDENT_SUBJECT_SUZERAINS,
+  );
+  assertEquals(map, snapshot);
+  // 直列化（キーのソート）まで含めてファイルと一致する = 実行しても diff ゼロ
+  const sorted: Record<string, string> = {};
+  for (const key of Object.keys(map).sort()) sorted[key] = map[key];
+  assertEquals(
+    `${JSON.stringify(sorted, null, 2)}\n`,
+    await Deno.readTextFile("data/colors.json"),
   );
 });
 

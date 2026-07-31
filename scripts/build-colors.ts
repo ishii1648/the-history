@@ -7,6 +7,14 @@
  * - data/colors.json を生成する。クライアントは NAME（属領は "NAME|SUBJECTO"）で
  *   O(1) 参照するのみ（実行時のハッシュ計算・色衝突の揺れを避ける）。
  *
+ * 差分追加モード（Issue #193）:
+ * 既存の data/colors.json を「スナップショット正」として読み込み、既存キーの色は
+ * 一切変えず、現行データに現れた新キーだけを決定的規則（fnv1a 自然スロット +
+ * 線形プロービング + 同年非衝突制約）で追加する。全量再生成（buildColorMap）は
+ * プロービング連鎖のずれで既存キーが大量に変色するため（#172 実測で 92 キー）、
+ * colors.json が存在しない bootstrap 時のみ使う。現行データに存在しなくなった
+ * キー（900 年廃止由来等）は既定で保持し、--prune 指定時のみ取り除く。
+ *
  * ロジックは純粋関数として export しテスト対象にする（scripts/build-colors_test.ts）。
  * 参照仕様: docs/app-spec.md §4.3
  */
@@ -248,6 +256,36 @@ interface ColorEntry {
 }
 
 /**
+ * 1 feature ぶんの割当情報を組み立てる（純粋関数）。
+ * buildColorMap（全量生成）と buildColorMapAdditive（差分追加）で共有する
+ * キー・ベース勢力・属領判定の単一の真実。NAME が無い feature は null。
+ */
+function entryForFeature(
+  props: Record<string, unknown> | null | undefined,
+  overrides: NameOverrides,
+  independentSubjectSuzerains: ReadonlySet<string>,
+): ColorEntry | null {
+  const name = stringProp(props, "NAME");
+  if (name === null) return null;
+  const subjecto = effectiveSubjecto(name, props, overrides);
+  const key = compositeKey(name, subjecto);
+  if (subjecto !== null && subjecto !== name) {
+    const suzerain = overrides.renames[subjecto] ?? subjecto;
+    // suzerains 補正済みの値は既に正規化されているので renames は no-op
+    if (suzerain === name) {
+      // 補正前綴りの自己参照 → 属領扱いせずベース色
+      return { key, baseName: name, subject: false };
+    }
+    if (independentSubjectSuzerains.has(suzerain)) {
+      // 独立色にする宗主国（HRE 等）配下 → NAME ベースの独立プロービング色
+      return { key, baseName: name, subject: false };
+    }
+    return { key, baseName: suzerain, subject: true };
+  }
+  return { key, baseName: name, subject: false };
+}
+
+/**
  * 「属領でも独立色にする宗主国名」の既定集合（TASK-19）。
  * HRE 領邦オーバーレイ（data/hre_<year>.geojson）は全 feature が
  * SUBJECTO="Holy Roman Empire" のため、従来の「宗主国色の明度シフト」では
@@ -280,32 +318,15 @@ export function buildColorMap(
   const baseNames = new Set<string>();
   for (const fc of collections) {
     for (const f of fc.features) {
-      const props = f.properties as Record<string, unknown> | null;
-      const name = stringProp(props, "NAME");
-      if (name === null) continue;
-      const subjecto = effectiveSubjecto(name, props, overrides);
-      const key = compositeKey(name, subjecto);
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-      if (subjecto !== null && subjecto !== name) {
-        const suzerain = overrides.renames[subjecto] ?? subjecto;
-        // suzerains 補正済みの値は既に正規化されているので renames は no-op
-        if (suzerain === name) {
-          // 補正前綴りの自己参照 → 属領扱いせずベース色
-          entries.push({ key, baseName: name, subject: false });
-          baseNames.add(name);
-        } else if (independentSubjectSuzerains.has(suzerain)) {
-          // 独立色にする宗主国（HRE 等）配下 → NAME ベースの独立プロービング色
-          entries.push({ key, baseName: name, subject: false });
-          baseNames.add(name);
-        } else {
-          entries.push({ key, baseName: suzerain, subject: true });
-          baseNames.add(suzerain);
-        }
-      } else {
-        entries.push({ key, baseName: name, subject: false });
-        baseNames.add(name);
-      }
+      const entry = entryForFeature(
+        f.properties as Record<string, unknown> | null,
+        overrides,
+        independentSubjectSuzerains,
+      );
+      if (entry === null || seenKeys.has(entry.key)) continue;
+      seenKeys.add(entry.key);
+      entries.push(entry);
+      baseNames.add(entry.baseName);
     }
   }
 
@@ -320,6 +341,219 @@ export function buildColorMap(
     map[key] = hslToHex(hsl.h, hsl.s, hsl.l);
   }
   return map;
+}
+
+/** 年 1 つぶんのコレクション。差分追加モードの「同年非衝突制約」の単位 */
+export interface YearCollection {
+  year: number;
+  collection: FeatureCollection;
+}
+
+/** buildColorMapAdditive のオプション */
+export interface AdditiveOptions {
+  /**
+   * true のとき、現行データに存在しなくなったスナップショットのキー
+   * （900 年廃止由来等）を出力から取り除く。既定 false（保持）。
+   * クライアントは colors.json に無いキーをデフォルト色で縮退させるため
+   * 削除自体は安全だが、既定は「実行しても diff ゼロ」を優先する。
+   */
+  prune?: boolean;
+}
+
+/** パレット全 288 色の HEX → スロット番号の逆引きマップ（全 HEX は一意） */
+function paletteHexToSlot(): Map<string, number> {
+  const map = new Map<string, number>();
+  for (let i = 0; i < PALETTE_SIZE; i++) {
+    const { h, s, l } = paletteHslForIndex(i);
+    map.set(hslToHex(h, s, l), i);
+  }
+  return map;
+}
+
+/** HEX → HSL の数値変換。パレット逆引きで解決できない色（派生色等）の縮退用 */
+function hexToHsl(hex: string): Hsl {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const l = (max + min) / 2;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  return { h, s, l };
+}
+
+/**
+ * 差分追加モード（Issue #193・#172 追加限定方式の正式化）。純粋関数。
+ *
+ * snapshot（既存 data/colors.json）を正とし、既存キーの色は一切変えない。
+ * 現行データに現れた新キーだけを次の決定的規則で追加する:
+ * - 新しいベース勢力名は fnv1a の自然スロットを起点に線形プロービング（+1, mod）。
+ *   制約は「同年非衝突」: その勢力が現れるいずれかの年に既に表示される色とは
+ *   同色にしない。年が交差しない既存色との一致（パレット再利用）は許容する
+ *   （パレット 288 色はほぼ使用済みのため、全域一意は構造的に成立しない）。
+ * - 新しい属領キーは、宗主国のスナップショット色をパレット逆引きして HSL に
+ *   戻し、明度シフトで派生させる（宗主国の実表示色と同色相ファミリー）。
+ * - 全候補が同年衝突する場合のみ自然スロットへ縮退する（決定性を優先）。
+ * 入力順に依存しない（キー・ベース名ともソート順に処理する）。
+ */
+export function buildColorMapAdditive(
+  snapshot: ColorMap,
+  yearCollections: YearCollection[],
+  overrides: NameOverrides,
+  independentSubjectSuzerains: ReadonlySet<string> = new Set(),
+  options: AdditiveOptions = {},
+): ColorMap {
+  // 第 1 パス: 現行データのキー → 割当情報・出現年集合を収集する。
+  const entryByKey = new Map<string, ColorEntry>();
+  const yearsByKey = new Map<string, Set<number>>();
+  for (const { year, collection } of yearCollections) {
+    for (const f of collection.features) {
+      const entry = entryForFeature(
+        f.properties as Record<string, unknown> | null,
+        overrides,
+        independentSubjectSuzerains,
+      );
+      if (entry === null) continue;
+      if (!entryByKey.has(entry.key)) entryByKey.set(entry.key, entry);
+      let years = yearsByKey.get(entry.key);
+      if (years === undefined) {
+        years = new Set<number>();
+        yearsByKey.set(entry.key, years);
+      }
+      years.add(year);
+    }
+  }
+
+  // 第 2 パス: スナップショットの既存キーを無条件で引き継ぐ（prune 時は
+  // 現行データに存在するキーのみ）。
+  const result: ColorMap = {};
+  for (const key of Object.keys(snapshot)) {
+    if (options.prune === true && !entryByKey.has(key)) continue;
+    result[key] = snapshot[key];
+  }
+
+  // 第 3 パス: 年 → その年に表示される既存色の集合（同年非衝突制約の判定材料）。
+  const colorsByYear = new Map<number, Set<string>>();
+  const addYearColor = (year: number, hex: string) => {
+    let colors = colorsByYear.get(year);
+    if (colors === undefined) {
+      colors = new Set<string>();
+      colorsByYear.set(year, colors);
+    }
+    colors.add(hex);
+  };
+  for (const [key, years] of yearsByKey) {
+    const hex = result[key];
+    if (hex === undefined) continue;
+    for (const year of years) addYearColor(year, hex);
+  }
+
+  const hexToSlot = paletteHexToSlot();
+  const newKeys = [...entryByKey.keys()].filter((key) => !(key in result))
+    .sort();
+
+  // 第 4 パス: 新キーが参照するベース勢力名の HSL を解決する。
+  // 既存の実表示色（プロービング後）から逆引きし、無ければ新規にプロービングする。
+  const baseHslByName = new Map<string, Hsl>();
+  const resolveFromExisting = (baseName: string): Hsl | null => {
+    // ① ベース勢力名そのものの独立キー
+    const direct = result[baseName];
+    if (direct !== undefined) {
+      const slot = hexToSlot.get(direct);
+      return slot !== undefined ? paletteHslForIndex(slot) : hexToHsl(direct);
+    }
+    // ② 同じベース勢力名を持つ既存のベース色キー（複合キーの独立色等）
+    for (const key of Object.keys(result).sort()) {
+      const entry = entryByKey.get(key);
+      if (entry === undefined || entry.subject || entry.baseName !== baseName) {
+        continue;
+      }
+      const hex = result[key];
+      const slot = hexToSlot.get(hex);
+      return slot !== undefined ? paletteHslForIndex(slot) : hexToHsl(hex);
+    }
+    return null;
+  };
+
+  // 新規プロービングが必要なベース勢力名と、その制約材料（出現年・用途）を集める。
+  const pending = new Map<
+    string,
+    { years: Set<number>; baseUse: boolean; subjectUse: boolean }
+  >();
+  for (const key of newKeys) {
+    const entry = entryByKey.get(key)!;
+    if (baseHslByName.has(entry.baseName)) continue;
+    const existing = resolveFromExisting(entry.baseName);
+    if (existing !== null) {
+      baseHslByName.set(entry.baseName, existing);
+      continue;
+    }
+    let info = pending.get(entry.baseName);
+    if (info === undefined) {
+      info = { years: new Set<number>(), baseUse: false, subjectUse: false };
+      pending.set(entry.baseName, info);
+    }
+    for (const year of yearsByKey.get(key) ?? []) info.years.add(year);
+    if (entry.subject) info.subjectUse = true;
+    else info.baseUse = true;
+  }
+
+  for (const baseName of [...pending.keys()].sort()) {
+    const info = pending.get(baseName)!;
+    const start = fnv1a(baseName) % PALETTE_SIZE;
+    let chosen = start;
+    for (let d = 0; d < PALETTE_SIZE; d++) {
+      const slot = (start + d) % PALETTE_SIZE;
+      const base = paletteHslForIndex(slot);
+      const rawHex = hslToHex(base.h, base.s, base.l);
+      const shifted = shiftLightnessForSubject(base);
+      const derivedHex = hslToHex(shifted.h, shifted.s, shifted.l);
+      let conflict = false;
+      for (const year of info.years) {
+        const colors = colorsByYear.get(year);
+        if (colors === undefined) continue;
+        if (
+          (info.baseUse && colors.has(rawHex)) ||
+          (info.subjectUse && colors.has(derivedHex))
+        ) {
+          conflict = true;
+          break;
+        }
+      }
+      if (!conflict) {
+        chosen = slot;
+        break;
+      }
+    }
+    const base = paletteHslForIndex(chosen);
+    baseHslByName.set(baseName, base);
+    // 後続のプロービングが同年で同色を選ばないよう、実表示色を予約する。
+    const rawHex = hslToHex(base.h, base.s, base.l);
+    const shifted = shiftLightnessForSubject(base);
+    const derivedHex = hslToHex(shifted.h, shifted.s, shifted.l);
+    for (const year of info.years) {
+      if (info.baseUse) addYearColor(year, rawHex);
+      if (info.subjectUse) addYearColor(year, derivedHex);
+    }
+  }
+
+  // 第 5 パス: 新キーの色を確定する。
+  for (const key of newKeys) {
+    const entry = entryByKey.get(key)!;
+    const base = baseHslByName.get(entry.baseName)!;
+    const hsl = entry.subject ? shiftLightnessForSubject(base) : base;
+    result[key] = hslToHex(hsl.h, hsl.s, hsl.l);
+  }
+  return result;
 }
 
 /** キーをソートした安定な ColorMap を返す（diff を安定させる） */
@@ -372,39 +606,49 @@ async function loadOverrides(path: string): Promise<NameOverrides> {
  * （TASK-95）がここでもそのまま「独立色を割り当てる」意味になり、hre_fiefs の
  * 複合キー（"NAME|Holy Roman Empire"）とは衝突しない。
  */
-async function loadCollections(): Promise<FeatureCollection[]> {
-  const collections: FeatureCollection[] = [];
+export async function loadYearCollections(): Promise<YearCollection[]> {
+  const collections: YearCollection[] = [];
   for (const year of SNAPSHOT_YEARS) {
     const path = `${DATA_DIR}/europe_${year}.geojson`;
     const fc = JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
-    collections.push(fc);
+    collections.push({ year, collection: fc });
   }
-  const optionalPaths = [
-    ...HRE_OVERLAY_YEARS.map((year) => `${DATA_DIR}/hre_${year}.geojson`),
-    ...FRANCE_FIEF_YEARS.map((year) =>
-      `${DATA_DIR}/france_fiefs_${year}.geojson`
-    ),
-    ...HRE_FIEF_YEARS.map((year) => `${DATA_DIR}/hre_fiefs_${year}.geojson`),
-    ...ITALY_FIEF_YEARS.map((year) =>
-      `${DATA_DIR}/italy_fiefs_${year}.geojson`
-    ),
+  const optionalEntries: Array<{ year: number; path: string }> = [
+    ...HRE_OVERLAY_YEARS.map((year) => ({
+      year,
+      path: `${DATA_DIR}/hre_${year}.geojson`,
+    })),
+    ...FRANCE_FIEF_YEARS.map((year) => ({
+      year,
+      path: `${DATA_DIR}/france_fiefs_${year}.geojson`,
+    })),
+    ...HRE_FIEF_YEARS.map((year) => ({
+      year,
+      path: `${DATA_DIR}/hre_fiefs_${year}.geojson`,
+    })),
+    ...ITALY_FIEF_YEARS.map((year) => ({
+      year,
+      path: `${DATA_DIR}/italy_fiefs_${year}.geojson`,
+    })),
     // TASK-110: Cliopatria 由来の諸侯領・領邦。仏側は SUBJECTO を持たないので
     // france_fiefs と同じ NAME キー、帝国側は SUBJECTO="Holy Roman Empire" を
     // 持つので hre_fiefs と同じ複合キーになり、既存の色割当規則がそのまま効く。
-    ...CLIOPATRIA_FIEF_YEARS.map((year) =>
-      `${DATA_DIR}/cliopatria_fiefs_${year}.geojson`
-    ),
+    ...CLIOPATRIA_FIEF_YEARS.map((year) => ({
+      year,
+      path: `${DATA_DIR}/cliopatria_fiefs_${year}.geojson`,
+    })),
     // #172: ブリテン諸島の政体（TASK-151、`deno task build-britain-fiefs` で
     // 生成）。SUBJECTO を持たないため france_fiefs と同じ NAME キーの独立
     // プロービング色になる。
-    ...BRITAIN_FIEF_YEARS.map((year) =>
-      `${DATA_DIR}/britain_fiefs_${year}.geojson`
-    ),
+    ...BRITAIN_FIEF_YEARS.map((year) => ({
+      year,
+      path: `${DATA_DIR}/britain_fiefs_${year}.geojson`,
+    })),
   ];
-  for (const path of optionalPaths) {
+  for (const { year, path } of optionalEntries) {
     try {
       const fc = JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
-      collections.push(fc);
+      collections.push({ year, collection: fc });
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) throw error;
       // 未生成環境（build-hre / build-france-fiefs 前）ではスキップして従来どおり動かす
@@ -413,21 +657,67 @@ async function loadCollections(): Promise<FeatureCollection[]> {
   return collections;
 }
 
-async function main(): Promise<void> {
-  const overrides = await loadOverrides(OVERRIDES_PATH);
-  const collections = await loadCollections();
-  const map = sortColorMap(
-    buildColorMap(collections, overrides, INDEPENDENT_SUBJECT_SUZERAINS),
-  );
-  await Deno.writeTextFile(COLORS_PATH, `${JSON.stringify(map, null, 2)}\n`);
+/** 既存 colors.json を読み込む。存在しなければ null（bootstrap の全量生成へ） */
+async function loadSnapshot(
+  path: string,
+): Promise<{ map: ColorMap; text: string } | null> {
+  try {
+    const text = await Deno.readTextFile(path);
+    return { map: JSON.parse(text) as ColorMap, text };
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return null;
+    throw error;
+  }
+}
 
+async function main(): Promise<void> {
+  const prune = Deno.args.includes("--prune");
+  const check = Deno.args.includes("--check");
+  const overrides = await loadOverrides(OVERRIDES_PATH);
+  const yearCollections = await loadYearCollections();
+  const snapshot = await loadSnapshot(COLORS_PATH);
+  const map = sortColorMap(
+    snapshot === null
+      ? buildColorMap(
+        yearCollections.map((yc) => yc.collection),
+        overrides,
+        INDEPENDENT_SUBJECT_SUZERAINS,
+      )
+      : buildColorMapAdditive(
+        snapshot.map,
+        yearCollections,
+        overrides,
+        INDEPENDENT_SUBJECT_SUZERAINS,
+        { prune },
+      ),
+  );
+  const text = `${JSON.stringify(map, null, 2)}\n`;
+
+  const before = snapshot?.map ?? {};
+  const added = Object.keys(map).filter((k) => !(k in before));
+  const removed = Object.keys(before).filter((k) => !(k in map));
   const subjectKeys = Object.keys(map).filter((k) =>
     k.includes(SUBJECT_KEY_SEP)
   );
-  console.log(
-    `${COLORS_PATH}: ${Object.keys(map).length} entries ` +
-      `(${subjectKeys.length} subject-derived), palette=${PALETTE_SIZE}`,
-  );
+  const summary = `${COLORS_PATH}: ${Object.keys(map).length} entries ` +
+    `(${subjectKeys.length} subject-derived, +${added.length} added, ` +
+    `-${removed.length} removed), palette=${PALETTE_SIZE}`;
+
+  if (check) {
+    // ドリフト検出モード（#193 AC3）: 実行しても colors.json が変化しないことを
+    // 検証する。差分があれば非 0 終了で CI / 手元の検証を失敗させる。
+    if (snapshot !== null && text === snapshot.text) {
+      console.log(`${summary} — no drift`);
+      return;
+    }
+    console.error(`${summary} — DRIFT DETECTED`);
+    if (added.length > 0) console.error(`  added: ${added.join(", ")}`);
+    if (removed.length > 0) console.error(`  removed: ${removed.join(", ")}`);
+    Deno.exit(1);
+  }
+
+  await Deno.writeTextFile(COLORS_PATH, text);
+  console.log(summary);
 }
 
 if (import.meta.main) {
