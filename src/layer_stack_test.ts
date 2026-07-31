@@ -29,6 +29,7 @@ import {
 } from "./basemap.ts";
 import { BASEMAP_PMTILES_URL } from "./config.ts";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CITY_HIT_LAYER_ID,
   CITY_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
@@ -65,12 +66,13 @@ Deno.test("WATER_STYLE_LAYER_ID はベースマップスタイルに実在する
   );
 });
 
-Deno.test("水面より下へ回すのは政治ポリゴン 5 枚のみ（TASK-80 で base 境界線は deck から外れた、TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦を追加）", () => {
+Deno.test("水面より下へ回すのは政治ポリゴン 6 枚のみ（TASK-80 で base 境界線は deck から外れた、TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦・#172 でブリテン諸島を追加）", () => {
   // TASK-78 の base-outlines（deck の GeoJsonLayer）は TASK-80 で MapLibre の
   // line レイヤー（approximate-borders-*）へ移した。deck 側に線の層は無い。
   assertEquals(
     [...UNDER_WATER_LAYER_IDS].sort(),
     [
+      BRITAIN_FIEF_LAYER_ID,
       CLIOPATRIA_FIEF_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
@@ -93,6 +95,15 @@ Deno.test("Cliopatria 領邦の塗りも他の政治ポリゴンと同じ before
   const ids = [WATER_INLAND_LAYER_ID, WATER_LAYER_ID];
   const expected = underWaterBeforeId(POWER_LAYER_ID, ids);
   assertEquals(underWaterBeforeId(CLIOPATRIA_FIEF_LAYER_ID, ids), expected);
+  assertEquals(expected, WATER_LAYER_ID);
+});
+
+Deno.test("ブリテン諸島の政体の塗りも他の政治ポリゴンと同じ beforeId を得る（#172）", () => {
+  // アイリッシュ海・大西洋岸で base と同じく海へはみ出すため、水面の下へ
+  // 回さないと海上に塗りが露出する（他の政治ポリゴンと同じ理由）
+  const ids = [WATER_INLAND_LAYER_ID, WATER_LAYER_ID];
+  const expected = underWaterBeforeId(POWER_LAYER_ID, ids);
+  assertEquals(underWaterBeforeId(BRITAIN_FIEF_LAYER_ID, ids), expected);
   assertEquals(expected, WATER_LAYER_ID);
 });
 
@@ -454,6 +465,7 @@ Deno.test("beforeId の付与は picking 優先順（PICKING_PRIORITY）に影�
     FRANCE_FIEF_LAYER_ID,
     ITALY_FIEF_LAYER_ID,
     CLIOPATRIA_FIEF_LAYER_ID,
+    BRITAIN_FIEF_LAYER_ID,
     POWER_LAYER_ID,
   ]);
 });

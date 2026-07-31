@@ -3,6 +3,7 @@ import {
   BASE_OUTLINE_YEARS,
   BASEMAP_PMTILES_URL,
   BASEMAP_SOURCE_ID,
+  BRITAIN_FIEF_OVERLAY_YEARS,
   CLIOPATRIA_FIEF_OVERLAY_YEARS,
   FALLBACK_STYLE_URL,
   FRANCE_FIEF_OVERLAY_YEARS,
@@ -304,16 +305,72 @@ Deno.test("CLIOPATRIA_FIEF_OVERLAY_YEARS は BASE_OUTLINE_YEARS の部分集合�
   }
 });
 
-Deno.test("BASE_OUTLINE_YEARS は 3 系統のオーバーレイ年代の和集合で昇順・重複なし（TASK-86/96）", () => {
+Deno.test("BASE_OUTLINE_YEARS は 4 系統のオーバーレイ年代の和集合で昇順・重複なし（TASK-86/96、#172 でブリテンを追加）", () => {
   const expected = [
     ...new Set([
       ...FRANCE_FIEF_OVERLAY_YEARS,
       ...HRE_FIEF_OVERLAY_YEARS,
       ...ITALY_FIEF_OVERLAY_YEARS,
+      ...BRITAIN_FIEF_OVERLAY_YEARS,
     ]),
   ].sort((a, b) => a - b);
   assertEquals([...BASE_OUTLINE_YEARS], expected);
   for (const year of BASE_OUTLINE_YEARS) {
     assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
+});
+
+// ---- ブリテン諸島の政体オーバーレイ（#172）----
+
+Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は TASK-151 が生成した 12 年代である（#172）", () => {
+  assertEquals([...BRITAIN_FIEF_OVERLAY_YEARS], [
+    1000,
+    1100,
+    1200,
+    1279,
+    1300,
+    1400,
+    1492,
+    1500,
+    1530,
+    1600,
+    1650,
+    1700,
+  ]);
+});
+
+Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS の部分集合（#172）", () => {
+  const sorted = [...BRITAIN_FIEF_OVERLAY_YEARS].sort((a, b) => a - b);
+  assertEquals([...BRITAIN_FIEF_OVERLAY_YEARS], sorted);
+  assertEquals(
+    new Set(BRITAIN_FIEF_OVERLAY_YEARS).size,
+    BRITAIN_FIEF_OVERLAY_YEARS.length,
+  );
+  for (const year of BRITAIN_FIEF_OVERLAY_YEARS) {
+    assert(SNAPSHOT_YEARS.includes(year), `${year} は SNAPSHOT_YEARS に無い`);
+  }
+});
+
+Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は 1715 以降を含まない（base が UK とアイルランド王国を分けて収録する年代。#172）", () => {
+  for (const year of BRITAIN_FIEF_OVERLAY_YEARS) {
+    assert(year <= 1700, `${year} は base が既に分離収録する年代`);
+  }
+});
+
+Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は AC の対象年（1000〜1279 のウェールズ・アイルランド諸王国、1600〜1700 のアイルランド）を含む（#172）", () => {
+  for (const year of [1000, 1100, 1200, 1279, 1600, 1650, 1700]) {
+    assert(
+      BRITAIN_FIEF_OVERLAY_YEARS.includes(year),
+      `${year} は目視確認対象の年`,
+    );
+  }
+});
+
+Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は BASE_OUTLINE_YEARS の部分集合（全対象年に base_outline / europe_flat が存在する）（#172）", () => {
+  for (const year of BRITAIN_FIEF_OVERLAY_YEARS) {
+    assert(
+      BASE_OUTLINE_YEARS.includes(year),
+      `${year} の base_outline / europe_flat が存在しない`,
+    );
   }
 });

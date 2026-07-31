@@ -14,6 +14,7 @@ import {
 } from "./suzerain_extent.ts";
 import { YEAR_CACHE_MAX_YEARS, type YearDataLoader } from "./powers.ts";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CITY_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
@@ -272,6 +273,33 @@ Deno.test("suzerainExtentKey は cliopatria-fiefs の仏封土も同じ規則で
       EMPTY_SUZERAIN_OVERRIDES,
     ),
     "France",
+  );
+});
+
+Deno.test("suzerainExtentKey は britain-fiefs の政体も包含する base 勢力の宗主キーへ解決する（#172）", () => {
+  // TASK-151 の生成物は SUBJECTO を持たない（仏諸侯領と同型）ため、宗主キーは
+  // 「その政体のラベル地点を base のどの勢力が塗っているか」で決まる。実データ
+  // では 1000〜1200 のウェールズ・アイルランド諸王国が base の Celtic kingdoms
+  // へ、1600〜1700 のアイルランド王国が England and Ireland へ解決する
+  // （伊諸侯領のコルシカと同じ「base の塗りが答えになる」規則。TASK-121）。
+  assertEquals(
+    suzerainExtentKey(
+      BRITAIN_FIEF_LAYER_ID,
+      feature({ NAME: "Kingdom of Gwynedd" }, box(1, 1)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    "France",
+  );
+  // base のどの勢力にも包含されない（海側へはみ出す等）場合は外枠なし
+  assertEquals(
+    suzerainExtentKey(
+      BRITAIN_FIEF_LAYER_ID,
+      feature({ NAME: "Sodor" }, box(20, 20)),
+      FIEF_BASE,
+      EMPTY_SUZERAIN_OVERRIDES,
+    ),
+    null,
   );
 });
 

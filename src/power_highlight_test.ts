@@ -12,6 +12,7 @@ import {
 } from "./power_highlight.ts";
 import { FILL_ALPHA, hexToRgb } from "./powers.ts";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CITY_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
@@ -68,10 +69,11 @@ Deno.test("powerHighlightKey: NAME を持たない feature は null", () => {
   assertEquals(powerHighlightKey(POWER_LAYER_ID, {}), null);
 });
 
-Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 5 層のみ（TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦を追加）", () => {
+Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 6 層のみ（TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦・#172 でブリテン諸島を追加）", () => {
   assertEquals(
     [...POWER_HIGHLIGHT_LAYER_IDS].sort(),
     [
+      BRITAIN_FIEF_LAYER_ID,
       CLIOPATRIA_FIEF_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
@@ -79,6 +81,16 @@ Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 5 層
       POWER_LAYER_ID,
     ].sort(),
   );
+});
+
+Deno.test("powerHighlightKey: ブリテン諸島の政体も colorKeyFor と同一のキーで強調される（#172）", () => {
+  // TASK-151 の生成物は SUBJECTO を持たない（仏諸侯領と同型）ため、キーは
+  // NAME 単独になる（独立主権政体として振る舞う）
+  assertEquals(
+    powerHighlightKey(BRITAIN_FIEF_LAYER_ID, { NAME: "Kingdom of Gwynedd" }),
+    "Kingdom of Gwynedd",
+  );
+  assertEquals(powerHighlightKey(BRITAIN_FIEF_LAYER_ID, {}), null);
 });
 
 Deno.test("powerHighlightKey: Cliopatria 領邦も colorKeyFor と同一のキーで強調される（TASK-110）", () => {

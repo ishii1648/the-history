@@ -510,3 +510,69 @@ Deno.test("コルシカ島の帰属が諸侯領オーバーレイ側へ移るこ
   assert(entry !== undefined);
   assert(entry.text.includes("コルシカ"), "text がコルシカ島に触れていない");
 });
+
+// ---- ブリテン諸島の政体オーバーレイ（#172）----
+
+Deno.test("イングランド・アイルランド一括り収録の制限がオーバーレイの実態に合わせて更新されている（#172 AC #6）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "england-ireland-wales-1530-1700");
+  assert(entry !== undefined, "england-ireland-wales-1530-1700 が無い");
+  // base の一括り収録は変わらないが、OHM 由来のオーバーレイがアイルランドの
+  // 政体を識別可能に描くようになったことを反映する
+  for (
+    const keyword of [
+      "OpenHistoricalMap",
+      "アイルランド王国",
+      "アイルランド・カトリック同盟",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // TASK-39 時点の「分離して表示できません」という断定は実態に合わなくなった
+  assert(
+    !entry.text.includes("分離して表示できません"),
+    "text がオーバーレイ追加前の記述のまま",
+  );
+  assertEquals(entry.years, { from: 1530, to: 1700 });
+});
+
+Deno.test("1283〜1707 のウェールズの欠落が年代連動で明示されている（#172 AC #6）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "britain-fiefs-wales-missing");
+  assert(entry !== undefined, "britain-fiefs-wales-missing が無い");
+  // 欠落が上流（OHM / Cliopatria）由来であることと、1284 年ルデュラン法令・
+  // 1536 年併合法により史実とおおむね整合することの両方を明示する
+  for (
+    const keyword of ["OpenHistoricalMap", "Cliopatria", "1284", "1536"]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // ウェールズ諸王国が表示されるのは 1279 まで。欠落が生じるのは 1300 以降
+  assertEquals(entry.years, { from: 1300, to: 1700 });
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      year >= 1300 && year <= 1700,
+      `${year} 年の active 判定が期待と異なる`,
+    );
+  }
+});
+
+Deno.test("アイルランドの Munster / Connacht / Ulster 欠落が年代連動で明示されている（#172 AC #6）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) => l.id === "britain-fiefs-ireland-partial");
+  assert(entry !== undefined, "britain-fiefs-ireland-partial が無い");
+  for (
+    const keyword of [
+      "マンスター",
+      "コナハト",
+      "アルスター",
+      "OpenHistoricalMap",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // 部分的な描画になるのは中世（1000〜1300）。1600 以降はアイルランド王国の
+  // 単一政体が島全体を覆うため部分欠落ではなくなる
+  assertEquals(entry.years, { from: 1000, to: 1300 });
+});

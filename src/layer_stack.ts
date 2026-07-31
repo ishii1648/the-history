@@ -33,6 +33,7 @@ import {
   WATER_LAYER_ID,
 } from "./basemap.ts";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -48,10 +49,10 @@ import { APPROXIMATE_BORDER_LAYER_IDS } from "./approximate_borders.ts";
 export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
 
 /**
- * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 5 枚）。
- * 相対順（powers → cliopatria-fiefs → italy-fiefs → france-fiefs → hre-powers）
- * は同一 beforeId のグループ内で deck レイヤー配列順が保たれるため従来と
- * 変わらない。
+ * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 6 枚）。
+ * 相対順（powers → britain-fiefs → cliopatria-fiefs → italy-fiefs →
+ * france-fiefs → hre-powers）は同一 beforeId のグループ内で deck レイヤー
+ * 配列順が保たれるため従来と変わらない。
  *
  * TASK-78 の base 境界線オーバーレイ（deck の base-outlines）は TASK-80 で
  * MapLibre の line レイヤー（approximate_borders.ts）へ移したため、ここには
@@ -68,12 +69,17 @@ export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
  * ビスケー湾側、ブランデンブルクはバルト海側）、水面より上に置くと海への
  * はみ出しがそのまま露出する。
  *
+ * #172: ブリテン諸島の政体も同じ扱いにする。アイリッシュ海・大西洋岸の
+ * 海岸線はベースマップと OHM 由来ポリゴンで解像度が異なり、base と同じく
+ * 海へはみ出すため、水面より上に置くと海上に塗りが露出する。
+ *
  * hre-extent（帝国範囲の強調輪郭）は含めない: 常時表示ではなくトグルで出す
  * 強調記号であり、水面より下だと海側の輪郭が切れて「どこからどこまでが帝国か」の
  * 表現が壊れるため、従来どおり水面より上に残す。
  */
 export const UNDER_WATER_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
+  BRITAIN_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,

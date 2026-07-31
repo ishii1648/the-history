@@ -43,6 +43,7 @@
 import area from "@turf/area";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { serializeWithAttribution } from "./build-attribution.ts";
+import { BRITAIN_FIEF_YEARS } from "./build-britain-fiefs.ts";
 import {
   CLIOPATRIA_FIEF_YEARS,
   cliopatriaRawPathFor,
@@ -417,6 +418,18 @@ export function cliopatriaFiefsPathFor(year: number): string {
 }
 
 /**
+ * ブリテン諸島の政体（OHM 由来・TASK-151 / #172）の入力パス。
+ *
+ * 年集合は scripts 側の BRITAIN_FIEF_YEARS を参照する（cliopatria と同じく、
+ * src → scripts の import を行わない規約の下で定数の二重成長を避ける。
+ * src/config.ts BRITAIN_FIEF_OVERLAY_YEARS との同値は
+ * build-britain-fiefs_test.ts で担保する）。
+ */
+export function britainFiefsPathFor(year: number): string {
+  return `data/britain_fiefs_${year}.geojson`;
+}
+
+/**
  * その年に存在するオーバーレイの入力パスを全て返す（純粋関数、TASK-86/96/110）。
  * 被覆率も境界線の切り出しも「その年に描かれるオーバーレイ全体」に対する判定
  * なので、仏諸侯領・HRE 領邦・伊諸侯領が揃う年（1000〜1300）は 3 件を返す。
@@ -437,6 +450,14 @@ export function fiefsPathsFor(year: number): string[] {
   }
   if (CLIOPATRIA_FIEF_YEARS.includes(year)) {
     paths.push(cliopatriaFiefsPathFor(year));
+  }
+  // #172: ブリテン諸島の政体（1000〜1700）。これを登録しないと base の
+  // Celtic kingdoms / England and Ireland の塗りがオーバーレイの下に残り、
+  // 半透明が二重に重なって濃くなる（既存 4 系統と同じ二重塗りの解消）。
+  // 近世（1500〜1700）はブリテンだけが対象で、この年集合の追加により
+  // FIEF_DEDUPE_YEARS（= BASE_OUTLINE_YEARS）が 12 年へ広がる。
+  if (BRITAIN_FIEF_YEARS.includes(year)) {
+    paths.push(britainFiefsPathFor(year));
   }
   return paths;
 }

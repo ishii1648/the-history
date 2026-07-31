@@ -15,6 +15,7 @@ import {
 import {
   createBaseFillLoader,
   createBaseOutlineLoader,
+  createBritainFiefOverlayLoader,
   createCliopatriaFiefOverlayLoader,
   createCombinedYearLoader,
   createFranceFiefOverlayLoader,
@@ -63,6 +64,7 @@ import {
 import {
   BASE_OUTLINE_YEARS,
   BASEMAP_SOURCE_ID,
+  BRITAIN_FIEF_OVERLAY_YEARS,
   CLIOPATRIA_FIEF_OVERLAY_YEARS,
   FALLBACK_STYLE_URL,
   FRANCE_FIEF_OVERLAY_YEARS,
@@ -88,6 +90,7 @@ import {
 } from "./url_state.ts";
 import type { NotesData } from "./notes.ts";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CITY_HIT_LAYER_ID,
   CITY_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
@@ -364,6 +367,16 @@ const dataLoader = createCombinedYearLoader(
       CLIOPATRIA_FIEF_OVERLAY_YEARS,
     ),
   ),
+  // #172: ブリテン諸島の政体（britain_fiefs_flat_*、1000〜1700）。base が
+  // 一括りに塗るウェールズ・アイルランドの政体を識別可能にする補完で、既存
+  // 4 系統と同じ機構に載せる。非対象年（1715 以降）は fetch せず空 FC になり、
+  // base の United Kingdom / Kingdom of Ireland と二重表示にならない。
+  withOverrides(
+    createBritainFiefOverlayLoader(
+      (url) => fetch(url),
+      BRITAIN_FIEF_OVERLAY_YEARS,
+    ),
+  ),
 );
 
 /**
@@ -473,6 +486,10 @@ let currentView:
      * TASK-110: Cliopatria 由来の領邦（非対象年・取得失敗・未生成時は空 FC）
      */
     cliopatriaFiefs: FeatureCollection;
+    /**
+     * #172: ブリテン諸島の政体（非対象年・取得失敗・未生成時は空 FC）
+     */
+    britainFiefs: FeatureCollection;
   }
   | null = null;
 
@@ -724,7 +741,7 @@ function renderLayers(): void {
   if (currentView === null) return;
   const { year, base, hre, fiefs, outlines, baseFill, italyFiefs } =
     currentView;
-  const { cliopatriaFiefs } = currentView;
+  const { cliopatriaFiefs, britainFiefs } = currentView;
   // TASK-80: base の境界線は全年代とも MapLibre の概略境界レイヤー
   // （approximate-borders-*、syncApproximateBorders）が描くため、powers の
   // stroke は常に止める（TASK-78 は諸侯領オーバーレイ対象年だけ止めていた）。
@@ -782,6 +799,17 @@ function renderLayers(): void {
           isHreSuzerainFeature(f.properties) ? LINE_COLOR : FIEF_LINE_COLOR,
         FIEF_LINE_WIDTH_PX,
       ),
+    // #172: ブリテン諸島の政体。base が一括りに塗るウェールズ・アイルランドの
+    // 政体を、仏・伊諸侯領と同じ藍紫の境界線・同じ塗り規則で「オーバーレイ
+    // 由来の区画」として重ねる。非対象年（1715 以降）は空 FC なので実質非表示。
+    [BRITAIN_FIEF_LAYER_ID]: () =>
+      politicalLayers.buildPowerLayer(
+        pctx,
+        BRITAIN_FIEF_LAYER_ID,
+        britainFiefs,
+        FIEF_LINE_COLOR,
+        FIEF_LINE_WIDTH_PX,
+      ),
     [CITY_LAYER_ID]: () => featureLayers.buildCityMarkerLayer(ctx),
     [CITY_HIT_LAYER_ID]: () => featureLayers.buildCityHitLayer(ctx),
     [RIVERS_LAYER_ID]: () => featureLayers.buildRiversLineLayer(ctx),
@@ -829,6 +857,7 @@ function renderLayers(): void {
       fiefs,
       italyFiefs,
       cliopatriaFiefs,
+      britainFiefs,
     ),
     featureLayers.buildRiverLabelLayer(ctx),
     featureLayers.buildCityLabelLayer(ctx),
@@ -921,6 +950,7 @@ const yearSwitcher = createYearSwitcher(
       baseFill: data.baseFill,
       italyFiefs: data.italyFiefs,
       cliopatriaFiefs: data.cliopatriaFiefs,
+      britainFiefs: data.britainFiefs,
     };
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
@@ -1109,7 +1139,7 @@ map.on("load", () => {
 });
 
 // TASK-144: ヘッドレス CDP 検証用のデバッグフック群（__setYear / __get*Debug /
-// __probePick の 15 件）は src/debug_hooks.ts へ抽出した。フック名と返り値の
+// __probePick の 16 件）は src/debug_hooks.ts へ抽出した。フック名と返り値の
 // 形は scripts/verify/ のヘッドレス検証の契約なので変えない。状態の所有は
 // main.ts に残し（decision-29）、ここでは getter・関数を注入する配線だけを行う。
 // メモ化関数を注入するのは builder と同一キャッシュを共有するため（フックの

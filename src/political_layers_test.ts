@@ -261,6 +261,7 @@ Deno.test("勢力ラベル層は id・pickable・サイズが main.ts 時代の�
     emptyFc,
     emptyFc,
     emptyFc,
+    emptyFc,
   );
   assertEquals(layer.id, LABEL_LAYER_ID);
   assertEquals(layer.props.pickable, false);
@@ -273,6 +274,7 @@ Deno.test("勢力ラベルの文字色は強調キーを反映し updateTriggers
     ctx({ selectedPowerKey: "France" }),
     baseFc,
     hreFc,
+    emptyFc,
     emptyFc,
     emptyFc,
     emptyFc,
@@ -294,7 +296,7 @@ Deno.test("勢力ラベルの文字色は強調キーを反映し updateTriggers
 Deno.test("強調キーだけの再構築では勢力ラベルの data・characterSet が再計算されない", () => {
   const f = createPoliticalLayerBuilders();
   const build = (c: PoliticalLayerContext) =>
-    f.buildLabelLayer(c, baseFc, hreFc, emptyFc, emptyFc, emptyFc);
+    f.buildLabelLayer(c, baseFc, hreFc, emptyFc, emptyFc, emptyFc, emptyFc);
   const first = build(ctx());
   const second = build(ctx({ hoveredPowerKey: "France" }));
   // data 参照が同一 = polylabel（buildLabelData）が走らない（TASK-50 非退行）
@@ -306,7 +308,7 @@ Deno.test("強調キーだけの再構築では勢力ラベルの data・charact
 Deno.test("ズーム段が変わっても characterSet は全 datum 由来の同一参照を保つ", () => {
   const f = createPoliticalLayerBuilders();
   const build = (c: PoliticalLayerContext) =>
-    f.buildLabelLayer(c, baseFc, hreFc, emptyFc, emptyFc, emptyFc);
+    f.buildLabelLayer(c, baseFc, hreFc, emptyFc, emptyFc, emptyFc, emptyFc);
   const z4 = build(ctx({ zoomStep: 4 }));
   const z5 = build(ctx({ zoomStep: 5 }));
   // TASK-122 AC #7: characterSet はズーム絞り込み前の全 datum から作る
@@ -330,6 +332,7 @@ Deno.test("公開メモ化インスタンスは builder と同一キャッシュ
     emptyFc,
     emptyFc,
     emptyFc,
+    emptyFc,
   );
   // builder 実行でキャッシュが埋まり、同じ引数の直接呼び出しは同一参照を返す
   // （別インスタンスなら初回計算で新しいオブジェクトが返り、この assert は落ちる）
@@ -337,6 +340,7 @@ Deno.test("公開メモ化インスタンスは builder と同一キャッシュ
     1000,
     baseFc,
     hreFc,
+    emptyFc,
     emptyFc,
     emptyFc,
     emptyFc,
@@ -360,6 +364,7 @@ Deno.test("factory ごとにキャッシュは独立している", () => {
     emptyFc,
     emptyFc,
     emptyFc,
+    emptyFc,
     nameJa,
     EMPTY_FIEF_DEDUPE_TABLE,
   ] as const;
@@ -379,6 +384,7 @@ Deno.test("被覆率表による base ラベル抑制はズーム段で解除さ
       ctx({ zoomStep, fiefDedupe: dedupe }),
       baseFc,
       hreFc,
+      emptyFc,
       emptyFc,
       emptyFc,
       emptyFc,

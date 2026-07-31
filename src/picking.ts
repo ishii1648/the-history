@@ -93,6 +93,30 @@ export const ITALY_FIEF_LAYER_ID = "italy-fiefs";
  */
 export const CLIOPATRIA_FIEF_LAYER_ID = "cliopatria-fiefs";
 
+/**
+ * ブリテン諸島の政体オーバーレイのレイヤー ID（#172）。出典は
+ * OpenHistoricalMap（CC0、生成は scripts/build-britain-fiefs.ts →
+ * scripts/build-fief-flat.ts。TASK-151）。
+ *
+ * なぜ既存レイヤーへ合流させず独立レイヤーにするのか（ITALY_FIEF_LAYER_ID /
+ * CLIOPATRIA_FIEF_LAYER_ID の判断をそのまま踏襲する）:
+ * - 年集合が既存のどの系統とも食い違う（仏 1000〜1300 / 伊・HRE 領邦
+ *   1000〜1492 に対しブリテンは 1000〜1700 で、唯一近世まで続く）。どれへ
+ *   合流させてもレイヤー ID が実態を偽る。
+ * - hre-powers への合流は帰属の記述が壊れる。ウェールズ・アイルランドの
+ *   諸王国は帝国と無関係の独立主権政体で、SUBJECTO=Holy Roman Empire 前提の
+ *   レイヤーに混ぜられない。
+ * - 独立レイヤーの追加コストは PICKING_PRIORITY / UNDER_WATER_LAYER_IDS /
+ *   POWER_HIGHLIGHT_LAYER_IDS への各 1 行で、整合はいずれも既存の汎用テストが
+ *   そのまま検証する。
+ *
+ * PICKING_PRIORITY 上の位置は powers の直上（既存 4 系統の下）。ブリテン諸島は
+ * 大陸のオーバーレイと地理的に重ならないため相対順は表示・picking のどちらにも
+ * 影響しないが、「後から追加した層は最も影響の小さい最下段へ積む」既定
+ * （TASK-96 / TASK-110 と同じ判断）に従う。
+ */
+export const BRITAIN_FIEF_LAYER_ID = "britain-fiefs";
+
 /** 主要都市マーカー（ScatterplotLayer）のレイヤー ID（TASK-27） */
 export const CITY_LAYER_ID = "cities";
 
@@ -211,6 +235,7 @@ export const PICKING_PRIORITY: readonly string[] = [
   FRANCE_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
+  BRITAIN_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 ];
 

@@ -18,6 +18,7 @@ import type { GeoJsonProperties } from "geojson";
 import { colorKeyFor, fillColorFor, type Rgba } from "./powers.ts";
 import { type LabelColor, labelColorFor, type LabelDatum } from "./labels.ts";
 import {
+  BRITAIN_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   HRE_LAYER_ID,
@@ -34,6 +35,9 @@ import {
  * （NAME、SUBJECTO があれば NAME|SUBJECTO）なので、出典が違っても同じ領邦の
  * 飛び地は 1 つの面として光る。出典の違いは情報パネルの出典行（TASK-109）が
  * 開示するので、強調表現の側で区別を作る必要はない。
+ *
+ * #172: ブリテン諸島の政体も同じ扱い。SUBJECTO を持たないため強調キーは
+ * NAME 単独になる（独立主権政体として振る舞う既存の仏諸侯領と同型）。
  */
 export const POWER_HIGHLIGHT_LAYER_IDS: readonly string[] = [
   POWER_LAYER_ID,
@@ -41,6 +45,7 @@ export const POWER_HIGHLIGHT_LAYER_IDS: readonly string[] = [
   FRANCE_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
+  BRITAIN_FIEF_LAYER_ID,
 ];
 
 /**
