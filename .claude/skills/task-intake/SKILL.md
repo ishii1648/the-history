@@ -142,7 +142,23 @@ Write ツール（またはエディタ）で行う。
   `scripts-build` / `scripts-loop` / `scripts-verify` は生成物を持たないため
   対になる `data-*` はない。
 
-## 5. 起票後の確認
+## 5. triage Issue の正式化（外出先の雑起票の受け皿）
+
+外出先の GitHub モバイルアプリ等からの雑起票は、`triage` ラベルのみ・`task`
+ラベル無しで積まれる（`docs/development-style.md` 4.5 章の triage フロー。
+`task` が無い間は `deno task next-tasks` の選定候補に入らない）。intake
+セッションはタスク起票のついで、または依頼を受けた時に
+`gh issue list --label triage --state open` で未整形 Issue を洗い出し、各件を 本
+skill の手順 1〜4 に従って正式化する:
+
+- 重複していれば既存 Issue 番号をコメントで示し、
+  `gh issue close <番号> --reason "not planned"` でクローズする。
+- 正式化する場合は本文を LOOP-META・Description・AC 規約へ整形したファイルを
+  作り `gh issue edit <番号> --body-file <path>` で置き換え、
+  `--add-label task`（と必要な area ラベル）・`--remove-label triage` を行う。
+  `task` を付けた時点で選定候補に入る。
+
+## 6. 起票後の確認
 
 - `gh issue view <番号>` で、Description・Acceptance Criteria・labels（task と
   area、必要なら bug）・LOOP-META（depends-on のクォート・ordinal）が期待

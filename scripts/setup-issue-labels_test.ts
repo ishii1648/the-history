@@ -85,8 +85,12 @@ Deno.test("extractAreaLabels は実ドキュメントの 4.2 章と同期して�
   ]);
 });
 
-Deno.test("FIXED_LABELS は task と status:in-progress を定義し bug を含まない", () => {
-  assertEquals(FIXED_LABELS.map((l) => l.name), ["task", "status:in-progress"]);
+Deno.test("FIXED_LABELS は task・status:in-progress・triage を定義し bug を含まない", () => {
+  assertEquals(FIXED_LABELS.map((l) => l.name), [
+    "task",
+    "status:in-progress",
+    "triage",
+  ]);
   // `bug` は GitHub 既定ラベルを流用するため作成対象に含めない（TASK-138）
   assert(!FIXED_LABELS.some((l) => l.name === "bug"));
 });
@@ -113,6 +117,7 @@ Deno.test("buildLabelDefs は固定ラベル + 4.2 章の area ラベルを重�
   assertEquals(defs.map((l) => l.name), [
     "task",
     "status:in-progress",
+    "triage",
     "area:docs",
     "area:workflow",
     "area:src-main",
