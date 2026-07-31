@@ -38,6 +38,8 @@
   `.github/ISSUE_TEMPLATE/task.md` の規約（LOOP-META・`AC1` 記法・area
   ラベル）に従う。`backlog` CLI は使わない（移行前のタスクは
   `docs/archive/backlog-tasks/` に凍結。索引は同ディレクトリの README）。
+  外出先などでこの起票品質をその場で満たせない場合は、`triage` ラベルによる
+  二段階起票を使う（4.5 章の triage フロー）。
 - 既存の運用規約（本ファイル末尾ではなくプロジェクト `CLAUDE.md`
   の「タスク駆動開発」節）に定める、ブランチ名 `issue-N-slug`（移行前のタスクは
   `task-N-slug`）・依存関係順の実行 （area が互いに素な場合のタスク間並列を
@@ -637,6 +639,84 @@ issue 上で判断を返す。判断が返ったらエージェントがタス�
   更新すればよい。`.claude/skills/agent-loop/SKILL.md` および `CLAUDE.md`
   はこの表を参照するのみで値を重複定義しないため、他文書の追随作業は
   不要である。
+
+### 4.5 二拠点・pod 運用モデル（Mac mini 実装専有と intake セッションの分離）
+
+外出先からスマホでも開発を進められるよう、開発環境は次の二拠点構成を前提と
+する（Issue #170。移行前の経緯は TASK-156）。
+
+| 役割                                | 実行場所                                                                        | 備考                                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 実装（agent-loop セッション）       | Mac mini 上の k8s pod（kind on colima）                                         | pod のマニフェスト・イメージは k8s-lab リポジトリ管理。CDP 動作確認は `CDP_BROKER` でホスト macOS 側の chrome-broker へ委譲する（4.3.1 章のリモート CDP モード） |
+| 起票・状況確認（intake セッション） | PC 作業時は MacBook。外出時はスマホ → Tailscale + mosh → Mac mini ホスト側 tmux | タスクは GitHub Issue に一元化済みのため、起票はサーバ側 API への書き込みで完結し、どのマシンから行っても同期の考慮は不要                                        |
+| スマホでの見た目確認                | Cloudflare 本番デプロイの URL（TASK-127 系）                                    | pod 内の dev サーバへスマホから接続しない                                                                                                                        |
+
+**スコープ:** 本節はこのリポジトリの開発フローに関わる運用ルール（役割分担・
+資源専有・接続手順・triage フロー）のみを定める。Mac mini のホスト構築
+（Tailscale・mosh・launchd 常駐の chrome-broker 等）や k8s マニフェスト・pod
+イメージそのものは k8s-lab / dotfiles リポジトリの管轄であり、本 doc の
+範囲外とする。
+
+#### セッションの役割分担（書き込み権限の分離）
+
+- **実装とタスク Issue のステータス遷移は agent-loop セッションのみが行う。**
+  claim タグ push（着手宣言。4.3 章の権威）・`status:in-progress` ラベルの
+  付け外し・AC チェック（Issue 本文の read-modify-write）・PR 作成・マージ
+  （`Closes #N` の自動クローズ = Done 遷移）は、すべて agent-loop セッションの
+  専権とする。4.3 章の「ループは同時に 1 セッションのみ」のガードは、この構成
+  では agent-loop セッションを Mac mini の pod に固定することで満たす。
+- **intake セッションは起票と参照に限定する。** 起票は `task-intake` スキル （2
+  章）で行い、参照は `gh issue list` / `gh issue view` / PR・CI 状況の
+  閲覧に留める。intake セッションからは claim タグ push・`status:in-progress`
+  ラベル操作・AC チェック・実装コミット・push を行わない（行うと二重着手
+  ガードや loop-doctor の整合の前提が崩れる）。後述の triage Issue の正式化は
+  本文・ラベルの編集を伴うが、対象は `task` ラベルが付く前の未整形 Issue で
+  あり、タスク Issue のステータス遷移には触れないため intake の範囲内である。
+
+#### 資源の専有（serve の既定ポート 8000）
+
+- `deno task serve` の既定ポート 8000 は **agent-loop セッション側が専有
+  する**。マージ後動作確認（4.3.1 章）のハーネスが dev サーバを前提にする
+  ため、intake 側が既定ポートを塞ぐとループの検証が壊れる。
+- intake セッション側で配信が必要な場合は必ず `--port` で分離する（例:
+  `deno task serve --port 8100`）。`--auto-port` はポートの奪い合いを暗黙の
+  フォールバックで見えなくするため使わず、intake 側は明示的な `--port` 指定に
+  限る。
+
+#### スマホからの接続手順（外出時の intake）
+
+1. スマホの Tailscale アプリで tailnet に接続する（Mac mini は同一 tailnet に
+   常駐している前提。ホスト側の常駐設定は k8s-lab / dotfiles 管轄）。
+2. mosh 対応のターミナルクライアントから `mosh <mac-mini-host>` で Mac mini
+   ホストへ接続する（モバイル回線の切断・IP 変化に耐えるため ssh 単体ではなく
+   mosh を使う）。
+3. `tmux attach -t intake`（無ければ `tmux new -s intake`）でホスト側の intake
+   セッションに入る。回線が切れてもセッションは tmux 側に残る。
+4. pod 内で回っている agent-loop の様子を見たい場合は、ホストから
+   `kubectl exec -it <agent-loop-pod> -- tmux attach` 等で pod 内の tmux に
+   入る。**観察（read-only）に限り**、ループへの介入・ステータス遷移は
+   行わない（介入が必要な事態は 4.4 章のエスカレーションで扱う）。
+5. 見た目の確認はスマホのブラウザで Cloudflare 本番デプロイの URL を開く。
+
+#### 未整形 Issue の triage フロー
+
+外出先では正式な起票品質（重複確認・LOOP-META・AC 記法・area ラベル。2 章と
+`task-intake` スキル）を満たすのが難しいため、起票を二段階に分ける。
+
+1. **雑起票（GitHub モバイルアプリ）**: 思いついた時点でスマホの GitHub
+   モバイルアプリから Issue を起票し、ラベルは `triage` のみを付ける。 **`task`
+   ラベルは付けない** — `task` の無い Issue は `deno task next-tasks`
+   の選定候補に入らないため（`scripts/task_source.ts`）、未整形のまま agent-loop
+   に拾われることがない。本文はメモ書きで構わない。
+2. **正式化（intake セッション）**: 後で intake セッションが
+   `gh issue list --label triage` で未整形 Issue を洗い出し、`task-intake`
+   スキルの手順（重複確認 → 本文を LOOP-META・Description・AC 規約へ整形 → area
+   ラベル付与）で正式化する。重複していれば既存 Issue 番号を示して not planned
+   でクローズする。正式化したら `task` ラベルを付与して `triage`
+   を外す。この時点で初めて選定候補に入る。
+
+`triage` ラベルの定義は他の固定ラベルと同様 `deno task setup-issue-labels`
+（`scripts/setup-issue-labels.ts`）が同期する。
 
 ## 5. 旧 backlog.md 資産の扱い
 

@@ -1,7 +1,8 @@
 /**
  * GitHub Issue タスク管理用のラベルをリポジトリへ同期する（TASK-138）。
  *
- * - 固定ラベル: `task`（タスク issue 判別）・`status:in-progress`（In Progress 表示）
+ * - 固定ラベル: `task`（タスク issue 判別）・`status:in-progress`（In Progress 表示）・
+ *   `triage`（未整形の雑起票マーク。development-style.md 4.5 章の triage フロー）
  * - area ラベル: docs/development-style.md 4.2 章の表から機械的に抽出する。
  *   ワイルドカード行（`area:scripts-*`）とプレースホルダ行（`area:src-<module>`）は
  *   固定領域ではないため対象外。`area:src-<module>` の個別ラベルはタスク起票時に
@@ -35,6 +36,12 @@ export const FIXED_LABELS: LabelDef[] = [
     color: "FBCA04",
     description:
       "In Progress 状態（open + このラベル。To Do は open のみ、Done は closed）",
+  },
+  {
+    name: "triage",
+    color: "D4C5F9",
+    description:
+      "未整形の雑起票（task ラベル無しのため選定対象外。intake セッションが正式化して task を付与する）",
   },
 ];
 
