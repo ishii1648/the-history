@@ -1,5 +1,6 @@
 /**
- * データの既知の制限一覧 UI の配線（TASK-46/52。TASK-146 で main.ts から抽出）。
+ * データの既知の制限一覧 UI の配線（TASK-46/52。TASK-146 で main.ts から抽出。
+ * #175 で年代連動の出し分け + 要約/詳細の分離へ再設計）。
  *
  * 折りたたみは attribution フッターと同一の操作性（トグル click /
  * コンテナ外 click / Escape）なので、reducer（footer.ts）ごと共通配線
@@ -8,16 +9,21 @@
  *
  * decision-29 の方針どおり module-scope の可変状態は持たない。従来の
  * 「revealKnownLimitations / reflectYearToKnownLimitations フックへ実体を
- * 差し込む」パターンをハンドル返却へ置き換えた（limitations / currentYear は
- * setup クロージャ内の状態）。DOM 要素欠如時は warn を出して no-op ハンドル
- * へ縮退する（契約維持）。
+ * 差し込む」パターンをハンドル返却へ置き換えた（limitations / currentYear /
+ * expandedIds / showAll は setup クロージャ内の状態）。DOM 要素欠如時は
+ * warn を出して no-op ハンドルへ縮退する（契約維持）。
  *
- * TASK-52: 全件表示は維持したまま、knownLimitationEntries で現在年代の
- * 該当判定（active）を付与し、該当項目だけ視覚強調する（削除ではなく配線）。
+ * #175（TASK-52 からの方針転換）: 1 項目 400〜1000 字の調査由来長文を全件
+ * 常時表示すると実質読めないため、表示中の年代に該当する項目だけを短い要約
+ * （summary。欠落時は text 冒頭で縮退）で並べる。text 全文は項目ごとの
+ * 「詳細」で展開でき、情報は削らない。非該当項目へは一覧末尾の
+ * 「他の年代の制限も表示」トグルで到達できる（淡色 + 年代範囲ラベルで区別）。
  */
 import {
+  formatKnownLimitationYears,
   type KnownLimitation,
-  knownLimitationEntries,
+  knownLimitationSummary,
+  visibleKnownLimitationEntries,
 } from "../known_limitations.ts";
 import {
   type CollapsibleContent,
@@ -43,12 +49,30 @@ interface ListElement {
   replaceChildren(...nodes: unknown[]): void;
 }
 
-/** 一覧項目 li / バッジ span の最小形（createElement の返り値を絞り込む） */
+/** 一覧項目 li / 要約 p / ラベル span の最小形（createElement の返り値を絞り込む） */
 interface ListItemElement {
   className: string;
   textContent: string | null;
-  classList: { toggle(name: string, force?: boolean): boolean };
+  setAttribute(name: string, value: string): void;
   append(...items: unknown[]): void;
+}
+
+/**
+ * 項目内ボタン（詳細トグル / show-all）の最小形（HTMLButtonElement が満たす）。
+ * click listener はイベントを受け取り伝播を止める: click で一覧を再描画
+ * （replaceChildren）するため、ボタンは document へバブルする前に DOM から
+ * 外れ、wireCollapsiblePanel のコンテナ外クリック判定（container.contains）が
+ * detached なターゲットを「外側」と誤判定してパネルごと閉じてしまう（実測）。
+ * stopPropagation は fake DOM のイベントに無い場合があるため任意呼び出しにする。
+ */
+interface ItemButtonElement {
+  className: string;
+  textContent: string | null;
+  setAttribute(name: string, value: string): void;
+  addEventListener(
+    type: "click",
+    listener: (event: { stopPropagation?: () => void }) => void,
+  ): void;
 }
 
 /**
@@ -56,8 +80,8 @@ interface ListItemElement {
  * - reveal: loadKnownLimitations 成功時にトグルボタンを表示し一覧を描画する
  *   （notes.json と同じ「未生成時はトグルごと非表示で従来表示を維持」方針）
  * - reflectYear: 年代切替の確定（applyFn。最新要求のみ到達）に追従して
- *   一覧の該当年代表示を更新する（reflectYearToNotes と同じタイミング保証。
- *   TASK-52）
+ *   表示中の年代に該当する項目の絞り込みを更新する（reflectYearToNotes と
+ *   同じタイミング保証。TASK-52 / #175）
  */
 export interface KnownLimitationsUiHandle {
   reveal(limitations: KnownLimitation[]): void;
@@ -101,28 +125,97 @@ export function setupKnownLimitationsUI(
 
   let limitations: KnownLimitation[] = [];
   let currentYear: number | null = null;
+  /** 「詳細」を展開中の項目 id。再描画（年代切替）をまたいで維持する */
+  const expandedIds = new Set<string>();
+  /** 非該当項目も表示するか（一覧末尾のトグルで切り替える。#175） */
+  let showAll = false;
+
+  /** 1 項目の li を組み立てる */
+  function renderItem(
+    entry: KnownLimitation & { active: boolean },
+  ): ListItemElement {
+    const li = doc.createElement("li") as ListItemElement;
+    li.className = entry.active
+      ? "known-limitations-item"
+      : "known-limitations-item known-limitations-item--inactive";
+    li.setAttribute("data-limitation-id", entry.id);
+
+    // 非該当項目（show-all 時のみ現れる）には年代範囲ラベルを付け、
+    // いま見ている年代の制限ではないことを示す
+    if (!entry.active) {
+      const years = doc.createElement("span") as ListItemElement;
+      years.className = "known-limitations-years";
+      years.textContent = `〔${formatKnownLimitationYears(entry.years)}〕`;
+      li.append(years, " ");
+    }
+
+    const summary = doc.createElement("p") as ListItemElement;
+    summary.className = "known-limitations-summary";
+    summary.textContent = knownLimitationSummary(entry);
+
+    const expanded = expandedIds.has(entry.id);
+    const detailToggle = doc.createElement("button") as ItemButtonElement;
+    detailToggle.className = "known-limitations-detail-toggle";
+    detailToggle.setAttribute("type", "button");
+    detailToggle.setAttribute("aria-expanded", String(expanded));
+    detailToggle.textContent = expanded ? "詳細を閉じる" : "詳細";
+    detailToggle.addEventListener("click", (event) => {
+      // 再描画で detached になるボタンのクリックを「コンテナ外」と誤判定
+      // させない（ItemButtonElement のコメント参照）
+      event.stopPropagation?.();
+      if (expandedIds.has(entry.id)) expandedIds.delete(entry.id);
+      else expandedIds.add(entry.id);
+      renderList();
+    });
+
+    li.append(summary, " ", detailToggle);
+
+    // 展開時のみ text 全文（調査由来の詳細。情報は削らない）を描画する
+    if (expanded) {
+      const detail = doc.createElement("p") as ListItemElement;
+      detail.className = "known-limitations-detail";
+      detail.textContent = entry.text;
+      li.append(detail);
+    }
+    return li;
+  }
 
   /**
-   * 現在の limitations / currentYear を元に一覧を再描画する。
-   * currentYear が未確定（switchYear 未完了）の間は年代非依存として
-   * 全件 active 扱いにはせず、そもそも呼ばれない想定だが、防御的に
-   * limitations が空・currentYear が null のときは何もしない。
+   * 現在の limitations / currentYear / showAll を元に一覧を再描画する。
+   * currentYear が未確定（switchYear 未完了）の間はそもそも呼ばれない想定
+   * だが、防御的に limitations が空・currentYear が null のときは何もしない。
    */
   function renderList(): void {
     if (limitations.length === 0 || currentYear === null) return;
-    const entries = knownLimitationEntries(limitations, currentYear);
-    list!.replaceChildren(...entries.map((entry) => {
-      const li = doc.createElement("li") as ListItemElement;
-      li.textContent = entry.text;
-      li.classList.toggle("known-limitations-item--active", entry.active);
-      if (entry.active) {
-        const badge = doc.createElement("span") as ListItemElement;
-        badge.className = "known-limitations-badge";
-        badge.textContent = "この年代に該当";
-        li.append(" ", badge);
-      }
-      return li;
-    }));
+    const entries = visibleKnownLimitationEntries(
+      limitations,
+      currentYear,
+      showAll,
+    );
+    const items: unknown[] = entries.map(renderItem);
+
+    // 非該当項目への到達手段（#175）。隠れている項目が無ければ出さない
+    const hiddenCount = limitations.length -
+      visibleKnownLimitationEntries(limitations, currentYear, false).length;
+    if (hiddenCount > 0 || showAll) {
+      const row = doc.createElement("li") as ListItemElement;
+      row.className = "known-limitations-show-all";
+      const button = doc.createElement("button") as ItemButtonElement;
+      button.className = "known-limitations-show-all-btn";
+      button.setAttribute("type", "button");
+      button.textContent = showAll
+        ? "この年代に該当する制限だけ表示"
+        : `他の年代の制限も表示（${hiddenCount}件）`;
+      button.addEventListener("click", (event) => {
+        event.stopPropagation?.();
+        showAll = !showAll;
+        renderList();
+      });
+      row.append(button);
+      items.push(row);
+    }
+
+    list!.replaceChildren(...items);
   }
 
   // 折りたたみの配線（トグル / コンテナ外 click / Escape / 属性同期）は
@@ -140,17 +233,16 @@ export function setupKnownLimitationsUI(
 
   return {
     // known-limitations.json のロード成功時のみトグルを表示し、一覧を描画する
-    // （AC #3: 制限事項の追加はデータ編集のみで可能。全件表示は維持したまま、
-    // TASK-52 で現在年代の該当項目を視覚強調する）
+    // （AC #3: 制限事項の追加はデータ編集のみで可能）
     reveal: (loaded) => {
       if (loaded.length === 0) return;
       limitations = loaded;
       renderList();
       toggle.hidden = false;
     },
-    // AC 相当: 年代切替の確定（applyFn。最新要求のみ到達）に追従して
-    // 一覧の該当年代表示を更新する。パネルの開閉状態に関わらず内容を
-    // 最新化しておくことで、次回展開時は常に現在年代の判定を表示する。
+    // 年代切替の確定（applyFn。最新要求のみ到達）に追従して該当項目の
+    // 絞り込みを更新する。パネルの開閉状態に関わらず内容を最新化しておく
+    // ことで、次回展開時は常に現在年代の一覧を表示する。
     reflectYear: (year) => {
       currentYear = year;
       renderList();

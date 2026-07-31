@@ -473,24 +473,64 @@ body {
   margin: 3px 0;
 }
 
-/* TASK-52: 現在の年代に該当する制限事項を封蝋レッド（--wax）で視覚強調する。
-   絞り込みではなく全件表示のまま該当項目だけ目立たせる方針のため、
-   非該当項目の表示は変えない（AC: 既存の全件表示・折りたたみ操作性は不変）。 */
-.known-limitations-item--active {
-  color: var(--wax);
-  font-weight: 700;
+/* #175: 表示中の年代に該当する制限だけを短い要約で並べる（TASK-52 の
+   「全件表示 + 該当強調」からの方針転換）。詳細（調査由来の text 全文）は
+   項目ごとの「詳細」で展開し、非該当項目には一覧末尾の「他の年代の制限も
+   表示」トグルで到達できる。 */
+.known-limitations-summary {
+  display: inline;
+  margin: 0;
 }
 
-.known-limitations-badge {
-  display: inline-block;
-  padding: 0 5px;
-  border: 1px solid var(--wax);
-  border-radius: 3px;
+/* 「詳細」/「詳細を閉じる」。本文内のリンクと同じ見た目のテキストボタン */
+.known-limitations-detail-toggle {
+  padding: 0;
+  border: none;
+  background: none;
   color: var(--wax);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.6;
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
   white-space: nowrap;
+}
+
+/* 展開時の詳細（従来の text 全文）。要約より一段小さく・淡く */
+.known-limitations-detail {
+  margin: 4px 0 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* 「他の年代の制限も表示」時のみ現れる非該当項目。淡色 + 年代範囲ラベルで
+   いま見ている年代の制限ではないことを示す */
+.known-limitations-item--inactive {
+  opacity: 0.65;
+}
+
+.known-limitations-years {
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* 非該当項目への到達手段（行頭マーカーは付けない） */
+.known-limitations-show-all {
+  margin-top: 6px;
+  margin-left: -18px; /* ul の padding-left 18px を打ち消して左端に揃える */
+  list-style: none;
+}
+
+.known-limitations-show-all-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* TASK-33: 年代ごとの歴史解説パネル。右下の maplibre attribution
