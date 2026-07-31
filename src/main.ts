@@ -8,16 +8,12 @@ import type {
 import { PMTiles, Protocol } from "pmtiles";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Layer, PickingInfo } from "@deck.gl/core";
-import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
-import type { CollisionFilterExtensionProps } from "@deck.gl/extensions";
 import type { Feature, FeatureCollection } from "geojson";
 import { buildBasemapStyle, shouldEnableHillshade } from "./basemap.ts";
 import {
   approximateBorderBeforeId,
   approximateBorderStackIsValid,
-  LABEL_LAYER_ID,
   overlaySplitIsValid,
-  underWaterBeforeId,
   waterStackIsValid,
 } from "./layer_stack.ts";
 import {
@@ -46,14 +42,12 @@ import {
   LINE_COLOR,
   LINE_WIDTH_PX,
   powerFillDataFor,
-  type Rgba,
   type YearDataLoader,
 } from "./powers.ts";
 import { displayLabel, sourceLines } from "./info.ts";
 import {
   EMPTY_FIEF_DEDUPE_TABLE,
   type FiefDedupeTable,
-  suppressedPowerNames,
 } from "./fief_dedupe.ts";
 import {
   loadCities,
@@ -67,18 +61,8 @@ import {
   loadPeaks,
   loadRivers,
 } from "./data_loading.ts";
+import { isHreSuzerainFeature } from "./labels.ts";
 import {
-  buildLabelData,
-  characterSetFrom,
-  FIEF_LABEL_COLOR,
-  filterPowerLabelsByZoom,
-  isHreSuzerainFeature,
-  type LabelDatum,
-  partitionFiefsBySuzerain,
-  POWER_LABEL_SIZE_PX,
-} from "./labels.ts";
-import {
-  createSuzerainExtentCache,
   EMPTY_SUZERAIN_OVERRIDES,
   suzerainExtentKey,
   type SuzerainOverrides,
@@ -164,17 +148,20 @@ import {
 import {
   createPowerHighlightStore,
   HIGHLIGHT_FILL_TRANSITION_MS,
-  powerFillColor,
   powerHighlightKey,
-  powerLabelColor,
   YEAR_FILL_TRANSITION_MS,
 } from "./power_highlight.ts";
 import { installDebugHooks } from "./debug_hooks.ts";
 import {
   createFeatureLayerBuilders,
   type FeatureLayerContext,
-  labelLayerBaseProps,
 } from "./feature_layers.ts";
+import {
+  createPoliticalLayerBuilders,
+  FIEF_LINE_COLOR,
+  FIEF_LINE_WIDTH_PX,
+  type PoliticalLayerContext,
+} from "./political_layers.ts";
 import { setupInfoUI } from "./ui/info_panel.ts";
 import { setupFooter } from "./ui/footer.ts";
 import { setupKnownLimitationsUI } from "./ui/known_limitations.ts";
@@ -333,35 +320,8 @@ map.on("styledata", syncApproximateBorders);
 // 両立のため、この 3 層だけを overlaid オーバーレイに載せる分配ルールと同じ
 // 場所で管理する。
 
-/**
- * 勢力圏の外枠オーバーレイ（GeoJsonLayer）のレイヤー ID（TASK-30 / TASK-94）。
- * pickable: false のため PICKING_PRIORITY には含めない（picking 非関与）。
- * ID は "hre-extent" のまま据え置く（TASK-94 で対象を全勢力へ広げたが、
- * レイヤー順・overlaid 分配（layer_stack.ts）の既存の扱いを変えないため）。
- */
-const HRE_EXTENT_LAYER_ID = "hre-extent";
-
-/**
- * 勢力圏の外枠の色（TASK-30 AC #2）。HRE 領邦ラベルの臙脂
- * （labels.ts HRE_LABEL_COLOR）と同系色で「帝国系」の記号を揃える。
- * 外縁線は不透明、塗りはごく薄くして下の勢力塗り・領邦境界を隠さない。
- * TASK-94 で対象を全勢力へ広げた際も、この見た目は据え置く（AC #2）。
- */
-const HRE_EXTENT_LINE_COLOR: [number, number, number, number] = [
-  140,
-  30,
-  30,
-  255,
-];
-const HRE_EXTENT_FILL_COLOR: [number, number, number, number] = [
-  140,
-  30,
-  30,
-  30,
-];
-
-/** 勢力圏の外枠の線の太さ（px）。通常の勢力境界（1px 白）より明確に太くする */
-const HRE_EXTENT_LINE_WIDTH_PX = 3;
+// 勢力圏の外枠（hre-extent）のレイヤー ID・見た目定数（HRE_EXTENT_*）は
+// 政治レイヤー builder 群とともに src/political_layers.ts へ移した（TASK-148）。
 
 /** colors.json（NAME / "NAME|SUBJECTO" → HEX のフラットマップ） */
 let colors: Record<string, string> = {};
@@ -509,12 +469,6 @@ let hoveredPeakName: string | null = null;
 let extentKey: string | null = null;
 
 /**
- * 宗主キーごとの外枠（union）のメモ化キャッシュ（TASK-94）。base の参照が
- * 変われば内部で捨てられるため、年代切替をまたいで古い形が残ることはない。
- */
-const suzerainExtent = createSuzerainExtentCache();
-
-/**
  * 政治ポリゴン（powers / hre-powers / france-fiefs）のアクティブ強調状態
  * （TASK-90）。ホバー/クリックした勢力・領邦の塗りをアクティブ色
  * （power_highlight.ts ACTIVE_FILL_COLOR）へ変え、飛び地を含む同一勢力キーの
@@ -636,23 +590,8 @@ const labelOverlay = new MapboxOverlay({
   layers: [],
 });
 
-/**
- * 中世フランス諸侯領オーバーレイの境界線色（TASK-71 AC #1）。ラベル文字色
- * （labels.ts FIEF_LABEL_COLOR）と同系の藍紫。base 勢力ポリゴンの白境界
- * （powers.ts LINE_COLOR）と明確に異なる色にすることで、「フランス王国の内側に
- * 重なった諸侯領の区画」であることが塗り分けとは独立に読み取れる。塗り自体は
- * base と同じ colors.json 由来（諸侯ごとに決定的な独立色）で、alpha も共通の
- * FILL_ALPHA のため、下のベースマップ・France ポリゴンが透けて見える。
- */
-const FIEF_LINE_COLOR: Rgba = [
-  FIEF_LABEL_COLOR[0],
-  FIEF_LABEL_COLOR[1],
-  FIEF_LABEL_COLOR[2],
-  220,
-];
-
-/** 諸侯領境界線の太さ（px）。base の勢力境界（1px）より少し太く、区画を際立たせる */
-const FIEF_LINE_WIDTH_PX = 1.5;
+// 諸侯領境界線の見た目定数（FIEF_LINE_*）は src/political_layers.ts へ移した
+// （TASK-148）。renderLayers の呼び出し引数として import して使う。
 
 /**
  * 現在の MapLibre スタイルのレイヤー ID 列を返す（TASK-77）。
@@ -680,76 +619,8 @@ function currentStyleLayerIds(): string[] {
   }
 }
 
-/**
- * 指定年代の FeatureCollection から GeoJsonLayer を 1 枚生成する。
- * data 以外のプロパティは全年代で不変。updateTriggers に year を渡し、
- * 色関数の再評価を促す（colors 読み込み前後でも齟齬が出ないようにする）。
- * powers / hre-powers / france-fiefs の 3 枚で共用し、id と境界線の見た目
- * （lineColor / lineWidth）以外は同一の挙動にする（TASK-19、TASK-71）。
- *
- * TASK-77: 3 枚とも beforeId（underWaterBeforeId）でベースマップの水面
- * ポリゴンの下へ差し込み、海岸線の解像度差による海上へのはみ出しを水面に
- * 覆わせて隠す。水面より上に残す河川・都市・ラベルはこの builder を通らない
- * ため、対象は構造的に政治ポリゴンの 3 枚だけになる。
- */
-function buildPowerLayer(
-  id: string,
-  year: number,
-  data: FeatureCollection,
-  // TASK-110: 定数だけでなく feature 単位のアクセサも受ける。Cliopatria 由来の
-  // レイヤーは仏諸侯領と帝国領邦を同居させるため、境界線の記号（藍紫 = 諸侯領の
-  // 区画 / 白 = base と同じ線）を feature ごとに選ぶ必要がある。
-  lineColor: Rgba | ((feature: Feature) => Rgba) = LINE_COLOR,
-  lineWidth: number = LINE_WIDTH_PX,
-  stroked: boolean = true,
-): GeoJsonLayer {
-  return new GeoJsonLayer({
-    id,
-    data,
-    // TASK-77: 水面ポリゴンの直下へ差し込む（interleaved 前提。水面レイヤーが
-    // 無いスタイルでは undefined = 従来どおり最前面グループへフォールバック）
-    beforeId: underWaterBeforeId(id, currentStyleLayerIds()),
-    // AC #3: ホバー/クリックを有効化（ツールチップ UI は TASK-7）
-    pickable: true,
-    // TASK-78: powers は諸侯領オーバーレイ対象年のみ stroke を止め、境界線を
-    // base-outlines 層（諸侯領の内側を除いた輪郭）に委ねる。塗り・picking は不変。
-    stroked,
-    filled: true,
-    // AC #2: 塗り色は colors.json 参照・opacity 0.5 相当（alpha はカラーに内包）
-    // TASK-90: ホバー/クリック中の勢力キー（飛び地含む全 feature）だけは
-    // アクティブ色へ差し替える（判定は power_highlight.ts の純粋関数）
-    getFillColor: (f: Feature) =>
-      powerFillColor(
-        f.properties,
-        colors,
-        powerHighlight.selected(),
-        powerHighlight.hovered(),
-      ),
-    // AC #2: 白系の境界線（TASK-71: フランス諸侯領のみ藍紫の少し太い線）
-    getLineColor: lineColor,
-    lineWidthUnits: "pixels",
-    getLineWidth: lineWidth,
-    // 塗りの alpha はカラー側で表現するため、レイヤー opacity は等倍にする
-    opacity: 1,
-    // TASK-90: 強調キー（選択・ホバー）も accessor の入力なので trigger に足す。
-    // 足さないと deck.gl が getFillColor を再評価せず、色が変わらない。
-    updateTriggers: {
-      getFillColor: [
-        year,
-        powerHighlight.selected(),
-        powerHighlight.hovered(),
-      ],
-    },
-    // AC #5: 年代切替時に塗り色を数百 ms かけて補間し、ポリゴンをフェードさせる。
-    // 同一 layer id を保つため deck.gl が差分更新し、getFillColor の遷移が発火する。
-    // TASK-90: 同じ accessor に強調の色変化も乗るため、遷移時間は再構築の要因で
-    // 切り替える（年代切替 400ms / 強調 HIGHLIGHT_FILL_TRANSITION_MS）。年代
-    // フェードの 400ms をホバーへ流用すると色の追従が鈍く見える。
-    transitions: { getFillColor: { duration: fillTransitionMs } },
-    // ホバー/クリックの表示処理は Deck レベルの handlePickHover / handlePickClick
-    // に集約する（TASK-24。per-layer に分けると rivers との発火順レースになる）
-  });
-}
+// 政治ポリゴン builder（buildPowerLayer）は src/political_layers.ts へ移した
+// （TASK-148）。renderLayers が politicalLayerContext 経由で呼ぶ。
 
 /**
  * picking 結果からツールチップ/パネル用の表示ラベルを整形する（TASK-24）。
@@ -1161,33 +1032,44 @@ function featureLayerContext(year: number): FeatureLayerContext {
   };
 }
 
+// ---- 政治レイヤー builder 群（TASK-148: src/political_layers.ts へ抽出）----
+
+// 政治ポリゴン（buildPowerLayer）・勢力圏の外枠（buildSuzerainExtentLayer）・
+// 勢力名ラベル（buildLabelLayer）の 3 builder と、そのメモ化・見た目定数
+// （HRE_EXTENT_* / FIEF_LINE_*）・外枠 union キャッシュ（suzerain_extent.ts）は
+// src/political_layers.ts へ移した。ファクトリは起動時に 1 度だけ呼び、メモ化
+// キャッシュ（TASK-50/136 の参照同値契約の実体）を builder とデバッグフック
+// （installDebugHooks への注入）で共有する。状態の所有（powerHighlight ストア・
+// fillTransitionMs の一時差し替え・extentKey）は従来どおり main.ts に残し
+// （decision-29）、builder へは renderLayers が politicalLayerContext で
+// 現在値のスナップショットを渡す。
+const politicalLayers = createPoliticalLayerBuilders();
+
 /**
- * 勢力圏の外枠オーバーレイ（GeoJsonLayer）を生成する（TASK-30 AC #2〜#4 /
- * TASK-94）。データは base（europe_*）から宗主キーで集めた feature の union
- * （suzerain_extent.ts）で、領邦オーバーレイの有無に依らず勢力圏全体の輪郭が
- * 取れる。太い臙脂の外縁線 + ごく薄い塗りで「どこからどこまでが 1 つの勢力圏か」
- * を一目で示す。pickable: false のため picking の優先順位（PICKING_PRIORITY）・
- * ツールチップ・パネルには一切関与しない（AC #5）。表示の on/off は visible で
- * 切り替え、レイヤー ID を保って deck.gl の差分更新に任せる。
+ * 政治レイヤー builder へ渡す main.ts 所有状態のスナップショットを組み立てる
+ * （TASK-148）。メモ化は context オブジェクトではなく中身の参照（base 等の
+ * 引数と nameJa / fiefDedupe）をキーにするため、renderLayers のたびに新しい
+ * context を作っても TASK-50/136 の参照同値契約は崩れない。強調キー
+ * （powerHighlight）と fillTransitionMs は値で渡す: 変化時は必ずストアの
+ * onChange / renderWithFillTransition 経由で renderLayers が呼び直されるため、
+ * スナップショットが古くなることはない。
  */
-function buildSuzerainExtentLayer(
-  year: number,
-  base: FeatureCollection,
-): GeoJsonLayer {
-  return new GeoJsonLayer({
-    id: HRE_EXTENT_LAYER_ID,
-    data: suzerainExtent(base, extentKey, overrides),
-    visible: extentKey !== null,
-    pickable: false,
-    stroked: true,
-    filled: true,
-    getFillColor: HRE_EXTENT_FILL_COLOR,
-    getLineColor: HRE_EXTENT_LINE_COLOR,
-    lineWidthUnits: "pixels",
-    getLineWidth: HRE_EXTENT_LINE_WIDTH_PX,
-    opacity: 1,
-    updateTriggers: { getFillColor: [year], getLineColor: [year] },
-  });
+function politicalLayerContext(year: number): PoliticalLayerContext {
+  return {
+    year,
+    colors,
+    nameJa,
+    overrides,
+    fiefDedupe,
+    zoomStep,
+    extentKey,
+    selectedPowerKey: powerHighlight.selected(),
+    hoveredPowerKey: powerHighlight.hovered(),
+    fillTransitionMs,
+    // beforeId（underWaterBeforeId）の入力。スタイル差し替え時は renderLayers が
+    // 呼び直されるため、1 回の描画内でのスナップショットで十分
+    styleLayerIds: currentStyleLayerIds(),
+  };
 }
 
 /**
@@ -1329,11 +1211,12 @@ function renderLayers(): void {
   // 描画データの入力は「対象年 = 切り出し済みの base 輪郭（outlines）、
   // それ以外 = base ポリゴンの環」で、TASK-78 の二重輪郭解消は維持される。
   const ctx = featureLayerContext(year);
+  const pctx = politicalLayerContext(year);
   const buildPickableLayer: Record<string, () => Layer> = {
     [POWER_LAYER_ID]: () =>
-      buildPowerLayer(
+      politicalLayers.buildPowerLayer(
+        pctx,
         POWER_LAYER_ID,
-        year,
         // TASK-92: 諸侯領オーバーレイ対象年は諸侯領 union を差し引いた派生 base を
         // 塗る。諸侯領の下に base の半透明が重なって出る「境界線を伴わない濃淡」を
         // 消すのが目的で、非対象年・取得失敗時は base に縮退する。
@@ -1342,13 +1225,14 @@ function renderLayers(): void {
         LINE_WIDTH_PX,
         false,
       ),
-    [HRE_LAYER_ID]: () => buildPowerLayer(HRE_LAYER_ID, year, hre),
+    [HRE_LAYER_ID]: () =>
+      politicalLayers.buildPowerLayer(pctx, HRE_LAYER_ID, hre),
     // TASK-71: 中世フランス諸侯領。base の France ポリゴンの上に重ね、
     // 藍紫の境界線で区画を示す（非対象年は空 FC なので実質非表示）
     [FRANCE_FIEF_LAYER_ID]: () =>
-      buildPowerLayer(
+      politicalLayers.buildPowerLayer(
+        pctx,
         FRANCE_FIEF_LAYER_ID,
-        year,
         fiefs,
         FIEF_LINE_COLOR,
         FIEF_LINE_WIDTH_PX,
@@ -1357,9 +1241,9 @@ function renderLayers(): void {
     // 「諸侯領の区画」という記号を共有する（帝国系の臙脂とは色相で区別する）。
     // 非対象年は空 FC なので実質非表示。
     [ITALY_FIEF_LAYER_ID]: () =>
-      buildPowerLayer(
+      politicalLayers.buildPowerLayer(
+        pctx,
         ITALY_FIEF_LAYER_ID,
-        year,
         italyFiefs,
         FIEF_LINE_COLOR,
         FIEF_LINE_WIDTH_PX,
@@ -1370,9 +1254,9 @@ function renderLayers(): void {
     // 決める: このレイヤーは仏諸侯領と帝国領邦を同居させるため、レイヤー一律に
     // すると凡例（藍紫 = 諸侯領の区画 / 白 = 帝国領邦・base と同じ線）が破れる。
     [CLIOPATRIA_FIEF_LAYER_ID]: () =>
-      buildPowerLayer(
+      politicalLayers.buildPowerLayer(
+        pctx,
         CLIOPATRIA_FIEF_LAYER_ID,
-        year,
         cliopatriaFiefs,
         (f: Feature) =>
           isHreSuzerainFeature(f.properties) ? LINE_COLOR : FIEF_LINE_COLOR,
@@ -1400,7 +1284,7 @@ function renderLayers(): void {
     // pickable: false のため PICKING_PRIORITY 外の ID で、整合検証では
     // 無視される（layerOrderMatchesPickingPriority の既存仕様）。
     if (id === HRE_LAYER_ID) {
-      layers.push(buildSuzerainExtentLayer(year, base));
+      layers.push(politicalLayers.buildSuzerainExtentLayer(pctx, base));
       // TASK-100: 山脈の強調輪郭は勢力圏の外枠と同じ層（政治ポリゴンの上・
       // 都市ドット/河川ラインの下）に置く。輪郭どうしが同じ階層に並ぶことで
       // 「臙脂の外縁 = 帝国範囲 / オリーブの外縁 = 山脈の範囲」が同じ土俵で
@@ -1418,7 +1302,14 @@ function renderLayers(): void {
   const labelLayers: Layer[] = [
     featureLayers.buildMountainLabelLayer(ctx),
     featureLayers.buildPeakLabelLayer(ctx),
-    buildLabelLayer(year, base, hre, fiefs, italyFiefs, cliopatriaFiefs),
+    politicalLayers.buildLabelLayer(
+      pctx,
+      base,
+      hre,
+      fiefs,
+      italyFiefs,
+      cliopatriaFiefs,
+    ),
     featureLayers.buildRiverLabelLayer(ctx),
     featureLayers.buildCityLabelLayer(ctx),
   ];
@@ -1449,149 +1340,8 @@ function renderLayers(): void {
   syncApproximateBorders();
 }
 
-/**
- * 勢力名ラベルの TextLayer を生成する（TASK-20）。
- * base（europe_*）と HRE 領邦オーバーレイ（hre_*）双方のラベルを 1 枚に束ね、
- * CollisionFilterExtension で重なりを間引く。面積由来の priority（labels.ts）
- * により大勢力を優先表示し、小勢力はズームインで空きができ次第表示される。
- * pickable は false（ラベル自体はホバー対象にせず、下のポリゴンの picking を
- * 妨げない）。年代切替では同一 ID のまま data を差し替えるのみ。
- */
-/**
- * 勢力名ラベルのデータ + characterSet をメモ化する（TASK-50）。
- * 直近実測 ~4.3ms/回の主因だった buildLabelData（全 base+hre feature への
- * polylabel）を、year・base・hre・nameJa の参照同値でキャッシュする。
- * applyRiverHover / applyRiverSelection / applyExtentKey は currentView
- * （base/hre）を書き換えずに renderLayers() を呼ぶだけなので、同じ引数の
- * 参照が渡り続けてキャッシュヒットし polylabel は走らない。switchYear
- * 経由で currentView が新しい base/hre に置き換わったとき（年代切替・
- * データ再ロード）だけ、参照が変わって正しく再計算される。
- */
-const memoizedPowerLabelData = memoizeLatest(
-  (
-    // year は抑制対象の解決（suppressedPowerNames）に使い、同時にメモ化キーの
-    // 一部にもなる（base/hre/fiefs と揃えて明示的に年代依存であることを示す）
-    year: number,
-    base: FeatureCollection,
-    hre: FeatureCollection,
-    fiefs: FeatureCollection,
-    italyFiefs: FeatureCollection,
-    cliopatriaFiefs: FeatureCollection,
-    ja: Record<string, string>,
-    dedupe: FiefDedupeTable,
-  ) => {
-    // TASK-23: ラベルは name-ja.json で日本語化する（未登録 NAME は英語のまま）。
-    // TASK-30: kind（base/hre）を付与し、HRE 領邦ラベルだけ帝国色で塗り分ける。
-    // TASK-71: フランス諸侯領は kind=fief で藍紫。オーバーレイ非対象年では
-    // fiefs が空 FC なのでラベルも 0 件になる（二重ラベルにならない）。
-    // TASK-78 AC #1: 諸侯領にほぼ完全内包される base 勢力（1000〜1300 の
-    // Britany）は、同じ土地の諸侯領ラベル（ブルターニュ公領）と二重表示に
-    // なるため base 側のラベルだけ落とす。抑制対象が無い年（1400 以降や
-    // 対応表の取得失敗時）は同一参照が返り、polylabel のメモ化も効き続ける。
-    // TASK-122: 抑制対象を FeatureCollection から落とすのではなく datum に
-    // suppressed の印だけ付ける。諸侯領ラベルを出していないズーム段では抑制を
-    // 解除しないとその土地のラベルが 1 つも無くなる（AC #4）ため、実際に出すか
-    // どうかの判断は filterPowerLabelsByZoom（ズーム段依存）へ移した。datum を
-    // 常に作っておくことで characterSet も絞り込み前の全テキストから作れる。
-    const suppressed = suppressedPowerNames(dedupe, year);
-    const cliopatriaLabelGroups = partitionFiefsBySuzerain(cliopatriaFiefs);
-    const data = [
-      ...buildLabelData(base, ja, "base", suppressed),
-      ...buildLabelData(hre, ja, "hre"),
-      ...buildLabelData(fiefs, ja, "fief"),
-      // TASK-96: 伊諸侯領も kind=fief（藍紫）。base 側の教皇領・帝国との
-      // 二重ラベルは fief-dedupe.json の被覆率が抑制する（1100 年以降の
-      // Corsica は被覆率 0.9983 で抑制側に入る）。
-      ...buildLabelData(italyFiefs, ja, "fief"),
-      // TASK-110: Cliopatria 由来は 1 枚のレイヤーに仏諸侯領と帝国領邦が同居
-      // するため、kind をレイヤー一律ではなく宗主で決める（labels.ts
-      // partitionFiefsBySuzerain）。こうしないと 1400/1492 年に Cliopatria 由来の
-      // バイエルンだけ藍紫・隣の OHM 由来領邦は臙脂、という凡例の破れが出る。
-      ...buildLabelData(cliopatriaLabelGroups.hre, ja, "hre"),
-      ...buildLabelData(cliopatriaLabelGroups.fief, ja, "fief"),
-    ];
-    // TASK-122 AC #7: characterSet はズームで絞り込む**前**の全 datum から
-    // 作る。表示中の datum から作ると、ズームインで諸侯領ラベルが増えた瞬間に
-    // 未収録グリフ（ü・日本語）が豆腐になるか、フォントアトラスが作り直される。
-    return { data, characterSet: characterSetFrom(data.map((d) => d.text)) };
-  },
-);
-
-/**
- * 現在のズーム段で表示する勢力ラベルだけに絞る（TASK-122）。
- * memoizedPowerLabelData の安定参照 + zoomStep をキーにするので、ホバー/
- * 選択のたびに走る renderLayers() では再計算されない（山脈の
- * memoizedMountainHitData と同型）。zoomStep をこちら側のキーに置くことで、
- * 段が変わっても polylabel（memoizedPowerLabelData）は再計算されない。
- */
-const memoizedVisiblePowerLabels = memoizeLatest(
-  (data: readonly LabelDatum[], zoomStep: number) =>
-    filterPowerLabelsByZoom(data, zoomStep),
-);
-
-function buildLabelLayer(
-  year: number,
-  base: FeatureCollection,
-  hre: FeatureCollection,
-  fiefs: FeatureCollection,
-  italyFiefs: FeatureCollection,
-  cliopatriaFiefs: FeatureCollection,
-): TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>> {
-  // TextLayer は 1 枚のまま・衝突制御（共有空間・priority）も従来どおり。
-  const { data: allData, characterSet } = memoizedPowerLabelData(
-    year,
-    base,
-    hre,
-    fiefs,
-    italyFiefs,
-    cliopatriaFiefs,
-    nameJa,
-    fiefDedupe,
-  );
-  // TASK-122: FIEF_LABEL_MIN_ZOOM 未満では諸侯領・帝国領邦ラベルを出さず、
-  // 代わりに TASK-78 で抑制していた base ラベルを復活させる。
-  const data = memoizedVisiblePowerLabels(allData, zoomStep);
-  return new TextLayer<LabelDatum, CollisionFilterExtensionProps<LabelDatum>>({
-    // フォント・クリーム halo（TASK-72: ケルン大司教領・ザクセン選帝侯領/
-    // 公領周辺の密集や HRE 外縁の赤境界線との重なり対策。背景パネルは撤去済み）
-    // ・衝突制御（COLLISION_SIZE_SCALE 倍判定）は共通 base props
-    ...labelLayerBaseProps(),
-    id: LABEL_LAYER_ID,
-    data,
-    pickable: false,
-    getText: (d) => d.text,
-    getPosition: (d) => d.position,
-    // POWER_LABEL_SIZE_PX 固定・濃色文字 + 白 halo（SDF アウトライン）で塗りの上でも判読できる。
-    // TASK-30 AC #1: 文字色は kind で塗り分け（独立国 = 濃グレー、HRE 域内の
-    // 領邦 = 臙脂 HRE_LABEL_COLOR、TASK-71: フランス諸侯領 = 藍紫
-    // FIEF_LABEL_COLOR）。ラベルだけで由来の系統を区別できる。
-    // TASK-93: 強調（ホバー/クリック）中の勢力・領邦のラベルは、同じ色相のまま
-    // 暗く沈めた強調用の色へ切り替える。アクティブ塗りの上で通常色のままだと
-    // 文字が塗りに埋もれるため（判定は d.key = 塗りと同一の強調キー）。
-    getSize: POWER_LABEL_SIZE_PX,
-    getColor: (d: LabelDatum) => [
-      ...powerLabelColor(
-        d,
-        powerHighlight.selected(),
-        powerHighlight.hovered(),
-      ),
-    ],
-    // ü などの非 ASCII 文字（Württemberg 等）もグリフを生成する
-    characterSet,
-    // TASK-93: 強調キーは getColor の入力なので trigger に足す（足さないと
-    // deck.gl が getColor を再評価せず文字色が切り替わらない）。data 自体は
-    // 強調状態に依存しないため memoizedPowerLabelData のキャッシュは効き続け、
-    // ホバーのたびに polylabel が走ることはない。
-    // TASK-122: 表示対象がズーム段でも変わるため trigger に zoomStep を足す。
-    // characterSet は絞り込み前の全テキストなので段が変わっても不変
-    // （フォントアトラスは作り直されない）。
-    updateTriggers: {
-      getText: [year, zoomStep],
-      getPosition: [year, zoomStep],
-      getColor: [powerHighlight.selected(), powerHighlight.hovered()],
-    },
-  });
-}
+// 勢力名ラベル builder（buildLabelLayer + memoizedPowerLabelData /
+// memoizedVisiblePowerLabels）は src/political_layers.ts へ移した（TASK-148）。
 
 // ホバー/クリック情報 UI（TASK-7/109/111）と attribution フッター（TASK-26）の
 // DOM 配線は src/ui/ へ抽出した（TASK-146）。buildPowerLayer は年代切替のたびに
@@ -1874,8 +1624,10 @@ installDebugHooks({
   memoizedPeakEntries: featureLayers.memoizedPeakEntries,
   memoizedVisiblePeaks: featureLayers.memoizedVisiblePeaks,
   memoizedPeakLabelData: featureLayers.memoizedPeakLabelData,
-  memoizedPowerLabelData,
-  memoizedVisiblePowerLabels,
+  // TASK-148: 政治レイヤーのメモ化は political_layers.ts のファクトリが所有する。
+  // builder と同一インスタンスを渡し、キャッシュ共有（TASK-50/136）を保つ。
+  memoizedPowerLabelData: politicalLayers.memoizedPowerLabelData,
+  memoizedVisiblePowerLabels: politicalLayers.memoizedVisiblePowerLabels,
   memoizedCityAvoidPoints: featureLayers.memoizedCityAvoidPoints,
   memoizedRiverLabelData: featureLayers.memoizedRiverLabelData,
   memoizedVisibleCityEntries: featureLayers.memoizedVisibleCityEntries,
