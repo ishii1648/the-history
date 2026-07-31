@@ -352,7 +352,7 @@ const dataLoader = createCombinedYearLoader(
   // TASK-92: 諸侯領の下地になる base 塗りを差し引いた派生 base。輪郭
   // （base_outline_*）と同じ union から作られるので、年集合も同一。
   withOverrides(createBaseFillLoader((url) => fetch(url), BASE_OUTLINE_YEARS)),
-  // TASK-96: 中世イタリア諸侯領（italy_fiefs_flat_*、1000〜1492）。仏諸侯領・
+  // TASK-96: イタリア諸侯領（italy_fiefs_flat_*、1000〜1500。#188）。仏諸侯領・
   // HRE 領邦と同じ機構に載せ、非対象年は fetch せず空 FC になる。
   withOverrides(
     createItalyFiefOverlayLoader((url) => fetch(url), ITALY_FIEF_OVERLAY_YEARS),

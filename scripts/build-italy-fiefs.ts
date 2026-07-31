@@ -1,6 +1,7 @@
 /**
- * 中世イタリア（北・中部）の諸侯領・都市共和国オーバーレイを
- * OpenHistoricalMap（OHM）から生成するデータパイプライン（TASK-95）。
+ * イタリア（北・中部）の諸侯領・都市共和国オーバーレイ（中世 1000〜1492 年と
+ * 近世初頭 1500 年、#188）を OpenHistoricalMap（OHM）から生成する
+ * データパイプライン（TASK-95）。
  *
  * ## なぜ独立系統なのか（hre-fiefs の bbox / 許可リスト拡張ではなく新設した理由）
  * 1. 帰属が単一でない。フィレンツェ・ジェノヴァ・ピサ・シエナ・ルッカのコムーネは
@@ -78,7 +79,7 @@ export const ITALY_FIEF_BBOX: readonly [number, number, number, number] = [
 ];
 
 /**
- * 生成対象年。SNAPSHOT_YEARS 全 7 年を収録する。
+ * 中世の生成対象年。
  * 生成物の実測件数と合計面積（bbox 外パート除去・簡略化の後。球面近似で、
  * 諸侯領同士の重なりは差し引いていない）:
  * 1000 = 3 件 / 57,285 km²、1100 = 7 / 81,226、1200 = 10 / 55,530、
@@ -92,7 +93,7 @@ export const ITALY_FIEF_BBOX: readonly [number, number, number, number] = [
  * かつての 900 年を落とした「2 件で面にならない」ケースとは異なる。900 年は
  * TASK-119 でスナップショット年自体が廃止された）。
  */
-export const ITALY_FIEF_YEARS: readonly number[] = [
+export const ITALY_FIEF_MEDIEVAL_YEARS: readonly number[] = [
   1000,
   1100,
   1200,
@@ -100,6 +101,27 @@ export const ITALY_FIEF_YEARS: readonly number[] = [
   1300,
   1400,
   1492,
+];
+
+/**
+ * 近世初頭の生成対象年（#188）。base（europe_<year>）が北・中部イタリアの諸邦を
+ * 個別収録するのは 1530 年からで、1500 年だけは base が Holy Roman Empire
+ * 一括塗りへ退行する（Roller 由来 hre_1500 も独領邦 13 件のみでイタリアを
+ * 持たない）。この空白を 1492 年と同じ許可リスト系統
+ * （ITALY_FIEF_EARLY_MODERN_NAMES）で埋める。
+ *
+ * 選抜の許可リストと除外の適用を中世と分けることで、中世 7 年代の候補選抜へ
+ * 手を入れずに済み、既存生成物のバイト不変を構造的に保つ（#187 の
+ * HRE_FIEF_EARLY_MODERN_YEARS と同じ方針）。
+ */
+export const ITALY_FIEF_EARLY_MODERN_YEARS: readonly number[] = [
+  1500,
+];
+
+/** 生成対象年の全体（中世 + 近世初頭、昇順）。 */
+export const ITALY_FIEF_YEARS: readonly number[] = [
+  ...ITALY_FIEF_MEDIEVAL_YEARS,
+  ...ITALY_FIEF_EARLY_MODERN_YEARS,
 ];
 
 /**
@@ -133,7 +155,10 @@ export const ITALY_FIEF_EXCLUSIONS: Record<string, string> = {
     "Prince-Bishopric of Freising / Dauphiné of Viennois）。同じ土地を 2 系統で" +
     "塗らないため本系統では採らない。Milan は 1400 年が hre_fiefs 側の " +
     "Duchy of Milan で収録されており、1279 / 1300 年の Lordship of Milan は" +
-    "ジオメトリが無い（ohmGeometryMissing）ので本系統でも埋められない。",
+    "ジオメトリが無い（ohmGeometryMissing）ので本系統でも埋められない。" +
+    "hre_fiefs が存在しない 1500 年（Roller 由来 hre_1500 は独領邦 13 件のみ）に" +
+    "限り、この根拠が成り立たない Duchy of Milan の除外を解除して本系統で採る" +
+    "（ITALY_FIEF_EARLY_MODERN_EXEMPTIONS、#188）。",
   transalpineImperialTerritories:
     "アルプス以北・アドリア海北岸の帝国領（Margraviate of Istria 696 km² / " +
     "Triest 163 km² / Free Imperial City of Bern）。bbox の北端・東端に掛かるが" +
@@ -152,15 +177,22 @@ export const ITALY_FIEF_EXCLUSIONS: Record<string, string> = {
     "Provence（1487 年以降・23,215 km²）。bbox の西端に掛かるがイタリアの" +
     "諸侯領ではなく、フランス王国側の領域。",
   microStates:
-    "面積 100 km² 未満で簡略化すると点に近くなる領域（San Marino 7〜22 km² / " +
-    "City of San Marino / Fiorentino / County of Vernio 12 km² / " +
-    "Republic of Noli 58 km² / County of Novellara and Bagnolo 50 km²）。" +
+    "面積 100 km² 未満で簡略化すると点に近くなる領域（San Marino 7〜22 km² と" +
+    "その castelli（City of San Marino / Acquaviva / Chiesanuova / Domagnano / " +
+    "Faetano / Fiorentino / Mercatale / Montegiardino / Serravalle）/ " +
+    "County of Vernio 12 km² / Republic of Noli 58 km² / " +
+    "County of Novellara and Bagnolo 50 km²）。" +
     "収録した最小は County of Guastalla 133 km² で、100 km² を採否の境目にした" +
     "（hre_fiefs が「点に近い領域」を落とした判断と同じ基準）。",
   ohmDateErrors:
     "Golden Ambrosian Republic（史実は 1447〜1450 のミラノ市共和国）が OHM では " +
-    "1449〜1500 になっており 1492 年でも有効判定になる。hre_fiefs と同じく " +
-    "OHM 側の end_date 誤りと判断して落とす（結果として 1492 年のミラノは空白）。",
+    "1449〜1500 になっており 1492 / 1500 年でも有効判定になる。hre_fiefs と" +
+    "同じく OHM 側の end_date 誤りと判断して落とす（結果として 1492 年のミラノは" +
+    "空白。1500 年は rel 2800654 の Duchy of Milan（1500〜1512）が埋める。#188）。",
+  imperialCircles:
+    "帝国クライス（1500 年の帝国改革で設けられた帝国の管区。Bavarian Circle / " +
+    "Upper Rhenish Circle、いずれも 1500 年開始の admin_level 3）。領邦ではなく" +
+    "領邦を束ねる行政区分で、面としては配下の諸邦と全面的に重なる。",
   ohmGeometryMissing:
     "メンバーが label ノードだけでジオメトリを組めないリレーション" +
     "（Lordship of Milan 1259〜1349 / Pisan Corsica 1050〜1284）。面が作れないので" +
@@ -176,17 +208,22 @@ export const ITALY_FIEF_EXCLUSIONS: Record<string, string> = {
  * 実測で挙がった候補のうち、パターンで落とせない個別事例をここに置く。
  */
 export const ITALY_FIEF_EXCLUDED_NAMES: Record<string, string> = {
+  "Acquaviva": "microStates",
   "Aprutium beyond the Pescara": "kingdomOfSicilyProvinces",
   "Aprutium this side of the Pescara": "kingdomOfSicilyProvinces",
+  "Bavarian Circle": "imperialCircles",
+  "Chiesanuova": "microStates",
   "City of San Marino": "microStates",
   "County of Novellara and Bagnolo": "microStates",
   "County of Vernio": "microStates",
   "Dauphiné of Viennois": "hreFiefOverlap",
+  "Domagnano": "microStates",
   "Duchy of Bavaria": "hreFiefOverlap",
   "Duchy of Carinthia": "hreFiefOverlap",
   "Duchy of Carniola": "hreFiefOverlap",
   "Duchy of Milan": "hreFiefOverlap",
   "Duchy of Swabia": "hreFiefOverlap",
+  "Faetano": "microStates",
   "Fiorentino": "microStates",
   "Free Imperial City of Bern": "transalpineImperialTerritories",
   "Genoese Corsica": "islandsCoveredByParent",
@@ -196,15 +233,32 @@ export const ITALY_FIEF_EXCLUDED_NAMES: Record<string, string> = {
   "Lordship of Verona": "hreFiefOverlap",
   "March of Verona": "hreFiefOverlap",
   "Margraviate of Istria": "transalpineImperialTerritories",
+  "Mercatale": "microStates",
   "Milanese Corsica": "islandsCoveredByParent",
+  "Montegiardino": "microStates",
   "Pisan Corsica": "ohmGeometryMissing",
   "Prince-Bishopric of Freising": "hreFiefOverlap",
   "Provence": "franceAndProvence",
   "Republic of Noli": "microStates",
   "San Marino": "microStates",
   "Savoyard state": "imperialKingdomsAndSavoy",
+  "Serravalle": "microStates",
   "Triest": "transalpineImperialTerritories",
+  "Upper Rhenish Circle": "imperialCircles",
 };
+
+/**
+ * 近世初頭（1500 年）に限り除外を解除する対象（OHM の名前、#188）。
+ * Duchy of Milan の除外根拠 hreFiefOverlap（hre_fiefs 側で収録済み）は、
+ * hre_fiefs が存在しない 1500 年には成り立たない（1500 年の hre-powers は
+ * Roller 由来 hre_1500 で、収録は独領邦 13 件のみ）。1500 年のミラノは
+ * rel 2800654（1500〜1512。1499 年にミラノを征服したフランス王権下の公国）が
+ * OHM に実在するため、本系統で採って base の Holy Roman Empire 一括塗りへの
+ * 退行を防ぐ。
+ */
+export const ITALY_FIEF_EARLY_MODERN_EXEMPTIONS: readonly string[] = [
+  "Duchy of Milan",
+];
 
 /**
  * イタリア諸侯領として収録しない対象なら、その根拠を返す（純粋関数）。収録するなら null。
@@ -213,9 +267,23 @@ export const ITALY_FIEF_EXCLUDED_NAMES: Record<string, string> = {
  * （scripts/build-hre-fiefs.ts の hreFiefExclusionReason と同じ方針）。
  * 期間つき曖昧性解消（"Savoyard state (1388-1401)" 等）は表示名で判定するので、
  * 除外リストには期間を外した名前を置く。
+ *
+ * #188: year を渡すと年で除外根拠が変わる対象を判定できる。近世初頭
+ * （ITALY_FIEF_EARLY_MODERN_YEARS）は ITALY_FIEF_EARLY_MODERN_EXEMPTIONS の
+ * 対象（Duchy of Milan）だけ除外を解除する。year 省略時は従来どおり全除外を
+ * 適用する（中世 7 年代の判定は year の有無で変わらない）。
  */
-export function italyFiefExclusionReason(name: string): string | null {
+export function italyFiefExclusionReason(
+  name: string,
+  year?: number,
+): string | null {
   const display = italyFiefDisplayName(name);
+  if (
+    year !== undefined && ITALY_FIEF_EARLY_MODERN_YEARS.includes(year) &&
+    ITALY_FIEF_EARLY_MODERN_EXEMPTIONS.includes(display)
+  ) {
+    return null;
+  }
   for (const candidate of [name, display]) {
     const explicit = ITALY_FIEF_EXCLUDED_NAMES[candidate];
     if (explicit !== undefined) return ITALY_FIEF_EXCLUSIONS[explicit];
@@ -245,14 +313,17 @@ export function italyFiefExclusionReason(name: string): string | null {
  * 2,456 / Lordship of Piombino 1,507 / Lordship of Oneglia 270 /
  * Principality of Oneglia 270 / Lordship of Lucca 1,042。
  *
- * 近世初頭（1492 年）の公領・伯領: Duchy of Florence 12,773 /
+ * 近世初頭（1492 年）の公領・伯領: Duchy of Florence 12,773
+ * （rel 2800633。表示は Republic of Florence に上書きする。
+ * ITALY_FIEF_DISPLAY_NAME_OVERRIDES を参照）/
  * Duchy of Modena and Reggio 4,624 / Duchy of Ferrara 3,244 /
  * Duchy of Massa and Carrara 212 / Duchy of Mirandola 201 /
  * County of Sovana 300 / County of Santa Fiora 185 / County of Pitigliano 149 /
  * County of Guastalla 133。
  *
  * OHM に無く収録できない主要勢力: ミラノ（1279 / 1300 の Lordship of Milan は
- * ジオメトリ無し、1492 は end_date 誤りの Golden Ambrosian Republic のみ）・
+ * ジオメトリ無し、1492 は end_date 誤りの Golden Ambrosian Republic のみ。
+ * 1500 は rel 2800654 があり ITALY_FIEF_EARLY_MODERN_NAMES で採る）・
  * ヴェネツィア（admin_level 2 で base 側）・ボローニャ・パドヴァ・
  * ウルビーノ公領。詳細は docs/data-inventory/README.md を参照。
  */
@@ -287,6 +358,59 @@ export const ITALY_FIEF_NAMES: readonly string[] = [
 ];
 
 /**
+ * 近世初頭（1500 年）に採用する諸侯領の名前許可リスト（昇順・21 件、#188）。
+ *
+ * OHM 実測（bbox 内 1,353 リレーションのうち admin_level 3 / 4 / 6・名前あり・
+ * 1500 年に有効 = 59 件）で確定した結果、1492 年の生成物 20 件の元リレーションは
+ * 全て 1500 年にも有効（最短の存続は Lordship of Rimini の 1295〜1500 で、
+ * end_date は年単位の包含判定により 1500 年を含む。史実でも Malatesta 家の
+ * リミニは 1500 年のチェーザレ・ボルジアの征服まで存続）。そこへ 1500 年開始の
+ * Duchy of Milan（rel 2800654、1500〜1512）を加えた 21 件を採る。
+ *
+ * 21 件以外で 1500 年に有効な候補は、既存の除外分類（帝国クライス・
+ * サンマリノの castelli・Savoyard state・Golden Ambrosian Republic 等）で落ちる
+ * （ITALY_FIEF_EXCLUSIONS / ITALY_FIEF_EXCLUDED_NAMES を参照）。
+ *
+ * 中世の許可リスト ITALY_FIEF_NAMES と分けるのは、中世 7 年代の候補選抜に
+ * 手を入れず既存生成物のバイト不変を保つため（#187 の
+ * HRE_FIEF_EARLY_MODERN_NAMES と同じ方針）。
+ */
+export const ITALY_FIEF_EARLY_MODERN_NAMES: readonly string[] = [
+  "County of Asti",
+  "County of Guastalla",
+  "County of Pitigliano",
+  "County of Santa Fiora",
+  "County of Sovana",
+  "Duchy of Ferrara (1471-1597)",
+  "Duchy of Florence",
+  "Duchy of Massa and Carrara",
+  "Duchy of Milan",
+  "Duchy of Mirandola",
+  "Duchy of Modena and Reggio",
+  "Lordship of Piombino",
+  "Lordship of Rimini",
+  "March of Montferrat",
+  "Margraviate of Mantua",
+  "Marquisate of Saluzzo",
+  "Principality of Oneglia (1488-1576)",
+  "Republic of Ancona",
+  "Republic of Genoa",
+  "Republic of Lucca",
+  "Republic of Siena",
+];
+
+/**
+ * year の選抜に使う許可リストを返す（純粋関数、#188）。
+ * 中世 7 年代は従来の ITALY_FIEF_NAMES のまま（生成物のバイト不変を保つ）、
+ * 近世初頭（1500 年）は ITALY_FIEF_EARLY_MODERN_NAMES。
+ */
+export function italyFiefNamesForYear(year: number): readonly string[] {
+  return ITALY_FIEF_EARLY_MODERN_YEARS.includes(year)
+    ? ITALY_FIEF_EARLY_MODERN_NAMES
+    : ITALY_FIEF_NAMES;
+}
+
+/**
  * 表示名の上書き（OHM の名前 → 表示名。AC4）。
  * OHM のイタリア系リレーションには name:en に期間の曖昧性解消が入ったものがあり、
  * そのままでは表示名に使えない。とくに "Republic of Pisa (1399-1406)" は
@@ -296,9 +420,19 @@ export const ITALY_FIEF_NAMES: readonly string[] = [
  * 落としたが、本系統では中核勢力なので落とさず表示名を上書きする。
  * italyFiefDisplayName が末尾の "(開始-終了)" を機械的に外すため、この表は
  * 「意図した上書きだ」という記録を兼ねる。
+ *
+ * #188: "Duchy of Florence" は OHM の rel 2800633（1406〜1555）が存続期間全体に
+ * 後年の公国名を与えた時代錯誤で、フィレンツェ公国の成立は 1532 年
+ * （アレッサンドロ・デ・メディチの世襲公位）。本パイプラインがこのリレーションを
+ * 使う年は 1492 / 1500 のみで、いずれも共和政期にあたるため史実名
+ * "Republic of Florence" へ上書きする。中世（1200〜1400 年）の
+ * Republic of Florence（rel 2800634、1115〜1405）とは期間が重ならないので、
+ * 同一年に表示名が衝突することはない。OHM_NAME に元名が残るため出典への追跡は
+ * 保たれる。
  */
 export const ITALY_FIEF_DISPLAY_NAME_OVERRIDES: Record<string, string> = {
   "Duchy of Ferrara (1471-1597)": "Duchy of Ferrara",
+  "Duchy of Florence": "Republic of Florence",
   "Lordship of Oneglia (1298-1488)": "Lordship of Oneglia",
   "Principality of Oneglia (1488-1576)": "Principality of Oneglia",
   "Republic of Pisa (1399-1406)": "Republic of Pisa",
@@ -372,7 +506,7 @@ function activeSpan(tags: Record<string, string>): number {
 export function selectItalyFiefsForYear(
   elements: readonly OhmRelation[],
   year: number,
-  names: readonly string[] = ITALY_FIEF_NAMES,
+  names: readonly string[] = italyFiefNamesForYear(year),
   adminLevels: readonly number[] = ITALY_FIEF_ADMIN_LEVELS,
 ): OhmRelation[] {
   const allowed = new Set(names);
@@ -381,7 +515,7 @@ export function selectItalyFiefsForYear(
     const tags = element.tags ?? {};
     const name = relationName(tags);
     if (name === null || !allowed.has(name)) return false;
-    if (italyFiefExclusionReason(name) !== null) return false;
+    if (italyFiefExclusionReason(name, year) !== null) return false;
     const level = Number.parseInt(tags["admin_level"] ?? "", 10);
     if (!Number.isInteger(level) || !levels.has(level)) return false;
     return isActiveAtYear(tags["start_date"], tags["end_date"], year);
@@ -479,7 +613,7 @@ export function buildYearCollection(
   tagged: readonly OhmRelation[],
   geometries: ReadonlyMap<number, OhmRelation>,
   year: number,
-  names: readonly string[] = ITALY_FIEF_NAMES,
+  names: readonly string[] = italyFiefNamesForYear(year),
 ): ItalyFiefYearCollection {
   const selected = selectItalyFiefsForYear(tagged, year, names);
   const features: FeatureCollection["features"] = [];
@@ -571,19 +705,39 @@ async function runOverpass(
   throw new Error("到達しない");
 }
 
+/**
+ * CLI 引数から生成対象年を決める（純粋関数、#188）。
+ * 引数なしなら全対象年（従来どおり）。年を並べる（例: `1492 1500`）と
+ * その年だけを生成・書き込みし、他の年の生成物へ一切触れない。
+ * 既存年の生成物のバイト不変を「再生成しない」ことで構造的に保証するための
+ * 仕組みで、対象年に無い年の指定はエラーにする。
+ */
+export function parseTargetYears(args: readonly string[]): number[] {
+  if (args.length === 0) return [...ITALY_FIEF_YEARS];
+  const years = args.map((arg) => Number.parseInt(arg, 10));
+  for (const year of years) {
+    if (!ITALY_FIEF_YEARS.includes(year)) {
+      throw new Error(`${year} は ITALY_FIEF_YEARS に含まれない年です`);
+    }
+  }
+  return [...new Set(years)].sort((a, b) => a - b);
+}
+
 async function main(): Promise<void> {
   for (const year of ITALY_FIEF_YEARS) {
     if (!SNAPSHOT_YEARS.includes(year)) {
       throw new Error(`${year} は SNAPSHOT_YEARS に含まれない年です`);
     }
   }
+  const targetYears = parseTargetYears(Deno.args);
+  console.log(`target years: ${targetYears.join(", ")}`);
   // 1 段目: bbox 内の boundary=administrative を tags のみ取得（約 1,350 件）
   const tagged = (await runOverpass(buildTagsQuery(ITALY_FIEF_BBOX))).elements;
   console.log(`tags: ${tagged.length} relations`);
 
-  // 2 段目: 全対象年で必要になるリレーションのジオメトリだけをまとめて 1 回取得
+  // 2 段目: 対象年で必要になるリレーションのジオメトリだけをまとめて 1 回取得
   const ids = new Set<number>();
-  for (const year of ITALY_FIEF_YEARS) {
+  for (const year of targetYears) {
     for (const element of selectItalyFiefsForYear(tagged, year)) {
       ids.add(element.id);
     }
@@ -594,7 +748,7 @@ async function main(): Promise<void> {
   const geometries = new Map(geomElements.map((e) => [e.id, e]));
   console.log(`geom: ${geometries.size}/${ids.size} relations`);
 
-  for (const year of ITALY_FIEF_YEARS) {
+  for (const year of targetYears) {
     const { fc, metadata } = buildYearCollection(tagged, geometries, year);
     const { fc: shrunk, tolerance, cleanStats } = shrinkToLimit(
       fc,

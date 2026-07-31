@@ -31,6 +31,14 @@ import {
   restrictPartsToBbox,
   selectItalyFiefsForYear,
 } from "./build-italy-fiefs.ts";
+import {
+  ITALY_FIEF_EARLY_MODERN_NAMES,
+  ITALY_FIEF_EARLY_MODERN_YEARS,
+  ITALY_FIEF_MEDIEVAL_YEARS,
+  italyFiefNamesForYear,
+} from "./build-italy-fiefs.ts";
+import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
+import { HRE_OVERLAY_YEARS } from "../src/config.ts";
 import { MIN_PART_AREA_M2, polygonParts } from "./clean-polygons.ts";
 import area from "@turf/area";
 
@@ -98,6 +106,28 @@ Deno.test("対象年は SNAPSHOT_YEARS の部分集合", () => {
   ]);
 });
 
+Deno.test("対象年は中世 7 年代 + 近世初頭 1500 の連結（#188）", () => {
+  assertEquals([...ITALY_FIEF_MEDIEVAL_YEARS], [
+    1000,
+    1100,
+    1200,
+    1279,
+    1300,
+    1400,
+    1492,
+  ]);
+  assertEquals([...ITALY_FIEF_EARLY_MODERN_YEARS], [1500]);
+  assertEquals([...ITALY_FIEF_YEARS], [
+    ...ITALY_FIEF_MEDIEVAL_YEARS,
+    ...ITALY_FIEF_EARLY_MODERN_YEARS,
+  ]);
+});
+
+Deno.test("1500 年は hre_fiefs（OHM 由来）の対象外で Roller 由来 hre_1500 の年（ミラノを伊系統で出す前提。#188）", () => {
+  assert(!HRE_FIEF_YEARS.includes(1500));
+  assert(HRE_OVERLAY_YEARS.includes(1500));
+});
+
 Deno.test("採用する admin_level は 3 / 4 / 6（2 = 主権国家は除く）", () => {
   assertEquals(ITALY_FIEF_ADMIN_LEVELS, [3, 4, 6]);
 });
@@ -140,6 +170,41 @@ Deno.test("許可リストは hre_fiefs / france_fiefs と重複しない（二�
   }
 });
 
+Deno.test("近世初頭の許可リストは 1492 の 20 件 + Duchy of Milan で昇順・重複なし（#188）", () => {
+  const sorted = [...ITALY_FIEF_EARLY_MODERN_NAMES].sort((a, b) =>
+    a.localeCompare(b, "en")
+  );
+  assertEquals([...ITALY_FIEF_EARLY_MODERN_NAMES], sorted);
+  assertEquals(
+    new Set(ITALY_FIEF_EARLY_MODERN_NAMES).size,
+    ITALY_FIEF_EARLY_MODERN_NAMES.length,
+  );
+  assertEquals(ITALY_FIEF_EARLY_MODERN_NAMES.length, 21);
+  assert(ITALY_FIEF_EARLY_MODERN_NAMES.includes("Duchy of Milan"));
+  // Milan 以外の 20 件は中世の許可リストの部分集合（1492 年の実測 20 件と同一）
+  for (const name of ITALY_FIEF_EARLY_MODERN_NAMES) {
+    if (name === "Duchy of Milan") continue;
+    assert(ITALY_FIEF_NAMES.includes(name), `${name} が中世の許可リストに無い`);
+  }
+});
+
+Deno.test("近世初頭の許可リストと hre_fiefs の重複は Duchy of Milan のみ（年集合が互いに素なので二重塗りにならない。#188）", () => {
+  const hre = new Set(HRE_FIEF_NAMES);
+  const overlap = ITALY_FIEF_EARLY_MODERN_NAMES.filter((name) => hre.has(name));
+  assertEquals(overlap, ["Duchy of Milan"]);
+  // hre_fiefs は 1500 年を持たないため、同一年に両系統でミラノが出ることはない
+  for (const year of ITALY_FIEF_EARLY_MODERN_YEARS) {
+    assert(!HRE_FIEF_YEARS.includes(year));
+  }
+});
+
+Deno.test("italyFiefNamesForYear: 中世は従来リスト、1500 は近世初頭リスト（#188）", () => {
+  for (const year of ITALY_FIEF_MEDIEVAL_YEARS) {
+    assertEquals(italyFiefNamesForYear(year), ITALY_FIEF_NAMES);
+  }
+  assertEquals(italyFiefNamesForYear(1500), ITALY_FIEF_EARLY_MODERN_NAMES);
+});
+
 // ---------------------------------------------------------------------------
 // 名前の解決と表示名の上書き（AC4）
 // ---------------------------------------------------------------------------
@@ -176,6 +241,20 @@ Deno.test("italyFiefDisplayName: 期間つき曖昧性解消を表示名から�
   );
 });
 
+Deno.test("italyFiefDisplayName: OHM の時代錯誤名 Duchy of Florence を Republic of Florence へ上書きする（#188）", () => {
+  // OHM の rel 2800633 は 1406〜1555 の全期間に公国名を与えているが、
+  // フィレンツェ公国の成立は 1532 年で、スナップショット年 1492 / 1500 は
+  // 共和政期にあたる
+  assertEquals(
+    italyFiefDisplayName("Duchy of Florence"),
+    "Republic of Florence",
+  );
+  assertEquals(
+    ITALY_FIEF_DISPLAY_NAME_OVERRIDES["Duchy of Florence"],
+    "Republic of Florence",
+  );
+});
+
 Deno.test("表示名の上書き表は許可リストの名前だけを対象にする", () => {
   const allowed = new Set(ITALY_FIEF_NAMES);
   for (const raw of Object.keys(ITALY_FIEF_DISPLAY_NAME_OVERRIDES)) {
@@ -205,6 +284,20 @@ Deno.test("italyFiefExclusionReason: 許可リストに紛れ込んでも他系�
   // 収録するもの
   assertEquals(italyFiefExclusionReason("Republic of Florence"), null);
   assertEquals(italyFiefExclusionReason("Duchy of Spoleto"), null);
+});
+
+Deno.test("italyFiefExclusionReason: 1500 年に限り Duchy of Milan の除外を解除する（#188）", () => {
+  // hreFiefOverlap の除外根拠（hre_fiefs 側で収録済み）は hre_fiefs が存在する
+  // 中世 7 年代にしか成り立たない。1500 年の hre-powers は Roller 由来
+  // hre_1500（独領邦 13 件のみ）でミラノを持たないため、伊系統で採る。
+  assert(italyFiefExclusionReason("Duchy of Milan") !== null);
+  assert(italyFiefExclusionReason("Duchy of Milan", 1400) !== null);
+  assertEquals(italyFiefExclusionReason("Duchy of Milan", 1500), null);
+  // 1500 年でも他の除外は据え置き（OHM の end_date 誤り・帝国クライス等）
+  assert(italyFiefExclusionReason("Golden Ambrosian Republic", 1500) !== null);
+  assert(italyFiefExclusionReason("Savoyard state", 1500) !== null);
+  assert(italyFiefExclusionReason("Bavarian Circle", 1500) !== null);
+  assert(italyFiefExclusionReason("Upper Rhenish Circle", 1500) !== null);
 });
 
 // ---------------------------------------------------------------------------
@@ -313,6 +406,47 @@ Deno.test("selectItalyFiefsForYear: 並び順は表示名の昇順で決定的",
   assertEquals(
     selectItalyFiefsForYear(elements, 1200).map((e) => e.id),
     [3, 2, 1],
+  );
+});
+
+Deno.test("selectItalyFiefsForYear: 1500 年はミラノ公領を採り、end_date 誤りの黄金アンブロシア共和国は落とす（#188）", () => {
+  const elements = [
+    // 実データの rel 2800654（1500〜1512。1499 年の仏占領下の公国）
+    relation(2800654, {
+      "name:en": "Duchy of Milan",
+      admin_level: "4",
+      start_date: "1500",
+      end_date: "1512",
+    }),
+    // 史実は 1447〜1450 だが OHM では 1449〜1500 で、1500 年に有効判定になる
+    relation(2830842, {
+      "name:en": "Golden Ambrosian Republic",
+      admin_level: "4",
+      start_date: "1449",
+      end_date: "1500",
+    }),
+  ];
+  assertEquals(
+    selectItalyFiefsForYear(
+      elements,
+      1500,
+      [...ITALY_FIEF_EARLY_MODERN_NAMES, "Golden Ambrosian Republic"],
+    ).map((e) => e.id),
+    [2800654],
+  );
+  // 中世（1400 年）ではミラノは hre_fiefs 側なので従来どおり落ちる
+  const milan1400 = relation(2750055, {
+    "name:en": "Duchy of Milan",
+    admin_level: "4",
+    start_date: "1395-05-11",
+    end_date: "1404",
+  });
+  assertEquals(
+    selectItalyFiefsForYear([milan1400], 1400, [
+      ...ITALY_FIEF_NAMES,
+      "Duchy of Milan",
+    ]),
+    [],
   );
 });
 
@@ -555,15 +689,16 @@ Deno.test("生成物: 表示名に期間つき曖昧性解消が残っていな�
 
 Deno.test("生成物: 除外対象が 1 件も入っていない", async () => {
   for (const year of ITALY_FIEF_YEARS) {
+    const names = italyFiefNamesForYear(year);
     for (const feature of (await readItalyFiefs(year)).features) {
       const name = String(feature.properties?.NAME);
       assertEquals(
-        italyFiefExclusionReason(name),
+        italyFiefExclusionReason(name, year),
         null,
         `${year} に除外対象 ${name} が入っている`,
       );
       assert(
-        ITALY_FIEF_NAMES.includes(String(feature.properties?.OHM_NAME)),
+        names.includes(String(feature.properties?.OHM_NAME)),
         `${year} の ${name} が許可リスト外`,
       );
     }
@@ -607,23 +742,61 @@ Deno.test("生成物: 許可リストの全件がどこかの年代に現れる�
       seen.add(String(feature.properties?.OHM_NAME));
     }
   }
-  const dead = ITALY_FIEF_NAMES.filter((name) => !seen.has(name));
+  const all = new Set([...ITALY_FIEF_NAMES, ...ITALY_FIEF_EARLY_MODERN_NAMES]);
+  const dead = [...all].filter((name) => !seen.has(name));
   assertEquals(dead, []);
 });
 
-Deno.test("生成物: hre_fiefs / france_fiefs と同じ勢力が二重に出ない", async () => {
+Deno.test("生成物: 同年の HRE 領邦（OHM 由来 / Roller 由来）と同じ勢力が二重に出ない", async () => {
   for (const year of ITALY_FIEF_YEARS) {
     const italy = new Set(
       (await readItalyFiefs(year)).features.map((f) =>
         String(f.properties?.NAME)
       ),
     );
+    // その年に hre-powers レイヤーが実際に描くファイルと突き合わせる
+    // （中世 7 年代は hre_fiefs_<year>、1500 年は Roller 由来 hre_1500。#188）
+    const hrePath = HRE_FIEF_YEARS.includes(year)
+      ? `data/hre_fiefs_${year}.geojson`
+      : `data/hre_${year}.geojson`;
     const other: FeatureCollection = JSON.parse(
-      await Deno.readTextFile(`data/hre_fiefs_${year}.geojson`),
+      await Deno.readTextFile(hrePath),
     );
     for (const feature of other.features) {
       const name = String(feature.properties?.NAME);
       assert(!italy.has(name), `${year} の ${name} が両系統に存在する`);
     }
   }
+});
+
+Deno.test("生成物: 1500 年にジェノヴァ・フィレンツェ（共和国名）・ミラノが含まれる（#188 AC1）", async () => {
+  const names = new Set(
+    (await readItalyFiefs(1500)).features.map((f) =>
+      String(f.properties?.NAME)
+    ),
+  );
+  for (
+    const expected of [
+      "Republic of Genoa",
+      "Republic of Florence",
+      "Duchy of Milan",
+      "Republic of Siena",
+      "Republic of Lucca",
+    ]
+  ) {
+    assert(names.has(expected), `1500 年に ${expected} が無い`);
+  }
+  assert(!names.has("Duchy of Florence"));
+});
+
+Deno.test("生成物: 1492 年のフィレンツェは共和政期の名で表示される（#188 AC2）", async () => {
+  const features = (await readItalyFiefs(1492)).features;
+  const florence = features.find((f) =>
+    String(f.properties?.OHM_NAME) === "Duchy of Florence"
+  );
+  assert(florence !== undefined, "1492 年にフィレンツェが無い");
+  assertEquals(florence.properties?.NAME, "Republic of Florence");
+  assert(
+    !features.some((f) => String(f.properties?.NAME) === "Duchy of Florence"),
+  );
 });

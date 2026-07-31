@@ -165,8 +165,8 @@ export const HRE_ALL_OVERLAY_YEARS: readonly number[] = [
 ].sort((a, b) => a - b);
 
 /**
- * 中世イタリア諸侯領オーバーレイ（italy_fiefs_flat_<year>.geojson）が存在する
- * 年代（昇順、TASK-95/96）。出典は OpenHistoricalMap（CC0）。
+ * イタリア諸侯領オーバーレイ（italy_fiefs_flat_<year>.geojson）が存在する
+ * 年代（昇順、TASK-95/96、#188）。出典は OpenHistoricalMap（CC0）。
  *
  * scripts/build-italy-fiefs.ts の ITALY_FIEF_YEARS と同値（src → scripts の
  * import は行わない規約のため値を重複定義し、同値性は build-italy-fiefs_test.ts
@@ -176,15 +176,18 @@ export const HRE_ALL_OVERLAY_YEARS: readonly number[] = [
  * （トスカーナ辺境伯領・スポレート公国・モンフェッラート辺境伯領）と少ないが、
  * 前 2 者だけで中部イタリアの大半を覆うため面として成立する。
  *
- * 1500 以降を持たないのは仏諸侯領（1400 以降を落とした理由）と同じで、
- * base（europe_<year>）側がヴェネツィア共和国・教皇領・ミラノ公国などを
- * 主権国家として個別収録するようになり、オーバーレイは二重表示にしかならない
- * ため。HRE_FIEF_OVERLAY_YEARS（1000〜1492）とは全年が重なり、
- * FRANCE_FIEF_OVERLAY_YEARS（1000〜1300）とは 1000〜1300 が重なるので、
- * 最大 3 系統のオーバーレイが同時に表示される。描画順・picking 順は
- * PICKING_PRIORITY で一意に決まり、領域の重なり（1400 年の
- * March of Montferrat × Duchy of Milan 等）は scripts/build-fief-flat.ts が
- * HRE 側から差し引いて二重塗りを防ぐ（TASK-96）。
+ * #188: 1500 年を含む。base（europe_<year>）が北・中部イタリアの諸邦
+ * （ヴェネツィアを除く）を主権国家として個別収録するのは 1530 年からで、
+ * 1500 年だけは Holy Roman Empire 一括塗りへ退行する（Roller 由来 hre_1500 も
+ * 独領邦 13 件のみでイタリアを持たない）ため、1492 年と同じ系統の
+ * オーバーレイで埋める。1530 以降を持たないのは base の個別収録との
+ * 二重表示にしかならないため（仏諸侯領が 1400 以降を落とした理由と同じ）。
+ *
+ * HRE_FIEF_OVERLAY_YEARS とは 1000〜1492 が重なり、FRANCE_FIEF_OVERLAY_YEARS
+ * （1000〜1300）とは 1000〜1300 が重なるので、最大 3 系統のオーバーレイが
+ * 同時に表示される。描画順・picking 順は PICKING_PRIORITY で一意に決まり、
+ * 領域の重なり（1400 年の March of Montferrat × Duchy of Milan 等）は
+ * scripts/build-fief-flat.ts が HRE 側から差し引いて二重塗りを防ぐ（TASK-96）。
  */
 export const ITALY_FIEF_OVERLAY_YEARS: readonly number[] = [
   1000,
@@ -194,6 +197,7 @@ export const ITALY_FIEF_OVERLAY_YEARS: readonly number[] = [
   1300,
   1400,
   1492,
+  1500,
 ];
 
 /**
