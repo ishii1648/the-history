@@ -14,6 +14,7 @@ import {
   createFranceFiefOverlayLoader,
   createHreOverlayLoader,
   createItalyFiefOverlayLoader,
+  createSovereignFiefOverlayLoader,
   createYearDataLoader,
   createYearSwitcher,
   dataUrlFor,
@@ -28,12 +29,14 @@ import {
   hasFranceFiefOverlay,
   hasHreOverlay,
   hasItalyFiefOverlay,
+  hasSovereignFiefOverlay,
   hexToRgb,
   hreDataUrlFor,
   italyFiefDataUrlFor,
   LINE_COLOR,
   powerFillDataFor,
   type Rgba,
+  sovereignFiefDataUrlFor,
   YEAR_CACHE_MAX_YEARS,
   type YearDataLoader,
   type YearLayerData,
@@ -47,6 +50,7 @@ import {
   HRE_OVERLAY_YEARS,
   ITALY_FIEF_OVERLAY_YEARS,
   SNAPSHOT_YEARS,
+  SOVEREIGN_FIEF_OVERLAY_YEARS,
 } from "./config.ts";
 
 Deno.test("colorKeyFor は独立勢力（SUBJECTO が NAME と同じ）では NAME を返す", () => {
@@ -773,6 +777,7 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     italyFiefs: EMPTY_FEATURE_COLLECTION,
     cliopatriaFiefs: EMPTY_FEATURE_COLLECTION,
     britainFiefs: EMPTY_FEATURE_COLLECTION,
+    sovereignFiefs: EMPTY_FEATURE_COLLECTION,
   });
   d1400.resolve({
     base: fakeCollection("F"),
@@ -783,6 +788,7 @@ Deno.test("createYearSwitcher は複合データ（base+hre）でも古い要求
     italyFiefs: EMPTY_FEATURE_COLLECTION,
     cliopatriaFiefs: EMPTY_FEATURE_COLLECTION,
     britainFiefs: EMPTY_FEATURE_COLLECTION,
+    sovereignFiefs: EMPTY_FEATURE_COLLECTION,
   });
   await Promise.all([p1, p2]);
   assertEquals(applied, [{ year: 1500, hreCount: 1 }]);
@@ -1610,4 +1616,142 @@ Deno.test("createCombinedYearLoader はブリテンローダを省略しても�
   );
   const data = await loader.load(1200);
   assertEquals(data.britainFiefs, EMPTY_FEATURE_COLLECTION);
+});
+
+// ---- 主権政体オーバーレイ（#189）----
+
+Deno.test("sovereignFiefDataUrlFor は主権政体オーバーレイ GeoJSON のパスを返す（#189）", () => {
+  // 参照先は重なりを排他化した flat（scripts/build-fief-flat.ts）。
+  // 生データ sovereign_fiefs_<year> は派生データの入力で、配信もしない。
+  assertEquals(
+    sovereignFiefDataUrlFor(1200),
+    "/data/sovereign_fiefs_flat_1200.geojson",
+  );
+  assertEquals(
+    sovereignFiefDataUrlFor(1900),
+    "/data/sovereign_fiefs_flat_1900.geojson",
+  );
+});
+
+Deno.test("hasSovereignFiefOverlay は対象年（1200〜1900 の 14 年）でのみ true（#189）", () => {
+  for (const year of SOVEREIGN_FIEF_OVERLAY_YEARS) {
+    assert(hasSovereignFiefOverlay(year, SOVEREIGN_FIEF_OVERLAY_YEARS));
+  }
+  // 1000〜1100・1279〜1300 は対象政体を base が収録済み、1914 は後継の
+  // 主権国家（Finland ほか）を base が個別収録するため対象外
+  for (const year of [1000, 1100, 1279, 1300, 1914]) {
+    assert(!hasSovereignFiefOverlay(year, SOVEREIGN_FIEF_OVERLAY_YEARS));
+  }
+});
+
+Deno.test("createSovereignFiefOverlayLoader は非対象年では fetch せず空 FC を返す（#189）", async () => {
+  let count = 0;
+  const loader = createSovereignFiefOverlayLoader(() => {
+    count++;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("X")),
+    });
+  }, SOVEREIGN_FIEF_OVERLAY_YEARS);
+  assertEquals(await loader.load(1914), EMPTY_FEATURE_COLLECTION);
+  assertEquals(count, 0);
+  assert(loader.has(1914));
+});
+
+Deno.test("createSovereignFiefOverlayLoader は対象年で sovereign_fiefs_flat を fetch して返す（キャッシュあり）（#189）", async () => {
+  const calls: string[] = [];
+  const loader = createSovereignFiefOverlayLoader((url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection("Grand Duchy of Finland")),
+    });
+  }, SOVEREIGN_FIEF_OVERLAY_YEARS);
+  const data = await loader.load(1815);
+  assertEquals(data.features[0].properties?.NAME, "Grand Duchy of Finland");
+  assertEquals(calls, ["/data/sovereign_fiefs_flat_1815.geojson"]);
+  await loader.load(1815);
+  assertEquals(calls, ["/data/sovereign_fiefs_flat_1815.geojson"]);
+});
+
+Deno.test("createSovereignFiefOverlayLoader は取得失敗時に warn して空 FC で縮退する（#189）", async () => {
+  const warns: string[] = [];
+  let count = 0;
+  const loader = createSovereignFiefOverlayLoader(
+    () => {
+      count++;
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      });
+    },
+    SOVEREIGN_FIEF_OVERLAY_YEARS,
+    (msg) => warns.push(msg),
+  );
+  assertEquals(await loader.load(1815), EMPTY_FEATURE_COLLECTION);
+  assertEquals(warns.length, 1);
+  assert(!loader.has(1815));
+  // 失敗はキャッシュされず、次のロードで再試行される
+  await loader.load(1815);
+  assertEquals(count, 2);
+});
+
+Deno.test("createCombinedYearLoader は主権政体オーバーレイも同時に返す（#189）", async () => {
+  const calls: string[] = [];
+  const fetchFn = (url: string) => {
+    calls.push(url);
+    const name = url.includes("sovereign_fiefs")
+      ? "Grand Duchy of Finland"
+      : "Kingdom of France";
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(name)),
+    });
+  };
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(
+      fetchFn,
+      HRE_ALL_OVERLAY_YEARS,
+      () => {},
+      HRE_FIEF_OVERLAY_YEARS,
+    ),
+    createFranceFiefOverlayLoader(fetchFn, FRANCE_FIEF_OVERLAY_YEARS),
+    undefined,
+    undefined,
+    createItalyFiefOverlayLoader(fetchFn, ITALY_FIEF_OVERLAY_YEARS),
+    createCliopatriaFiefOverlayLoader(fetchFn, CLIOPATRIA_FIEF_OVERLAY_YEARS),
+    createBritainFiefOverlayLoader(fetchFn, BRITAIN_FIEF_OVERLAY_YEARS),
+    createSovereignFiefOverlayLoader(fetchFn, SOVEREIGN_FIEF_OVERLAY_YEARS),
+  );
+  // 1815 は主権政体だけが対象（中世限定のオーバーレイは空 FC のまま）
+  const data = await loader.load(1815);
+  assertEquals(
+    data.sovereignFiefs.features[0].properties?.NAME,
+    "Grand Duchy of Finland",
+  );
+  assert(calls.includes("/data/sovereign_fiefs_flat_1815.geojson"));
+  assertEquals(data.fiefs, EMPTY_FEATURE_COLLECTION);
+  assertEquals(data.italyFiefs, EMPTY_FEATURE_COLLECTION);
+  assertEquals(data.cliopatriaFiefs, EMPTY_FEATURE_COLLECTION);
+  assertEquals(data.britainFiefs, EMPTY_FEATURE_COLLECTION);
+});
+
+Deno.test("createCombinedYearLoader は主権政体ローダを省略しても従来どおり動く（後方互換・未生成時の縮退。#189）", async () => {
+  const fetchFn = (url: string) =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(fakeCollection(url)),
+    });
+  const loader = createCombinedYearLoader(
+    createYearDataLoader(fetchFn),
+    createHreOverlayLoader(fetchFn, HRE_OVERLAY_YEARS),
+  );
+  const data = await loader.load(1200);
+  assertEquals(data.sovereignFiefs, EMPTY_FEATURE_COLLECTION);
 });

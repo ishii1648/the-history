@@ -600,3 +600,37 @@ Deno.test("アイルランドの Munster / Connacht / Ulster 欠落が年代連�
   // 単一政体が島全体を覆うため部分欠落ではなくなる
   assertEquals(entry.years, { from: 1000, to: 1300 });
 });
+
+// ---- 主権政体オーバーレイ（#189）----
+
+Deno.test("主権政体オーバーレイで埋められない政体が年代連動で明示されている（#189 AC9）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) =>
+    l.id === "sovereign-fiefs-missing-territories"
+  );
+  assert(entry !== undefined, "sovereign-fiefs-missing-territories が無い");
+  // 埋められない政体（実測でリレーション不在・面が組めない）を明示する:
+  // 1530〜1715 年のハンガリー王国（境界 way の無いリレーション）、
+  // 1600〜1650 年のトランシルヴァニア公国、1492〜1800 年のモルダヴィア公国、
+  // 1400〜1650 年のラグーザ共和国、1400 年のセルビア、1783 年のモンテネグロ
+  for (
+    const keyword of [
+      "ハンガリー王国",
+      "トランシルヴァニア",
+      "モルダヴィア",
+      "ラグーザ",
+      "モンテネグロ",
+      "OpenHistoricalMap",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  assertEquals(entry.years, { from: 1400, to: 1815 });
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      year >= 1400 && year <= 1815,
+      `${year} 年の active 判定が期待と異なる`,
+    );
+  }
+});

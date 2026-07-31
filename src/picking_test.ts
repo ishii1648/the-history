@@ -24,11 +24,12 @@ import {
   RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
   selectPreferredPick,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 
 // ---- PICKING_PRIORITY ----
 
-Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明判定層（都市 > 山峰 > 山脈 > 河川）> 領邦 5 系統 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82, TASK-96, TASK-100, TASK-110, #172）", () => {
+Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明判定層（都市 > 山峰 > 山脈 > 河川）> 領邦 6 系統 > 勢力 の順で並ぶ（TASK-49, TASK-71, TASK-82, TASK-96, TASK-100, TASK-110, #172, #189）", () => {
   assertEquals(
     [...PICKING_PRIORITY],
     [
@@ -44,9 +45,34 @@ Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明�
       ITALY_FIEF_LAYER_ID,
       CLIOPATRIA_FIEF_LAYER_ID,
       BRITAIN_FIEF_LAYER_ID,
+      SOVEREIGN_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ],
   );
+});
+
+Deno.test("PICKING_PRIORITY: sovereign-fiefs は powers より優先され、既存の領邦 5 系統に劣後する（#189）", () => {
+  // 主権政体は既存オーバーレイと地理的にほぼ重ならないため相対順は表示に
+  // 影響しないが、後から追加した層を最下段（powers の直上）へ置く既定
+  // （TASK-96 / TASK-110 / #172 と同じ判断）を保つ
+  const sovereignIndex = PICKING_PRIORITY.indexOf(SOVEREIGN_FIEF_LAYER_ID);
+  const powerIndex = PICKING_PRIORITY.indexOf(POWER_LAYER_ID);
+  assert(sovereignIndex !== -1);
+  assert(sovereignIndex < powerIndex);
+  for (
+    const existing of [
+      HRE_LAYER_ID,
+      FRANCE_FIEF_LAYER_ID,
+      ITALY_FIEF_LAYER_ID,
+      CLIOPATRIA_FIEF_LAYER_ID,
+      BRITAIN_FIEF_LAYER_ID,
+    ]
+  ) {
+    assert(
+      PICKING_PRIORITY.indexOf(existing) < sovereignIndex,
+      `${existing} は sovereign-fiefs より優先されなければならない`,
+    );
+  }
 });
 
 Deno.test("PICKING_PRIORITY: britain-fiefs は powers より優先される（オーバーレイがベースの上）（#172）", () => {
@@ -78,13 +104,14 @@ Deno.test("PICKING_PRIORITY: britain-fiefs は既存の領邦 4 系統に劣後�
 
 // ---- 山岳（TASK-100）----
 
-Deno.test("PICKING_PRIORITY: 山岳 3 層はすべて政治ポリゴン 6 層より上（勢力の上に載る）（TASK-100 AC #1/#2、TASK-110 で Cliopatria・#172 でブリテンを追加）", () => {
+Deno.test("PICKING_PRIORITY: 山岳 3 層はすべて政治ポリゴン 7 層より上（勢力の上に載る）（TASK-100 AC #1/#2、TASK-110 で Cliopatria・#172 でブリテン・#189 で主権政体を追加）", () => {
   const political = [
     HRE_LAYER_ID,
     FRANCE_FIEF_LAYER_ID,
     ITALY_FIEF_LAYER_ID,
     CLIOPATRIA_FIEF_LAYER_ID,
     BRITAIN_FIEF_LAYER_ID,
+    SOVEREIGN_FIEF_LAYER_ID,
     POWER_LAYER_ID,
   ];
   for (
@@ -591,6 +618,7 @@ Deno.test("renderOrderFromPickingPriority: 描画順（下→上）は優先順�
     renderOrderFromPickingPriority(PICKING_PRIORITY),
     [
       POWER_LAYER_ID,
+      SOVEREIGN_FIEF_LAYER_ID,
       BRITAIN_FIEF_LAYER_ID,
       CLIOPATRIA_FIEF_LAYER_ID,
       ITALY_FIEF_LAYER_ID,

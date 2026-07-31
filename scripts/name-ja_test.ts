@@ -30,7 +30,7 @@ import { ADOPTED_PEAK_NAMES } from "./build-peaks.ts";
 // データ変更時は下記コマンドで再生成して手動更新する運用とする。
 //
 // 再生成コマンド（リポジトリルートで実行）:
-//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')+glob.glob('data/italy_fiefs_*.geojson')+glob.glob('data/cliopatria_fiefs_*.geojson')+glob.glob('data/britain_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
+//   python3 -c "import json,glob; s=set(); [s.update(v for f2 in [json.load(open(f))] for ft in f2['features'] for k in ('NAME','SUBJECTO') if (v:=ft['properties'].get(k))) for f in glob.glob('data/europe_*.geojson')+glob.glob('data/hre_*.geojson')+glob.glob('data/france_fiefs_*.geojson')+glob.glob('data/italy_fiefs_*.geojson')+glob.glob('data/cliopatria_fiefs_*.geojson')+glob.glob('data/britain_fiefs_*.geojson')+glob.glob('data/sovereign_fiefs_*.geojson')]; s.update(v for ft in json.load(open('data/rivers.geojson'))['features'] if (v:=ft['properties'].get('name'))); print(json.dumps(sorted(s),ensure_ascii=False,indent=2))"
 const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Abdelouadides",
   "Afghanistan",
@@ -160,6 +160,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "County of Vermandois",
   "County of Vexin",
   "County/Principality of Neuchâtel",
+  "Cretan State",
   "Crimean Khanate",
   "Croatia",
   "Cuman Khanates",
@@ -223,6 +224,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Durdzuks",
   "Dutch Republic",
   "Dutchy of Benevento",
+  "Eastern Rumelia",
   "Ebro",
   "Elbe",
   "Electoral Hesse",
@@ -241,6 +243,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "English territory",
   "Erfurt Territory",
   "Euphrates",
+  "Eyalet of Crete",
   "Fatimid Caliphate",
   "Finland",
   "Finnmark",
@@ -261,6 +264,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Goghtn",
   "Golden Horde",
   "Granada",
+  "Grand Duchy of Finland",
   "Grand Duchy of Hesse",
   "Grand Duchy of Moscow",
   "Greece",
@@ -436,6 +440,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Principality of Bayreuth",
   "Principality of Galicia-Volhynia",
   "Principality of Kyiv",
+  "Principality of Moldavia",
   "Principality of Novgorod",
   "Principality of Oneglia",
   "Principality of Polotsk",
@@ -453,6 +458,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Republic of Lucca",
   "Republic of Massa",
   "Republic of Pisa",
+  "Republic of Ragusa",
   "Republic of Siena",
   "Republic of the Seven Zenden",
   "Rhine",
@@ -514,6 +520,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Timurid Emirates",
   "Timurid Empire",
   "Tisza",
+  "Transylvania",
   "Trebizond",
   "Tsardom of Muscovy",
   "Tunis",
@@ -524,6 +531,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "United Kingdom",
   "United Kingdom of Great Britain and Ireland",
   "United Kingdom of Netherlands",
+  "United States of the Ionian Islands",
   "Ural",
   "Venetia",
   "Venice",
@@ -817,6 +825,32 @@ Deno.test("ブリテン諸島の政体 19 件が日本語表記で登録され�
     "Isle of Man": "マン島",
   };
   assertEquals(Object.keys(expected).length, 19);
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+});
+
+Deno.test("主権政体オーバーレイの新出 8 政体が日本語表記で登録されている（#189）", () => {
+  // #189 の許可リスト（scripts/build-sovereign-fiefs.ts）のうち base に
+  // 現れない NAME。base と共通の政体（ハンガリー王国・ワラキア公国・
+  // モスクワ大公国・クリミア・ハン国・セルビア・モンテネグロ）は base の
+  // NAME に合わせており、既存の訳がそのまま使われる。
+  // Transylvania は 1715 年（公国）と 1783 年以降（大公国）を単一 NAME で
+  // 覆うため、時代で正誤が割れる称号を付けず地名のままとする。
+  // Eyalet of Crete は「オスマン帝国のクレタ州」で、1880 年の base の
+  // Bulgaria 誤帰属を正すための区画。日本語文献に定訳が無いため、実態を
+  // 示す「オスマン領クレタ」とする（欠落勢力台帳と同じ表記）。
+  const expected: Record<string, string> = {
+    "Transylvania": "トランシルヴァニア",
+    "Principality of Moldavia": "モルダヴィア公国",
+    "Republic of Ragusa": "ラグーザ共和国",
+    "Grand Duchy of Finland": "フィンランド大公国",
+    "Eastern Rumelia": "東ルメリ自治州",
+    "United States of the Ionian Islands": "イオニア諸島合衆国",
+    "Eyalet of Crete": "オスマン領クレタ",
+    "Cretan State": "クレタ国",
+  };
+  assertEquals(Object.keys(expected).length, 8);
   for (const [name, ja] of Object.entries(expected)) {
     assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
   }

@@ -36,6 +36,7 @@ import {
   POWER_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 import { CITY_LAYER_ID } from "./picking.ts";
 import { MOUNTAIN_HIT_LAYER_ID } from "./mountains.ts";
@@ -138,6 +139,7 @@ function createHarness() {
     italyFiefs: fc([], { source: "italy" }),
     cliopatriaFiefs: fc([], { source: "cliopatria" }),
     britainFiefs: fc([], { source: "britain" }),
+    sovereignFiefs: fc([], { source: "sovereign" }),
   };
   const riversData = fc([riverFeature], { source: "rivers" });
   const mountainsData = fc([], { source: "mountains" });
@@ -271,6 +273,12 @@ Deno.test("pickedLabel はレイヤー種別ごとに表示ラベルを整形す
     handlers.pickedLabel(pick(BRITAIN_FIEF_LAYER_ID, normandyFeature)),
     displayLabel(normandyFeature.properties, {}, NAME_JA),
   );
+  // #189: 主権政体も同じ displayLabel 経路（SUBJECTO を持たないため
+  // 宗主なしの NAME 表記になる）
+  assertEquals(
+    handlers.pickedLabel(pick(SOVEREIGN_FIEF_LAYER_ID, normandyFeature)),
+    displayLabel(normandyFeature.properties, {}, NAME_JA),
+  );
   // picking なし・対象外レイヤーは null
   assertEquals(handlers.pickedLabel(emptyPick()), null);
   assertEquals(handlers.pickedLabel(pick("power-labels", riverFeature)), null);
@@ -319,6 +327,11 @@ Deno.test("pickedMetadata はラベルと同じレイヤー分岐で出典を解
   assertEquals(
     handlers.pickedMetadata(pick(BRITAIN_FIEF_LAYER_ID, franceFeature)),
     { source: "britain" },
+  );
+  // #189: 主権政体もレイヤー単位で出典（OHM / CC0）を引く
+  assertEquals(
+    handlers.pickedMetadata(pick(SOVEREIGN_FIEF_LAYER_ID, franceFeature)),
+    { source: "sovereign" },
   );
   // 対象外・picking なしは undefined = 出典欄を出さない
   assertEquals(handlers.pickedMetadata(emptyPick()), undefined);

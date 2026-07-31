@@ -69,6 +69,7 @@ import {
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 import { labelAnchorFor } from "./labels.ts";
 import { createYearCache, type YearDataLoader } from "./powers.ts";
@@ -109,12 +110,19 @@ const EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
  * Celtic kingdoms、1279〜1300 が English territory、1600〜1700 のアイルランド
  * 王国が England and Ireland へ解決する。「base の塗りがそのまま答えになる」
  * 規則（TASK-121）により、独立か従属かの史実解釈を実装者が持ち込まずに済む。
+ *
+ * #189 の主権政体（sovereign-fiefs）も同じ扱い。SUBJECTO を持たないため
+ * base の塗りで宗主キーが決まる。実データでは 1650 年のクリミア・ハン国が
+ * base の Ottoman Empire（名目宗主）、1815 年のフィンランド大公国が
+ * Russian Empire へ解決し、「オスマン宗主下」「ロシア帝国内」という帰属が
+ * 外枠として読める。base に包含されない場合（差し引き済みの土地）は外枠なし。
  */
 const FIEF_EXTENT_SOURCE_LAYER_IDS: readonly string[] = [
   FRANCE_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   BRITAIN_FIEF_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 ];
 
 /** properties から文字列プロパティを取り出す。空文字・非文字列は null */

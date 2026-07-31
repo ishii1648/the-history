@@ -35,6 +35,7 @@ import {
   HRE_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   POWER_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 import { FRANCE_FIEF_OVERLAY_YEARS } from "./config.ts";
 
@@ -78,7 +79,7 @@ function stubDeps(overrides: Partial<DebugHookDeps> = {}): DebugHookDeps {
   };
 }
 
-Deno.test("DEBUG_HOOK_NAMES はヘッドレス検証の契約 16 件と一致する", () => {
+Deno.test("DEBUG_HOOK_NAMES はヘッドレス検証の契約 17 件と一致する", () => {
   assertEquals([...DEBUG_HOOK_NAMES], [
     "__setYear",
     "__getYear",
@@ -92,6 +93,7 @@ Deno.test("DEBUG_HOOK_NAMES はヘッドレス検証の契約 16 件と一致す
     "__getItalyFiefDebug",
     "__getCliopatriaFiefDebug",
     "__getBritainFiefDebug",
+    "__getSovereignFiefDebug",
     "__getApproximateBorderDebug",
     "__probePick",
     "__getPowerHighlightDebug",
@@ -99,7 +101,7 @@ Deno.test("DEBUG_HOOK_NAMES はヘッドレス検証の契約 16 件と一致す
   ]);
 });
 
-Deno.test("installDebugHooks: 16 件のフックを全てターゲットへ定義する", () => {
+Deno.test("installDebugHooks: 17 件のフックを全てターゲットへ定義する", () => {
   const target: DebugHooksTarget = {};
   installDebugHooks(stubDeps(), target);
   for (const name of DEBUG_HOOK_NAMES) {
@@ -261,6 +263,7 @@ Deno.test("__getFranceFiefDebug: 対象年判定と feature 数を返す", () =>
         italyFiefs: EMPTY_FEATURE_COLLECTION,
         cliopatriaFiefs: EMPTY_FEATURE_COLLECTION,
         britainFiefs: EMPTY_FEATURE_COLLECTION,
+        sovereignFiefs: EMPTY_FEATURE_COLLECTION,
       }),
     }),
     target,
@@ -330,6 +333,7 @@ Deno.test("__getPowerHighlightDebug: view なしでは全レイヤー 0 件を�
       [ITALY_FIEF_LAYER_ID]: 0,
       [CLIOPATRIA_FIEF_LAYER_ID]: 0,
       [BRITAIN_FIEF_LAYER_ID]: 0,
+      [SOVEREIGN_FIEF_LAYER_ID]: 0,
     },
     extentKey: null,
     extentMembers: [],

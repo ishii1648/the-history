@@ -263,7 +263,7 @@ const FILE_PATTERNS: readonly (readonly [RegExp, DatasetKey])[] = [
   [/^europe_flat_\d+\.geojson$/, "historicalBasemaps"],
   [/^base_outline_\d+\.geojson$/, "historicalBasemaps"],
   [
-    /^(?:france|hre|italy|britain)_fiefs_(?:flat_)?\d+\.geojson$/,
+    /^(?:france|hre|italy|britain|sovereign)_fiefs_(?:flat_)?\d+\.geojson$/,
     "openHistoricalMap",
   ],
   [/^cliopatria_fiefs_(?:flat_)?\d+\.geojson$/, "cliopatria"],

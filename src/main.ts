@@ -21,6 +21,7 @@ import {
   createFranceFiefOverlayLoader,
   createHreOverlayLoader,
   createItalyFiefOverlayLoader,
+  createSovereignFiefOverlayLoader,
   createYearDataLoader,
   createYearSwitcher,
   EMPTY_FEATURE_COLLECTION,
@@ -78,6 +79,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   SNAPSHOT_YEARS,
+  SOVEREIGN_FIEF_OVERLAY_YEARS,
 } from "./config.ts";
 import {
   resolveBasemapPmtilesUrl,
@@ -107,6 +109,7 @@ import {
   renderOrderFromPickingPriority,
   RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 import {
   createPowerHighlightStore,
@@ -377,6 +380,16 @@ const dataLoader = createCombinedYearLoader(
       BRITAIN_FIEF_OVERLAY_YEARS,
     ),
   ),
+  // #189: 主権政体オーバーレイ（sovereign_fiefs_flat_*、1200〜1900）。base の
+  // 一枚岩塗り（オスマン・ハプスブルク・ロシア）に隠れた主権政体を識別可能に
+  // する補完で、既存 5 系統と同じ機構に載せる。非対象年（1914 等）は fetch
+  // せず空 FC になり、base が個別収録する後継国家と二重表示にならない。
+  withOverrides(
+    createSovereignFiefOverlayLoader(
+      (url) => fetch(url),
+      SOVEREIGN_FIEF_OVERLAY_YEARS,
+    ),
+  ),
 );
 
 /**
@@ -490,6 +503,10 @@ let currentView:
      * #172: ブリテン諸島の政体（非対象年・取得失敗・未生成時は空 FC）
      */
     britainFiefs: FeatureCollection;
+    /**
+     * #189: 主権政体オーバーレイ（非対象年・取得失敗・未生成時は空 FC）
+     */
+    sovereignFiefs: FeatureCollection;
   }
   | null = null;
 
@@ -741,7 +758,7 @@ function renderLayers(): void {
   if (currentView === null) return;
   const { year, base, hre, fiefs, outlines, baseFill, italyFiefs } =
     currentView;
-  const { cliopatriaFiefs, britainFiefs } = currentView;
+  const { cliopatriaFiefs, britainFiefs, sovereignFiefs } = currentView;
   // TASK-80: base の境界線は全年代とも MapLibre の概略境界レイヤー
   // （approximate-borders-*、syncApproximateBorders）が描くため、powers の
   // stroke は常に止める（TASK-78 は諸侯領オーバーレイ対象年だけ止めていた）。
@@ -810,6 +827,17 @@ function renderLayers(): void {
         FIEF_LINE_COLOR,
         FIEF_LINE_WIDTH_PX,
       ),
+    // #189: 主権政体オーバーレイ。base の一枚岩塗りに隠れた主権政体を、
+    // 既存の諸侯領と同じ藍紫の境界線・同じ塗り規則で「オーバーレイ由来の
+    // 区画」として重ねる。非対象年は空 FC なので実質非表示。
+    [SOVEREIGN_FIEF_LAYER_ID]: () =>
+      politicalLayers.buildPowerLayer(
+        pctx,
+        SOVEREIGN_FIEF_LAYER_ID,
+        sovereignFiefs,
+        FIEF_LINE_COLOR,
+        FIEF_LINE_WIDTH_PX,
+      ),
     [CITY_LAYER_ID]: () => featureLayers.buildCityMarkerLayer(ctx),
     [CITY_HIT_LAYER_ID]: () => featureLayers.buildCityHitLayer(ctx),
     [RIVERS_LAYER_ID]: () => featureLayers.buildRiversLineLayer(ctx),
@@ -858,6 +886,7 @@ function renderLayers(): void {
       italyFiefs,
       cliopatriaFiefs,
       britainFiefs,
+      sovereignFiefs,
     ),
     featureLayers.buildRiverLabelLayer(ctx),
     featureLayers.buildCityLabelLayer(ctx),
@@ -951,6 +980,7 @@ const yearSwitcher = createYearSwitcher(
       italyFiefs: data.italyFiefs,
       cliopatriaFiefs: data.cliopatriaFiefs,
       britainFiefs: data.britainFiefs,
+      sovereignFiefs: data.sovereignFiefs,
     };
     renderLayers();
     // AC #2/#3: 実際に反映された年で UI を確定させる（最新要求のみ到達する）
@@ -1139,7 +1169,7 @@ map.on("load", () => {
 });
 
 // TASK-144: ヘッドレス CDP 検証用のデバッグフック群（__setYear / __get*Debug /
-// __probePick の 16 件）は src/debug_hooks.ts へ抽出した。フック名と返り値の
+// __probePick の 17 件）は src/debug_hooks.ts へ抽出した。フック名と返り値の
 // 形は scripts/verify/ のヘッドレス検証の契約なので変えない。状態の所有は
 // main.ts に残し（decision-29）、ここでは getter・関数を注入する配線だけを行う。
 // メモ化関数を注入するのは builder と同一キャッシュを共有するため（フックの

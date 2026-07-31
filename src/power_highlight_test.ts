@@ -21,6 +21,7 @@ import {
   POWER_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
   RIVERS_LAYER_ID,
+  SOVEREIGN_FIEF_LAYER_ID,
 } from "./picking.ts";
 
 const colors: Record<string, string> = {
@@ -69,7 +70,7 @@ Deno.test("powerHighlightKey: NAME を持たない feature は null", () => {
   assertEquals(powerHighlightKey(POWER_LAYER_ID, {}), null);
 });
 
-Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 6 層のみ（TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦・#172 でブリテン諸島を追加）", () => {
+Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 7 層のみ（TASK-96 で伊諸侯領・TASK-110 で Cliopatria 領邦・#172 でブリテン諸島・#189 で主権政体を追加）", () => {
   assertEquals(
     [...POWER_HIGHLIGHT_LAYER_IDS].sort(),
     [
@@ -79,8 +80,20 @@ Deno.test("POWER_HIGHLIGHT_LAYER_IDS: 強調対象は政治ポリゴンの 6 層
       HRE_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
       POWER_LAYER_ID,
+      SOVEREIGN_FIEF_LAYER_ID,
     ].sort(),
   );
+});
+
+Deno.test("powerHighlightKey: 主権政体も colorKeyFor と同一のキーで強調される（#189）", () => {
+  // #189 の生成物は SUBJECTO を持たない（仏諸侯領と同型）ため、キーは
+  // NAME 単独になる。NAME は base の呼称に合わせているため、base 側と
+  // 同じ政体（Crimean Khanate 等）は年代を跨いで同じキーで強調される
+  assertEquals(
+    powerHighlightKey(SOVEREIGN_FIEF_LAYER_ID, { NAME: "Crimean Khanate" }),
+    "Crimean Khanate",
+  );
+  assertEquals(powerHighlightKey(SOVEREIGN_FIEF_LAYER_ID, {}), null);
 });
 
 Deno.test("powerHighlightKey: ブリテン諸島の政体も colorKeyFor と同一のキーで強調される（#172）", () => {

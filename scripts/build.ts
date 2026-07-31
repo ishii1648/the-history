@@ -12,6 +12,7 @@ import { HRE_FIEF_YEARS } from "./build-hre-fiefs.ts";
 import { ITALY_FIEF_YEARS } from "./build-italy-fiefs.ts";
 import { CLIOPATRIA_FIEF_YEARS } from "./build-cliopatria-fiefs.ts";
 import { BRITAIN_FIEF_YEARS } from "./build-britain-fiefs.ts";
+import { SOVEREIGN_FIEF_YEARS } from "./build-sovereign-fiefs.ts";
 
 const ENTRY = "src/main.ts";
 const DIST_DIR = "dist";
@@ -64,6 +65,7 @@ export function getDataCopyTargets(
   italyFiefYears: readonly number[] = [],
   cliopatriaFiefYears: readonly number[] = [],
   britainFiefYears: readonly number[] = [],
+  sovereignFiefYears: readonly number[] = [],
 ): Array<{ from: string; to: string }> {
   const targets: Array<{ from: string; to: string }> = [
     { from: "data/index.json", to: `${distDir}/data/index.json` },
@@ -158,6 +160,16 @@ export function getDataCopyTargets(
       to: `${distDir}/data/britain_fiefs_flat_${year}.geojson`,
     });
   }
+  // #189: 主権政体オーバーレイ（deno task build-sovereign-fiefs で生成）。
+  // 他の系統と同じく、配信するのは重なりを排他化した派生データ
+  // （sovereign_fiefs_flat_<year>）で、ランタイムの参照先（powers.ts
+  // sovereignFiefDataUrlFor）と一致させる。
+  for (const year of sovereignFiefYears) {
+    targets.push({
+      from: `data/sovereign_fiefs_flat_${year}.geojson`,
+      to: `${distDir}/data/sovereign_fiefs_flat_${year}.geojson`,
+    });
+  }
   // TASK-78/86/96/110、#172: オーバーレイとの二重輪郭・二重ラベルを解消する
   // 派生データ（deno task build-fief-dedupe で生成）。オーバーレイがある年に
   // しか存在しないため、いずれの年集合も空なら 1 件も含めない（対象外年の
@@ -169,6 +181,7 @@ export function getDataCopyTargets(
       ...italyFiefYears,
       ...cliopatriaFiefYears,
       ...britainFiefYears,
+      ...sovereignFiefYears,
     ]),
   ].sort((a, b) => a - b);
   if (outlineYears.length > 0) {
@@ -400,6 +413,7 @@ async function copyDataFiles(distDir: string): Promise<void> {
       ITALY_FIEF_YEARS,
       CLIOPATRIA_FIEF_YEARS,
       BRITAIN_FIEF_YEARS,
+      SOVEREIGN_FIEF_YEARS,
     )
   ) {
     await Deno.copyFile(from, to);
