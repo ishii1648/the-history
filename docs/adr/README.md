@@ -54,3 +54,4 @@
 | [0029](0029-main-ts-incremental-factory-extraction.md) | main.ts の分割は状態所有を残した純関数 + 依存注入ファクトリ抽出で段階実施する | accepted |
 | [0030](0030-invisible-background-quads-self-collision.md) | 衝突参加の全ラベル層に不可視背景クアッドを敷き自己衝突を構造的に防ぐ | accepted |
 | [0031](0031-migrate-task-management-to-github-issues.md) | タスク管理を backlog.md から GitHub Issue へ移行する | accepted |
+| [0032](./0032-colors-snapshot-additive.md) | colors.json をスナップショット正とし build-colors を差分追加モードにする | accepted |
