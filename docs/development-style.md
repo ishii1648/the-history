@@ -563,37 +563,6 @@ subagent の成果は mainagent がパッチとして取り出し済みなので
 `scripts/cleanup_branches_test.ts` の `canForceRemoveWorktree` テストと本章・
 decision-24 の更新をセットで行う。
 
-#### `active_branch_days` の値（backlog/config.yml・歴史的記録）
-
-> タスク管理の GitHub Issue 移行（docs/adr/0031）により backlog.md は使って
-> おらず、本節の設定は既に効力を持たない。値の根拠を残すための歴史的記録で
-> あり、`backlog/config.yml` 等の残骸の完全撤去（TASK-142 の移行先 Issue）で
-> 本節ごと削除してよい。
-
-`active_branch_days` は backlog.md がクロスブランチ走査の対象にするブランチの
-**コミット日時の新しさの窓**（日数）である。backlog.md 1.48.0 の実装では 次の 3
-か所で使われる:
-
-- `listRecentBranchTips(days)`:
-  `git for-each-ref refs/heads refs/remotes/origin` の結果を
-  `committerdate >= now - days` で絞る。走査対象ブランチ集合そのもの。
-- `listRecentRemoteBranches(days)`: リモートブランチ側の同じ絞り込み （board
-  の「Indexing N recent remote branches (last D days)」）。
-- `getBranchLastModifiedMap(...)`: ブランチごとの履歴走査に
-  `--since=<days>.days` を付ける深さ制限。
-
-値は **30 → 3** に変更した。根拠は実測で、origin/main にマージ済みの
-タスクブランチ 117 本について「ブランチ最初のコミット〜マージコミット」の
-生存時間を計測したところ、中央値 0.12 時間・95 パーセンタイル 0.69 時間・ 最大
-19.98 時間だった（1 日を超えたブランチは 1 本も無い）。走査に価値がある
-のは「まだマージされていない in-flight のブランチのタスク状態」だけなので、
-実測最大の約 3.6 倍にあたる 3 日あれば十分な余裕があり、これより長い窓は
-掃除漏れの ref を拾って board を遅くするだけになる。1 日未満に詰めることも
-できるが、週末や一晩の中断で in-flight のタスクが board から消えると
-かえって混乱するため 3 日を採る。なお `check_active_branches: false`
-（走査を完全に無効化）は board を 0.18 秒まで縮めるが、マージ前のタスク状態が
-board に出なくなるため採らない。
-
 ### 4.4 エスカレーション規約（人の介入は例外時のみ）
 
 エージェントは次のいずれかに該当する場合のみ、`needs-human` ラベル付きの GitHub
@@ -727,7 +696,8 @@ issue 上で判断を返す。判断が返ったらエージェントがタス�
 参照する（起票・編集・復活はしない）。移行時点で未終端だったタスクは
 `scripts/migrate-tasks-to-issues.ts` で Issue 化され、アーカイブ側 md の
 「移行先: #N」と Issue 本文末尾の旧 ID・アーカイブパスで相互リンクされている。
-`backlog/config.yml` 等の残骸の完全撤去は TASK-142（の移行先 Issue）で行う。
+`backlog/config.yml`・board export の `Backlog.md` 等の残骸は撤去済みで、
+リポジトリに backlog.md の設定・成果物は残っていない（Issue #171）。
 
 ## 6. branch protection 設定手順
 

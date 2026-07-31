@@ -5,7 +5,6 @@
   },
   "fmt": {
     "exclude": [
-      "backlog/",
       "data/",
       "docs/adr/",
       "docs/archive/",

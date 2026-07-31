@@ -57,7 +57,7 @@ see `docs/adr/0031-migrate-task-management-to-github-issues.md`).
   に委譲、並列可なら複数起動）→ `deno test` green → mainagent
   によるレビューで収束 → 個別 PR 作成（Issue 番号明記）→ CI green → マージ →
   マージ後動作確認 → finalization（AC チェック・Issue クローズ。ループ内の
-  詳細手順は TASK-141 で Issue ベースへ更新予定）。集合が単一タスクなら従来の
+  詳細手順は `.claude/skills/agent-loop/SKILL.md`）。集合が単一タスクなら従来の
   直列フローと同一。動作確認で見つけた問題は label `bug` 付き Issue として
   task-intake スキルで起票し、次イテレーションで最優先修正する（直接 hotfix
   しない）。
@@ -72,9 +72,9 @@ see `docs/adr/0031-migrate-task-management-to-github-issues.md`).
   同じ優先順の貪欲選択で返す。単一選択の `deno task next-task` も互換維持）を
   使う。外側ループはローカルの Claude Code セッションで `/agent-loop`
   スキル（`.claude/skills/agent-loop/SKILL.md`）を実行して
-  回し、マージ後も同一セッションが次タスクを継続する（スキル本文の Issue
-  ベース化は TASK-141 で更新予定）。CI や PR のステータスは Monitor ツールや PR
-  activity 購読で監視する。詳細は `docs/development-style.md` の 4 章を参照。
+  回し、マージ後も同一セッションが次タスクを継続する。CI や PR のステータスは
+  Monitor ツールや PR activity 購読で監視する。詳細は
+  `docs/development-style.md` の 4 章を参照。
 - 人の介入は例外時のみ: AC が曖昧・CI が恒常 red・仕様判断が必要な場合に限り
   `needs-human` ラベル付き issue を起票して停止し、判断を仰ぐ。それ以外で人の
   指示を待たない。加えて、CI red 連続回数・実装 subagent 試行回数・タスク

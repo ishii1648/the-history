@@ -1,7 +1,8 @@
 # リポジトリ名変更 runbook（the-history → zeitreise）
 
-TASK-125 で、リポジトリ内で完結する参照（`backlog/config.yml` の
-project_name・`Backlog.md`・`.gitignore`）は更新済み。本書は**リポジトリ外**の
+TASK-125 で、リポジトリ内で完結する参照（当時の `backlog/config.yml` の
+project_name・`Backlog.md`（いずれも backlog.md 撤去（Issue #171）で削除済み）・
+`.gitignore`）は更新済み。本書は**リポジトリ外**の
 名前変更手順をまとめた人間向け runbook である。上から順に実施する。
 
 ## 1. GitHub リポジトリ名の変更
@@ -96,8 +97,8 @@ deno task test
 以下は Done 済みタスクの歴史的記述（当時の PR URL・当時の Pages
 プロジェクト名）であり、意図的に更新しない:
 
-- `backlog/tasks/task-2 - *.md` — PR #14 の URL（GitHub 側リダイレクトで
-  引き続き到達可能）
-- `backlog/tasks/task-11 - *.md` — PR #3 の URL（同上）
-- `backlog/tasks/task-127 - *.md` — 旧 Pages プロジェクト `the-history` の
-  削除可否に関する申し送り
+- `docs/archive/backlog-tasks/task-2 - *.md` — PR #14 の URL（GitHub
+  側リダイレクトで引き続き到達可能）
+- `docs/archive/backlog-tasks/task-11 - *.md` — PR #3 の URL（同上）
+- `docs/archive/backlog-tasks/task-127 - *.md` — 旧 Pages プロジェクト
+  `the-history` の削除可否に関する申し送り
