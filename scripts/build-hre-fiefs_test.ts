@@ -8,16 +8,22 @@ import {
   selfIntersectionPoints,
 } from "./clean-polygons.ts";
 import {
+  applyLocalNameFallback,
   buildYearCollection,
   HRE_FIEF_ADMIN_LEVELS,
   HRE_FIEF_BBOX,
+  HRE_FIEF_EARLY_MODERN_EXCLUSIONS,
+  HRE_FIEF_EARLY_MODERN_NAMES,
+  HRE_FIEF_EARLY_MODERN_YEARS,
   HRE_FIEF_EXCLUSIONS,
+  HRE_FIEF_MEDIEVAL_YEARS,
   HRE_FIEF_NAME,
   HRE_FIEF_NAMES,
   HRE_FIEF_SIZE_LIMIT_BYTES,
   HRE_FIEF_YEAR_1200_NOTE,
   HRE_FIEF_YEARS,
   hreFiefExclusionReason,
+  hreFiefNamesForYear,
   removePinchPoints,
   removePinchPointsFromCollection,
   selectHreFiefsForYear,
@@ -89,14 +95,194 @@ Deno.test("取得範囲は実測に使った帝国中核域 bbox をピン留め
   assertEquals([...HRE_FIEF_BBOX], [45.5, 5.5, 55.0, 19.0]);
 });
 
-Deno.test("対象年は SNAPSHOT_YEARS の部分集合で中世 7 年代", () => {
-  assertEquals([...HRE_FIEF_YEARS], [1000, 1100, 1200, 1279, 1300, 1400, 1492]);
+Deno.test("対象年は SNAPSHOT_YEARS の部分集合で中世 7 年代 + 近世 3 年代（#187）", () => {
+  assertEquals([...HRE_FIEF_MEDIEVAL_YEARS], [
+    1000,
+    1100,
+    1200,
+    1279,
+    1300,
+    1400,
+    1492,
+  ]);
+  assertEquals([...HRE_FIEF_EARLY_MODERN_YEARS], [1715, 1783, 1800]);
+  assertEquals([...HRE_FIEF_YEARS], [
+    ...HRE_FIEF_MEDIEVAL_YEARS,
+    ...HRE_FIEF_EARLY_MODERN_YEARS,
+  ]);
   for (const year of HRE_FIEF_YEARS) {
     assert(
       SNAPSHOT_YEARS.includes(year),
       `${year} は SNAPSHOT_YEARS に含まれない`,
     );
   }
+});
+
+Deno.test("#187: hreFiefNamesForYear は年代で許可リストを切り替える", () => {
+  // 中世年代は従来の許可リストのまま（生成物のバイト不変を保つ）
+  for (const year of HRE_FIEF_MEDIEVAL_YEARS) {
+    assertEquals(hreFiefNamesForYear(year), HRE_FIEF_NAMES);
+  }
+  // 近世年代は Issue #187 の帝国領邦だけを選ぶ独立リスト
+  for (const year of HRE_FIEF_EARLY_MODERN_YEARS) {
+    assertEquals(hreFiefNamesForYear(year), HRE_FIEF_EARLY_MODERN_NAMES);
+  }
+});
+
+Deno.test("#187: 近世の許可リストは昇順・重複なしの 17 件", () => {
+  assertEquals(HRE_FIEF_EARLY_MODERN_NAMES.length, 17);
+  assertEquals(
+    new Set(HRE_FIEF_EARLY_MODERN_NAMES).size,
+    HRE_FIEF_EARLY_MODERN_NAMES.length,
+  );
+  assertEquals(
+    [...HRE_FIEF_EARLY_MODERN_NAMES].sort((a, b) => a.localeCompare(b, "en")),
+    [...HRE_FIEF_EARLY_MODERN_NAMES],
+  );
+  // Issue #187 の 13 系統のうち面を組めるものが入っている（バーデンは 1715 年が
+  // Baden-Baden / Baden-Durlach の分立期なので 3 名称に分かれる。ブラバント
+  // 公領は rel 2812126 が label ノードのみで面を組めず、実測により見送り =
+  // HRE_FIEF_EARLY_MODERN_EXCLUSIONS.unbuildableGeometry）
+  assert(!HRE_FIEF_EARLY_MODERN_NAMES.includes("Duchy of Brabant"));
+  for (
+    const name of [
+      "Duchy of Mecklenburg-Schwerin",
+      "Duchy of Mecklenburg-Strelitz",
+      "Electorate of Bavaria",
+      "Electorate of Brandenburg",
+      "Electorate of Cologne",
+      "Electorate of Mainz",
+      "Electorate of Saxony",
+      "Margraviate of Baden",
+      "Margraviate of Baden-Baden",
+      "Margraviate of Baden-Durlach",
+      "Nassau-Weilburg",
+      "Prince-Archbishopric of Salzburg",
+      "Prince-Bishopric of Bamberg",
+      "Prince-Bishopric of Münster",
+      "Prince-Bishopric of Würzburg",
+    ]
+  ) {
+    assert(HRE_FIEF_EARLY_MODERN_NAMES.includes(name), `${name} が無い`);
+  }
+  // 実測差分（Issue は「ヘッセンは埋まらない」としたが OHM に実在する）
+  assert(HRE_FIEF_EARLY_MODERN_NAMES.includes("Hesse-Kassel"));
+  assert(HRE_FIEF_EARLY_MODERN_NAMES.includes("Hesse-Darmstadt"));
+  // 二重の防波堤（帝国都市・帝国外行政区画のパターン）を通り抜けない名前だけ
+  for (const name of HRE_FIEF_EARLY_MODERN_NAMES) {
+    assertEquals(hreFiefExclusionReason(name, name), null, name);
+  }
+});
+
+Deno.test("#187: 近世の見送り理由が分類ごとに記録されている", () => {
+  const keys = Object.keys(HRE_FIEF_EARLY_MODERN_EXCLUSIONS);
+  assert(keys.length >= 4, `分類が少なすぎる: ${keys.length}`);
+  for (
+    const [key, reason] of Object.entries(HRE_FIEF_EARLY_MODERN_EXCLUSIONS)
+  ) {
+    assert(reason.length >= 10, `${key} の理由が短すぎる: ${reason}`);
+  }
+  assert("frenchTerritories" in HRE_FIEF_EARLY_MODERN_EXCLUSIONS);
+  assert("dutchRepublicProvinces" in HRE_FIEF_EARLY_MODERN_EXCLUSIONS);
+  assert("baseDuplicates" in HRE_FIEF_EARLY_MODERN_EXCLUSIONS);
+  assert("minorTerritoriesOutOfScope" in HRE_FIEF_EARLY_MODERN_EXCLUSIONS);
+  // Issue #187 の 13 系統のうちブラバント公領だけは上流のリレーションが面を
+  // 組めず採れない。見送り根拠として rel id ごと記録する
+  assert("unbuildableGeometry" in HRE_FIEF_EARLY_MODERN_EXCLUSIONS);
+  assert(
+    HRE_FIEF_EARLY_MODERN_EXCLUSIONS.unbuildableGeometry.includes("2812126"),
+  );
+});
+
+Deno.test("#187: applyLocalNameFallback は name:en 欠損のリレーションへローカル名を写す", () => {
+  // Nassau-Weilburg（rel 2830775 ほか）は name:en が無く name のみ
+  const noNameEn: OhmRelation = {
+    type: "relation",
+    id: 2830775,
+    tags: {
+      "boundary": "administrative",
+      "admin_level": "4",
+      "name": "Nassau-Weilburg",
+      "start_date": "1651",
+      "end_date": "1783",
+    },
+  };
+  const untouched = rel(1, "Electorate of Mainz", "4", "1573", "1797-10-10");
+  const outsideList: OhmRelation = {
+    type: "relation",
+    id: 99,
+    tags: {
+      "boundary": "administrative",
+      "admin_level": "4",
+      "name": "Nassau",
+    },
+  };
+  const result = applyLocalNameFallback(
+    [noNameEn, untouched, outsideList],
+    ["Nassau-Weilburg"],
+  );
+  assertEquals(result[0].tags["name:en"], "Nassau-Weilburg");
+  // name:en を持つ要素・許可リスト外の要素は同一参照のまま
+  assertEquals(result[1], untouched);
+  assertEquals(result[2], outsideList);
+  // フォールバック適用後は通常の選抜に乗る
+  assertEquals(
+    selectHreFiefsForYear(result, 1715, ["Nassau-Weilburg"]).map((e) => e.id),
+    [2830775],
+  );
+});
+
+Deno.test("#187: 近世年代の選抜は実測どおりの領邦集合になる", () => {
+  // OHM 実測（2026-07 時点）の存続期間を持つ最小の再現データ
+  const elements: OhmRelation[] = [
+    rel(2830591, "Electorate of Bavaria", "4", "1705-03-20", "1734"),
+    rel(2693973, "Electorate of Brandenburg", "4", "1648-10-24", "1807-07-09"),
+    rel(2831106, "Electorate of Cologne", "4", "1449-06-05", "1797-10-17"),
+    rel(2830738, "Electorate of Mainz", "4", "1573", "1797-10-10"),
+    rel(2806956, "Electorate of Saxony", "4", "1780-03-31", "1806-08-06"),
+    rel(2834739, "Margraviate of Baden-Baden", "4", "1535", "1771-10-21"),
+    rel(2834738, "Margraviate of Baden-Durlach", "4", "1535", "1771-10-21"),
+    rel(2683539, "Margraviate of Baden", "4", "1771-10-21", "1797-10-17"),
+    rel(2830880, "Margraviate of Baden", "4", "1797-10-17", "1803-04-27"),
+    // 許可リスト外（近世に有効でも落ちる）
+    rel(2830026, "Silesia", "4", "1742-07-28", "1807-07-09"),
+    rel(2815290, "Alsace", "4", "1697-09-20", "1791-09-21"),
+  ];
+  assertEquals(
+    selectHreFiefsForYear(elements, 1715, HRE_FIEF_EARLY_MODERN_NAMES)
+      .map((e) => e.tags["name:en"]),
+    [
+      "Electorate of Bavaria",
+      "Electorate of Brandenburg",
+      "Electorate of Cologne",
+      "Electorate of Mainz",
+      "Margraviate of Baden-Baden",
+      "Margraviate of Baden-Durlach",
+    ],
+  );
+  // 1783: バイエルン選帝侯領は OHM の収録が 1779 年（テシェン条約）で切れる。
+  // バーデンは 1771 年の再統合後の単一辺境伯領になる
+  assertEquals(
+    selectHreFiefsForYear(elements, 1783, HRE_FIEF_EARLY_MODERN_NAMES)
+      .map((e) => e.tags["name:en"]),
+    [
+      "Electorate of Brandenburg",
+      "Electorate of Cologne",
+      "Electorate of Mainz",
+      "Electorate of Saxony",
+      "Margraviate of Baden",
+    ],
+  );
+  // 1800: ケルン・マインツは 1797 年（カンポ・フォルミオ）で収録が切れる
+  assertEquals(
+    selectHreFiefsForYear(elements, 1800, HRE_FIEF_EARLY_MODERN_NAMES)
+      .map((e) => e.tags["name:en"]),
+    [
+      "Electorate of Brandenburg",
+      "Electorate of Saxony",
+      "Margraviate of Baden",
+    ],
+  );
 });
 
 Deno.test("採用する admin_level は 4 / 5（2 = 主権国家・3 = 帝国構成王国は除く）", () => {
@@ -460,6 +646,9 @@ Deno.test("生成物: 対象年ごとにファイルがあり feature を持つ�
     1300: 52,
     1400: 63,
     1492: 73,
+    1715: 14,
+    1783: 14,
+    1800: 12,
   };
   for (const year of HRE_FIEF_YEARS) {
     const fc = await readGenerated(year);
@@ -471,6 +660,7 @@ Deno.test("生成物: 対象年ごとにファイルがあり feature を持つ�
 Deno.test("生成物: 帝国都市・帝国外の行政区画が 1 件も入っていない（AC2）", async () => {
   for (const year of HRE_FIEF_YEARS) {
     const fc = await readGenerated(year);
+    const allowed = hreFiefNamesForYear(year);
     for (const feature of fc.features) {
       const name = String(feature.properties?.NAME);
       assertEquals(
@@ -479,9 +669,78 @@ Deno.test("生成物: 帝国都市・帝国外の行政区画が 1 件も入っ�
         `${year}: ${name} は除外対象`,
       );
       assert(
-        HRE_FIEF_NAMES.includes(name),
+        allowed.includes(name),
         `${year}: ${name} は許可リスト外`,
       );
+    }
+  }
+});
+
+Deno.test("#187: 生成物の近世 3 年代は実測どおりの領邦集合を持つ", async () => {
+  // Issue #187 の 13 系統を OHM 実測（存続期間・ジオメトリの有無）で年代へ
+  // 落とした期待集合。Issue との差分: バイエルン選帝侯領は 1715 のみ（OHM は
+  // 1779 年で収録が切れる）、ケルン・マインツは 1800 に無い（1797 年で収録が
+  // 切れる）、ブラバント公領は面を組めず全年に無い、ヘッセン（カッセル /
+  // ダルムシュタット）は Issue の「埋まらない」に反して OHM に実在するため採る。
+  const expected: Record<number, string[]> = {
+    1715: [
+      "Duchy of Mecklenburg-Schwerin",
+      "Duchy of Mecklenburg-Strelitz",
+      "Electorate of Bavaria",
+      "Electorate of Brandenburg",
+      "Electorate of Cologne",
+      "Electorate of Mainz",
+      "Hesse-Kassel",
+      "Margraviate of Baden-Baden",
+      "Margraviate of Baden-Durlach",
+      "Nassau-Weilburg",
+      "Prince-Archbishopric of Salzburg",
+      "Prince-Bishopric of Bamberg",
+      "Prince-Bishopric of Münster",
+      "Prince-Bishopric of Würzburg",
+    ],
+    1783: [
+      "Duchy of Mecklenburg-Schwerin",
+      "Duchy of Mecklenburg-Strelitz",
+      "Electorate of Brandenburg",
+      "Electorate of Cologne",
+      "Electorate of Mainz",
+      "Electorate of Saxony",
+      "Hesse-Darmstadt",
+      "Hesse-Kassel",
+      "Margraviate of Baden",
+      "Nassau-Weilburg",
+      "Prince-Archbishopric of Salzburg",
+      "Prince-Bishopric of Bamberg",
+      "Prince-Bishopric of Münster",
+      "Prince-Bishopric of Würzburg",
+    ],
+    1800: [
+      "Duchy of Mecklenburg-Schwerin",
+      "Duchy of Mecklenburg-Strelitz",
+      "Electorate of Brandenburg",
+      "Electorate of Saxony",
+      "Hesse-Darmstadt",
+      "Hesse-Kassel",
+      "Margraviate of Baden",
+      "Nassau-Weilburg",
+      "Prince-Archbishopric of Salzburg",
+      "Prince-Bishopric of Bamberg",
+      "Prince-Bishopric of Münster",
+      "Prince-Bishopric of Würzburg",
+    ],
+  };
+  for (const year of HRE_FIEF_EARLY_MODERN_YEARS) {
+    const fc = await readGenerated(year);
+    assertEquals(
+      fc.features.map((f) => String(f.properties?.NAME)),
+      expected[year],
+      `${year} の領邦集合`,
+    );
+    // SUBJECTO / PARTOF は中世年代と同じく帝国名（1806 年の帝国解体まで有効）
+    for (const feature of fc.features) {
+      assertEquals(feature.properties?.SUBJECTO, HRE_FIEF_NAME);
+      assertEquals(feature.properties?.PARTOF, HRE_FIEF_NAME);
     }
   }
 });
@@ -535,9 +794,9 @@ Deno.test("生成物: サイズ上限内で微小破片・退化リングが残�
   }
 });
 
-Deno.test("生成物: 許可リストの全 98 件がどこかの年代に現れる（死んだエントリが無い）", async () => {
+Deno.test("生成物: 許可リストの全 98 件がどこかの中世年代に現れる（死んだエントリが無い）", async () => {
   const used = new Set<string>();
-  for (const year of HRE_FIEF_YEARS) {
+  for (const year of HRE_FIEF_MEDIEVAL_YEARS) {
     const fc = await readGenerated(year);
     for (const feature of fc.features) {
       used.add(String(feature.properties?.NAME));
@@ -548,6 +807,22 @@ Deno.test("生成物: 許可リストの全 98 件がどこかの年代に現れ
     unused,
     [],
     `生成物に現れない許可リスト項目: ${unused.join(", ")}`,
+  );
+});
+
+Deno.test("#187: 近世許可リストの全 17 件がどこかの近世年代に現れる（死んだエントリが無い）", async () => {
+  const used = new Set<string>();
+  for (const year of HRE_FIEF_EARLY_MODERN_YEARS) {
+    const fc = await readGenerated(year);
+    for (const feature of fc.features) {
+      used.add(String(feature.properties?.NAME));
+    }
+  }
+  const unused = HRE_FIEF_EARLY_MODERN_NAMES.filter((name) => !used.has(name));
+  assertEquals(
+    unused,
+    [],
+    `生成物に現れない近世許可リスト項目: ${unused.join(", ")}`,
   );
 });
 

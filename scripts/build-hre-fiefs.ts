@@ -1,6 +1,7 @@
 /**
- * 神聖ローマ帝国（HRE）領邦オーバーレイのうち、中世（1000〜1492 年）分を
- * OpenHistoricalMap（OHM）から生成するデータパイプライン（TASK-85）。
+ * 神聖ローマ帝国（HRE）領邦オーバーレイのうち、中世（1000〜1492 年）分と
+ * 近世（1715 / 1783 / 1800 年、#187）分を OpenHistoricalMap（OHM）から生成する
+ * データパイプライン（TASK-85）。
  *
  * 既存の data/hre_<year>.geojson（1500〜1700。ETH Zürich の Roller データセット
  * 由来・CC BY-NC-SA 4.0）とは別系統・別ファイル data/hre_fiefs_<year>.geojson
@@ -82,7 +83,7 @@ export const HRE_FIEF_BBOX: readonly [number, number, number, number] = [
 ];
 
 /**
- * 生成対象年。SNAPSHOT_YEARS のうち OHM に領邦データが十分にある中世年代。
+ * 中世の生成対象年。SNAPSHOT_YEARS のうち OHM に領邦データが十分にある年代。
  * 許可リスト内で有効な領邦の実測件数と合計面積（クリップ前・球面近似）:
  * 1000 = 19 件 / 544,855 km²、1100 = 23 / 542,256、
  * 1200 = 26 / 122,184、1279 = 40 / 110,706、1300 = 52 / 151,447、
@@ -93,11 +94,8 @@ export const HRE_FIEF_BBOX: readonly [number, number, number, number] = [
  * 6 件のみだった）で、TASK-119 で 900 年はスナップショット年自体が廃止された。
  * 1200 年は 1100 年から面積が 1/4 に落ちる「谷」だが収録する
  * （判断根拠は HRE_FIEF_YEAR_1200_NOTE）。
- *
- * Roller 由来の HRE_OVERLAY_YEARS（1500〜1700）とは互いに素で、同一年に
- * 2 系統の HRE 領邦が並ぶことはない。
  */
-export const HRE_FIEF_YEARS: readonly number[] = [
+export const HRE_FIEF_MEDIEVAL_YEARS: readonly number[] = [
   1000,
   1100,
   1200,
@@ -105,6 +103,33 @@ export const HRE_FIEF_YEARS: readonly number[] = [
   1300,
   1400,
   1492,
+];
+
+/**
+ * 近世の生成対象年（#187）。Roller 由来 hre_<year>（1500〜1700）が 1700 年で
+ * 打ち切られた後、1715 年でバイエルン選帝侯領等が base の Holy Roman Empire
+ * 一括塗りへ一斉に「消える」退行と、1783 / 1800 年の教会諸侯領（1803 年の
+ * 世俗化まで存続）の Prussia / Bavaria への誤帰属を、OHM の帝国領邦で埋める。
+ * 1815 年以降はウィーン体制で base 側が諸邦を個別収録するため対象外。
+ *
+ * 選抜の許可リストは中世と別系統（HRE_FIEF_EARLY_MODERN_NAMES）。中世の
+ * 許可リスト・候補プールへ手を入れないことで、中世 7 年代の生成物のバイト
+ * 不変を構造的に保証する。
+ */
+export const HRE_FIEF_EARLY_MODERN_YEARS: readonly number[] = [
+  1715,
+  1783,
+  1800,
+];
+
+/**
+ * 生成対象年の全体（中世 + 近世、昇順）。
+ * Roller 由来の HRE_OVERLAY_YEARS（1500〜1700）とは互いに素で、同一年に
+ * 2 系統の HRE 領邦が並ぶことはない。
+ */
+export const HRE_FIEF_YEARS: readonly number[] = [
+  ...HRE_FIEF_MEDIEVAL_YEARS,
+  ...HRE_FIEF_EARLY_MODERN_YEARS,
 ];
 
 /**
@@ -371,6 +396,125 @@ export const HRE_FIEF_NAMES: readonly string[] = [
   "Principality of Bayreuth",
   "Saxon Eastern March",
 ];
+
+/**
+ * 近世 3 年代で収録を見送った対象の分類と根拠（#187）。
+ * HRE_FIEF_BBOX 内の boundary=administrative から admin_level 4 / 5・
+ * 1715 / 1783 / 1800 のいずれかで有効・name:en ありで絞ると 219 件が残る
+ * （実測 2026-07。低地地方の補完 bbox (49.3, 2.5, 52.5, 6.2) も照会したが、
+ * 追加で採れる帝国領邦は無かった = unbuildableGeometry を参照）。帝国都市・
+ * 帝国外の行政区画は中世と同じパターン（hreFiefExclusionReason）で自動的に
+ * 落ち、残りをここに挙げる分類で落として許可リスト
+ * HRE_FIEF_EARLY_MODERN_NAMES（17 件）にした。
+ */
+export const HRE_FIEF_EARLY_MODERN_EXCLUSIONS: Record<string, string> = {
+  frenchTerritories:
+    "フランス王国の州・フランス勢力圏（Alsace / Franche-Comté / " +
+    "Three Bishoprics / the Dauphiné / Lorraine and Barrois / French Flanders / " +
+    "Cambrésis / Bailiwick of Tournai と、1697〜1718 年の Duchy of Lorraine / " +
+    "Duchy of Bar）。base の France が塗る領域で、帝国領邦オーバーレイの対象外。",
+  dutchRepublicProvinces:
+    "オランダ共和国（ネーデルラント連邦共和国）の州（Holland / " +
+    "Lordship of Friesland / Lordship of Utrecht / Lordship of Overijssel / " +
+    "Land of Drenthe）。base の Dutch Republic が単一勢力として塗る領域で、" +
+    "1648 年のヴェストファーレン条約以降は帝国領邦でもない。",
+  baseDuplicates:
+    "base（europe_<year>）が個別の勢力色で塗る領域と重複する領邦" +
+    "（Bohemia / Moravia / Silesia / Swedish Pomerania / Duchy of Magdeburg / " +
+    "Duchy of Cleves / County of Mark / プロイセンの諸州など）。重ねても同じ" +
+    "領域の二重表示にしかならない。例外はブランデンブルク選帝侯領で、" +
+    "プロイセン王国の中核と重なるが Issue #187 が帝国内の選帝侯領として" +
+    "明示する 13 系統に含まれるため採る（base 塗りとの二重塗りは " +
+    "europe_flat_<year> の差し引きで解消する）。",
+  minorTerritoriesOutOfScope:
+    "Issue #187 のスコープ（1715 年の一斉消失と 1783 / 1800 年の誤帰属を" +
+    "解消する主要 13 系統 + 実測で判明したヘッセン 2 系統）外の中小領邦" +
+    "（Anhalt / Schwarzburg / Sayn / Salm 諸侯領、Ansbach / Bayreuth、" +
+    "Osnabrück / Hildesheim / Speyer / Worms / Paderborn / Passau / Freising / " +
+    "Eichstätt / Regensburg / Basel の司教領、修道院領、小伯領など）。" +
+    "OHM に実在するため将来の拡張候補として台帳" +
+    "（docs/data-inventory/missing-powers-ledger.md）に残る。",
+  unbuildableGeometry:
+    "Duchy of Brabant（rel 2812126、1648〜1797。Issue #187 の 13 系統の一つ）は " +
+    "HRE_FIEF_BBOX 外（低地地方）にあるため補完 bbox (49.3, 2.5, 52.5, 6.2) で" +
+    "照会したが、リレーションのメンバーが label ノード 2 個だけで境界 way を" +
+    "一切持たず、面を組めない（1279 / 1300 年の Lordship of Milan と同種の" +
+    "上流欠陥）。採っても生成物に現れないため許可リストから外し、" +
+    "known-limitations とデータ台帳に記録する。",
+};
+
+/**
+ * 近世 3 年代（1715 / 1783 / 1800）で採用する領邦の名前許可リスト
+ * （昇順・17 件、#187）。照合は name:en、無ければローカル名 name
+ * （applyLocalNameFallback。Nassau-Weilburg は OHM に name:en が無い）。
+ *
+ * Issue #187 の 13 系統を OHM 実測（存続期間・リレーションの有無・ジオメトリの
+ * 有無）で確定した結果で、Issue との差分は 5 点:
+ * - バーデン辺境伯領は 1715 年が Baden-Baden / Baden-Durlach の分立期
+ *   （1535〜1771）なので 3 名称に分かれる（1771 年の再統合後は
+ *   Margraviate of Baden）。
+ * - バイエルン選帝侯領は OHM の収録が 1779 年（テシェン条約）で切れるため
+ *   1715 年のみ（1783 / 1800 年のミュンヘン周辺は埋まらない）。
+ * - ケルン・マインツ両選帝侯領は 1797 年（カンポ・フォルミオ条約）で収録が
+ *   切れるため 1800 年には現れない。
+ * - ブラバント公領はリレーションが label ノードのみで面を組めず採れない
+ *   （HRE_FIEF_EARLY_MODERN_EXCLUSIONS.unbuildableGeometry）。
+ * - Issue が「OHM に無い」としたヘッセン方伯領は実測では実在する
+ *   （Hesse-Kassel = 1648〜1803 を 3 リレーションで分割収録、
+ *   Hesse-Darmstadt = 1736〜1803）ため採る。
+ */
+export const HRE_FIEF_EARLY_MODERN_NAMES: readonly string[] = [
+  "Duchy of Mecklenburg-Schwerin",
+  "Duchy of Mecklenburg-Strelitz",
+  "Electorate of Bavaria",
+  "Electorate of Brandenburg",
+  "Electorate of Cologne",
+  "Electorate of Mainz",
+  "Electorate of Saxony",
+  "Hesse-Darmstadt",
+  "Hesse-Kassel",
+  "Margraviate of Baden",
+  "Margraviate of Baden-Baden",
+  "Margraviate of Baden-Durlach",
+  "Nassau-Weilburg",
+  "Prince-Archbishopric of Salzburg",
+  "Prince-Bishopric of Bamberg",
+  "Prince-Bishopric of Münster",
+  "Prince-Bishopric of Würzburg",
+];
+
+/**
+ * year の選抜に使う許可リストを返す（純粋関数、#187）。
+ * 中世 7 年代は従来の HRE_FIEF_NAMES のまま（生成物のバイト不変を保つ）、
+ * 近世 3 年代は HRE_FIEF_EARLY_MODERN_NAMES。
+ */
+export function hreFiefNamesForYear(year: number): readonly string[] {
+  return HRE_FIEF_EARLY_MODERN_YEARS.includes(year)
+    ? HRE_FIEF_EARLY_MODERN_NAMES
+    : HRE_FIEF_NAMES;
+}
+
+/**
+ * name:en を欠くリレーションへローカル名（name）を写す（純粋関数、#187）。
+ * OHM の Nassau-Weilburg（rel 2830775 / 2832289 / 2832290）は name:en が無く
+ * name のみで、選抜（selectHreFiefsForYear）は name:en を見るため素通りして
+ * しまう。ローカル名が許可リストに一致する場合に限り name:en を補い、
+ * それ以外の要素は同一参照のまま返す（決定性・無用な複製を避ける）。
+ * 近世プール専用に使い、中世プールへは適用しない（バイト不変の保証）。
+ */
+export function applyLocalNameFallback(
+  elements: readonly OhmRelation[],
+  names: readonly string[],
+): OhmRelation[] {
+  const allowed = new Set(names);
+  return elements.map((element) => {
+    const tags = element.tags ?? {};
+    if (tags["name:en"] !== undefined) return element;
+    const local = tags["name"];
+    if (local === undefined || !allowed.has(local)) return element;
+    return { ...element, tags: { ...tags, "name:en": local } };
+  });
+}
 
 /**
  * year 時点で有効な HRE 領邦のリレーションを選ぶ（純粋関数）。
@@ -641,10 +785,26 @@ async function main(): Promise<void> {
   const tagged = (await runOverpass(buildTagsQuery(HRE_FIEF_BBOX))).elements;
   console.log(`tags: ${tagged.length} relations`);
 
+  // #187: 近世 3 年代だけは name:en 欠損へのローカル名フォールバック
+  // （Nassau-Weilburg）を適用した別プールから選ぶ。中世 7 年代の候補プールは
+  // 従来の tagged のままにして、中世生成物のバイト不変を構造的に保証する。
+  const earlyModernTagged = applyLocalNameFallback(
+    tagged,
+    HRE_FIEF_EARLY_MODERN_NAMES,
+  );
+  const taggedForYear = (year: number): readonly OhmRelation[] =>
+    HRE_FIEF_EARLY_MODERN_YEARS.includes(year) ? earlyModernTagged : tagged;
+
   // 2 段目: 全対象年で必要になるリレーションのジオメトリだけをまとめて 1 回取得
   const ids = new Set<number>();
   for (const year of HRE_FIEF_YEARS) {
-    for (const element of selectHreFiefsForYear(tagged, year)) {
+    for (
+      const element of selectHreFiefsForYear(
+        taggedForYear(year),
+        year,
+        hreFiefNamesForYear(year),
+      )
+    ) {
       ids.add(element.id);
     }
   }
@@ -655,7 +815,12 @@ async function main(): Promise<void> {
   console.log(`geom: ${geometries.size}/${ids.size} relations`);
 
   for (const year of HRE_FIEF_YEARS) {
-    const { fc, metadata } = buildYearCollection(tagged, geometries, year);
+    const { fc, metadata } = buildYearCollection(
+      taggedForYear(year),
+      geometries,
+      year,
+      hreFiefNamesForYear(year),
+    );
     const { fc: shrunk, tolerance, cleanStats } = shrinkToLimit(
       fc,
       HRE_FIEF_SIZE_LIMIT_BYTES,

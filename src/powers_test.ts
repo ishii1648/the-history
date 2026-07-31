@@ -439,8 +439,12 @@ Deno.test("hasHreOverlay は HRE_ALL_OVERLAY_YEARS で中世・近世の双方�
       `${year} で HRE オーバーレイが無い`,
     );
   }
-  // 1715 以降はベースマップがドイツ諸邦を個別収録するため対象外
-  assert(!hasHreOverlay(1715, HRE_ALL_OVERLAY_YEARS));
+  // #187: 1715〜1800 も OHM 由来の近世領邦で対象になった
+  assert(hasHreOverlay(1715, HRE_ALL_OVERLAY_YEARS));
+  assert(hasHreOverlay(1783, HRE_ALL_OVERLAY_YEARS));
+  assert(hasHreOverlay(1800, HRE_ALL_OVERLAY_YEARS));
+  // 1815 以降はウィーン体制でベースマップが諸邦を個別収録するため対象外
+  assert(!hasHreOverlay(1815, HRE_ALL_OVERLAY_YEARS));
   assert(!hasHreOverlay(1914, HRE_ALL_OVERLAY_YEARS));
 });
 
@@ -521,7 +525,27 @@ Deno.test("createHreOverlayLoader は中世年代で hre_fiefs_flat を fetch �
   ]);
 });
 
-Deno.test("createHreOverlayLoader は非対象年（1715）で fetch せず空 FC を返す（TASK-86 AC #6）", async () => {
+Deno.test("createHreOverlayLoader は #187 の近世年代（1715）で hre_fiefs_flat を fetch する", async () => {
+  const calls: string[] = [];
+  const loader = createHreOverlayLoader(
+    (url) => {
+      calls.push(url);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(fakeCollection("Electorate of Bavaria")),
+      });
+    },
+    HRE_ALL_OVERLAY_YEARS,
+    () => {},
+    HRE_FIEF_OVERLAY_YEARS,
+  );
+  const fc = await loader.load(1715);
+  assertEquals(fc.features[0].properties?.NAME, "Electorate of Bavaria");
+  assertEquals(calls, ["/data/hre_fiefs_flat_1715.geojson"]);
+});
+
+Deno.test("createHreOverlayLoader は非対象年（1815）で fetch せず空 FC を返す（TASK-86 AC #6 / #187）", async () => {
   const calls: string[] = [];
   const loader = createHreOverlayLoader(
     (url) => {
@@ -536,7 +560,7 @@ Deno.test("createHreOverlayLoader は非対象年（1715）で fetch せず空 F
     () => {},
     HRE_FIEF_OVERLAY_YEARS,
   );
-  assertEquals(await loader.load(1715), EMPTY_FEATURE_COLLECTION);
+  assertEquals(await loader.load(1815), EMPTY_FEATURE_COLLECTION);
   assertEquals(calls, []);
 });
 

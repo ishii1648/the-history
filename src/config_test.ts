@@ -166,7 +166,7 @@ Deno.test("FRANCE_FIEF_OVERLAY_YEARS と HRE_OVERLAY_YEARS は互いに素（Rol
   assertEquals(overlap, []);
 });
 
-Deno.test("HRE_FIEF_OVERLAY_YEARS は中世 7 年代である（TASK-86）", () => {
+Deno.test("HRE_FIEF_OVERLAY_YEARS は中世 7 年代 + 近世 3 年代である（TASK-86 / #187）", () => {
   assertEquals([...HRE_FIEF_OVERLAY_YEARS], [
     1000,
     1100,
@@ -175,6 +175,9 @@ Deno.test("HRE_FIEF_OVERLAY_YEARS は中世 7 年代である（TASK-86）", () 
     1300,
     1400,
     1492,
+    1715,
+    1783,
+    1800,
   ]);
 });
 
@@ -197,11 +200,11 @@ Deno.test("HRE_FIEF_OVERLAY_YEARS は Roller 由来の HRE_OVERLAY_YEARS と互�
   assertEquals(overlap, []);
 });
 
-Deno.test("HRE_ALL_OVERLAY_YEARS は中世 OHM 年代と近世 Roller 年代の和で昇順・重複なし（TASK-86）", () => {
-  assertEquals([...HRE_ALL_OVERLAY_YEARS], [
-    ...HRE_FIEF_OVERLAY_YEARS,
-    ...HRE_OVERLAY_YEARS,
-  ]);
+Deno.test("HRE_ALL_OVERLAY_YEARS は OHM 年代（中世 + 近世 1715〜1800）と Roller 年代の和で昇順・重複なし（TASK-86 / #187）", () => {
+  const expected = [
+    ...new Set([...HRE_FIEF_OVERLAY_YEARS, ...HRE_OVERLAY_YEARS]),
+  ].sort((a, b) => a - b);
+  assertEquals([...HRE_ALL_OVERLAY_YEARS], expected);
   const sorted = [...HRE_ALL_OVERLAY_YEARS].sort((a, b) => a - b);
   assertEquals([...HRE_ALL_OVERLAY_YEARS], sorted);
   assertEquals(
@@ -213,6 +216,13 @@ Deno.test("HRE_ALL_OVERLAY_YEARS は中世 OHM 年代と近世 Roller 年代の�
 Deno.test("HRE_ALL_OVERLAY_YEARS は 1492 と 1500 を連続して含む（1492↔1500 の切替で表示が途切れない。TASK-86 AC #5）", () => {
   assert(HRE_ALL_OVERLAY_YEARS.includes(1492));
   assert(HRE_ALL_OVERLAY_YEARS.includes(1500));
+});
+
+Deno.test("HRE_ALL_OVERLAY_YEARS は 1700 と 1715 を連続して含む（1700↔1715 の切替で領邦レイヤーが途切れない。#187）", () => {
+  assert(HRE_ALL_OVERLAY_YEARS.includes(1700));
+  assert(HRE_ALL_OVERLAY_YEARS.includes(1715));
+  assert(HRE_ALL_OVERLAY_YEARS.includes(1783));
+  assert(HRE_ALL_OVERLAY_YEARS.includes(1800));
 });
 
 Deno.test("ITALY_FIEF_OVERLAY_YEARS は中世〜近世初頭の 7 年代である（TASK-95/96）", () => {

@@ -122,16 +122,21 @@ export const FRANCE_FIEF_OVERLAY_YEARS: readonly number[] = [
 ];
 
 /**
- * 中世の神聖ローマ帝国領邦オーバーレイ（hre_fiefs_flat_<year>.geojson）が存在する
- * 年代（昇順、TASK-85/86）。出典は OpenHistoricalMap（CC0）。
+ * OHM 由来の神聖ローマ帝国領邦オーバーレイ（hre_fiefs_flat_<year>.geojson）が
+ * 存在する年代（昇順、TASK-85/86、#187）。出典は OpenHistoricalMap（CC0）。
  *
  * scripts/build-hre-fiefs.ts の HRE_FIEF_YEARS と同値（src → scripts の import は
  * 行わない規約のため値を重複定義し、同値性は build-hre-fiefs_test.ts で担保する）。
  *
- * 最古年は SNAPSHOT_YEARS と同じ 1000。1500 以降は Roller 由来の
- * HRE_OVERLAY_YEARS が引き継ぐ。両者は互いに素で、
- * 1492↔1500 の切替では同じ hre-powers レイヤー・同じラベル色・同じ帝国範囲強調の
- * ままデータ出典だけが替わる（TASK-86 AC #5）。
+ * 最古年は SNAPSHOT_YEARS と同じ 1000。1500〜1700 は Roller 由来の
+ * HRE_OVERLAY_YEARS が受け持ち、両者は互いに素。1492↔1500・1700↔1715 の切替では
+ * 同じ hre-powers レイヤー・同じラベル色・同じ帝国範囲強調のままデータ出典だけが
+ * 替わる（TASK-86 AC #5）。
+ *
+ * #187: Roller が 1700 年で打ち切られた後の近世 3 年代（1715 / 1783 / 1800）を
+ * OHM から補い、1715 年でバイエルン選帝侯領等が一斉に消える退行と、1783 / 1800 年
+ * の教会諸侯領（1803 年の帝国代表者会議主要決議までは存続）の Prussia / Bavaria
+ * への誤帰属を解消する。1806 年の帝国解体後（1815〜）は対象外。
  */
 export const HRE_FIEF_OVERLAY_YEARS: readonly number[] = [
   1000,
@@ -141,19 +146,23 @@ export const HRE_FIEF_OVERLAY_YEARS: readonly number[] = [
   1300,
   1400,
   1492,
+  1715,
+  1783,
+  1800,
 ];
 
 /**
  * HRE 領邦オーバーレイ（hre-powers レイヤー）が存在する全年代（昇順、TASK-86）。
- * 中世の OHM 由来（HRE_FIEF_OVERLAY_YEARS）と近世の Roller 由来
- * （HRE_OVERLAY_YEARS）の和で、両者は互いに素なので単純連結で昇順になる。
- * ランタイムはこの 1 本の年集合でオーバーレイの有無を判定し、どのファイルを
- * 引くかは powers.ts hreDataUrlFor が HRE_FIEF_OVERLAY_YEARS で切り分ける。
+ * OHM 由来（HRE_FIEF_OVERLAY_YEARS = 中世 1000〜1492 + 近世 1715〜1800、#187）と
+ * Roller 由来（HRE_OVERLAY_YEARS = 1500〜1700）の和。両者は互いに素だが #187 で
+ * OHM 側が Roller の後の年代も持つようになったため、単純連結では昇順にならず
+ * ソートして束ねる。ランタイムはこの 1 本の年集合でオーバーレイの有無を判定し、
+ * どのファイルを引くかは powers.ts hreDataUrlFor が HRE_FIEF_OVERLAY_YEARS で
+ * 切り分ける。
  */
 export const HRE_ALL_OVERLAY_YEARS: readonly number[] = [
-  ...HRE_FIEF_OVERLAY_YEARS,
-  ...HRE_OVERLAY_YEARS,
-];
+  ...new Set([...HRE_FIEF_OVERLAY_YEARS, ...HRE_OVERLAY_YEARS]),
+].sort((a, b) => a - b);
 
 /**
  * 中世イタリア諸侯領オーバーレイ（italy_fiefs_flat_<year>.geojson）が存在する
