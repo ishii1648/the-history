@@ -1203,12 +1203,12 @@ Deno.test("italyFiefDataUrlFor はイタリア諸侯領オーバーレイ GeoJSO
   );
 });
 
-Deno.test("hasItalyFiefOverlay は対象年（1000〜1492）のみ true を返す（TASK-96）", () => {
+Deno.test("hasItalyFiefOverlay は対象年（1000〜1500）のみ true を返す（TASK-96、#188）", () => {
   for (const year of ITALY_FIEF_OVERLAY_YEARS) {
     assert(hasItalyFiefOverlay(year, ITALY_FIEF_OVERLAY_YEARS));
   }
-  // 1500 以降は base が主権国家として個別収録する
-  for (const year of [1500, 1650, 1914]) {
+  // 1530 以降は base が伊諸邦を主権国家として個別収録する
+  for (const year of [1530, 1650, 1914]) {
     assert(!hasItalyFiefOverlay(year, ITALY_FIEF_OVERLAY_YEARS));
   }
 });
@@ -1223,11 +1223,11 @@ Deno.test("createItalyFiefOverlayLoader は非対象年で fetch せず空 FC �
       json: () => Promise.resolve(fakeCollection("Republic of Florence")),
     });
   }, ITALY_FIEF_OVERLAY_YEARS);
-  assertEquals(await loader.load(1500), EMPTY_FEATURE_COLLECTION);
+  assertEquals(await loader.load(1530), EMPTY_FEATURE_COLLECTION);
   assertEquals(await loader.load(1914), EMPTY_FEATURE_COLLECTION);
   assertEquals(calls, []);
   // 非対象年は fetch 不要なので「取得済み」扱い（スピナーを出さない）
-  assert(loader.has(1500));
+  assert(loader.has(1530));
 });
 
 Deno.test("createItalyFiefOverlayLoader は対象年で italy_fiefs_flat を fetch して返す（キャッシュあり）（TASK-96 AC #1）", async () => {

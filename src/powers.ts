@@ -634,7 +634,7 @@ export interface YearLayerData {
    */
   baseFill: FeatureCollection;
   /**
-   * 中世イタリア諸侯領オーバーレイ（italy_fiefs_flat_*、1000〜1492。TASK-96）の
+   * イタリア諸侯領オーバーレイ（italy_fiefs_flat_*、1000〜1500。TASK-96、#188）の
    * FeatureCollection（非対象年・取得失敗時は空）
    */
   italyFiefs: FeatureCollection;

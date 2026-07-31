@@ -225,7 +225,7 @@ Deno.test("HRE_ALL_OVERLAY_YEARS は 1700 と 1715 を連続して含む（1700�
   assert(HRE_ALL_OVERLAY_YEARS.includes(1800));
 });
 
-Deno.test("ITALY_FIEF_OVERLAY_YEARS は中世〜近世初頭の 7 年代である（TASK-95/96）", () => {
+Deno.test("ITALY_FIEF_OVERLAY_YEARS は中世〜近世初頭の 8 年代である（TASK-95/96、#188）", () => {
   assertEquals([...ITALY_FIEF_OVERLAY_YEARS], [
     1000,
     1100,
@@ -234,6 +234,7 @@ Deno.test("ITALY_FIEF_OVERLAY_YEARS は中世〜近世初頭の 7 年代であ�
     1300,
     1400,
     1492,
+    1500,
   ]);
 });
 
@@ -249,9 +250,10 @@ Deno.test("ITALY_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEARS �
   }
 });
 
-Deno.test("ITALY_FIEF_OVERLAY_YEARS は近世（1500 以降）を含まない（TASK-96）", () => {
+Deno.test("ITALY_FIEF_OVERLAY_YEARS は 1500 を含み 1530 以降を含まない（base の個別収録は 1530 から。#188）", () => {
+  assert(ITALY_FIEF_OVERLAY_YEARS.includes(1500));
   for (const year of ITALY_FIEF_OVERLAY_YEARS) {
-    assert(year < 1500, `${year} は近世（base が担う年代）`);
+    assert(year < 1530, `${year} は base が伊諸邦を個別収録する年代`);
   }
 });
 

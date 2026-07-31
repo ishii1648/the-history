@@ -94,7 +94,14 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
     "data/cliopatria_fiefs_1492.geojson",
     "data/britain_fiefs_1492.geojson",
   ]);
-  // #172: 近世（1500〜1700）はブリテンのみが対象。これを登録しないと
+  // #188: 1500 年は伊諸侯領（近世初頭拡張）+ ブリテン。伊を登録しないと
+  // base の Holy Roman Empire 一括塗りが北・中伊の諸邦の下に残り、
+  // 半透明が二重に重なって濃くなる。
+  assertEquals(fiefsPathsFor(1500), [
+    "data/italy_fiefs_1500.geojson",
+    "data/britain_fiefs_1500.geojson",
+  ]);
+  // #172: 近世（1530〜1700）はブリテンのみが対象。これを登録しないと
   // 1600 以降の England and Ireland の下に base 塗りが残り、アイルランド王国の
   // 半透明が二重に重なって濃くなる（既存 4 系統と同じ二重塗りの解消方針）。
   assertEquals(fiefsPathsFor(1530), ["data/britain_fiefs_1530.geojson"]);

@@ -73,6 +73,7 @@
       "1500": {
         "base": "data/europe_1500.geojson",
         "fiefs": [
+          "data/italy_fiefs_1500.geojson",
           "data/britain_fiefs_1500.geojson"
         ]
       },
@@ -227,7 +228,11 @@
       "Venice": 0.0318
     },
     "1500": {
-      "England": 0.052
+      "England": 0.052,
+      "Holy Roman Empire": 0.0855,
+      "Papal States": 0.1322,
+      "Swiss Confederation": 0.0026,
+      "Venice": 0.0617
     },
     "1530": {
       "England and Ireland": 0.0522
