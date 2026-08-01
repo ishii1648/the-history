@@ -55,3 +55,4 @@
 | [0030](0030-invisible-background-quads-self-collision.md) | 衝突参加の全ラベル層に不可視背景クアッドを敷き自己衝突を構造的に防ぐ | accepted |
 | [0031](0031-migrate-task-management-to-github-issues.md) | タスク管理を backlog.md から GitHub Issue へ移行する | accepted |
 | [0032](./0032-colors-snapshot-additive.md) | colors.json をスナップショット正とし build-colors を差分追加モードにする | accepted |
+| [0033](./0033-borrowed-adjacent-year-geometry.md) | 上流に面が無い年へ隣接年の出典付きジオメトリを流用する条件（ADR-0014 / ADR-0018 の限定的な例外） | accepted |
