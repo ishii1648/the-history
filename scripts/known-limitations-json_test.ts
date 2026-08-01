@@ -671,3 +671,88 @@ Deno.test("西欧・イタリア・地中海で埋められない政体が年代
     );
   }
 });
+
+// ---- 1815 年以降の UK 構成国を表示しない判断（#174 / ADR-0034）----
+//
+// OHM には 1815 年以降の UK 構成国（admin_level=4 の Scotland / England and
+// Wales / Ireland）が存在するが、本アプリの「勢力」は主権政体とその従属関係を
+// 指し、1801 年合同法以降の構成国は一主権国家の内部行政区分で層が違うため
+// 採用しないと決めた（ADR-0034）。ユーザから見れば「ブリテン諸島が一括りで
+// 区別できない」ことに変わりはないので、なぜ分けないのかを読める形で残す。
+
+Deno.test("1815 年以降の UK 構成国を表示しない理由が明記されている（#174 AC4）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) =>
+    l.id === "uk-constituent-countries-1815-1914"
+  );
+  assert(entry !== undefined, "uk-constituent-countries-1815-1914 が無い");
+  // 理由 (1): 1801 年合同法以降の構成国は一主権国家の内部行政区分である
+  for (const keyword of ["1801", "行政区分", "主権"]) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // 理由 (2): UK だけ第 1 級行政区分を出すと他の多民族国家と整合が崩れる
+  for (const keyword of ["オーストリア", "ロシア帝国", "プロイセン"]) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // 理由 (3): 単一の主権国家であることは史実として正しく欠落ではない
+  assert(
+    /史実/.test(entry.text) && /欠落/.test(entry.text),
+    "text が「単一ポリゴンは欠落ではない」旨に言及していない",
+  );
+  // 常に一括りではないこと（#151 / #172 の成果。1707 年合同法より前は個別表示）
+  for (const keyword of ["1707", "スコットランド"]) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // 傍証 1: ウェールズ単独は分離できない（OHM は 1707〜1967 を England and
+  // Wales という単一法域として持ち、1536 年併合法以降の史実と整合する）
+  for (
+    const keyword of ["England and Wales", "1536", "1967", "OpenHistoricalMap"]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  // 傍証 2: Scotland リレーションの bbox 北端 59.46 度はシェトランドを含まない
+  for (const keyword of ["59.46", "シェトランド"]) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+});
+
+Deno.test("UK 構成国を表示しない制限は 1815〜1914 でのみ active（#174 AC4）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) =>
+    l.id === "uk-constituent-countries-1815-1914"
+  );
+  assert(entry !== undefined);
+  // base が United Kingdom of Great Britain and Ireland を単一 feature として
+  // 持つのは 1815 以降（1715 / 1783 / 1800 は UK と Kingdom of Ireland が別）
+  assertEquals(entry.years, { from: 1815, to: 1914 });
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      year >= 1815 && year <= 1914,
+      `${year} 年の active 判定が期待と異なる`,
+    );
+  }
+});
+
+Deno.test("UK 構成国の項目は 1530〜1700 の一括り収録の項目と年代が重ならない（#174 AC4）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const legacy = parsed.find((l) => l.id === "england-ireland-wales-1530-1700");
+  const entry = parsed.find((l) =>
+    l.id === "uk-constituent-countries-1815-1914"
+  );
+  assert(legacy !== undefined, "既存の 1530〜1700 の項目が削除されている");
+  assert(entry !== undefined);
+  assert(legacy.years !== undefined && entry.years !== undefined);
+  // 同時に active にならない（パネルに同種の説明が 2 件並ばない）
+  assert(
+    entry.years.from > legacy.years.to,
+    "1530〜1700 の項目と年代範囲が重なっている",
+  );
+  for (const year of SNAPSHOT_YEARS) {
+    assert(
+      !(isKnownLimitationActiveForYear(entry, year) &&
+        isKnownLimitationActiveForYear(legacy, year)),
+      `${year} 年で両方の項目が active になっている`,
+    );
+  }
+});
