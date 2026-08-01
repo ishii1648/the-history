@@ -230,15 +230,15 @@ ID 順）ため決定性は 変わらず、 そのうえで 4.2 章の area 判�
 
 **`scripts/` の細分化**（`src-<module>` と同じくモジュール単位で切る）:
 
-| area                    | 対応パスの目安                                                                                                                                                                          |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `area:scripts-base`     | `scripts/build-data.ts`・`scripts/build-hre.ts`・`scripts/clean-polygons.ts`・`scripts/base-properties_test.ts`（base 勢力・Roller HRE の生成と検証）                                   |
-| `area:scripts-fiefs`    | `scripts/build-france-fiefs.ts`・`build-hre-fiefs.ts`・`build-italy-fiefs.ts`・`build-cliopatria-fiefs.ts`・`build-fief-dedupe.ts`・`build-fief-flat.ts`・`clean-polygons.ts`           |
-| `area:scripts-features` | `scripts/build-rivers.ts`・`build-mountains.ts`・`build-peaks.ts`・`build-cities.ts`・`audit-rivers.ts`（河川・山脈・山峰・都市）                                                       |
-| `area:scripts-meta`     | `scripts/build-colors.ts`・`build-attribution.ts`・`audit-attribution.ts`・`name-ja_test.ts`・`known-limitations-json_test.ts`・`notes-json_test.ts`                                    |
-| `area:scripts-build`    | `scripts/build.ts`・`extract-pmtiles.ts`・`extract-dem.ts`（ビルド統合エントリとベースマップ素材取得）。`build.ts` は全パイプラインのハブなので `src-main` と同様に同士は衝突扱いとする |
-| `area:scripts-loop`     | `scripts/next_task.ts`・`next_tasks.ts`・`task_source.ts`・`cleanup_branches.ts`・`loop_doctor.ts`（agent-loop 支援ツール）                                                             |
-| `area:scripts-verify`   | `scripts/serve.ts`・`scripts/verify/`（ローカル配信と headless 動作確認ハーネス）                                                                                                       |
+| area                    | 対応パスの目安                                                                                                                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `area:scripts-base`     | `scripts/build-data.ts`・`scripts/build-hre.ts`・`scripts/clean-polygons.ts`・`scripts/base-properties_test.ts`（base 勢力・Roller HRE の生成と検証）                                                    |
+| `area:scripts-fiefs`    | `scripts/build-france-fiefs.ts`・`build-hre-fiefs.ts`・`build-italy-fiefs.ts`・`build-cliopatria-fiefs.ts`・`build-borrowed-fiefs.ts`・`build-fief-dedupe.ts`・`build-fief-flat.ts`・`clean-polygons.ts` |
+| `area:scripts-features` | `scripts/build-rivers.ts`・`build-mountains.ts`・`build-peaks.ts`・`build-cities.ts`・`audit-rivers.ts`（河川・山脈・山峰・都市）                                                                        |
+| `area:scripts-meta`     | `scripts/build-colors.ts`・`build-attribution.ts`・`audit-attribution.ts`・`name-ja_test.ts`・`known-limitations-json_test.ts`・`notes-json_test.ts`                                                     |
+| `area:scripts-build`    | `scripts/build.ts`・`extract-pmtiles.ts`・`extract-dem.ts`（ビルド統合エントリとベースマップ素材取得）。`build.ts` は全パイプラインのハブなので `src-main` と同様に同士は衝突扱いとする                  |
+| `area:scripts-loop`     | `scripts/next_task.ts`・`next_tasks.ts`・`task_source.ts`・`cleanup_branches.ts`・`loop_doctor.ts`（agent-loop 支援ツール）                                                                              |
+| `area:scripts-verify`   | `scripts/serve.ts`・`scripts/verify/`（ローカル配信と headless 動作確認ハーネス）                                                                                                                        |
 
 **`data/` の細分化**（生成元パイプラインと 1 対 1 に対応させる）:
 

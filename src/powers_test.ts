@@ -3,11 +3,14 @@ import type { FeatureCollection } from "geojson";
 import {
   baseFillDataUrlFor,
   baseOutlineDataUrlFor,
+  borrowedHreDataUrlFor,
+  borrowedItalyFiefDataUrlFor,
   britainFiefDataUrlFor,
   cliopatriaFiefDataUrlFor,
   colorKeyFor,
   createBaseFillLoader,
   createBaseOutlineLoader,
+  createBorrowedHreLoader,
   createBritainFiefOverlayLoader,
   createCliopatriaFiefOverlayLoader,
   createCombinedYearLoader,
@@ -34,9 +37,11 @@ import {
   hreDataUrlFor,
   italyFiefDataUrlFor,
   LINE_COLOR,
+  mergeBorrowedFeatures,
   powerFillDataFor,
   type Rgba,
   sovereignFiefDataUrlFor,
+  withBorrowedGeometry,
   YEAR_CACHE_MAX_YEARS,
   type YearDataLoader,
   type YearLayerData,
@@ -1759,4 +1764,139 @@ Deno.test("createCombinedYearLoader は主権政体ローダを省略しても�
   );
   const data = await loader.load(1200);
   assertEquals(data.sovereignFiefs, EMPTY_FEATURE_COLLECTION);
+});
+
+// ---------------------------------------------------------------------------
+// #202 / ADR-0033: 隣接年から流用した面のマージ
+// ---------------------------------------------------------------------------
+
+/** 借用ファイル相当の FeatureCollection（metadata に出典を持つ） */
+function fakeBorrowedCollection(name: string): FeatureCollection {
+  return {
+    ...fakeCollection(name),
+    metadata: {
+      source: "Territories of the Holy Roman Empire (Roller, ETH Zürich)",
+      sourceUrl: "https://doi.org/10.3929/ethz-b-000472583",
+      license: "CC BY-NC-SA 4.0",
+      borrowedFrom: [{ name, year: 1500 }],
+    },
+  } as FeatureCollection;
+}
+
+Deno.test("borrowedHreDataUrlFor / borrowedItalyFiefDataUrlFor は系統ごとの借用ファイルを指す（#202）", () => {
+  assertEquals(
+    borrowedHreDataUrlFor(1492),
+    "/data/borrowed_hre_1492.geojson",
+  );
+  assertEquals(
+    borrowedItalyFiefDataUrlFor(1492),
+    "/data/borrowed_italy_1492.geojson",
+  );
+});
+
+Deno.test("mergeBorrowedFeatures は借用 feature を足し、その出典を feature 単位で持たせる（#202）", () => {
+  const base = fakeCollection("County of Schaunberg");
+  const borrowed = fakeBorrowedCollection("Archduchy of Austria");
+  const merged = mergeBorrowedFeatures(base, borrowed);
+  assertEquals(merged.features.length, 2);
+  assertEquals(
+    merged.features.map((feature) => feature.properties?.NAME),
+    ["County of Schaunberg", "Archduchy of Austria"],
+  );
+  // 借用元のファイル metadata を feature へ写す（1 枚のレイヤーに 2 出典が
+  // 載っても、クリックした feature の出典・ライセンスが正しく出る）
+  assertEquals(
+    merged.features[1].properties?.ATTRIBUTION,
+    (borrowed as unknown as { metadata: unknown }).metadata,
+  );
+  // 既存 feature には触らない（同一参照のまま）
+  assertEquals(merged.features[0], base.features[0]);
+  // レイヤーの metadata（既存系統の出典）は借用で書き換えない
+  assertEquals(
+    (merged as unknown as { metadata?: unknown }).metadata,
+    (base as unknown as { metadata?: unknown }).metadata,
+  );
+});
+
+Deno.test("mergeBorrowedFeatures は借用が無ければ入力をそのまま返す（deck.gl の差分更新を壊さない）", () => {
+  const base = fakeCollection("County of Schaunberg");
+  assertEquals(mergeBorrowedFeatures(base, EMPTY_FEATURE_COLLECTION), base);
+});
+
+Deno.test("withBorrowedGeometry は対象年だけ借用ファイルを fetch してマージする（#202）", async () => {
+  const calls: string[] = [];
+  const fetchFn = (url: string) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve(
+          url.includes("borrowed")
+            ? fakeBorrowedCollection("Archduchy of Austria")
+            : fakeCollection("County of Schaunberg"),
+        ),
+    });
+  };
+  const loader = withBorrowedGeometry(
+    createHreOverlayLoader(
+      fetchFn,
+      HRE_ALL_OVERLAY_YEARS,
+      () => {},
+      HRE_FIEF_OVERLAY_YEARS,
+    ),
+    createBorrowedHreLoader(fetchFn, [1492], () => {}),
+  );
+  const borrowedYear = await loader.load(1492);
+  assertEquals(
+    borrowedYear.features.map((feature) => feature.properties?.NAME),
+    ["County of Schaunberg", "Archduchy of Austria"],
+  );
+  assertEquals(calls, [
+    "/data/hre_fiefs_flat_1492.geojson",
+    "/data/borrowed_hre_1492.geojson",
+  ]);
+  // 借用の無い年は借用ファイルを fetch しない（404 のノイズを出さない）
+  const plainYear = await loader.load(1400);
+  assertEquals(
+    plainYear.features.map((feature) => feature.properties?.NAME),
+    ["County of Schaunberg"],
+  );
+  assertEquals(calls, [
+    "/data/hre_fiefs_flat_1492.geojson",
+    "/data/borrowed_hre_1492.geojson",
+    "/data/hre_fiefs_flat_1400.geojson",
+  ]);
+  assert(loader.has(1492));
+});
+
+Deno.test("withBorrowedGeometry は借用ファイルの取得失敗を従来表示へ縮退させる（#202）", async () => {
+  const warnings: string[] = [];
+  const fetchFn = (url: string) =>
+    Promise.resolve(
+      url.includes("borrowed")
+        ? { ok: false, status: 404, json: () => Promise.resolve({}) }
+        : {
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(fakeCollection("County of Schaunberg")),
+        },
+    );
+  const loader = withBorrowedGeometry(
+    createHreOverlayLoader(
+      fetchFn,
+      HRE_ALL_OVERLAY_YEARS,
+      () => {},
+      HRE_FIEF_OVERLAY_YEARS,
+    ),
+    createBorrowedHreLoader(fetchFn, [1492], (message) => {
+      warnings.push(message);
+    }),
+  );
+  const fc = await loader.load(1492);
+  assertEquals(
+    fc.features.map((feature) => feature.properties?.NAME),
+    ["County of Schaunberg"],
+  );
+  assertEquals(warnings.length, 1);
 });

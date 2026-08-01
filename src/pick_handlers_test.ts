@@ -341,6 +341,36 @@ Deno.test("pickedMetadata はラベルと同じレイヤー分岐で出典を解
   );
 });
 
+Deno.test("pickedMetadata は借用 feature の出典（properties.ATTRIBUTION）をレイヤーの出典より優先する（#202）", () => {
+  const { handlers } = createHarness();
+  const borrowedAttribution = {
+    source: "Territories of the Holy Roman Empire (Roller, ETH Zürich)",
+    license: "CC BY-NC-SA 4.0",
+    borrowedFrom: [{ name: "Archduchy of Austria", year: 1500 }],
+  };
+  const borrowedFeature = polygonFeature(
+    { NAME: "Archduchy of Austria" },
+    [16, 48],
+  );
+  (borrowedFeature.properties as Record<string, unknown>).ATTRIBUTION =
+    borrowedAttribution;
+  // hre-powers レイヤーには OHM 由来の面（CC0）と借用面（CC BY-NC-SA）が
+  // 同居しうる。クリックした feature 自身の出典があればそれを出す
+  assertStrictEquals(
+    handlers.pickedMetadata(pick(HRE_LAYER_ID, borrowedFeature)),
+    borrowedAttribution,
+  );
+  assertStrictEquals(
+    handlers.pickedMetadata(pick(ITALY_FIEF_LAYER_ID, borrowedFeature)),
+    borrowedAttribution,
+  );
+  // 借用でない feature は従来どおりレイヤー（FeatureCollection）の出典
+  assertEquals(
+    handlers.pickedMetadata(pick(HRE_LAYER_ID, franceFeature)),
+    { source: "hre" },
+  );
+});
+
 // ---- resolveClickInfo ----
 
 Deno.test("resolveClickInfo: 直下 pick が確定層ならそのまま返し再ピックしない", () => {

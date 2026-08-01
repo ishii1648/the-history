@@ -21,6 +21,7 @@
 | 二重表示の解消（派生）      | `data/fief-dedupe.json`・`data/base_outline_<year>.geojson` × 7・`data/europe_flat_<year>.geojson` × 7                            | `scripts/build-fief-dedupe.ts` が `europe_<year>` と 3 系統のオーバーレイ（`france_fiefs_<year>` / `hre_fiefs_<year>` / `italy_fiefs_<year>`）の union から生成（§3.5）                                                                                                                                  | GPL-3.0（`europe_<year>` の派生）                                      | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ          |
 | 諸侯領の重なり解消（派生）  | `data/france_fiefs_flat_<year>.geojson` × 5・`data/hre_fiefs_flat_<year>.geojson` × 7・`data/italy_fiefs_flat_<year>.geojson` × 7 | `scripts/build-fief-flat.ts` が各系統の生データから生成（§3.6）。アプリが実際に配信・描画するのはこちら                                                                                                                                                                                                  | CC0 1.0（各生データの派生）                                            | 仏 1000〜1300 / 帝・伊 1000〜1492                            |
 | 諸侯領土（Cliopatria 補完） | `data/cliopatria_fiefs_<year>.geojson` × 7                                                                                        | Cliopatria (Seshat Global History Databank) — Bennett, J., Mutch, E., Chalstrey, E. et al. (2025) _Scientific Data_、DOI 10.5281/zenodo.14714684。[Seshat-Global-History-Databank/cliopatria](https://github.com/Seshat-Global-History-Databank/cliopatria) @ `ad28a691b7c07c1fca89d0e0636d324667d2a258` | CC BY 4.0                                                              | 1000 / 1100 / 1200 / 1279 / 1300 / 1400 / 1492 のみ（§3.11） |
+| 隣接年からの借用（#202）    | `data/borrowed_hre_1492.geojson`・`data/borrowed_italy_1492.geojson`                                                              | `scripts/build-borrowed-fiefs.ts` が隣接年の生成物から座標無改変で複製（ADR-0033）。borrowed_hre は `hre_1500` の `Archduchy of Austria`、borrowed_italy は `italy_fiefs_1500` の `Duchy of Milan`（OHM rel 2800654）                                                                                    | 借用元と同一（Roller: CC BY-NC-SA 4.0 / OHM: CC0 1.0）                 | 1492 のみ                                                    |
 | 日本語表記                  | `data/name-ja.json`                                                                                                               | 本リポジトリで手当て（勢力名・都市名・領邦名・山脈名・山峰名の対訳 1136 件）                                                                                                                                                                                                                             | —                                                                      | —                                                            |
 | 勢力色                      | `data/colors.json`                                                                                                                | `scripts/build-colors.ts` が NAME から決定的に生成（473 キー）                                                                                                                                                                                                                                           | —                                                                      | —                                                            |
 | 年代解説                    | `data/notes.json`                                                                                                                 | 本リポジトリで執筆（summary + points）                                                                                                                                                                                                                                                                   | —                                                                      | 全 20 年代                                                   |
@@ -149,9 +150,17 @@ TASK-80 の「採用データは全 feature の `BORDERPRECISION` が 1」とい
 ```
 build-data / build-hre / build-*-fiefs / build-cliopatria-fiefs /
 build-rivers / build-mountains / build-peaks / build-cities
-  →  build-fief-flat  →  build-fief-dedupe  →  build-colors
+  →  build-borrowed-fiefs  →  build-fief-flat  →  build-fief-dedupe
+                                            →  build-colors
                                             →  build-attribution（最後）
 ```
+
+- `build-borrowed-fiefs`（#202 / ADR-0033）は、その年に面が無い政体へ隣接年の
+  出典付き面を**座標無改変で複製**して `data/borrowed_<系統>_<year>.geojson` を
+  作る。借用元と同じ系統の別ファイルに置くのは出典の粒度がファイル単位だから
+  （Roller / CC BY-NC-SA と OHM / CC0 を 1 ファイルに混ぜない）。借用面は
+  `build-fief-flat` の重なり解消を通さない（差分を取ると借用元の頂点が変わる）
+  一方、`build-fief-dedupe` の入力には含める（base の二重塗りを解消するため）。
 
 - 独立した最終段にしているのは、(1) 各取得スクリプトに配ると
   `build-attribution.ts` が全取得スクリプトの定数を import する一方で全取得

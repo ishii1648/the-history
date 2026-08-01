@@ -92,6 +92,26 @@ export function collectionMetadata(data: unknown): unknown {
 }
 
 /**
+ * feature 自身が持つ出典（properties.ATTRIBUTION）を取り出す（#202 / ADR-0033）。
+ *
+ * 出典の粒度は通常 FeatureCollection 単位（= レイヤー単位）だが、隣接年から
+ * 流用した面は借用元と同じ系統のレイヤーへ載せるため、出典もライセンスも違う
+ * feature が 1 枚のレイヤーに同居する（1492 年の hre-powers に OHM / CC0 の
+ * 領邦と Roller / CC BY-NC-SA の大公領が並ぶ）。powers.ts の
+ * mergeBorrowedFeatures が借用ファイルの metadata をここへ写しているので、
+ * feature 側の出典があればそれを優先する。無ければ従来どおりレイヤーの出典。
+ */
+export function featureAttribution(object: unknown): unknown {
+  const attribution = (object as
+    | { properties?: { ATTRIBUTION?: unknown } | null }
+    | null
+    | undefined)?.properties?.ATTRIBUTION;
+  return typeof attribution === "object" && attribution !== null
+    ? attribution
+    : undefined;
+}
+
+/**
  * picking 結果から山脈名（英語の元名）を解決する（TASK-100）。
  * 対象外レイヤー・picking なしは null。extentKeyFromPick / powerHighlightKeyFromPick
  * と同型で、ホバー（直下 pick）とクリック（resolveClickInfo で選び直した pick）が
@@ -316,6 +336,11 @@ export function createPickHandlers(deps: PickHandlerDeps) {
     if (isRiversPickLayerId(layerId)) {
       return collectionMetadata(deps.getRiversData());
     }
+    // #202 / ADR-0033: 隣接年から流用した面は、載っているレイヤーの出典では
+    // なく借用元の出典を持つ（1 枚のレイヤーに 2 出典が同居する）。feature 側の
+    // 出典があれば常にそちらを優先し、無ければ従来のレイヤー分岐へ落ちる。
+    const borrowed = featureAttribution(info.object);
+    if (borrowed !== undefined) return borrowed;
     const currentView = deps.getCurrentView();
     if (currentView === null) return undefined;
     if (layerId === POWER_LAYER_ID) {

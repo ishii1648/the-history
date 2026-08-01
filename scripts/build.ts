@@ -4,7 +4,12 @@
  * - index.html / app.css を dist/ にコピー
  */
 
-import { FALLBACK_STYLE_URL, SNAPSHOT_YEARS } from "../src/config.ts";
+import {
+  BORROWED_HRE_OVERLAY_YEARS,
+  BORROWED_ITALY_FIEF_OVERLAY_YEARS,
+  FALLBACK_STYLE_URL,
+  SNAPSHOT_YEARS,
+} from "../src/config.ts";
 import { TILES_ORIGIN } from "../src/pmtiles_url.ts";
 import { HRE_OVERLAY_YEARS } from "./build-hre.ts";
 import { FRANCE_FIEF_YEARS } from "./build-france-fiefs.ts";
@@ -66,6 +71,8 @@ export function getDataCopyTargets(
   cliopatriaFiefYears: readonly number[] = [],
   britainFiefYears: readonly number[] = [],
   sovereignFiefYears: readonly number[] = [],
+  borrowedHreYears: readonly number[] = [],
+  borrowedItalyFiefYears: readonly number[] = [],
 ): Array<{ from: string; to: string }> {
   const targets: Array<{ from: string; to: string }> = [
     { from: "data/index.json", to: `${distDir}/data/index.json` },
@@ -168,6 +175,23 @@ export function getDataCopyTargets(
     targets.push({
       from: `data/sovereign_fiefs_flat_${year}.geojson`,
       to: `${distDir}/data/sovereign_fiefs_flat_${year}.geojson`,
+    });
+  }
+  // #202 / ADR-0033: 隣接年から流用した面（deno task build-borrowed-fiefs で
+  // 生成）。既存オーバーレイと出典・ライセンスが違うためファイルを分けたまま
+  // 配信し、ランタイム（powers.ts withBorrowedGeometry）が hre-powers /
+  // italy-fiefs レイヤーへマージする。flat 化は通さない（借用元の座標を
+  // 1 頂点も変えないため）ので、参照するのは生成物そのもの。
+  for (const year of borrowedHreYears) {
+    targets.push({
+      from: `data/borrowed_hre_${year}.geojson`,
+      to: `${distDir}/data/borrowed_hre_${year}.geojson`,
+    });
+  }
+  for (const year of borrowedItalyFiefYears) {
+    targets.push({
+      from: `data/borrowed_italy_${year}.geojson`,
+      to: `${distDir}/data/borrowed_italy_${year}.geojson`,
     });
   }
   // TASK-78/86/96/110、#172: オーバーレイとの二重輪郭・二重ラベルを解消する
@@ -414,6 +438,8 @@ async function copyDataFiles(distDir: string): Promise<void> {
       CLIOPATRIA_FIEF_YEARS,
       BRITAIN_FIEF_YEARS,
       SOVEREIGN_FIEF_YEARS,
+      BORROWED_HRE_OVERLAY_YEARS,
+      BORROWED_ITALY_FIEF_OVERLAY_YEARS,
     )
   ) {
     await Deno.copyFile(from, to);

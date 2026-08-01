@@ -15,6 +15,8 @@ import {
 import {
   createBaseFillLoader,
   createBaseOutlineLoader,
+  createBorrowedHreLoader,
+  createBorrowedItalyFiefLoader,
   createBritainFiefOverlayLoader,
   createCliopatriaFiefOverlayLoader,
   createCombinedYearLoader,
@@ -28,6 +30,7 @@ import {
   LINE_COLOR,
   LINE_WIDTH_PX,
   powerFillDataFor,
+  withBorrowedGeometry,
   type YearDataLoader,
 } from "./powers.ts";
 import {
@@ -65,6 +68,8 @@ import {
 import {
   BASE_OUTLINE_YEARS,
   BASEMAP_SOURCE_ID,
+  BORROWED_HRE_OVERLAY_YEARS,
+  BORROWED_ITALY_FIEF_OVERLAY_YEARS,
   BRITAIN_FIEF_OVERLAY_YEARS,
   CLIOPATRIA_FIEF_OVERLAY_YEARS,
   FALLBACK_STYLE_URL,
@@ -337,11 +342,18 @@ const withOverrides = (loader: YearDataLoader) =>
 
 const dataLoader = createCombinedYearLoader(
   withOverrides(createYearDataLoader((url) => fetch(url))),
-  withOverrides(createHreOverlayLoader(
-    (url) => fetch(url),
-    HRE_ALL_OVERLAY_YEARS,
-    console.warn,
-    HRE_FIEF_OVERLAY_YEARS,
+  // #202 / ADR-0033: 1492 年のオーストリア大公領はどの上流にも面が無いため、
+  // 隣接年（1500）の Roller 由来の面を借用ファイルから足す。レイヤーは
+  // hre-powers のまま 1 枚で、出典・ライセンスだけが feature ごとに解決される
+  // （pick_handlers.ts featureAttribution）。借用の無い年は fetch されない。
+  withOverrides(withBorrowedGeometry(
+    createHreOverlayLoader(
+      (url) => fetch(url),
+      HRE_ALL_OVERLAY_YEARS,
+      console.warn,
+      HRE_FIEF_OVERLAY_YEARS,
+    ),
+    createBorrowedHreLoader((url) => fetch(url), BORROWED_HRE_OVERLAY_YEARS),
   )),
   withOverrides(
     createFranceFiefOverlayLoader(
@@ -357,8 +369,19 @@ const dataLoader = createCombinedYearLoader(
   withOverrides(createBaseFillLoader((url) => fetch(url), BASE_OUTLINE_YEARS)),
   // TASK-96: イタリア諸侯領（italy_fiefs_flat_*、1000〜1500。#188）。仏諸侯領・
   // HRE 領邦と同じ機構に載せ、非対象年は fetch せず空 FC になる。
+  // #202: 1492 年のミラノ公国は OHM の 1447〜1500 が空白なので、隣接年（1500）の
+  // rel 2800654 を借用ファイルから足す（HRE 側と同じ機構・同じ縮退契約）。
   withOverrides(
-    createItalyFiefOverlayLoader((url) => fetch(url), ITALY_FIEF_OVERLAY_YEARS),
+    withBorrowedGeometry(
+      createItalyFiefOverlayLoader(
+        (url) => fetch(url),
+        ITALY_FIEF_OVERLAY_YEARS,
+      ),
+      createBorrowedItalyFiefLoader(
+        (url) => fetch(url),
+        BORROWED_ITALY_FIEF_OVERLAY_YEARS,
+      ),
+    ),
   ),
   // TASK-110: Cliopatria 由来の領邦（cliopatria_fiefs_flat_*、1000〜1492）。
   // OHM に該当リレーションが無い領邦だけを収録する補完データで、既存 3 系統と

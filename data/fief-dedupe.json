@@ -74,7 +74,9 @@
           "data/italy_fiefs_1492.geojson",
           "data/cliopatria_fiefs_1492.geojson",
           "data/britain_fiefs_1492.geojson",
-          "data/sovereign_fiefs_1492.geojson"
+          "data/sovereign_fiefs_1492.geojson",
+          "data/borrowed_hre_1492.geojson",
+          "data/borrowed_italy_1492.geojson"
         ]
       },
       "1500": {
@@ -273,13 +275,13 @@
       "Aragón": 0.2823,
       "England": 0.052,
       "France": 0.0267,
-      "Holy Roman Empire": 0.545,
+      "Holy Roman Empire": 0.6061,
       "Imperial Hungary": 0.0099,
       "Ottoman Empire": 0.0674,
       "Papal States": 0.3047,
       "Poland-Lithuania": 0.0087,
-      "Swiss Confederation": 0.1066,
-      "Venice": 0.0318
+      "Swiss Confederation": 0.1092,
+      "Venice": 0.0803
     },
     "1500": {
       "Aragón": 0.2823,

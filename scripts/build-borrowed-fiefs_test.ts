@@ -1,0 +1,331 @@
+import { assert, assertEquals, assertThrows } from "@std/assert";
+import type { Feature, FeatureCollection } from "geojson";
+import {
+  BORROWED_FEATURES,
+  type BorrowedFeatureSpec,
+  borrowedPathFor,
+  borrowFeature,
+  buildBorrowedCollection,
+} from "./build-borrowed-fiefs.ts";
+import {
+  attributionForDataFile,
+  DATA_ATTRIBUTIONS,
+} from "./build-attribution.ts";
+import {
+  BORROWED_HRE_OVERLAY_YEARS,
+  BORROWED_ITALY_FIEF_OVERLAY_YEARS,
+  SNAPSHOT_YEARS,
+} from "../src/config.ts";
+import knownLimitations from "../data/known-limitations.json" with {
+  type: "json",
+};
+
+/** テスト用の最小 FeatureCollection */
+function fcOf(...features: Feature[]): FeatureCollection {
+  return { type: "FeatureCollection", features };
+}
+
+const SQUARE: Feature = {
+  type: "Feature",
+  properties: { NAME: "Archduchy of Austria", SUBJECTO: "Holy Roman Empire" },
+  geometry: {
+    type: "Polygon",
+    coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+  },
+};
+
+const SPEC: BorrowedFeatureSpec = {
+  year: 1492,
+  lineage: "hre",
+  name: "Archduchy of Austria",
+  from: {
+    year: 1500,
+    file: "data/hre_1500.geojson",
+    sourceRef: "Roller territories_manual: id=Österreich",
+  },
+  reason: "テスト用",
+};
+
+/** data/<name> を読む */
+async function readCollection(path: string): Promise<FeatureCollection> {
+  return JSON.parse(await Deno.readTextFile(path)) as FeatureCollection;
+}
+
+/** 点がポリゴン/マルチポリゴンの内側か（テスト専用の素朴な判定） */
+function containsPoint(
+  geometry: Feature["geometry"],
+  point: readonly [number, number],
+): boolean {
+  const parts = geometry.type === "Polygon"
+    ? [geometry.coordinates]
+    : geometry.type === "MultiPolygon"
+    ? geometry.coordinates
+    : [];
+  let inside = false;
+  for (const part of parts) {
+    let hit = false;
+    for (const [ringIndex, ring] of part.entries()) {
+      let crossings = false;
+      for (let i = 0; i < ring.length; i++) {
+        const [x1, y1] = ring[i];
+        const [x2, y2] = ring[(i + 1) % ring.length];
+        if (
+          (y1 > point[1]) !== (y2 > point[1]) &&
+          point[0] < (x2 - x1) * (point[1] - y1) / (y2 - y1) + x1
+        ) {
+          crossings = !crossings;
+        }
+      }
+      if (ringIndex === 0) hit = crossings;
+      else if (crossings) hit = false;
+    }
+    if (hit) inside = !inside;
+  }
+  return inside;
+}
+
+// ---------------------------------------------------------------------------
+// 純粋関数（借用は「座標を 1 頂点も変えない複製」であること）
+// ---------------------------------------------------------------------------
+
+Deno.test("borrowFeature は借用元のジオメトリをそのまま複製する（ADR-0033 条件 2）", () => {
+  const borrowed = borrowFeature(fcOf(SQUARE), SPEC);
+  assertEquals(borrowed.geometry, SQUARE.geometry);
+  // properties は借用元をそのまま引き継ぐ（色キー・ラベルが既存年と一致する）
+  assertEquals(borrowed.properties?.NAME, "Archduchy of Austria");
+  assertEquals(borrowed.properties?.SUBJECTO, "Holy Roman Empire");
+});
+
+Deno.test("borrowFeature は借用の事実を feature に記録する（ADR-0033 追跡可能性）", () => {
+  const borrowed = borrowFeature(fcOf(SQUARE), SPEC);
+  assertEquals(borrowed.properties?.BORROWED_FROM, {
+    year: 1500,
+    file: "data/hre_1500.geojson",
+    sourceRef: "Roller territories_manual: id=Österreich",
+  });
+});
+
+Deno.test("borrowFeature は入力を破壊しない", () => {
+  const source = fcOf(SQUARE);
+  const before = JSON.stringify(source);
+  borrowFeature(source, SPEC);
+  assertEquals(JSON.stringify(source), before);
+});
+
+Deno.test("borrowFeature は借用元に対象 NAME が無ければ失敗する", () => {
+  assertThrows(
+    () => borrowFeature(fcOf(), SPEC),
+    Error,
+    "Archduchy of Austria",
+  );
+});
+
+Deno.test("buildBorrowedCollection は借用元をファイル単位の metadata にも記録する", () => {
+  const { fc } = buildBorrowedCollection(
+    [SPEC],
+    new Map([[
+      "data/hre_1500.geojson",
+      fcOf(SQUARE),
+    ]]),
+  );
+  assertEquals(fc.features.length, 1);
+  assertEquals((fc as unknown as { metadata: unknown }).metadata, {
+    borrowedFrom: [{
+      name: "Archduchy of Austria",
+      year: 1500,
+      file: "data/hre_1500.geojson",
+      sourceRef: "Roller territories_manual: id=Österreich",
+      reason: "テスト用",
+    }],
+  });
+});
+
+Deno.test("borrowedPathFor は系統ごとに別ファイルを指す（ライセンス混在を作らない）", () => {
+  assertEquals(borrowedPathFor("hre", 1492), "data/borrowed_hre_1492.geojson");
+  assertEquals(
+    borrowedPathFor("italy", 1492),
+    "data/borrowed_italy_1492.geojson",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 許可リスト（#202: 1492 年のオーストリア大公領・ミラノ公国）
+// ---------------------------------------------------------------------------
+
+Deno.test("許可リストは 1492 年のオーストリア大公領・ミラノ公国の 2 件（#202）", () => {
+  assertEquals(
+    BORROWED_FEATURES.map((spec) => [spec.year, spec.lineage, spec.name]),
+    [
+      [1492, "hre", "Archduchy of Austria"],
+      [1492, "italy", "Duchy of Milan"],
+    ],
+  );
+  for (const spec of BORROWED_FEATURES) {
+    // ADR-0033 条件 4: 隣接するスナップショット年からの借用に限る
+    assert(
+      Math.abs(spec.from.year - spec.year) <= 8,
+      `${spec.name} の借用元が隣接年ではない`,
+    );
+    // ADR-0033 条件 3: 史実の根拠を必ず持つ
+    assert(spec.reason.length > 0, `${spec.name} に借用の根拠が無い`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 生成物（AC1 / AC2 / AC3 / AC5）
+// ---------------------------------------------------------------------------
+
+Deno.test("借用ファイルの座標は借用元と 1 頂点も違わない（ADR-0033 条件 2）", async () => {
+  for (const spec of BORROWED_FEATURES) {
+    const source = await readCollection(spec.from.file);
+    const target = await readCollection(
+      borrowedPathFor(spec.lineage, spec.year),
+    );
+    const original = source.features.find((f) =>
+      f.properties?.NAME === spec.name
+    );
+    const copied = target.features.find((f) =>
+      f.properties?.NAME === spec.name
+    );
+    assert(original !== undefined, `${spec.from.file} に ${spec.name} が無い`);
+    assert(copied !== undefined, `借用ファイルに ${spec.name} が無い`);
+    assertEquals(
+      JSON.stringify(copied.geometry),
+      JSON.stringify(original.geometry),
+      `${spec.name} のジオメトリが借用元と一致しない`,
+    );
+  }
+});
+
+Deno.test("借用ファイルは借用元（年・ファイル・ソース識別子）を metadata に記録する（AC3 / AC5）", async () => {
+  for (const spec of BORROWED_FEATURES) {
+    const path = borrowedPathFor(spec.lineage, spec.year);
+    const target = await readCollection(path) as unknown as {
+      metadata?: { borrowedFrom?: unknown };
+      features: Feature[];
+    };
+    const entries = target.metadata?.borrowedFrom;
+    assert(Array.isArray(entries), `${path} の metadata.borrowedFrom が無い`);
+    const entry = entries.find((e) =>
+      (e as { name?: string }).name === spec.name
+    );
+    assertEquals(entry, {
+      name: spec.name,
+      year: spec.from.year,
+      file: spec.from.file,
+      sourceRef: spec.from.sourceRef,
+      reason: spec.reason,
+    });
+    const feature = target.features.find((f) =>
+      f.properties?.NAME === spec.name
+    );
+    assertEquals(feature?.properties?.BORROWED_FROM, {
+      year: spec.from.year,
+      file: spec.from.file,
+      sourceRef: spec.from.sourceRef,
+    });
+  }
+});
+
+Deno.test("借用ファイルの出典・ライセンスは借用元の系統と一致する（AC4 の出典表示）", async () => {
+  const expected = {
+    hre: DATA_ATTRIBUTIONS.ethHreTerritories,
+    italy: DATA_ATTRIBUTIONS.openHistoricalMap,
+  } as const;
+  for (const spec of BORROWED_FEATURES) {
+    const name = borrowedPathFor(spec.lineage, spec.year).slice("data/".length);
+    assertEquals(attributionForDataFile(name), expected[spec.lineage]);
+    const metadata = (await readCollection(`data/${name}`) as unknown as {
+      metadata: Record<string, unknown>;
+    }).metadata;
+    assertEquals(metadata.source, expected[spec.lineage].source);
+    assertEquals(metadata.license, expected[spec.lineage].license);
+    assertEquals(metadata.sourceUrl, expected[spec.lineage].sourceUrl);
+  }
+});
+
+Deno.test("1492 年のウィーンはオーストリア大公領に含まれる（AC1）", async () => {
+  const fc = await readCollection("data/borrowed_hre_1492.geojson");
+  const austria = fc.features.find((f) =>
+    f.properties?.NAME === "Archduchy of Austria"
+  );
+  assert(austria !== undefined);
+  assert(
+    containsPoint(austria.geometry, [16.37, 48.21]),
+    "ウィーンが大公領に含まれない",
+  );
+});
+
+Deno.test("1492 年のミラノはミラノ公国に含まれる（AC2）", async () => {
+  const fc = await readCollection("data/borrowed_italy_1492.geojson");
+  const milan = fc.features.find((f) =>
+    f.properties?.NAME === "Duchy of Milan"
+  );
+  assert(milan !== undefined);
+  assert(
+    containsPoint(milan.geometry, [9.19, 45.46]),
+    "ミラノがミラノ公国に含まれない",
+  );
+});
+
+Deno.test("表示側の年集合（src/config.ts）と許可リストが一致する（#202）", () => {
+  const yearsOf = (lineage: BorrowedFeatureSpec["lineage"]) =>
+    [
+      ...new Set(
+        BORROWED_FEATURES.filter((spec) => spec.lineage === lineage).map((
+          spec,
+        ) => spec.year),
+      ),
+    ].sort((a, b) => a - b);
+  assertEquals([...BORROWED_HRE_OVERLAY_YEARS], yearsOf("hre"));
+  assertEquals([...BORROWED_ITALY_FIEF_OVERLAY_YEARS], yearsOf("italy"));
+  // 借用先は必ずスナップショット年（借用元も同様）
+  for (const spec of BORROWED_FEATURES) {
+    assert(SNAPSHOT_YEARS.includes(spec.year));
+    assert(SNAPSHOT_YEARS.includes(spec.from.year));
+  }
+});
+
+Deno.test("借用は data/known-limitations.json で年代連動に開示される（AC5 / ADR-0033）", () => {
+  const entry = knownLimitations.limitations.find((limitation) =>
+    limitation.id === "borrowed-geometry-1492"
+  ) as { years?: { from: number; to: number }; text: string } | undefined;
+  assert(entry !== undefined, "borrowed-geometry-1492 が無い");
+  assertEquals(entry.years, { from: 1492, to: 1492 });
+  // 借用元の年・政体・出典・ライセンスが読めること
+  for (
+    const keyword of [
+      "1500",
+      "オーストリア大公領",
+      "ミラノ公国",
+      "CC BY-NC-SA 4.0",
+      "CC0",
+      "近似",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+});
+
+Deno.test("借用 feature の色キー・日本語表記は既存年と同一キーを再利用する（AC4）", async () => {
+  const colors = JSON.parse(
+    await Deno.readTextFile("data/colors.json"),
+  ) as Record<string, string>;
+  const nameJa = JSON.parse(
+    await Deno.readTextFile("data/name-ja.json"),
+  ) as Record<string, string>;
+  for (const spec of BORROWED_FEATURES) {
+    const fc = await readCollection(borrowedPathFor(spec.lineage, spec.year));
+    const feature = fc.features.find((f) => f.properties?.NAME === spec.name);
+    assert(feature !== undefined);
+    const subjecto = feature.properties?.SUBJECTO;
+    const key = typeof subjecto === "string" && subjecto !== spec.name
+      ? `${spec.name}|${subjecto}`
+      : spec.name;
+    assert(colors[key] !== undefined, `colors.json に ${key} が無い`);
+    assert(
+      nameJa[spec.name] !== undefined,
+      `name-ja.json に ${spec.name} が無い`,
+    );
+  }
+});

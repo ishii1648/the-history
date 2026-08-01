@@ -332,6 +332,31 @@ export const SOVEREIGN_FIEF_OVERLAY_YEARS: readonly number[] = [
 ];
 
 /**
+ * 隣接年から流用した面（borrowed_hre_<year>.geojson）を持つ年代（昇順、#202 /
+ * ADR-0033）。出典は借用元と同じ Roller / ETH Zürich（CC BY-NC-SA 4.0）。
+ *
+ * scripts/build-borrowed-fiefs.ts の BORROWED_FEATURES（lineage="hre"）と同値
+ * （src → scripts の import は行わない規約のため値を重複定義し、同値性は
+ * build-borrowed-fiefs_test.ts で担保する）。
+ *
+ * 1492 年はオーストリア大公領がどの上流にも面を持たない（OHM は 1453 年で
+ * リレーションが切れ、Roller は 1500 年から）。ADR-0033 の 4 条件を満たすため、
+ * data/hre_1500.geojson の Archduchy of Austria を座標を変えずに複製して
+ * hre-powers レイヤーへ足す。上流が埋まればこの年は一覧から落とす。
+ */
+export const BORROWED_HRE_OVERLAY_YEARS: readonly number[] = [1492];
+
+/**
+ * 隣接年から流用した面（borrowed_italy_<year>.geojson）を持つ年代（昇順、#202 /
+ * ADR-0033）。出典は借用元と同じ OpenHistoricalMap（CC0）。
+ *
+ * scripts/build-borrowed-fiefs.ts の BORROWED_FEATURES（lineage="italy"）と同値。
+ * 1492 年のミラノ公国は OHM の 1447〜1500 が空白なので、1500 年の rel 2800654
+ * （data/italy_fiefs_1500.geojson）を複製して italy-fiefs レイヤーへ足す。
+ */
+export const BORROWED_ITALY_FIEF_OVERLAY_YEARS: readonly number[] = [1492];
+
+/**
  * base 境界線オーバーレイ（base_outline_<year>.geojson）が存在する年代
  * （昇順、TASK-78/86/96、#172、#189、#191）。諸侯領・領邦・主権政体オーバーレイの
  * いずれかがある年、すなわち FRANCE_FIEF_OVERLAY_YEARS ∪

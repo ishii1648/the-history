@@ -66,6 +66,8 @@ import type {
 } from "geojson";
 import {
   BASE_OUTLINE_YEARS,
+  BORROWED_HRE_OVERLAY_YEARS,
+  BORROWED_ITALY_FIEF_OVERLAY_YEARS,
   FRANCE_FIEF_OVERLAY_YEARS,
   HRE_FIEF_OVERLAY_YEARS,
   ITALY_FIEF_OVERLAY_YEARS,
@@ -455,6 +457,20 @@ export function sovereignFiefsPathFor(year: number): string {
 }
 
 /**
+ * 隣接年から流用した HRE 領邦（#202 / ADR-0033）の入力パス。
+ * 生成は scripts/build-borrowed-fiefs.ts で、年集合は src/config.ts の
+ * BORROWED_HRE_OVERLAY_YEARS（表示側と同一の定義元）。
+ */
+export function borrowedHrePathFor(year: number): string {
+  return `data/borrowed_hre_${year}.geojson`;
+}
+
+/** 隣接年から流用したイタリア諸侯領（#202 / ADR-0033）の入力パス */
+export function borrowedItalyFiefsPathFor(year: number): string {
+  return `data/borrowed_italy_${year}.geojson`;
+}
+
+/**
  * その年に存在するオーバーレイの入力パスを全て返す（純粋関数、TASK-86/96/110）。
  * 被覆率も境界線の切り出しも「その年に描かれるオーバーレイ全体」に対する判定
  * なので、仏諸侯領・HRE 領邦・伊諸侯領が揃う年（1000〜1300）は 3 件を返す。
@@ -491,6 +507,17 @@ export function fiefsPathsFor(year: number): string[] {
   // 追加により FIEF_DEDUPE_YEARS が 1815 / 1880 / 1900 を含む 18 年へ広がる。
   if (SOVEREIGN_FIEF_YEARS.includes(year)) {
     paths.push(sovereignFiefsPathFor(year));
+  }
+  // #202 / ADR-0033: 隣接年から流用した面（1492 年のオーストリア大公領・
+  // ミラノ公国）。借用面は flat 化を通さない（借用元の座標を 1 頂点も変えない）
+  // ので、二重塗りの解消は base 側の差し引きだけが担う。ここへ足さないと
+  // 大公領・公国の下に base の Holy Roman Empire 塗りが残り、半透明が二重に
+  // 重なって色が濁る（既存 6 系統と同じ理由）。
+  if (BORROWED_HRE_OVERLAY_YEARS.includes(year)) {
+    paths.push(borrowedHrePathFor(year));
+  }
+  if (BORROWED_ITALY_FIEF_OVERLAY_YEARS.includes(year)) {
+    paths.push(borrowedItalyFiefsPathFor(year));
   }
   return paths;
 }
