@@ -343,8 +343,15 @@ export const SOVEREIGN_FIEF_OVERLAY_YEARS: readonly number[] = [
  * リレーションが切れ、Roller は 1500 年から）。ADR-0033 の 4 条件を満たすため、
  * data/hre_1500.geojson の Archduchy of Austria を座標を変えずに複製して
  * hre-powers レイヤーへ足す。上流が埋まればこの年は一覧から落とす。
+ *
+ * #209: 1715 年のザクセン選帝侯領も同様（OHM は 1485〜1780 が空白、Roller 由来の
+ * hre_<year> は 1700 年で打ち切り）。data/hre_1700.geojson の
+ * Electorate of Saxony を複製する。1715 年の hre-powers は OHM 由来の
+ * hre_fiefs_flat_1715 なので、この年だけ Roller 由来の面が 1 件混ざるが、
+ * 出典・ライセンスは feature ごとに解決される（pick_handlers.ts
+ * featureAttribution）ため表示は正しいまま。
  */
-export const BORROWED_HRE_OVERLAY_YEARS: readonly number[] = [1492];
+export const BORROWED_HRE_OVERLAY_YEARS: readonly number[] = [1492, 1715];
 
 /**
  * 隣接年から流用した面（borrowed_italy_<year>.geojson）を持つ年代（昇順、#202 /

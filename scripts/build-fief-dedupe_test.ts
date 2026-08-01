@@ -141,9 +141,13 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
   // 主権政体オーバーレイが対象。これを登録しないとハンガリー王国・
   // クリミア・ハン国などの下に base の一枚岩塗りが残り、半透明が二重に
   // 重なって濃くなる。
+  // #209: 1715 年は隣接年（1700）から流用したザクセン選帝侯領も入力に含む
+  // （1492 年と同じ理由。借用面は flat 化を通さないため base の二重塗りの
+  // 解消はここでの差し引きだけが担う）。
   assertEquals(fiefsPathsFor(1715), [
     "data/hre_fiefs_1715.geojson",
     "data/sovereign_fiefs_1715.geojson",
+    "data/borrowed_hre_1715.geojson",
   ]);
   assertEquals(fiefsPathsFor(1783), [
     "data/hre_fiefs_1783.geojson",

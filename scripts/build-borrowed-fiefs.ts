@@ -93,6 +93,17 @@ export interface BorrowedFeatureSpec {
  *   借用元は data/italy_fiefs_1500.geojson の rel 2800654（条件 2）。1492 年も
  *   1500 年もスフォルツァ期の同一領域で、1499 年のフランス占領は支配者の交代
  *   であって領域の変化ではない（条件 3）。隣接スナップショット年（条件 4）。
+ * - **ザクセン選帝侯領（1715 ← 1700）**: OHM の Electorate of Saxony は
+ *   1423〜1485 の次が 1780-03-31〜1806 で 1485〜1780 が空白、Roller 由来の
+ *   hre_<year> も 1700 年で打ち切られるため、1715 年はどの上流にも面が無い
+ *   （実測: 1715 年の全レイヤーでドレスデン・ライプツィヒ・ヴィッテンベルクの
+ *   3 点が base の Holy Roman Empire のみ。条件 1）。借用元は
+ *   data/hre_1700.geojson の Electorate of Saxony（34,071 km²・条件 2）。
+ *   1700↔1715 はいずれもアウグスト強王（フリードリヒ・アウグスト 1 世、
+ *   在位 1694〜1733）の選帝侯領で、1697 年のポーランド王位兼任は同君連合、
+ *   大北方戦争のスウェーデン占領（1706〜1707 年アルトランシュテット条約）も
+ *   占領であって領域の変更ではない（条件 3）。1700 は 1715 の直前の
+ *   スナップショット年（条件 4）。
  */
 export const BORROWED_FEATURES: readonly BorrowedFeatureSpec[] = [
   {
@@ -121,6 +132,22 @@ export const BORROWED_FEATURES: readonly BorrowedFeatureSpec[] = [
     reason:
       "1492 年・1500 年ともスフォルツァ家支配下のミラノ公国で領域はほぼ同一。" +
       "1499 年のフランスによる征服は支配者の交代であり領域の変化ではない。",
+  },
+  {
+    year: 1715,
+    lineage: "hre",
+    name: "Electorate of Saxony",
+    from: {
+      year: 1700,
+      file: "data/hre_1700.geojson",
+      sourceRef: "Roller territories_manual: id=albertinischesSachsennach1635",
+    },
+    reason:
+      "1700 年・1715 年ともアウグスト強王（フリードリヒ・アウグスト 1 世）の" +
+      "ザクセン選帝侯領で、領域は 1635 年のプラハ条約（ラウジッツ獲得）以降 " +
+      "1815 年まで安定している。1697 年のポーランド王位兼任は同君連合であり" +
+      "選帝侯領の領域を変えず、大北方戦争のスウェーデン占領（1706〜1707）も" +
+      "占領であって割譲ではない。",
   },
 ];
 

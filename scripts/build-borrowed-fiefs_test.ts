@@ -152,19 +152,28 @@ Deno.test("borrowedPathFor は系統ごとに別ファイルを指す（ライ�
 // 許可リスト（#202: 1492 年のオーストリア大公領・ミラノ公国）
 // ---------------------------------------------------------------------------
 
-Deno.test("許可リストは 1492 年のオーストリア大公領・ミラノ公国の 2 件（#202）", () => {
+Deno.test("許可リストは 1492 年の 2 件（#202）と 1715 年のザクセン選帝侯領（#209）", () => {
   assertEquals(
     BORROWED_FEATURES.map((spec) => [spec.year, spec.lineage, spec.name]),
     [
       [1492, "hre", "Archduchy of Austria"],
       [1492, "italy", "Duchy of Milan"],
+      [1715, "hre", "Electorate of Saxony"],
     ],
   );
   for (const spec of BORROWED_FEATURES) {
-    // ADR-0033 条件 4: 隣接するスナップショット年からの借用に限る
+    // ADR-0033 条件 4: 隣接するスナップショット年からの借用に限る。年差の絶対値
+    // ではなく SNAPSHOT_YEARS 上の隣接（1 区間以内）で判定する（本プロジェクトの
+    // 年代刻みは不均等で、1700↔1715 は 15 年差でも隣接年）。
+    const target = SNAPSHOT_YEARS.indexOf(spec.year);
+    const from = SNAPSHOT_YEARS.indexOf(spec.from.year);
     assert(
-      Math.abs(spec.from.year - spec.year) <= 8,
-      `${spec.name} の借用元が隣接年ではない`,
+      target >= 0 && from >= 0,
+      `${spec.name} の年がスナップショット年でない`,
+    );
+    assert(
+      Math.abs(target - from) === 1,
+      `${spec.name} の借用元が隣接スナップショット年ではない`,
     );
     // ADR-0033 条件 3: 史実の根拠を必ず持つ
     assert(spec.reason.length > 0, `${spec.name} に借用の根拠が無い`);
@@ -268,6 +277,29 @@ Deno.test("1492 年のミラノはミラノ公国に含まれる（AC2）", asyn
   );
 });
 
+Deno.test("1715 年のドレスデン・ライプツィヒ・ヴィッテンベルクはザクセン選帝侯領に含まれる（#209 AC1）", async () => {
+  const fc = await readCollection("data/borrowed_hre_1715.geojson");
+  const saxony = fc.features.find((f) =>
+    f.properties?.NAME === "Electorate of Saxony"
+  );
+  assert(
+    saxony !== undefined,
+    "borrowed_hre_1715 に Electorate of Saxony が無い",
+  );
+  for (
+    const [label, point] of [
+      ["ドレスデン", [13.74, 51.05]],
+      ["ライプツィヒ", [12.37, 51.34]],
+      ["ヴィッテンベルク", [12.65, 51.87]],
+    ] as const
+  ) {
+    assert(
+      containsPoint(saxony.geometry, point as readonly [number, number]),
+      `${label} がザクセン選帝侯領に含まれない`,
+    );
+  }
+});
+
 Deno.test("表示側の年集合（src/config.ts）と許可リストが一致する（#202）", () => {
   const yearsOf = (lineage: BorrowedFeatureSpec["lineage"]) =>
     [
@@ -304,6 +336,44 @@ Deno.test("借用は data/known-limitations.json で年代連動に開示され�
     ]
   ) {
     assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+});
+
+Deno.test("1715 年の借用も known-limitations で年代連動に開示される（#209 AC3 / ADR-0033）", () => {
+  const entry = knownLimitations.limitations.find((limitation) =>
+    limitation.id === "borrowed-geometry-1715"
+  ) as { years?: { from: number; to: number }; text: string } | undefined;
+  assert(entry !== undefined, "borrowed-geometry-1715 が無い");
+  assertEquals(entry.years, { from: 1715, to: 1715 });
+  for (
+    const keyword of [
+      "1700",
+      "ザクセン選帝侯領",
+      "CC BY-NC-SA 4.0",
+      "近似",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+});
+
+Deno.test("1715〜1800 年の既知の制限はザクセンを「借用で解消」へ更新している（#209 AC4）", () => {
+  const entry = knownLimitations.limitations.find((limitation) =>
+    limitation.id === "hre-fiefs-1715-1800-missing-territories"
+  ) as { text: string } | undefined;
+  assert(entry !== undefined, "hre-fiefs-1715-1800-missing-territories が無い");
+  // 「1715 年に表示されず」という記述は解消済み（借用で表示される）
+  assert(
+    !entry.text.includes("1715年に表示されず"),
+    "ザクセンが 1715 年に表示されない旨の記述が残っている",
+  );
+  assert(
+    entry.text.includes("1700年"),
+    "ザクセンの借用元（1700 年）に言及していない",
+  );
+  // 他の欠落（トリーア・ヴュルテンベルク等）はエントリに残す
+  for (const keyword of ["トリーア選帝侯領", "ヴュルテンベルク公国"]) {
+    assert(entry.text.includes(keyword), `${keyword} の記述が失われている`);
   }
 });
 
