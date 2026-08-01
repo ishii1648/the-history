@@ -34,6 +34,7 @@ import {
   BRITAIN_FIEF_SIZE_LIMIT_BYTES,
   BRITAIN_FIEF_YEARS,
 } from "./build-britain-fiefs.ts";
+import { BASE_FILL_SIZE_LIMIT_BYTES } from "./build-fief-dedupe.ts";
 import { BASE_OUTLINE_YEARS } from "../src/config.ts";
 
 /** 経緯度の矩形リング（反時計回り）。widthDeg 四方 */
@@ -407,10 +408,12 @@ Deno.test("生成物は年代ごとのサイズ上限に収まる", async () => 
       BRITAIN_FIEF_SIZE_LIMIT_BYTES,
     ]),
     // TASK-92: 諸侯領 union を差し引いた派生 base。境界が諸侯領の輪郭に沿う分
-    // 元の europe_<year> より頂点が増えるため、上限は base と同じ値で見張る
+    // 元の europe_<year> より頂点が増えるため、穴の縁の余白を持つ独立の上限
+    // （build-fief-dedupe.ts BASE_FILL_SIZE_LIMIT_BYTES）で見張る。#190 で
+    // 1783 年にジェノヴァ共和国の穴が開き base 上限（300 KB）を 0.3% 超えた
     ...BASE_OUTLINE_YEARS.map((y): [string, number] => [
       `europe_flat_${y}.geojson`,
-      SIZE_LIMIT_BYTES,
+      BASE_FILL_SIZE_LIMIT_BYTES,
     ]),
   ];
   for (const [name, limit] of limits) {

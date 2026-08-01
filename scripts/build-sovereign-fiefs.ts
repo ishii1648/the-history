@@ -1,6 +1,7 @@
 /**
- * 中東欧・バルカン・東欧の「base に現れない主権政体」を補完するオーバーレイを
- * OpenHistoricalMap（OHM）から生成するデータパイプライン（#189）。
+ * 「base に現れない主権政体」を補完するオーバーレイを OpenHistoricalMap（OHM）
+ * から生成するデータパイプライン（#189 で中東欧・バルカン・東欧を新設、
+ * #190 で西欧・イタリア・地中海を追加）。
  *
  * ## 背景
  * base（europe_<year>.geojson）は近世以降のオスマン帝国領・ハプスブルク領を
@@ -40,9 +41,25 @@
  *
  * ## 収録しない対象とその根拠: SOVEREIGN_FIEF_EXCLUSIONS を参照
  *
+ * ## #190 で追加した西欧・イタリア・地中海（データ追加のみ・機構は #189 のまま）
+ * 1000 年の教皇領（base は Holy Roman Empire 塗り）・1000〜1100 年の
+ * バルセロナ伯領（同 Kingdom of France）・1279〜1400 年のアテネ公国と
+ * アカイア公国（同 Byzantine Empire）・1400〜1500 年のナポリ王国（同 Sicily /
+ * Aragón）・1400〜1500 年のサヴォイア（同 Holy Roman Empire）・1783 年の
+ * ジェノヴァ共和国と 1800 年のリグリア共和国（同 Kingdom of Sardinia）・
+ * 1400〜1783 年のヨハネ騎士団（ロドス→マルタ。base は Byzantine / Ottoman
+ * 塗りか、マルタ島にポリゴンを持たない）を足した。既存 5 系統との分担は
+ * 「その年に他系統が同じ政体を収録していない年だけを埋める」で、伊諸侯領の
+ * ジェノヴァ（1100〜1500）・ミラノ（1500）と帝国領邦のミラノ（1400）は
+ * coveredByOtherOverlay で静的に除外する。
+ *
  * ## データ側の限界（本タスクで解消できないもの・data/known-limitations.json）
  * - 1530〜1715 年のハンガリー王国は上記のとおり面が組めず、base の Ottoman /
  *   Austrian Empire 塗りのまま残る。
+ * - 1650 / 1700 年のスペイン領ネーデルラント（#190）も同じく label ノードのみ
+ *   （rel 2848630 / 2848632、構成領邦のブラバント公領 2812126 も同様）で、
+ *   base が低地地方南部を Luxembourg 名義で塗る誤帰属は解消できない。
+ * - 1492 年のミラノ公国は OHM に 1447〜1500 年のリレーションが無く埋まらない。
  * - モルダヴィア公国（1359〜1859）は OHM の収録が 1812 年以降のみで、
  *   1492〜1800 年は埋められない（base の Ottoman / Poland-Lithuania 塗りのまま）。
  * - トランシルヴァニア公国（1570〜1711）は OHM に無く、1600 / 1650 年は
@@ -101,15 +118,25 @@ export const SOVEREIGN_FIEF_BBOX: readonly [number, number, number, number] = [
 ];
 
 /**
- * 生成対象年。SNAPSHOT_YEARS のうち許可リストのいずれかが有効になる 14 年。
- * 件数は 1200=1 / 1400=1 / 1492=1 / 1500=1 / 1530=1 / 1600=1 / 1650=2 /
- * 1700=3 / 1715=4 / 1783=4 / 1800=5 / 1815=7 / 1880=3 / 1900=2
- * （sovereignFiefIdsForYear の実測）。1000〜1100・1279〜1300 は対象政体を
- * base が全て収録済みで、1914 は Finland ほか後継の主権国家を base が個別
- * 収録するため対象にしない。
+ * 生成対象年。SNAPSHOT_YEARS のうち許可リストのいずれかが有効になる 18 年
+ * （= 1914 を除く全スナップショット年）。件数は 1000=2 / 1100=1 / 1200=1 /
+ * 1279=2 / 1300=2 / 1400=6 / 1492=4 / 1500=4 / 1530=2 / 1600=2 / 1650=3 /
+ * 1700=4 / 1715=5 / 1783=6 / 1800=6 / 1815=7 / 1880=3 / 1900=2
+ * （sovereignFiefIdsForYear の実測）。1914 は Finland ほか後継の主権国家を
+ * base が個別収録するため対象にしない。
+ *
+ * #190: 西欧・イタリア・地中海の追加（ナポリ王国・サヴォイア・ジェノヴァ /
+ * リグリア共和国・アテネ公国 / アカイア公国・バルセロナ伯領・1000 年の
+ * 教皇領・ヨハネ騎士団）により 1000 / 1100 / 1279 / 1300 が対象年に加わった。
+ * この 4 年は既に仏・帝国・伊・Cliopatria・ブリテンのオーバーレイがあるため
+ * BASE_OUTLINE_YEARS（派生データの年集合）は変わらない。
  */
 export const SOVEREIGN_FIEF_YEARS: readonly number[] = [
+  1000,
+  1100,
   1200,
+  1279,
+  1300,
   1400,
   1492,
   1500,
@@ -144,7 +171,14 @@ export interface SovereignFiefEntry {
   /** 実測した end_date */
   endDate: string;
   /** 地域区分（記録用。選別には使わない） */
-  region: "danubian" | "balkan" | "eastern" | "northern";
+  region:
+    | "danubian"
+    | "balkan"
+    | "eastern"
+    | "northern"
+    | "western"
+    | "italian"
+    | "mediterranean";
   /**
    * 存続区間内でも収録しない年（実測に基づく静的な固定値）。
    * base（europe_<year>）が同じ政体・同じ土地を個別収録しており、オーバーレイを
@@ -155,7 +189,7 @@ export interface SovereignFiefEntry {
 }
 
 /**
- * 採用するリレーション ID の静的な許可リスト（16 件）。
+ * 採用するリレーション ID の静的な許可リスト（30 件 = #189 の 16 + #190 の 14）。
  * ID・存続区間・admin_level とも 2026-07 に Overpass で実測した値をピン留め
  * する。年ごとの収録はこの表の存続区間の包含判定と excludedYears **だけ**で
  * 決まる（sovereignFiefIdsForYear）。OHM 側のタグが変わっても選別は動かず、
@@ -321,12 +355,176 @@ export const SOVEREIGN_FIEF_ALLOWLIST: Readonly<
     endDate: "1913",
     region: "balkan",
   },
+
+  // =========================================================================
+  // #190: 西欧・イタリア・地中海の追加分（14 件）
+  // =========================================================================
+
+  // --- 教皇領（1000 年のみ。base は 1000 年のローマを Holy Roman Empire で塗る） ---
+  // OHM の教皇領は 0754 年から連鎖するが、base は 1100 年以降 Papal States を
+  // 個別収録するため、退行が起きている 1000 年だけを埋める（rel 2805421 =
+  // 1020〜1201 は base 収録年に重なるので SOVEREIGN_FIEF_EXCLUDED_IDS で落とす）。
+  // NAME は base の呼称（Papal States）に揃え、1000→1100 年で色・和名が続く。
+  2889237: {
+    name: "Papal States",
+    ohmName: "Papal States",
+    adminLevel: 2,
+    startDate: "0988",
+    endDate: "1020",
+    region: "italian",
+  },
+  // --- バルセロナ伯領（base は 1000 / 1100 年のカタルーニャを Kingdom of France 塗り） ---
+  // 実際には 988 年以降フランス王への臣従を停止した事実上の独立伯領。
+  // 仏諸侯領オーバーレイは「フランス王国の封建諸侯領ではない」として
+  // カタルーニャ諸伯領を対象外にしており（build-france-fiefs.ts catalanCounties）、
+  // base に現れない主権政体を補う本系統が引き受ける。
+  // 2 本のリレーションは OHM 名が異なる（1050〜1150 は "Comtat de Barcelona
+  // 1050-1150"）が、表示名は County of Barcelona に統一する。
+  2739884: {
+    name: "County of Barcelona",
+    ohmName: "County of Barcelona",
+    adminLevel: 4,
+    startDate: "0950",
+    endDate: "1050",
+    region: "western",
+  },
+  2739885: {
+    name: "County of Barcelona",
+    ohmName: "Comtat de Barcelona 1050-1150",
+    adminLevel: 4,
+    startDate: "1050",
+    endDate: "1150",
+    region: "western",
+  },
+  // --- アテネ公国・アカイア公国（base は 1279〜1400 年のギリシアを Byzantine Empire 塗り） ---
+  // 第 4 回十字軍後のラテン系政体で、当該年代のビザンツ帝国は実際には
+  // これらの土地を支配していない（base の誤帰属）。アカイア公国は 1432 年に
+  // モレアス専制公領へ吸収され、アテネ公国は 1458 年にオスマンへ降るため、
+  // 1492 年以降は base の Ottoman Empire 塗りが正しい。
+  2809440: {
+    name: "Duchy of Athens",
+    ohmName: "Duchy of Athens",
+    adminLevel: 4,
+    startDate: "1205",
+    endDate: "1458",
+    region: "balkan",
+  },
+  2809441: {
+    name: "Principality of Achaea",
+    ohmName: "Principality of Achaea",
+    adminLevel: 2,
+    startDate: "1205",
+    endDate: "1432",
+    region: "balkan",
+  },
+  // --- ナポリ王国（base は 1400 年を Sicily、1492 / 1500 年を Aragón の一枚岩で塗る） ---
+  // 1282 年の晩祷戦争以降、イタリア半島南部（ナポリ）とシチリア島は別々の
+  // 王国で、1400 年はアンジュー家、1492 / 1500 年はアラゴン系ナポリ王家が
+  // 大陸側を治めた。base の一枚岩塗りではこの区別が読めない。
+  // NAME は base 1530 年以降の呼称（Naples = ナポリ王国）に合わせ、
+  // 1400→1530 年で色・和名が続く。1442〜1463 / 1501〜1504 のリレーションは
+  // スナップショット年を含まず、1504 年以降は base が Naples /
+  // Kingdom of the Two Sicilies として同じ土地を収録している。
+  2750042: {
+    name: "Naples",
+    ohmName: "Kingdom of Naples",
+    adminLevel: 2,
+    startDate: "1302-08-31",
+    endDate: "1442-06-02",
+    region: "italian",
+  },
+  2892793: {
+    name: "Naples",
+    ohmName: "Kingdom of Naples",
+    adminLevel: 2,
+    startDate: "1463",
+    endDate: "1501-08-02",
+    region: "italian",
+  },
+  // --- サヴォイア（base は 1400〜1500 年のサヴォイア・ピエモンテを Holy Roman Empire 塗り） ---
+  // 名目上は帝国封土だが、1416 年の公領昇格前後を通じて自立した領邦国家。
+  // base は 1530 / 1600 年に Savoy、1650 年以降に Sardinia-Piedmont /
+  // Kingdom of Sardinia として個別収録するため、その間だけを埋める。
+  // NAME は base の呼称（Savoy）に合わせる（OHM 名は Savoyard state）。
+  2893918: {
+    name: "Savoy",
+    ohmName: "Savoyard state",
+    adminLevel: 3,
+    startDate: "1388",
+    endDate: "1401",
+    region: "western",
+  },
+  2893921: {
+    name: "Savoy",
+    ohmName: "Savoyard state",
+    adminLevel: 3,
+    startDate: "1427",
+    endDate: "1536",
+    region: "western",
+    // base が Savoy を個別収録する年は除外（1530 年）
+    excludedYears: [1530],
+  },
+  // --- ジェノヴァ共和国・リグリア共和国（base は 1783 / 1800 年のリグリアを Kingdom of Sardinia 塗り） ---
+  // ジェノヴァがサルデーニャ王国へ併合されるのは 1815 年のウィーン会議で、
+  // 1783 年は独立共和国、1800 年はその後身のリグリア共和国（1797〜1805）。
+  // base の 1783 / 1800 年は先取りしてサルデーニャ王国で塗っており誤帰属。
+  // NAME は base 1530〜1715 年の呼称（Genoa）に合わせる: 伊諸侯領オーバーレイ
+  // （1100〜1500 の Republic of Genoa）とは別キーになり、同じ土地を 2 系統で
+  // 塗らない検査（build-sovereign-fiefs_test.ts の名前重複テスト）も通る。
+  2851381: {
+    name: "Genoa",
+    ohmName: "Republic of Genoa",
+    adminLevel: 2,
+    startDate: "1768",
+    endDate: "1797-06-13",
+    region: "italian",
+  },
+  2750805: {
+    name: "Ligurian Republic",
+    ohmName: "Ligurian Republic",
+    adminLevel: 4,
+    startDate: "1797-06-14",
+    endDate: "1805-06-09",
+    region: "italian",
+  },
+  // --- ヨハネ騎士団（ロドス期 1310〜1522 / マルタ期 1530〜1798） ---
+  // base はロドス島を 1400 年に Byzantine Empire、1492 / 1500 年に
+  // Ottoman Empire で塗る（いずれも誤帰属。島は 1522 年まで騎士団領）。
+  // マルタ島は base にポリゴンが無く、1880 年の Malta まで空白のままになる。
+  // 3 本のリレーションを単一 NAME（Knights Hospitaller）で継ぎ、拠点が
+  // 移っても同じ色・同じ日本語表記が続くようにする。1651〜1665 の
+  // リレーションはスナップショット年を含まず、1798 年の失陥後（French Malta
+  // 以降）は本 Issue の対象外。
+  2861791: {
+    name: "Knights Hospitaller",
+    ohmName: "Knights Hospitaller",
+    adminLevel: 2,
+    startDate: "1310-08-15",
+    endDate: "1522",
+    region: "mediterranean",
+  },
+  2861790: {
+    name: "Knights Hospitaller",
+    ohmName: "Knights Hospitaller",
+    adminLevel: 2,
+    startDate: "1530",
+    endDate: "1651",
+    region: "mediterranean",
+  },
+  2861788: {
+    name: "Knights Hospitaller",
+    ohmName: "Knights Hospitaller",
+    adminLevel: 2,
+    startDate: "1665",
+    endDate: "1798-06-11",
+    region: "mediterranean",
+  },
 };
 
 /**
  * 収録を見送った対象の分類と根拠。
  * 実測（名前照合）で確認した候補から、ここに挙げる分類で落とした残りが
- * 許可リスト 18 件になる。
+ * 許可リスト 30 件になる。
  */
 export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
   sovereignsCoveredByBase:
@@ -337,8 +535,35 @@ export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
     "of Moscow、1492 年以降に Grand Duchy of Moscow / Tsardom of Muscovy を" +
     "収録）、中世セルビア王国（base は 1279 年に Serbia、1300 年に Raška を" +
     "収録）、近代のセルビア・モンテネグロ（base は 1880 年以降に個別収録）が" +
-    "該当する。本オーバーレイは「base に無い政体を足す」補完であり、base と" +
-    "同じ主権政体は採らない。",
+    "該当する。#190 では 1504 年以降のナポリ王国（base は 1530〜1715 年に " +
+    "Naples、1783〜1815 年に Kingdom of the Two Sicilies）、1576 年以降の" +
+    "サヴォイア（base は 1530 / 1600 年に Savoy、1650〜1715 年に " +
+    "Sardinia-Piedmont、1783 年以降に Kingdom of Sardinia）、1580〜1742 年の" +
+    "ジェノヴァ共和国（base は 1530〜1715 年に Genoa）、1512 年以降のミラノ" +
+    "（base は 1530〜1715 年に Milan、1783 年に Milano (Austria)、1800 年に " +
+    "Lombardy）、1020〜1201 年の教皇領（base は 1100 / 1200 年に Papal States）、" +
+    "1769〜1797 年のブルグント帝国クライス（base は 1783 年に Austrian " +
+    "Netherlands）が加わる。本オーバーレイは「base に無い政体を足す」補完で" +
+    "あり、base と同じ主権政体は採らない。",
+  coveredByOtherOverlay:
+    "既存のオーバーレイ系統が該当年に同じ政体を収録しているリレーション。" +
+    "1395〜1404 年のミラノ公国は hre_fiefs_1400（TASK-85 の Duchy of Milan）、" +
+    "1500〜1512 年のミラノ公国と 1099〜1540 年のジェノヴァ共和国の連鎖は " +
+    "italy_fiefs_<year>（TASK-95 / #188 の Duchy of Milan / Republic of Genoa）" +
+    "が担う。同じ土地を 2 系統のオーバーレイで塗ると半透明が二重に重なるため、" +
+    "後から足す本系統は「他系統に無い年・政体」だけを埋める。",
+  duplicateRelationChain:
+    "同じ土地・同じ時期を指すリレーションが OHM に二重に存在し、片方だけを" +
+    "採るもの。マルタ島の Monastic State of the Order of Malta（1530〜1753）は " +
+    "Knights Hospitaller の連鎖（1530〜1651 / 1651〜1665 / 1665〜1798）と" +
+    "同一の島・同一の騎士団を指すため、年代を跨いで単一 NAME で継げる後者を採る。",
+  outOfIssueScope:
+    "面は組めるが本 Issue（#190: 西欧・イタリア・地中海の主要政体）の対象に" +
+    "含まれず、後続課題として docs/data-inventory/missing-powers-ledger.md に" +
+    "記録するリレーション。1230〜1337 年の Empire of Thessalonica（エピロス系" +
+    "の後継国家。base は 1279 / 1300 年の同域を Byzantine Empire で塗る）、" +
+    "1798 年以降のマルタ（French Malta / British Protectorate of Malta / " +
+    "Crown Colony of Malta）が該当する。",
   noSnapshotYearInSpan:
     "存続区間にスナップショット年（SNAPSHOT_YEARS）が 1 つも含まれない" +
     "リレーション。収録しても表示される年が無い（例: Wallachia 1417〜1420、" +
@@ -349,7 +574,11 @@ export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
     "組めない（2026-07 実測。#187 のブラバント公領と同じ状態）。1401〜1751 の " +
     "Kingdom of Hungary の AL2 連鎖（2829404 / 2750054 / 2829139 / 2829520）が" +
     "該当し、オスマン期（1530〜1715 年のスナップショット）のハンガリー王国は" +
-    "補完できない。data/known-limitations.json に明示する。",
+    "補完できない。#190 のスペイン領ネーデルラント（2848632 = 1556〜1581 / " +
+    "2848630 = 1581〜1714）と 1648〜1797 年のブラバント公領（2812126）も同じ" +
+    "状態で、base が 1650 / 1700 年の低地地方南部を Luxembourg 名義で塗る" +
+    "誤帰属は本オーバーレイでは解消できない。data/known-limitations.json に" +
+    "明示する。",
   annexationYearCollision:
     "クリミア・ハン国の末期リレーション（1774〜1783-04-08）。存続区間は " +
     "1783 年に掛かるが、同年 4 月のロシア併合により base の 1783 年は同地を " +
@@ -364,13 +593,14 @@ export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
     "で年を絞る）。",
   dependencyOfDisplayedPower:
     "表示中の主権勢力の従属領（Venetian rule in the Ionian Islands " +
-    "1363〜1797 など）。base の Venice が同地を含めて塗っており、独立の" +
+    "1363〜1797、Duchy of the Archipelago 1207〜1566、Kingdom of Candia " +
+    "1212〜1667 など）。base の Venice が同地を含めて塗っており、独立の" +
     "主権政体ではないため採らない。",
   baseCoveredYearsExcluded:
     "許可リスト内のリレーションでも、base が同じ政体を個別収録している年は " +
     "excludedYears で除外する（クリミア・ハン国 1492〜1600、セルビア 1000〜" +
-    "1100、フィンランド 1914、クレタ州 1700〜1815）。二重塗り・二重ラベルを" +
-    "生成段階で構造的に防ぐ。",
+    "1100、フィンランド 1914、クレタ州 1700〜1815、#190 のサヴォイア 1530）。" +
+    "二重塗り・二重ラベルを生成段階で構造的に防ぐ。",
   upstreamGapsRecorded: "OHM に使えるリレーションが無く埋められない政体は " +
     "data/known-limitations.json（sovereign-fiefs-missing-territories）と" +
     "docs/data-inventory/missing-powers-ledger.md に記録する: 1530〜1715 年の" +
@@ -378,7 +608,13 @@ export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
     "1492〜1800 年のモルダヴィア公国（OHM は 1812 年以降のみ）、1600〜1700 年の" +
     "トランシルヴァニア公国（OHM は 1711 年以降のみ）、1400 年のセルビア" +
     "（ラザレヴィチ公国）、1783 年のモンテネグロ（OHM の主教公国は 1789 年" +
-    "開始）、1815 年のセルビア自治公国。",
+    "開始）、1815 年のセルビア自治公国。#190 では 1650 / 1700 年の" +
+    "スペイン領ネーデルラント（面が組めない = geometryUnbuildable）、" +
+    "1492 年のミラノ公国（OHM は 1447〜1500 年のリレーションを持たない）、" +
+    "1279 / 1300 年のナポリ（OHM の Kingdom of Naples は 1302 年開始）、" +
+    "1279 / 1300 年のミラノ（Lordship of Milan は面が組めない）、" +
+    "1000〜1300 年の南イタリア諸侯領（ベネヴェント公国・サレルノ公国など）が" +
+    "加わる。",
 };
 
 /**
@@ -430,6 +666,78 @@ export const SOVEREIGN_FIEF_EXCLUDED_IDS: Readonly<Record<number, string>> = {
   2923272: "subdivisionOfDisplayedPower", // Eyalet of Rumelia 1650-1867
   2694169: "subdivisionOfDisplayedPower", // Serbia Eyalet 1840-1860
   2827694: "dependencyOfDisplayedPower", // Venetian rule in the Ionian Islands
+
+  // ---------------------------------------------------------------------
+  // #190: 西欧・イタリア・地中海の候補のうち収録しないもの
+  // ---------------------------------------------------------------------
+  // ナポリ王国の前後リレーション
+  2750043: "noSnapshotYearInSpan", // Kingdom of Naples 1442-1458
+  2750044: "noSnapshotYearInSpan", // Kingdom of Naples 1458-1463
+  2750046: "noSnapshotYearInSpan", // Kingdom of Naples 1501-1504
+  2750045: "sovereignsCoveredByBase", // Kingdom of Naples 1504-1647（base: Naples）
+  2750048: "sovereignsCoveredByBase", // Kingdom of Naples 1648-1714（base: Naples）
+  2750049: "sovereignsCoveredByBase", // Kingdom of Naples 1714-1735（base: Naples）
+  2750050: "sovereignsCoveredByBase", // Kingdom of Naples 1735-1799（base: Two Sicilies）
+  2750744: "sovereignsCoveredByBase", // Kingdom of Naples 1799-1806（base: Two Sicilies）
+  2750051: "sovereignsCoveredByBase", // Kingdom of Naples 1806-1815（base: Two Sicilies）
+  2750052: "sovereignsCoveredByBase", // Kingdom of Naples 1815-1816（base: Two Sicilies）
+  2888434: "noSnapshotYearInSpan", // Duchy of Naples 0661-0763
+  2888433: "sovereignsCoveredByBase", // Duchy of Naples 0763-1139（base: Dutchy of Benevento）
+  // サヴォイアの前後リレーション
+  2893919: "noSnapshotYearInSpan", // Savoyard state 1401-1416
+  2893917: "noSnapshotYearInSpan", // Savoyard state 1416-1427
+  2840765: "noSnapshotYearInSpan", // Savoyard state 1536-1576
+  2851942: "sovereignsCoveredByBase", // Savoyard state 1576-1601（base: Savoy）
+  2893900: "sovereignsCoveredByBase", // Savoyard state 1601-1713（base: Sardinia-Piedmont）
+  2893920: "sovereignsCoveredByBase", // Savoyard state 1713-1720（base: Sardinia-Piedmont）
+  2810446: "sovereignsCoveredByBase", // Duchy of Savoy 1601-1792（base: Sardinia-Piedmont / Kingdom of Sardinia）
+  2852040: "noSnapshotYearInSpan", // Savoy-Piedmont 1815-06-09..1816-03-16
+  2832164: "noSnapshotYearInSpan", // Savoy-Piedmont 1816-1847
+  // ジェノヴァ共和国の前後リレーション（中世は伊諸侯領オーバーレイが担う）
+  2854760: "coveredByOtherOverlay", // Republic of Genoa 1099-1191（italy_fiefs 1100）
+  2750806: "coveredByOtherOverlay", // Republic of Genoa 1192-1259（italy_fiefs 1200）
+  2851367: "coveredByOtherOverlay", // Republic of Genoa 1266-1284（italy_fiefs 1279）
+  2751186: "coveredByOtherOverlay", // Republic of Genoa 1298-1304（italy_fiefs 1300）
+  2851376: "coveredByOtherOverlay", // Republic of Genoa 1354-1453（italy_fiefs 1400）
+  2851369: "coveredByOtherOverlay", // Republic of Genoa 1475-1540（italy_fiefs 1492/1500）
+  2848942: "sovereignsCoveredByBase", // Republic of Genoa 1580-1648（base: Genoa）
+  2852275: "sovereignsCoveredByBase", // Republic of Genoa 1648-1742（base: Genoa）
+  2851379: "noSnapshotYearInSpan", // Republic of Genoa 1742-1768
+  // ミラノ（1492 年は OHM に 1447-1500 のリレーションが無く埋まらない）
+  2751478: "noSnapshotYearInSpan", // Lordship of Milan 1259-1349
+  2751477: "noSnapshotYearInSpan", // Lordship of Milan 1350-1395
+  2750055: "coveredByOtherOverlay", // Duchy of Milan 1395-1404（hre_fiefs 1400）
+  2751475: "noSnapshotYearInSpan", // Duchy of Milan 1405-1430
+  2795658: "noSnapshotYearInSpan", // Duchy of Milan 1431-1440
+  2848818: "noSnapshotYearInSpan", // Duchy of Milan 1440-1447
+  2800654: "coveredByOtherOverlay", // Duchy of Milan 1500-1512（italy_fiefs 1500）
+  2848874: "sovereignsCoveredByBase", // Duchy of Milan 1512-1559（base: Milan）
+  2848848: "sovereignsCoveredByBase", // State of Milan 1559-1707（base: Milan）
+  2848873: "noSnapshotYearInSpan", // Duchy of Milan 1707-1714
+  2832183: "sovereignsCoveredByBase", // Duchy of Milan 1714-1734（base: Milan）
+  2830845: "sovereignsCoveredByBase", // Duchy of Milan 1734-1786（base: Milano (Austria)）
+  2809350: "noSnapshotYearInSpan", // Duchy of Milan 1786-1791
+  2830844: "noSnapshotYearInSpan", // Duchy of Milan 1791-1796
+  // 低地地方（面が組めない）
+  2848632: "geometryUnbuildable", // Spanish Netherlands 1556-1581
+  2848630: "geometryUnbuildable", // Spanish Netherlands 1581-1714
+  2812126: "geometryUnbuildable", // Duchy of Brabant 1648-1797
+  2810173: "sovereignsCoveredByBase", // Burgundian Circle 1769-1797（base: Austrian Netherlands）
+  // 教皇領の前後リレーション（base が 1100 年以降を収録）
+  2805421: "sovereignsCoveredByBase", // Papal States 1020-1201
+  // バルセロナ伯領の前後リレーション
+  2739868: "noSnapshotYearInSpan", // Comtat de Barcelona 897-950
+  2739887: "noSnapshotYearInSpan", // County of Barcelona 1150-1163
+  // ギリシア・エーゲ海
+  2850421: "outOfIssueScope", // Empire of Thessalonica 1230-1337
+  2751425: "dependencyOfDisplayedPower", // Duchy of the Archipelago 1207-1566
+  2751426: "dependencyOfDisplayedPower", // Kingdom of Candia 1212-1667
+  // ヨハネ騎士団・マルタ
+  2861789: "noSnapshotYearInSpan", // Knights Hospitaller 1651-1665
+  2801186: "duplicateRelationChain", // Monastic State of the Order of Malta 1530-1753
+  2801183: "outOfIssueScope", // French Malta 1798-1800
+  2801184: "outOfIssueScope", // British Protectorate of Malta 1800-1814
+  2801185: "outOfIssueScope", // Crown Colony of Malta 1814-1964
 };
 
 /**
