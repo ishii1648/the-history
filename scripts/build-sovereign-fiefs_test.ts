@@ -75,9 +75,13 @@ Deno.test("取得範囲は実測に使った全欧 bbox をピン留めする", 
   assertEquals(SOVEREIGN_FIEF_BBOX, [34, -25, 72, 60]);
 });
 
-Deno.test("対象年は SNAPSHOT_YEARS の部分集合で 1200〜1900 の 14 年", () => {
+Deno.test("対象年は SNAPSHOT_YEARS の部分集合で 1000〜1900 の 18 年（#190）", () => {
   assertEquals([...SOVEREIGN_FIEF_YEARS], [
+    1000,
+    1100,
     1200,
+    1279,
+    1300,
     1400,
     1492,
     1500,
@@ -109,28 +113,45 @@ Deno.test("サイズ上限は既存パイプラインと同じ 200 KB", () => {
 // 静的許可リスト
 // ---------------------------------------------------------------------------
 
-Deno.test("許可リストは実測した 16 リレーションをピン留めする", () => {
+Deno.test("許可リストは実測した 30 リレーションをピン留めする（#189 の 16 + #190 の 14）", () => {
   const ids = Object.keys(SOVEREIGN_FIEF_ALLOWLIST).map(Number).sort((a, b) =>
     a - b
   );
-  assertEquals(ids, [
-    2692586, // Cretan State
-    2694163, // Principality of Moldavia
-    2696816, // Grand Duchy of Finland
-    2747433, // Transylvania (1711-1732)
-    2827696, // United States of the Ionian Islands
-    2829140, // Kingdom of Hungary (1779-1848)
-    2830352, // Republic of Ragusa
-    2835765, // Eyalet of Crete
-    2836150, // Grand Principality of Serbia
-    2849499, // Crimean Khanate (1475-1774)
-    2854743, // Eastern Rumelia
-    2857706, // Prince-Bishopric of Montenegro
-    2878295, // Transylvania (1765-1851)
-    2890623, // Grand Principality of Moscow (1392-1478)
-    2929115, // Wallachia (1420-1538)
-    2929116, // Wallachia (1538-1829)
-  ]);
+  assertEquals(
+    ids,
+    [
+      2739884, // County of Barcelona (0950-1050)          #190
+      2739885, // County of Barcelona (1050-1150)          #190
+      2750042, // Kingdom of Naples (1302-1442)            #190
+      2750805, // Ligurian Republic (1797-1805)            #190
+      2692586, // Cretan State
+      2694163, // Principality of Moldavia
+      2696816, // Grand Duchy of Finland
+      2747433, // Transylvania (1711-1732)
+      2809440, // Duchy of Athens (1205-1458)              #190
+      2809441, // Principality of Achaea (1205-1432)       #190
+      2827696, // United States of the Ionian Islands
+      2829140, // Kingdom of Hungary (1779-1848)
+      2830352, // Republic of Ragusa
+      2835765, // Eyalet of Crete
+      2836150, // Grand Principality of Serbia
+      2849499, // Crimean Khanate (1475-1774)
+      2851381, // Republic of Genoa (1768-1797)            #190
+      2854743, // Eastern Rumelia
+      2857706, // Prince-Bishopric of Montenegro
+      2861788, // Knights Hospitaller / Malta (1665-1798)  #190
+      2861790, // Knights Hospitaller / Malta (1530-1651)  #190
+      2861791, // Knights Hospitaller / Rhodes (1310-1522) #190
+      2878295, // Transylvania (1765-1851)
+      2889237, // Papal States (0988-1020)                 #190
+      2890623, // Grand Principality of Moscow (1392-1478)
+      2892793, // Kingdom of Naples (1463-1501)            #190
+      2893918, // Savoyard state (1388-1401)               #190
+      2893921, // Savoyard state (1427-1536)               #190
+      2929115, // Wallachia (1420-1538)
+      2929116, // Wallachia (1538-1829)
+    ].sort((a, b) => a - b),
+  );
 });
 
 Deno.test("許可リストの全件がいずれかの対象年で有効（死んだエントリが無い）", () => {
@@ -203,17 +224,21 @@ Deno.test("許可リストの名前は仏・独・伊・ブリテンの許可リ
 
 Deno.test("sovereignFiefIdsForYear: 年ごとの対象 ID 集合が実測どおりに固定される", () => {
   const expected: Record<number, number[]> = {
+    1000: [2739884, 2889237],
+    1100: [2739885],
     1200: [2836150],
-    1400: [2890623],
-    1492: [2929115],
-    1500: [2929115],
-    1530: [2929115],
-    1600: [2929116],
-    1650: [2849499, 2929116],
-    1700: [2830352, 2849499, 2929116],
-    1715: [2747433, 2830352, 2849499, 2929116],
-    1783: [2829140, 2830352, 2878295, 2929116],
-    1800: [2829140, 2830352, 2857706, 2878295, 2929116],
+    1279: [2809440, 2809441],
+    1300: [2809440, 2809441],
+    1400: [2750042, 2809440, 2809441, 2861791, 2890623, 2893918],
+    1492: [2861791, 2892793, 2893921, 2929115],
+    1500: [2861791, 2892793, 2893921, 2929115],
+    1530: [2861790, 2929115],
+    1600: [2861790, 2929116],
+    1650: [2849499, 2861790, 2929116],
+    1700: [2830352, 2849499, 2861788, 2929116],
+    1715: [2747433, 2830352, 2849499, 2861788, 2929116],
+    1783: [2829140, 2830352, 2851381, 2861788, 2878295, 2929116],
+    1800: [2750805, 2829140, 2830352, 2857706, 2878295, 2929116],
     1815: [2694163, 2696816, 2827696, 2829140, 2857706, 2878295, 2929116],
     1880: [2696816, 2835765, 2854743],
     1900: [2692586, 2696816],
@@ -323,6 +348,185 @@ Deno.test("base が同じ政体を収録する年は存続区間内でも除外�
   }
   // フィンランド大公国（1809..1917）: base は 1914 年に Finland を収録。
   assert(!sovereignFiefIdsForYear(1914).includes(2696816));
+});
+
+// ---------------------------------------------------------------------------
+// #190: 西欧・イタリア・地中海の追加分
+// ---------------------------------------------------------------------------
+
+Deno.test("1400/1492/1500 年にナポリ王国が含まれる（#190 AC1。base は Sicily / Aragón の一枚岩）", () => {
+  assert(sovereignFiefIdsForYear(1400).includes(2750042));
+  for (const year of [1492, 1500]) {
+    assert(
+      sovereignFiefIdsForYear(year).includes(2892793),
+      `Kingdom of Naples が ${year} 年に無い`,
+    );
+  }
+  // NAME は base 1530 年以降の呼称に合わせる（色・和名の連続性）
+  for (const id of [2750042, 2892793]) {
+    assertEquals(SOVEREIGN_FIEF_ALLOWLIST[id].name, "Naples");
+  }
+});
+
+Deno.test("base がナポリ王国を個別収録する 1530 年以降のリレーションは収録しない（#190）", () => {
+  // base は 1530〜1715 を Naples、1783〜1815 を Kingdom of the Two Sicilies で
+  // 収録しており、重ねると同じ土地の二重塗りになる
+  for (
+    const id of [2750045, 2750048, 2750049, 2750050, 2750744, 2750051, 2750052]
+  ) {
+    assert(
+      sovereignFiefExclusionReason(id) !== null,
+      `${id} が除外されていない`,
+    );
+  }
+  for (const year of [1530, 1600, 1650, 1700, 1715, 1783, 1800, 1815]) {
+    const ids = sovereignFiefIdsForYear(year);
+    assert(!ids.includes(2750045), `${year} 年にナポリ王国が混入`);
+    assert(!ids.includes(2750050), `${year} 年にナポリ王国が混入`);
+  }
+});
+
+Deno.test("1400/1492/1500 年にサヴォイアが含まれ、base 収録年（1530/1600 以降）は除外される（#190 AC4）", () => {
+  assert(sovereignFiefIdsForYear(1400).includes(2893918));
+  for (const year of [1492, 1500]) {
+    assert(
+      sovereignFiefIdsForYear(year).includes(2893921),
+      `Savoyard state が ${year} 年に無い`,
+    );
+  }
+  // 1530 は base の Savoy が同じ土地を収録するため excludedYears で落とす
+  assert(!sovereignFiefIdsForYear(1530).includes(2893921));
+  // 1600 の Savoyard state（base の Savoy）・1650〜1783 の Savoyard state /
+  // Duchy of Savoy（base の Sardinia-Piedmont / Kingdom of Sardinia）も除外
+  for (const id of [2851942, 2893900, 2893920, 2810446]) {
+    assert(
+      sovereignFiefExclusionReason(id) !== null,
+      `${id} が除外されていない`,
+    );
+  }
+  assertEquals(SOVEREIGN_FIEF_ALLOWLIST[2893918].name, "Savoy");
+  assertEquals(SOVEREIGN_FIEF_ALLOWLIST[2893921].name, "Savoy");
+});
+
+Deno.test("1783 年はジェノヴァ共和国、1800 年はリグリア共和国（#190 AC3）", () => {
+  assert(sovereignFiefIdsForYear(1783).includes(2851381));
+  assert(!sovereignFiefIdsForYear(1783).includes(2750805));
+  assert(sovereignFiefIdsForYear(1800).includes(2750805));
+  assert(!sovereignFiefIdsForYear(1800).includes(2851381));
+  // NAME は base 1530〜1715 年の呼称（Genoa）に合わせ、伊諸侯領オーバーレイの
+  // Republic of Genoa（1100〜1500）とは別キーにして二重塗り検査を通す
+  assertEquals(SOVEREIGN_FIEF_ALLOWLIST[2851381].name, "Genoa");
+  assertEquals(SOVEREIGN_FIEF_ALLOWLIST[2750805].name, "Ligurian Republic");
+  // base が Genoa を収録する 1600〜1700 のリレーションは落とす
+  for (const id of [2848942, 2852275]) {
+    assert(
+      sovereignFiefExclusionReason(id) !== null,
+      `${id} が除外されていない`,
+    );
+  }
+});
+
+Deno.test("1000 年のローマは教皇領（#190 AC5。base は Holy Roman Empire 塗り）", () => {
+  assert(sovereignFiefIdsForYear(1000).includes(2889237));
+  assertEquals(SOVEREIGN_FIEF_ALLOWLIST[2889237].name, "Papal States");
+  // base が Papal States を収録する 1100 / 1200 のリレーションは落とす
+  assert(sovereignFiefExclusionReason(2805421) !== null);
+  for (const year of [1100, 1200]) {
+    assert(
+      !sovereignFiefIdsForYear(year).includes(2805421),
+      `${year} 年に教皇領が二重収録`,
+    );
+  }
+});
+
+Deno.test("1000/1100 年にバルセロナ伯領が含まれる（#190。base は Kingdom of France 塗り）", () => {
+  assert(sovereignFiefIdsForYear(1000).includes(2739884));
+  assert(sovereignFiefIdsForYear(1100).includes(2739885));
+  for (const id of [2739884, 2739885]) {
+    assertEquals(SOVEREIGN_FIEF_ALLOWLIST[id].name, "County of Barcelona");
+  }
+});
+
+Deno.test("1279/1300/1400 年にアテネ公国・アカイア公国が含まれる（#190。base は Byzantine Empire 塗り）", () => {
+  for (const year of [1279, 1300, 1400]) {
+    const ids = sovereignFiefIdsForYear(year);
+    assert(ids.includes(2809440), `Duchy of Athens が ${year} 年に無い`);
+    assert(ids.includes(2809441), `Principality of Achaea が ${year} 年に無い`);
+  }
+  // アカイア公国は 1432 年で終わるため 1492 年には現れない
+  assert(!sovereignFiefIdsForYear(1492).includes(2809441));
+  assert(!sovereignFiefIdsForYear(1492).includes(2809440));
+});
+
+Deno.test("ヨハネ騎士団はロドス期（1400〜1500）とマルタ期（1530〜1783）を単一 NAME で継ぐ（#190）", () => {
+  for (const year of [1400, 1492, 1500]) {
+    assert(
+      sovereignFiefIdsForYear(year).includes(2861791),
+      `ロドスの騎士団領が ${year} 年に無い`,
+    );
+  }
+  for (const year of [1530, 1600, 1650]) {
+    assert(
+      sovereignFiefIdsForYear(year).includes(2861790),
+      `マルタの騎士団領が ${year} 年に無い`,
+    );
+  }
+  for (const year of [1700, 1715, 1783]) {
+    assert(
+      sovereignFiefIdsForYear(year).includes(2861788),
+      `マルタの騎士団領が ${year} 年に無い`,
+    );
+  }
+  // 1798 年の失陥後（French Malta 以降）は収録しない
+  assert(!sovereignFiefIdsForYear(1800).includes(2861788));
+  for (const id of [2861788, 2861790, 2861791]) {
+    assertEquals(SOVEREIGN_FIEF_ALLOWLIST[id].name, "Knights Hospitaller");
+  }
+});
+
+Deno.test("スペイン領ネーデルラントは面が組めず 1650/1700 の Luxembourg 名義を解消できない（#190 AC2 の実測結果）", () => {
+  // rel 2848630 / 2848632（Spanish Netherlands）と rel 2812126（Duchy of
+  // Brabant 1648〜1797）は label ノードのみで境界 way を 1 本も持たない
+  // （2026-07 実測。#187 のブラバント公領・#189 のハンガリー王国と同型）。
+  for (const id of [2848630, 2848632, 2812126]) {
+    assert(
+      sovereignFiefExclusionReason(id) !== null,
+      `${id} が除外されていない`,
+    );
+  }
+  for (const year of [1600, 1650, 1700]) {
+    const ids = sovereignFiefIdsForYear(year);
+    for (const id of [2848630, 2848632, 2812126]) {
+      assert(!ids.includes(id), `${year} 年に面の無い低地地方の政体が混入`);
+    }
+  }
+});
+
+Deno.test("ミラノ公国は他系統・base が全対象年を覆うため本系統では収録しない（#190）", () => {
+  // 1400 は hre_fiefs、1500 は italy_fiefs、1530〜1715 は base の Milan、
+  // 1783 は base の Milano (Austria)、1800 は base の Lombardy が担う。
+  // 1492 年は OHM 側に 1447〜1500 のリレーションが無く埋められない。
+  for (
+    const id of [
+      2750055,
+      2800654,
+      2848874,
+      2848848,
+      2832183,
+      2830845,
+    ]
+  ) {
+    assert(
+      sovereignFiefExclusionReason(id) !== null,
+      `${id} が除外されていない`,
+    );
+  }
+  for (const year of SOVEREIGN_FIEF_YEARS) {
+    const names = sovereignFiefIdsForYear(year).map((id) =>
+      SOVEREIGN_FIEF_ALLOWLIST[id].name
+    );
+    assert(!names.includes("Milan"), `${year} 年にミラノが混入`);
+  }
 });
 
 Deno.test("存続区間は年単位の閉区間（開始年・終了年の両端を含む）", () => {
@@ -471,8 +675,12 @@ Deno.test("parseTargetYears: 年を並べるとその年だけ（昇順・重複
 });
 
 Deno.test("parseTargetYears: 対象外の年はエラー", () => {
+  // 1914 は base が後継の主権国家を個別収録するため対象年ではない（#189）。
+  // #190 で 1000 / 1100 / 1279 / 1300 が対象年に加わったため、
+  // スナップショット年ですらない年（900 / 1850）も併せて固定する。
   assertThrows(() => parseTargetYears(["1914"]));
-  assertThrows(() => parseTargetYears(["1100"]));
+  assertThrows(() => parseTargetYears(["900"]));
+  assertThrows(() => parseTargetYears(["1850"]));
 });
 
 // ---------------------------------------------------------------------------

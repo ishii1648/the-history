@@ -634,3 +634,40 @@ Deno.test("主権政体オーバーレイで埋められない政体が年代連
     );
   }
 });
+
+// ---- 主権政体オーバーレイ・西欧/イタリア/地中海（#190）----
+
+Deno.test("西欧・イタリア・地中海で埋められない政体が年代連動で明示されている（#190 AC7）", () => {
+  const parsed = parseKnownLimitations(knownLimitations);
+  const entry = parsed.find((l) =>
+    l.id === "sovereign-fiefs-western-missing-territories"
+  );
+  assert(
+    entry !== undefined,
+    "sovereign-fiefs-western-missing-territories が無い",
+  );
+  // 埋められない対象（実測でリレーション不在・面が組めない）を明示する:
+  // 1650/1700 年のスペイン領ネーデルラント（境界 way の無いリレーション）、
+  // 1492 年のミラノ公国（OHM に 1447〜1500 年の区画が無い）、
+  // 1279/1300 年のナポリ（OHM の収録は 1302 年開始）、南イタリア諸侯領
+  for (
+    const keyword of [
+      "スペイン領ネーデルラント",
+      "ルクセンブルク",
+      "ミラノ公国",
+      "ナポリ王国",
+      "南イタリア諸侯領",
+      "OpenHistoricalMap",
+    ]
+  ) {
+    assert(entry.text.includes(keyword), `text が ${keyword} に言及していない`);
+  }
+  assertEquals(entry.years, { from: 1000, to: 1700 });
+  for (const year of SNAPSHOT_YEARS) {
+    assertEquals(
+      isKnownLimitationActiveForYear(entry, year),
+      year >= 1000 && year <= 1700,
+      `${year} 年の active 判定が期待と異なる`,
+    );
+  }
+});

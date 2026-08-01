@@ -9,7 +9,8 @@
           "data/hre_fiefs_1000.geojson",
           "data/italy_fiefs_1000.geojson",
           "data/cliopatria_fiefs_1000.geojson",
-          "data/britain_fiefs_1000.geojson"
+          "data/britain_fiefs_1000.geojson",
+          "data/sovereign_fiefs_1000.geojson"
         ]
       },
       "1100": {
@@ -19,7 +20,8 @@
           "data/hre_fiefs_1100.geojson",
           "data/italy_fiefs_1100.geojson",
           "data/cliopatria_fiefs_1100.geojson",
-          "data/britain_fiefs_1100.geojson"
+          "data/britain_fiefs_1100.geojson",
+          "data/sovereign_fiefs_1100.geojson"
         ]
       },
       "1200": {
@@ -40,7 +42,8 @@
           "data/hre_fiefs_1279.geojson",
           "data/italy_fiefs_1279.geojson",
           "data/cliopatria_fiefs_1279.geojson",
-          "data/britain_fiefs_1279.geojson"
+          "data/britain_fiefs_1279.geojson",
+          "data/sovereign_fiefs_1279.geojson"
         ]
       },
       "1300": {
@@ -50,7 +53,8 @@
           "data/hre_fiefs_1300.geojson",
           "data/italy_fiefs_1300.geojson",
           "data/cliopatria_fiefs_1300.geojson",
-          "data/britain_fiefs_1300.geojson"
+          "data/britain_fiefs_1300.geojson",
+          "data/sovereign_fiefs_1300.geojson"
         ]
       },
       "1400": {
@@ -162,10 +166,10 @@
       "Denmark-Norway": 0.0043,
       "Duchy of Normandy": 1,
       "Duchy of Swabia": 0.969,
-      "Dutchy of Benevento": 0.0607,
+      "Dutchy of Benevento": 0.0957,
       "England": 0.0013,
-      "Holy Roman Empire": 0.7158,
-      "Kingdom of France": 0.7846,
+      "Holy Roman Empire": 0.7606,
+      "Kingdom of France": 0.7914,
       "Magyars": 0.0025,
       "Poland": 0.0254,
       "Pomerania": 0.5523,
@@ -173,6 +177,7 @@
       "Venice": 0.8298
     },
     "1100": {
+      "Almoravid dynasty": 0.0017,
       "Aragón": 0.0021,
       "Britany": 1,
       "Burgandy": 0.0736,
@@ -184,7 +189,7 @@
       "Dutchy of Benevento": 0.0298,
       "Holy Roman Empire": 0.7257,
       "Hungary": 0.0036,
-      "Kingdom of France": 0.7842,
+      "Kingdom of France": 0.7919,
       "Papal States": 0.4707,
       "Poland": 0.0875,
       "Prussians": 0.0535,
@@ -211,6 +216,7 @@
     },
     "1279": {
       "Britany": 1,
+      "Byzantine Empire": 0.0644,
       "Corsica": 0.9983,
       "Counts of Saint-Pol": 1,
       "County of Artois": 0.9991,
@@ -226,6 +232,7 @@
     },
     "1300": {
       "Britany": 1,
+      "Byzantine Empire": 0.0615,
       "Corsica": 0.9983,
       "Counts of Saint-Pol": 1,
       "County of Artois": 0.9991,
@@ -240,35 +247,41 @@
       "Poland": 0.1629
     },
     "1400": {
+      "Beylik of Aydin": 0.0023,
       "Blue Horde": 0.1216,
+      "Byzantine Empire": 0.2176,
       "Corsica": 0.9983,
       "English territory": 0.0407,
-      "France": 0.0158,
-      "Holy Roman Empire": 0.4579,
+      "France": 0.0274,
+      "Holy Roman Empire": 0.4903,
       "Kingdom of Hungary": 0.0039,
       "Novgorod": 0.0442,
-      "Papal States": 0.0137,
-      "Poland-Lithuania": 0.0048
+      "Papal States": 0.2437,
+      "Poland-Lithuania": 0.0048,
+      "Sicily": 0.7399
     },
     "1492": {
+      "Aragón": 0.2805,
       "England": 0.052,
-      "France": 0.0166,
-      "Holy Roman Empire": 0.5058,
+      "France": 0.0266,
+      "Holy Roman Empire": 0.545,
       "Imperial Hungary": 0.0099,
-      "Ottoman Empire": 0.0659,
-      "Papal States": 0.1322,
+      "Ottoman Empire": 0.0674,
+      "Papal States": 0.3034,
       "Poland-Lithuania": 0.0087,
-      "Swiss Confederation": 0.0976,
+      "Swiss Confederation": 0.1066,
       "Venice": 0.0318
     },
     "1500": {
+      "Aragón": 0.2805,
       "England": 0.052,
-      "Holy Roman Empire": 0.0855,
+      "France": 0.0101,
+      "Holy Roman Empire": 0.1237,
       "Imperial Hungary": 0.0055,
-      "Ottoman Empire": 0.0659,
-      "Papal States": 0.1322,
+      "Ottoman Empire": 0.0673,
+      "Papal States": 0.3034,
       "Poland-Lithuania": 0.0035,
-      "Swiss Confederation": 0.0026,
+      "Swiss Confederation": 0.0116,
       "Venice": 0.0617
     },
     "1530": {
@@ -309,12 +322,16 @@
       "Brunswick": 0.1566,
       "France": 0.0011,
       "Hanover": 0.4781,
+      "Kingdom of Sardinia": 0.0796,
       "Lübeck": 0.5207,
       "Mecklenburg-Schwerin": 0.9524,
       "Mecklenburg-Strelitz": 0.1138,
+      "Modena": 0.0165,
       "Netherlands": 0.0072,
       "Oldenburg": 0.3799,
       "Ottoman Empire": 0.0565,
+      "Parma": 0.0401,
+      "Pontremoli": 0.0054,
       "Prussia": 0.2605,
       "Saxony": 0.8653,
       "Thuringia": 0.355,
@@ -328,11 +345,15 @@
       "Bavaria": 0.0199,
       "Brunswick": 0.0164,
       "Hanover": 0.4346,
+      "Kingdom of Sardinia": 0.0556,
       "Lübeck": 0.5207,
       "Mecklenburg-Schwerin": 0.9524,
       "Mecklenburg-Strelitz": 0.1138,
+      "Modena": 0.0165,
       "Oldenburg": 0.3799,
       "Ottoman Empire": 0.0591,
+      "Parma": 0.0401,
+      "Pontremoli": 0.0054,
       "Prussia": 0.123,
       "Saxony": 0.8652,
       "Swabia": 0.2549,

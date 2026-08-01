@@ -91,6 +91,18 @@ export const FIEF_DEDUPE_YEARS: readonly number[] = BASE_OUTLINE_YEARS;
 export const COVERAGE_PRECISION = 4;
 
 /**
+ * 派生 base（europe_flat_<year>.geojson）1 ファイルあたりのサイズ上限（バイト）。
+ *
+ * この派生ファイルは「base のポリゴン ＋ オーバーレイ union の輪郭（穴の縁）」で
+ * できているため、オーバーレイの収録が増えるほど元の europe_<year> より頂点が
+ * 増える。base 本体の上限（build-data.ts SIZE_LIMIT_BYTES = 300 KB）をそのまま
+ * 当てると、オーバーレイを 1 政体足すたびに base 側の簡略化をやり直す羽目に
+ * なるため、穴の縁の分の余白（+20 KB ≒ 実測で最大の 1783 年が 301 KB）を持つ
+ * 独立の上限にする。上限自体は残す: 際限なく増えると配信ペイロードが膨らむ。
+ */
+export const BASE_FILL_SIZE_LIMIT_BYTES = 320 * 1000;
+
+/**
  * 被覆率表に記録する下限。これ未満（0.1% 未満）の重複は境界線の解像度差や
  * 座標丸めに由来するノイズで、抑制判定にも目視確認にも意味を持たないため
  * 表に載せない（ファイルを小さく保ち、差分を読みやすくする）。
@@ -606,6 +618,12 @@ async function main(): Promise<void> {
     if (cleanLine !== null) console.log(`  ${cleanLine}`);
     const fillPath = baseFillPathFor(year);
     const fillJson = serializeWithAttribution(fillPath, cleanedFill);
+    const fillBytes = new TextEncoder().encode(fillJson).length;
+    if (fillBytes > BASE_FILL_SIZE_LIMIT_BYTES) {
+      throw new Error(
+        `${fillPath} が上限を超えました (${fillBytes} バイト > ${BASE_FILL_SIZE_LIMIT_BYTES})`,
+      );
+    }
     await Deno.writeTextFile(fillPath, fillJson);
     console.log(
       `${fillPath}: ${fillJson.length} bytes, features=${cleanedFill.features.length}（完全被覆で除外=${

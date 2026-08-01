@@ -391,9 +391,13 @@ Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は BASE_OUTLINE_YEARS の部分集合（�
 
 // ---- 主権政体オーバーレイ（#189）----
 
-Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は #189 が生成した 14 年代である", () => {
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は #189/#190 が生成した 18 年代である", () => {
   assertEquals([...SOVEREIGN_FIEF_OVERLAY_YEARS], [
+    1000,
+    1100,
     1200,
+    1279,
+    1300,
     1400,
     1492,
     1500,
@@ -426,8 +430,26 @@ Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は 1914 を含まない（base が後�
   assert(!SOVEREIGN_FIEF_OVERLAY_YEARS.includes(1914));
 });
 
-Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は AC の対象年（1650〜1715 のクリミア、1400 のモスクワ、1815〜1900 のフィンランド、1880 のクレタ）を含む（#189）", () => {
-  for (const year of [1400, 1650, 1700, 1715, 1815, 1880, 1900]) {
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は AC の対象年（1650〜1715 のクリミア、1400 のモスクワ、1815〜1900 のフィンランド、1880 のクレタ、#190 の 1000 の教皇領・1279〜1500 のナポリ / アテネ / サヴォイア・1783〜1800 のジェノヴァ）を含む", () => {
+  for (
+    const year of [
+      1000,
+      1100,
+      1279,
+      1300,
+      1400,
+      1492,
+      1500,
+      1650,
+      1700,
+      1715,
+      1783,
+      1800,
+      1815,
+      1880,
+      1900,
+    ]
+  ) {
     assert(
       SOVEREIGN_FIEF_OVERLAY_YEARS.includes(year),
       `${year} は目視確認対象の年`,

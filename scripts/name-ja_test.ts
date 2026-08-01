@@ -113,6 +113,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "County of Asti",
   "County of Auvergne",
   "County of Bar",
+  "County of Barcelona",
   "County of Bentheim",
   "County of Blôis",
   "County of Boulogne",
@@ -181,6 +182,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Don",
   "Drava",
   "Duchy of Aquitaine",
+  "Duchy of Athens",
   "Duchy of Austria",
   "Duchy of Bar",
   "Duchy of Bavaria",
@@ -329,6 +331,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Kingdom of Strathclyde",
   "Kingdom of the Two Sicilies",
   "Kingfom of Italy",
+  "Knights Hospitaller",
   "Kokemäenjoki",
   "Kurs",
   "Kyivan Rus",
@@ -336,6 +339,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Landgraviate of Hesse-Darmstadt",
   "Landgraviate of Hesse-Kassel",
   "Landgraviate of Thurgau",
+  "Ligurian Republic",
   "Lek",
   "Leks",
   "León",
@@ -436,6 +440,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Princely Abbey of Fulda",
   "Princely Abbey of Kempten",
   "Princely Abbey of Stavelot-Malmedy",
+  "Principality of Achaea",
   "Principality of Ansbach",
   "Principality of Bayreuth",
   "Principality of Galicia-Volhynia",
@@ -788,8 +793,12 @@ Deno.test("帝国内の称号を持つ領邦の訳は全て『〜領』で終わ
   // Principality of Ansbach / Bayreuth は上のテストが個別に固定している）。
   const titled =
     /^(Duchy|County|March|Margraviate|Burgraviate|Landgraviate|Electorate|Lordship|Prince-Bishopric|Prince-Archbishopric|Archbishopric|Bishopric|Imperial Abbey|Princely Abbey) of /;
+  // 帝国外の主権政体で、称号の英語表記だけが帝国領邦と同じ形になるもの。
+  // #190 の Duchy of Athens は第 4 回十字軍後のラテン系国家で、日本語文献の
+  // 慣用も「アテネ公国」。帝国領邦の表記規約（〜領）を当てる対象ではない。
+  const nonImperialTitled = new Set(["Duchy of Athens"]);
   const offenders = Object.entries(mapping)
-    .filter(([name]) => titled.test(name))
+    .filter(([name]) => titled.test(name) && !nonImperialTitled.has(name))
     .filter(([, ja]) => !ja.endsWith("領"))
     .map(([name, ja]) => `${name} -> ${ja}`);
   assertEquals(offenders, []);
@@ -854,6 +863,31 @@ Deno.test("主権政体オーバーレイの新出 8 政体が日本語表記で
   for (const [name, ja] of Object.entries(expected)) {
     assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
   }
+});
+
+Deno.test("主権政体オーバーレイの #190 追加分 5 政体が日本語表記で登録されている", () => {
+  // #190 の許可リスト（scripts/build-sovereign-fiefs.ts）のうち base に
+  // 現れない NAME。base と共通の政体（Naples / Savoy / Genoa / Papal States）は
+  // base の NAME に合わせており、既存の訳（ナポリ王国 / サヴォイア /
+  // ジェノヴァ / 教皇領）がそのまま使われる。
+  // Knights Hospitaller はロドス期（1400〜1500）とマルタ期（1530〜1783）を
+  // 単一 NAME で継ぐため、拠点名を含めず「ヨハネ騎士団領」とする。
+  const expected: Record<string, string> = {
+    "County of Barcelona": "バルセロナ伯領",
+    "Duchy of Athens": "アテネ公国",
+    "Principality of Achaea": "アカイア公国",
+    "Knights Hospitaller": "ヨハネ騎士団領",
+    "Ligurian Republic": "リグリア共和国",
+  };
+  assertEquals(Object.keys(expected).length, 5);
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
+  // base と共通の政体は既存の訳を再利用する（色・表記の連続性）
+  assertEquals(mapping["Naples"], "ナポリ王国");
+  assertEquals(mapping["Savoy"], "サヴォイア");
+  assertEquals(mapping["Genoa"], "ジェノヴァ");
+  assertEquals(mapping["Papal States"], "教皇領");
 });
 
 Deno.test("主要山脈の日本語表記が登録されている（TASK-97 AC #1）", () => {

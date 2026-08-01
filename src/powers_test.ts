@@ -1633,15 +1633,17 @@ Deno.test("sovereignFiefDataUrlFor は主権政体オーバーレイ GeoJSON の
   );
 });
 
-Deno.test("hasSovereignFiefOverlay は対象年（1200〜1900 の 14 年）でのみ true（#189）", () => {
+Deno.test("hasSovereignFiefOverlay は対象年（1000〜1900 の 18 年）でのみ true（#189/#190）", () => {
   for (const year of SOVEREIGN_FIEF_OVERLAY_YEARS) {
     assert(hasSovereignFiefOverlay(year, SOVEREIGN_FIEF_OVERLAY_YEARS));
   }
-  // 1000〜1100・1279〜1300 は対象政体を base が収録済み、1914 は後継の
-  // 主権国家（Finland ほか）を base が個別収録するため対象外
-  for (const year of [1000, 1100, 1279, 1300, 1914]) {
-    assert(!hasSovereignFiefOverlay(year, SOVEREIGN_FIEF_OVERLAY_YEARS));
+  // #190 で 1000〜1100（教皇領・バルセロナ伯領）・1279〜1300（アテネ公国・
+  // アカイア公国）が対象年に加わった。1914 は後継の主権国家（Finland ほか）を
+  // base が個別収録するため引き続き対象外
+  for (const year of [1000, 1100, 1279, 1300]) {
+    assert(hasSovereignFiefOverlay(year, SOVEREIGN_FIEF_OVERLAY_YEARS));
   }
+  assert(!hasSovereignFiefOverlay(1914, SOVEREIGN_FIEF_OVERLAY_YEARS));
 });
 
 Deno.test("createSovereignFiefOverlayLoader は非対象年では fetch せず空 FC を返す（#189）", async () => {
