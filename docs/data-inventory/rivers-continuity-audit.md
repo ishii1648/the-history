@@ -6,7 +6,10 @@ TASK-75（エルベ川が河口まで描かれない）と同種の欠落が他�
 
 - 検査スクリプト: `scripts/audit-rivers.ts`（`deno task audit-rivers` で再実行）
 - 回帰テスト: `scripts/audit-rivers_test.ts`
-- 生成レポート: `.outputs/claude/task-76/rivers-audit.{json,md}`（git 管理外）
+- 生成レポート: `deno task audit-rivers` が
+  `.outputs/claude/task-76/rivers-audit.{json,md}` に出力する（git
+  管理外の中間生成物。コミットされていないので、手元に無ければ上のコマンドで
+  作り直す。再現手順は §5）
 - 対象データ: `data/rivers.geojson`（48 feature / 正準名 30 河川）
 - ソース: `nvkelso/natural-earth-vector` @
   `ca96624a56bd078437bca8184e78163e5039ad19` （`ne_50m_rivers_lake_centerlines`
@@ -73,8 +76,9 @@ Natural Earth の別 feature 間のノード揺れ（実測最大 0.83 km: Donau
 ## 2. 検査結果（正準名 30 河川）
 
 `成分` = 連結成分数、`水域` = 全頂点から水域への最短距離、`他河川` = 全頂点から
-他河川ラインへの最短距離（いずれも km）。全行は
-`.outputs/claude/task-76/rivers-audit.md`。
+他河川ラインへの最短距離（いずれも km）。全行は `deno task audit-rivers`
+が生成する `.outputs/claude/task-76/rivers-audit.md`（git 管理外。§5
+の手順で作り直せる）にある。
 
 | 河川                   | feature | パート | 成分 | 水域 km | 他河川 km | 出口 | クリップ辺 | 判定 |
 | ---------------------- | ------- | ------ | ---- | ------- | --------- | ---- | ---------- | ---- |
@@ -232,5 +236,5 @@ deno test scripts/audit-rivers_test.ts
 ```
 
 初回実行時に Natural Earth のピン留めコミットから 4 データセットを取得し、
-`.outputs/claude/task-76/cache/` にキャッシュする（2
+`.outputs/claude/task-76/cache/` にキャッシュする（git 管理外。2
 回目以降はオフラインで実行可）。

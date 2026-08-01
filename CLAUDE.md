@@ -80,3 +80,27 @@ see `docs/adr/0031-migrate-task-management-to-github-issues.md`).
   指示を待たない。加えて、CI red 連続回数・実装 subagent 試行回数・タスク
   着手からの経過時間・停滞検出のいずれかが定量上限を超えた場合も強制的に
   エスカレーションする（上限値は `docs/development-style.md` 4.4.1 章を参照）。
+
+## 調査ドキュメントの出力先
+
+グローバル設定（`~/.claude/CLAUDE.md`）は調査結果を `.outputs/claude/` へ出力
+すると定めるが、**本プロジェクトでは以下を優先する**（グローバル側もプロジェクト
+CLAUDE.md の指定を優先すると定めている）。
+
+- **判断根拠になる一次調査レポートは `docs/research/` にコミットする。** 方針の
+  採否・起票根拠・実測に基づく現状分析など、他の docs / Issue / ADR が根拠として
+  指すものが該当する。置くもの・置かないもの・命名規約・他ディレクトリとの
+  棲み分けは `docs/research/README.md` を参照（規約本体は
+  `docs/development-style.md` 2.2 章）。
+- **再生成可能な中間生成物は従来どおり `.outputs/claude/` でよい。** スクリプト
+  1 コマンドで作り直せる出力（`deno task audit-attribution` /
+  `deno task audit-rivers` のレポート、検証スクリーンショット、ダウンロード
+  キャッシュ、巨大なダンプ）が該当する。ただし docs から参照する場合は
+  **生成コマンドを併記**し、パスだけを指す参照を残さない。
+- 理由: `.outputs/` は git 管理外（global gitignore）で worktree の後始末と
+  ともに消える。実際にコミット済みの docs が消失したレポートを参照する状態に
+  なっていた（Issue #204）。失われた分の結論の所在は `docs/research/README.md`
+  の「失われた調査レポート」節にまとめてある。
+- 決定そのものは ADR（`docs/adr/`）、データの性質・欠落・監査結果は台帳
+  （`docs/data-inventory/`）が正であり、`docs/research/` はその根拠となる調査の
+  記録を置く場所である。

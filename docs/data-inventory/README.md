@@ -1370,7 +1370,12 @@ base 勢力の帰属（名称・宗主・存続期間）については、監査
   全体の仕様であることは
   [rivers-continuity-audit.md](rivers-continuity-audit.md) §3.2 で全 30
   河川を対象に確認している（TASK-76）。
-- 生成スクリプトは `.outputs/claude/data-inventory/_gen/`（`europe-mask.ts` = §2
-  の境界定義、`gen-inventory.ts` =
-  集計・出力）に置いてある。`deno run -A gen-inventory.ts <出力先>`
-  で再生成できる。
+- 集計に使った生成スクリプトは git 管理外の
+  `.outputs/claude/data-inventory/_gen/` （`europe-mask.ts` = §2
+  の境界定義、`gen-inventory.ts` = 集計・出力）に置いて
+  おり、`deno run -A gen-inventory.ts <出力先>` で再生成する運用だった。**この
+  ディレクトリは現存しない**（`.outputs/` は git 管理外で、worktree の後始末と
+  ともに消えた）。本書の表そのものが集計結果の記録であり、再集計が必要な場合は
+  §2.1 の境界定義と §2.2 の採否ルールから同等のスクリプトを書き直す必要がある
+  （以後こうした調査・集計スクリプトは `scripts/` か `docs/research/` に置く。
+  プロジェクト `CLAUDE.md` の「調査ドキュメントの出力先」節を参照）。

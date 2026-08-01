@@ -7,8 +7,10 @@
 - 監査スクリプト: `scripts/audit-attribution.ts`（`deno task audit-attribution`
   で再実行）
 - 回帰テスト: `scripts/audit-attribution_test.ts`
-- 生成レポート: `.outputs/claude/task-103/attribution-audit.{json,md}`（git
-  管理外）
+- 生成レポート: `deno task audit-attribution` が
+  `.outputs/claude/task-103/attribution-audit.{json,md}` に出力する（git
+  管理外の中間生成物。コミットされていないので、手元に無ければ上のコマンドで
+  作り直す。再現手順は §8）
 - 対象データ: `data/europe_<year>.geojson` × **20
   年代**（900〜1914、`data/index.json` の `years`）。出典は
   [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps)
@@ -18,8 +20,11 @@
   `propertyFixes`（年代付きの properties 上書き 3 件・TASK-102）/ `suzerains`
   （宗主補正 1 件・decision-19）
 
-> 前提の訂正: 起票時の TASK-103 と
-> `.outputs/claude/base-territory-accuracy-survey.md` は対象を「全 26
+> 前提の訂正: 起票時の TASK-103 と先行調査 `base-territory-accuracy-survey` （旧
+> `.outputs/claude/base-territory-accuracy-survey.md`。git 管理外に出力
+> されていたため**現存せず復元しない**。本書がその後継で、確定した是正内容は
+> `docs/archive/backlog-tasks/` の TASK-101 / 102 / 103 に残る。所在の一覧は
+> `docs/research/README.md` の「失われた調査レポート」節）は対象を「全 26
 > 年代」と書いているが、実際のスナップショットは `src/config.ts` の
 > `SNAPSHOT_YEARS` = 20 年代（900 / 1000 / 1100 / 1200 / 1279 / 1300 / 1400 /
 > 1492 / 1500 / 1530 / 1600 / 1650 / 1700 / 1715 / 1783 / 1800 / 1815 / 1880 /
