@@ -53,6 +53,19 @@
  * ジェノヴァ（1100〜1500）・ミラノ（1500）と帝国領邦のミラノ（1400）は
  * coveredByOtherOverlay で静的に除外する。
  *
+ * ## #191 で追加した微小国家（データ追加のみ・機構は #189 のまま）
+ * サンマリノ共和国（base は 1815 年に 1 度だけ収録）・アンドラ公国・
+ * モナコ公国・リヒテンシュタイン侯国（後 3 者は全 19 年代で base に不在）を
+ * 足した。面積が小さいこと自体は許可リスト方式に何の影響も与えない一方、
+ * 「simplify（shrinkToLimit のトレランス 0.005 度 ≒ 556 m）と微小破片除去
+ * （MIN_PART_AREA_M2 = 1 km²・MIN_PART_MEAN_WIDTH_M ≒ 111 m）を通して面が
+ * 残るか」だけは事前に実測して確かめた。結果は最小のサンマリノ（0301〜1100 の
+ * 区画）でも 6.98 km² が残り、面積下限の 7 倍・平均幅も桁で上回る。よって
+ * 微小国家のための面積下限の例外機構は設けず、既存の閾値をそのまま使う
+ * （閾値の既定値を動かすと europe / hre / 諸侯領の既存生成物に波及するため）。
+ * 担保は build-sovereign-fiefs_test.ts の MICROSTATE_MIN_AREA_M2 で行う。
+ * この追加で 1914 年が対象年に加わった（SOVEREIGN_FIEF_YEARS の解説を参照）。
+ *
  * ## データ側の限界（本タスクで解消できないもの・data/known-limitations.json）
  * - 1530〜1715 年のハンガリー王国は上記のとおり面が組めず、base の Ottoman /
  *   Austrian Empire 塗りのまま残る。
@@ -67,6 +80,10 @@
  * - 1400 年のセルビア（ラザレヴィチ公国）・1783 年のモンテネグロ
  *   （OHM の主教公国は 1789 年開始）・1815 年のセルビア（第二次蜂起〜自治公国）
  *   は OHM に該当区間が無い。
+ * - #191 の微小国家は「OHM の収録開始年より前」が埋まらない: アンドラは
+ *   1000〜1200 年（OHM は 1278 年開始）、モナコは 1300〜1800 年（史実の起点は
+ *   1297 年だが OHM は 1815 年開始）、リヒテンシュタインは 1000〜1715 年
+ *   （OHM は侯国成立の 1719 年開始）。
  *
  * 出典: OpenHistoricalMap（https://www.openhistoricalmap.org/）
  * ライセンス: CC0 1.0（パブリックドメイン）。既存の諸侯領 4 系統と同じ出典・
@@ -118,18 +135,24 @@ export const SOVEREIGN_FIEF_BBOX: readonly [number, number, number, number] = [
 ];
 
 /**
- * 生成対象年。SNAPSHOT_YEARS のうち許可リストのいずれかが有効になる 18 年
- * （= 1914 を除く全スナップショット年）。件数は 1000=2 / 1100=1 / 1200=1 /
- * 1279=2 / 1300=2 / 1400=6 / 1492=4 / 1500=4 / 1530=2 / 1600=2 / 1650=3 /
- * 1700=4 / 1715=5 / 1783=6 / 1800=6 / 1815=7 / 1880=3 / 1900=2
- * （sovereignFiefIdsForYear の実測）。1914 は Finland ほか後継の主権国家を
- * base が個別収録するため対象にしない。
+ * 生成対象年。SNAPSHOT_YEARS の全 19 年。件数は 1000=3 / 1100=2 / 1200=2 /
+ * 1279=4 / 1300=4 / 1400=8 / 1492=6 / 1500=6 / 1530=4 / 1600=4 / 1650=5 /
+ * 1700=6 / 1715=7 / 1783=9 / 1800=9 / 1815=10 / 1880=7 / 1900=6 / 1914=4
+ * （sovereignFiefIdsForYear の実測）。
  *
  * #190: 西欧・イタリア・地中海の追加（ナポリ王国・サヴォイア・ジェノヴァ /
  * リグリア共和国・アテネ公国 / アカイア公国・バルセロナ伯領・1000 年の
  * 教皇領・ヨハネ騎士団）により 1000 / 1100 / 1279 / 1300 が対象年に加わった。
  * この 4 年は既に仏・帝国・伊・Cliopatria・ブリテンのオーバーレイがあるため
  * BASE_OUTLINE_YEARS（派生データの年集合）は変わらない。
+ *
+ * #191: 微小国家（サンマリノ・アンドラ・モナコ・リヒテンシュタイン）の追加で
+ * **1914 年も対象年になった**。#189 時点では「base が Finland ほか後継の
+ * 主権国家を個別収録する」ことを理由に外していたが、この 4 政体は 1914 年の
+ * base にも 1 件も無い（サンマリノは 1815 年だけ、他 3 政体は全年代で不在）。
+ * これにより BASE_OUTLINE_YEARS（派生データの年集合）が全 19 年へ広がり、
+ * base_outline_1914 / europe_flat_1914 / fief-dedupe.json の 1914 年分が
+ * 新たに生成される。
  */
 export const SOVEREIGN_FIEF_YEARS: readonly number[] = [
   1000,
@@ -150,6 +173,7 @@ export const SOVEREIGN_FIEF_YEARS: readonly number[] = [
   1815,
   1880,
   1900,
+  1914,
 ];
 
 /** 出力 1 ファイルあたりのサイズ上限（バイト）。既存の諸侯領データと同値 */
@@ -168,8 +192,12 @@ export interface SovereignFiefEntry {
   adminLevel: number;
   /** 実測した start_date */
   startDate: string;
-  /** 実測した end_date */
-  endDate: string;
+  /**
+   * 実測した end_date。**現存する政体は省略する**（#191 のアンドラ・モナコ・
+   * サンマリノは OHM 側も end_date を持たない）。省略は「無期限」を意味し、
+   * isActiveAtYear の判定でも tagDrift の比較でも欠損どうしとして一致する。
+   */
+  endDate?: string;
   /** 地域区分（記録用。選別には使わない） */
   region:
     | "danubian"
@@ -177,19 +205,23 @@ export interface SovereignFiefEntry {
     | "eastern"
     | "northern"
     | "western"
+    | "central"
     | "italian"
     | "mediterranean";
   /**
-   * 存続区間内でも収録しない年（実測に基づく静的な固定値）。
-   * base（europe_<year>）が同じ政体・同じ土地を個別収録しており、オーバーレイを
-   * 重ねると二重塗りになる年。根拠は SOVEREIGN_FIEF_EXCLUSIONS
-   * .baseCoveredYearsExcluded を参照。
+   * 存続区間内でも収録しない年（実測に基づく静的な固定値）。用途は 2 つ:
+   * 1. base（europe_<year>）が同じ政体・同じ土地を個別収録しており、
+   *    オーバーレイを重ねると二重塗りになる年（SOVEREIGN_FIEF_EXCLUSIONS
+   *    .baseCoveredYearsExcluded）。
+   * 2. 同じ政体のリレーション連鎖が年境界で重なる年（#191 のサンマリノの
+   *    1100 年。SOVEREIGN_FIEF_EXCLUSIONS.chainBoundaryYearExcluded）。
    */
   excludedYears?: readonly number[];
 }
 
 /**
- * 採用するリレーション ID の静的な許可リスト（30 件 = #189 の 16 + #190 の 14）。
+ * 採用するリレーション ID の静的な許可リスト
+ * （43 件 = #189 の 16 + #190 の 14 + #191 の 13）。
  * ID・存続区間・admin_level とも 2026-07 に Overpass で実測した値をピン留め
  * する。年ごとの収録はこの表の存続区間の包含判定と excludedYears **だけ**で
  * 決まる（sovereignFiefIdsForYear）。OHM 側のタグが変わっても選別は動かず、
@@ -519,6 +551,157 @@ export const SOVEREIGN_FIEF_ALLOWLIST: Readonly<
     endDate: "1798-06-11",
     region: "mediterranean",
   },
+
+  // =========================================================================
+  // #191: 微小国家（サンマリノ・アンドラ・モナコ・リヒテンシュタイン）13 件
+  // =========================================================================
+  // いずれも「主権政体でありながら base に現れない」典型で、本系統の意味論に
+  // そのまま当てはまる。base の実測（2026-08）では San Marino が 1815 年に
+  // 1 度だけ現れるだけで、Andorra / Monaco / Liechtenstein は全 19 年代に
+  // 1 件も無い。周囲の大国（Holy Roman Empire / Papal States / Aragón /
+  // Spain / France / Austrian Empire / Italy）の一枚岩塗りに呑まれている。
+  //
+  // 面積が小さいことによる固有の懸念（simplify で点に潰れる・微小破片除去で
+  // 消える）は実測で否定できた: shrinkToLimit（トレランス 0.005 度）を通した
+  // 後の面積はサンマリノ 6.98〜58.3 km²・アンドラ 465 km²・モナコ 17.9〜
+  // 73.1 km²・リヒテンシュタイン 153 km² で、いずれも MIN_PART_AREA_M2
+  // （1 km²）の 7 倍以上・MIN_PART_MEAN_WIDTH_M（≒ 111 m）も大きく上回る。
+  // そのため面積下限の例外機構は設けない（既存の閾値は他レイヤーの生成物へ
+  // 波及するため既定値のまま使う）。下限は build-sovereign-fiefs_test.ts の
+  // MICROSTATE_MIN_AREA_M2 で固定し、簡略化が悪化したら検出できるようにする。
+  //
+  // 伊諸侯領（build-italy-fiefs.ts）は San Marino を microStates として除外
+  // している。あちらは「イタリアの諸侯領を並べる」レイヤーで、面積 100 km²
+  // 未満を採否の境目にした判断であり、本系統の「base に無い主権政体を補う」
+  // 意味論とは別。二重塗りにはならない（伊側は収録していない）。
+
+  // --- サンマリノ共和国（0301〜。OHM は 8 本の連鎖で全スナップショット年を覆う） ---
+  // NAME は base 1815 年の表記（San Marino）に合わせ、色・和名が 1815 年の
+  // base と 1914 年までのオーバーレイで連続するようにする。
+  // 領域は建国伝承の 0301 年からモンテ・ティターノ周辺 7 km² で始まり、
+  // 1463 年（リミニ戦争の戦後処理）に現在の 61 km² へ広がる。
+  // OHM の name は 1699 年以前がラテン語の "Respublica Sancti Marini" だが、
+  // name:en は全リレーションが "San Marino"。tagDrift の比較は name:en を
+  // 優先するため ohmName も "San Marino" を記録する。
+  2692719: {
+    name: "San Marino",
+    ohmName: "San Marino",
+    adminLevel: 4,
+    startDate: "0301-09-03",
+    endDate: "1100",
+    region: "italian",
+    // 1100 は後続の rel 2692732（1100〜1243）が担う（境界年の二重収録を防ぐ）
+    excludedYears: [1100],
+  },
+  2692732: {
+    name: "San Marino",
+    ohmName: "San Marino",
+    adminLevel: 4,
+    startDate: "1100",
+    endDate: "1243",
+    region: "italian",
+  },
+  2806727: {
+    name: "San Marino",
+    ohmName: "San Marino",
+    adminLevel: 4,
+    startDate: "1243",
+    endDate: "1291",
+    region: "italian",
+  },
+  2692730: {
+    name: "San Marino",
+    ohmName: "San Marino",
+    adminLevel: 2,
+    startDate: "1291",
+    endDate: "1320",
+    region: "italian",
+  },
+  2692734: {
+    name: "San Marino",
+    ohmName: "San Marino",
+    adminLevel: 2,
+    startDate: "1320",
+    endDate: "1463-06-27",
+    region: "italian",
+  },
+  2692735: {
+    name: "San Marino",
+    ohmName: "San Marino",
+    adminLevel: 2,
+    startDate: "1463-06-27",
+    endDate: "1699",
+    region: "italian",
+  },
+  2853644: {
+    name: "San Marino",
+    ohmName: "San Marino",
+    adminLevel: 2,
+    startDate: "1700",
+    endDate: "1739-10-17",
+    region: "italian",
+  },
+  2853735: {
+    name: "San Marino",
+    ohmName: "San Marino",
+    adminLevel: 2,
+    startDate: "1740-02-05",
+    region: "italian",
+    // base が San Marino を個別収録する 1815 年は除外（唯一の base 収録年）
+    excludedYears: [1815],
+  },
+  // --- アンドラ公国（1278〜。フォワ伯とウルジェイ司教の共同統治協定が起点） ---
+  // OHM は start_date=1278 の 1 本だけで、1279 年以降の全スナップショット年を
+  // 覆う。1279 年以前（base は Kingdom of France 塗り）は上流に区画が無い。
+  2739874: {
+    name: "Andorra",
+    ohmName: "Andorra",
+    adminLevel: 2,
+    startDate: "1278",
+    region: "western",
+  },
+  // --- モナコ公国（史実は 1297 年のグリマルディ家によるロック占拠から） ---
+  // OHM の収録は 1815 年（ウィーン会議でサルデーニャ王国の保護下に入った年）
+  // 以降のみで、1297〜1814 年の区画は無い。1815〜1861 年の区画はマントン・
+  // ロクブリュヌを含み 73 km²、1861 年（トリノ条約で両市をフランスへ割譲）
+  // 以降は現在の 18 km²（領海を含む）。
+  2851283: {
+    name: "Monaco",
+    ohmName: "Monaco",
+    adminLevel: 2,
+    startDate: "1815-06-09",
+    endDate: "1861-02-01",
+    region: "western",
+  },
+  2693418: {
+    name: "Monaco",
+    ohmName: "Monaco",
+    adminLevel: 2,
+    startDate: "1861-02-02",
+    region: "western",
+  },
+  // --- リヒテンシュタイン侯国（1719 年に帝国侯国として成立） ---
+  // 1719〜1806 は帝国内の侯国（AL4）、1806 年のライン同盟加盟以降は主権国家
+  // （AL2）。base は 1783 年以降この地を Austrian Empire / Austria Hungary /
+  // Austro-Hungarian Empire で塗る。1719 年以前（base は Holy Roman Empire /
+  // Duchy of Swabia 塗り）は前身のシェレンベルク領・ファドゥーツ伯領で、
+  // OHM に区画が無い。
+  2806824: {
+    name: "Liechtenstein",
+    ohmName: "Liechtenstein",
+    adminLevel: 4,
+    startDate: "1719-01-23",
+    endDate: "1806-07-25",
+    region: "central",
+  },
+  2746467: {
+    name: "Liechtenstein",
+    ohmName: "Liechtenstein",
+    adminLevel: 2,
+    startDate: "1806-07-12",
+    endDate: "1960-03-17",
+    region: "central",
+  },
 };
 
 /**
@@ -568,7 +751,8 @@ export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
     "存続区間にスナップショット年（SNAPSHOT_YEARS）が 1 つも含まれない" +
     "リレーション。収録しても表示される年が無い（例: Wallachia 1417〜1420、" +
     "Serbian Empire 1346〜1371、Principality of Montenegro 1852〜1878、" +
-    "Transylvania 1732〜1765）。",
+    "Transylvania 1732〜1765、#191 のサンマリノ 1739〜1740（アルベローニ" +
+    "枢機卿の占領期）・リヒテンシュタイン 1960 年以降）。",
   geometryUnbuildable:
     "リレーションは存在するが label ノードのみで境界 way を持たず、面を" +
     "組めない（2026-07 実測。#187 のブラバント公領と同じ状態）。1401〜1751 の " +
@@ -590,7 +774,8 @@ export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
     "base の Ottoman Empire が正しく塗っている土地を州単位に割る表示は" +
     "本オーバーレイ（主権政体の補完）の意味論に反する。例外として 1880 年の" +
     "クレタ州のみ、base の Bulgaria 誤帰属を正す目的で収録する（excludedYears " +
-    "で年を絞る）。",
+    "で年を絞る）。#191 の City of San Marino（al=6、0301〜）も同じ理由で" +
+    "落とす: 表示中のサンマリノ共和国の内部行政区（首邑）にすぎない。",
   dependencyOfDisplayedPower:
     "表示中の主権勢力の従属領（Venetian rule in the Ionian Islands " +
     "1363〜1797、Duchy of the Archipelago 1207〜1566、Kingdom of Candia " +
@@ -599,8 +784,16 @@ export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
   baseCoveredYearsExcluded:
     "許可リスト内のリレーションでも、base が同じ政体を個別収録している年は " +
     "excludedYears で除外する（クリミア・ハン国 1492〜1600、セルビア 1000〜" +
-    "1100、フィンランド 1914、クレタ州 1700〜1815、#190 のサヴォイア 1530）。" +
+    "1100、フィンランド 1914、クレタ州 1700〜1815、#190 のサヴォイア 1530、" +
+    "#191 のサンマリノ 1815）。" +
     "二重塗り・二重ラベルを生成段階で構造的に防ぐ。",
+  chainBoundaryYearExcluded:
+    "同じ政体のリレーション連鎖が年境界でスナップショット年に重なる場合、" +
+    "前側のリレーションから excludedYears でその年を落とす（#191 の" +
+    "サンマリノ: rel 2692719 = 0301〜1100 と rel 2692732 = 1100〜1243 は" +
+    "年単位の閉区間ではどちらも 1100 年に有効になる）。採るのは「その年に" +
+    "成立した側」= 後続で、同じ政体が 1 年だけ 2 枚重なる二重塗り・" +
+    "二重ラベルを構造的に防ぐ。",
   upstreamGapsRecorded: "OHM に使えるリレーションが無く埋められない政体は " +
     "data/known-limitations.json（sovereign-fiefs-missing-territories）と" +
     "docs/data-inventory/missing-powers-ledger.md に記録する: 1530〜1715 年の" +
@@ -614,7 +807,12 @@ export const SOVEREIGN_FIEF_EXCLUSIONS: Record<string, string> = {
     "1279 / 1300 年のナポリ（OHM の Kingdom of Naples は 1302 年開始）、" +
     "1279 / 1300 年のミラノ（Lordship of Milan は面が組めない）、" +
     "1000〜1300 年の南イタリア諸侯領（ベネヴェント公国・サレルノ公国など）が" +
-    "加わる。",
+    "加わる。#191 では微小国家の上流欠落が加わる: アンドラ公国（1278 年の" +
+    "共同統治協定以前。OHM は 1278 年開始の 1 本のみで 1000〜1200 年は" +
+    "埋まらない）、モナコ公国（史実の起点は 1297 年だが OHM の収録は 1815 年" +
+    "以降のみで 1300〜1800 年は埋まらない）、リヒテンシュタイン侯国" +
+    "（1719 年の成立以前。前身のシェレンベルク領・ファドゥーツ伯領は OHM に" +
+    "無く 1000〜1715 年は埋まらない）。",
 };
 
 /**
@@ -738,6 +936,13 @@ export const SOVEREIGN_FIEF_EXCLUDED_IDS: Readonly<Record<number, string>> = {
   2801183: "outOfIssueScope", // French Malta 1798-1800
   2801184: "outOfIssueScope", // British Protectorate of Malta 1800-1814
   2801185: "outOfIssueScope", // Crown Colony of Malta 1814-1964
+
+  // ---------------------------------------------------------------------
+  // #191: 微小国家の候補のうち収録しないもの
+  // ---------------------------------------------------------------------
+  2692733: "subdivisionOfDisplayedPower", // City of San Marino (al=6) 0301-
+  2853734: "noSnapshotYearInSpan", // San Marino 1739-10-17..1740-02-04（占領期）
+  2692582: "noSnapshotYearInSpan", // Liechtenstein 1960-03-17..（1914 より後）
 };
 
 /**
@@ -887,7 +1092,9 @@ export function buildYearCollection(
         ADMIN_LEVEL: entry.adminLevel,
         OHM_RELATION_ID: element.id,
         START_DATE: entry.startDate,
-        END_DATE: entry.endDate,
+        // 現存する政体は endDate を持たない（#191）。仏・帝国・伊の
+        // パイプラインと同じく欠損は null で表す
+        END_DATE: entry.endDate ?? null,
       },
       geometry: result.geometry,
     });

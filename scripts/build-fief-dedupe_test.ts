@@ -88,7 +88,9 @@ Deno.test("FIEF_DEDUPE_YEARS は base 境界線オーバーレイの対象年（
 Deno.test("parseTargetYears: 年指定で対象年を絞れる（#189。既存年のバイト不変の構造的保証）", () => {
   assertEquals(parseTargetYears([]), [...FIEF_DEDUPE_YEARS]);
   assertEquals(parseTargetYears(["1880", "1815", "1880"]), [1815, 1880]);
-  assertThrows(() => parseTargetYears(["1914"]));
+  // #191: 1914 も主権政体オーバーレイ（微小国家 4 政体）の対象年になった
+  assertEquals(parseTargetYears(["1914"]), [1914]);
+  assertThrows(() => parseTargetYears(["1850"]));
 });
 
 Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力を全て返す（TASK-86/96/110、#172）", () => {
@@ -150,8 +152,10 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
   assertEquals(fiefsPathsFor(1815), ["data/sovereign_fiefs_1815.geojson"]);
   assertEquals(fiefsPathsFor(1880), ["data/sovereign_fiefs_1880.geojson"]);
   assertEquals(fiefsPathsFor(1900), ["data/sovereign_fiefs_1900.geojson"]);
-  // 対象外年は 1 件も無い
-  assertEquals(fiefsPathsFor(1914), []);
+  // #191: 1914 年も主権政体オーバーレイ（微小国家 4 政体）だけが対象
+  assertEquals(fiefsPathsFor(1914), ["data/sovereign_fiefs_1914.geojson"]);
+  // 対象外年（スナップショット年ですらない）は 1 件も無い
+  assertEquals(fiefsPathsFor(1850), []);
 });
 
 Deno.test("生成済みの fief-dedupe.json は HRE 領邦年代を含み、帝国本体のラベルは抑制しない（TASK-86 AC #3/#5）", () => {

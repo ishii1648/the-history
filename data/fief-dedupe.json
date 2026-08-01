@@ -151,6 +151,12 @@
         "fiefs": [
           "data/sovereign_fiefs_1900.geojson"
         ]
+      },
+      "1914": {
+        "base": "data/europe_1914.geojson",
+        "fiefs": [
+          "data/sovereign_fiefs_1914.geojson"
+        ]
       }
     },
     "coveragePrecision": 4,
@@ -206,7 +212,7 @@
       "Comté de Toulouse": 0.5407,
       "Corsica": 0.9983,
       "Dutchy of Benevento": 0.0298,
-      "Holy Roman Empire": 0.1865,
+      "Holy Roman Empire": 0.1866,
       "Hungary": 0.0063,
       "Kingdom of France": 0.7786,
       "Moravia": 0.9998,
@@ -215,6 +221,7 @@
       "Scotland": 0.0326
     },
     "1279": {
+      "Aragón": 0.0035,
       "Britany": 1,
       "Byzantine Empire": 0.0644,
       "Corsica": 0.9983,
@@ -231,6 +238,7 @@
       "Sardinia": 0.4996
     },
     "1300": {
+      "Aragón": 0.0035,
       "Britany": 1,
       "Byzantine Empire": 0.0615,
       "Corsica": 0.9983,
@@ -239,7 +247,7 @@
       "County of Flanders": 0.9999,
       "Denmark": 0.002,
       "English territory": 0.1485,
-      "France": 0.4601,
+      "France": 0.4602,
       "Holy Roman Empire": 0.3106,
       "Hungary": 0.0176,
       "Lordship of Rimini": 0.9996,
@@ -247,12 +255,13 @@
       "Poland": 0.1629
     },
     "1400": {
+      "Aragón": 0.0034,
       "Beylik of Aydin": 0.0023,
       "Blue Horde": 0.1216,
       "Byzantine Empire": 0.2176,
       "Corsica": 0.9983,
       "English territory": 0.0407,
-      "France": 0.0274,
+      "France": 0.0275,
       "Holy Roman Empire": 0.4903,
       "Kingdom of Hungary": 0.0039,
       "Novgorod": 0.0442,
@@ -261,45 +270,50 @@
       "Sicily": 0.7399
     },
     "1492": {
-      "Aragón": 0.2805,
+      "Aragón": 0.2823,
       "England": 0.052,
-      "France": 0.0266,
+      "France": 0.0267,
       "Holy Roman Empire": 0.545,
       "Imperial Hungary": 0.0099,
       "Ottoman Empire": 0.0674,
-      "Papal States": 0.3034,
+      "Papal States": 0.3047,
       "Poland-Lithuania": 0.0087,
       "Swiss Confederation": 0.1066,
       "Venice": 0.0318
     },
     "1500": {
-      "Aragón": 0.2805,
+      "Aragón": 0.2823,
       "England": 0.052,
-      "France": 0.0101,
+      "France": 0.0102,
       "Holy Roman Empire": 0.1237,
       "Imperial Hungary": 0.0055,
       "Ottoman Empire": 0.0673,
-      "Papal States": 0.3034,
+      "Papal States": 0.3047,
       "Poland-Lithuania": 0.0035,
       "Swiss Confederation": 0.0116,
       "Venice": 0.0617
     },
     "1530": {
       "England and Ireland": 0.0522,
-      "Ottoman Empire": 0.0277
+      "Ottoman Empire": 0.0277,
+      "Papal States": 0.0013
     },
     "1600": {
       "England and Ireland": 0.3648,
-      "Ottoman Empire": 0.0268
+      "Ottoman Empire": 0.0268,
+      "Papal States": 0.0013
     },
     "1650": {
       "England and Ireland": 0.3663,
-      "Ottoman Empire": 0.0623
+      "Ottoman Empire": 0.0623,
+      "Papal States": 0.0013
     },
     "1700": {
       "Austrian Empire": 0.0194,
       "England and Ireland": 0.3657,
-      "Ottoman Empire": 0.0693
+      "France": 0.001,
+      "Ottoman Empire": 0.0693,
+      "Papal States": 0.0013
     },
     "1715": {
       "Austrian Empire": 0.0767,
@@ -311,16 +325,17 @@
       "Lübeck": 0.6333,
       "Oldenburg": 0.0251,
       "Ottoman Empire": 0.1099,
+      "Papal States": 0.0013,
       "Sweden": 0.0011,
       "Venice": 0.0203
     },
     "1783": {
       "Anhalt": 0.1312,
-      "Austrian Empire": 0.423,
+      "Austrian Empire": 0.4232,
       "Baden": 0.2618,
       "Bavaria": 0.2422,
       "Brunswick": 0.1566,
-      "France": 0.0011,
+      "France": 0.0019,
       "Hanover": 0.4781,
       "Kingdom of Sardinia": 0.0796,
       "Lübeck": 0.5207,
@@ -330,6 +345,7 @@
       "Netherlands": 0.0072,
       "Oldenburg": 0.3799,
       "Ottoman Empire": 0.0565,
+      "Papal States": 0.0013,
       "Parma": 0.0401,
       "Pontremoli": 0.0054,
       "Prussia": 0.2605,
@@ -339,7 +355,7 @@
     },
     "1800": {
       "Anhalt": 0.1312,
-      "Austrian Empire": 0.4224,
+      "Austrian Empire": 0.4226,
       "Baden": 0.2198,
       "Batavian Republic": 0.0066,
       "Bavaria": 0.0199,
@@ -352,6 +368,7 @@
       "Modena": 0.0165,
       "Oldenburg": 0.3799,
       "Ottoman Empire": 0.0591,
+      "Papal States": 0.0013,
       "Parma": 0.0401,
       "Pontremoli": 0.0054,
       "Prussia": 0.123,
@@ -361,20 +378,26 @@
       "Waldeck": 0.3395
     },
     "1815": {
-      "Austrian Empire": 0.4186,
+      "Austrian Empire": 0.4188,
       "Ottoman Empire": 0.0802,
       "Russian Empire": 0.0653,
-      "Sweden–Norway": 0.0057
+      "Sweden–Norway": 0.0057,
+      "Switzerland": 0.0014
     },
     "1880": {
       "Bulgaria": 0.241,
       "Russian Empire": 0.0576,
-      "Sweden–Norway": 0.0057
+      "Sweden–Norway": 0.0057,
+      "Switzerland": 0.0014
     },
     "1900": {
       "Ottoman Empire": 0.0067,
       "Russian Empire": 0.0585,
-      "Sweden–Norway": 0.0057
+      "Sweden–Norway": 0.0057,
+      "Switzerland": 0.0014
+    },
+    "1914": {
+      "Switzerland": 0.0014
     }
   }
 }

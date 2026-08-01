@@ -27,7 +27,13 @@ import {
   sovereignFiefExclusionReason,
   sovereignFiefIdsForYear,
 } from "./build-sovereign-fiefs.ts";
-import { selfIntersectionPoints } from "./clean-polygons.ts";
+import area from "@turf/area";
+import {
+  dropTinyRings,
+  MIN_PART_AREA_M2,
+  polygonParts,
+  selfIntersectionPoints,
+} from "./clean-polygons.ts";
 
 /** タグだけのリレーション（Overpass 相当） */
 function relation(id: number, tags: Record<string, string>): OhmRelation {
@@ -63,7 +69,9 @@ function relationFromAllowlist(id: number): OhmRelation {
     "name:en": entry.ohmName,
     admin_level: String(entry.adminLevel),
     start_date: entry.startDate,
-    end_date: entry.endDate,
+    // 現存する政体（#191 のアンドラ・モナコ・リヒテンシュタイン・サンマリノ）は
+    // OHM 側に end_date が無く、許可リストも endDate を持たない
+    ...(entry.endDate === undefined ? {} : { end_date: entry.endDate }),
   });
 }
 
@@ -75,7 +83,7 @@ Deno.test("取得範囲は実測に使った全欧 bbox をピン留めする", 
   assertEquals(SOVEREIGN_FIEF_BBOX, [34, -25, 72, 60]);
 });
 
-Deno.test("対象年は SNAPSHOT_YEARS の部分集合で 1000〜1900 の 18 年（#190）", () => {
+Deno.test("対象年は SNAPSHOT_YEARS 全 19 年（#191 でサンマリノが 1914 年にも要る）", () => {
   assertEquals([...SOVEREIGN_FIEF_YEARS], [
     1000,
     1100,
@@ -95,6 +103,7 @@ Deno.test("対象年は SNAPSHOT_YEARS の部分集合で 1000〜1900 の 18 年
     1815,
     1880,
     1900,
+    1914,
   ]);
   for (const year of SOVEREIGN_FIEF_YEARS) {
     assert(SNAPSHOT_YEARS.includes(year), `${year} が SNAPSHOT_YEARS に無い`);
@@ -113,7 +122,7 @@ Deno.test("サイズ上限は既存パイプラインと同じ 200 KB", () => {
 // 静的許可リスト
 // ---------------------------------------------------------------------------
 
-Deno.test("許可リストは実測した 30 リレーションをピン留めする（#189 の 16 + #190 の 14）", () => {
+Deno.test("許可リストは実測した 43 リレーションをピン留めする（#189 の 16 + #190 の 14 + #191 の 13）", () => {
   const ids = Object.keys(SOVEREIGN_FIEF_ALLOWLIST).map(Number).sort((a, b) =>
     a - b
   );
@@ -150,6 +159,19 @@ Deno.test("許可リストは実測した 30 リレーションをピン留め�
       2893921, // Savoyard state (1427-1536)               #190
       2929115, // Wallachia (1420-1538)
       2929116, // Wallachia (1538-1829)
+      2692719, // San Marino (0301-1100)                   #191
+      2692730, // San Marino (1291-1320)                   #191
+      2692732, // San Marino (1100-1243)                   #191
+      2692734, // San Marino (1320-1463)                   #191
+      2692735, // San Marino (1463-1699)                   #191
+      2693418, // Monaco (1861-)                           #191
+      2739874, // Andorra (1278-)                          #191
+      2746467, // Liechtenstein (1806-1960)                #191
+      2806727, // San Marino (1243-1291)                   #191
+      2806824, // Liechtenstein (1719-1806)                #191
+      2851283, // Monaco (1815-1861)                       #191
+      2853644, // San Marino (1700-1739)                   #191
+      2853735, // San Marino (1740-)                       #191
     ].sort((a, b) => a - b),
   );
 });
@@ -180,6 +202,8 @@ Deno.test("除外の分類キーはすべて根拠文を持ち、未使用の分
   // 許可リスト側の設計判断の記録として存在する
   used.add("baseCoveredYearsExcluded");
   used.add("upstreamGapsRecorded");
+  // #191: 連鎖の境界年（サンマリノの 1100）も excludedYears で解く
+  used.add("chainBoundaryYearExcluded");
   for (const key of used) {
     assert(
       typeof SOVEREIGN_FIEF_EXCLUSIONS[key] === "string" &&
@@ -224,24 +248,65 @@ Deno.test("許可リストの名前は仏・独・伊・ブリテンの許可リ
 
 Deno.test("sovereignFiefIdsForYear: 年ごとの対象 ID 集合が実測どおりに固定される", () => {
   const expected: Record<number, number[]> = {
-    1000: [2739884, 2889237],
-    1100: [2739885],
-    1200: [2836150],
-    1279: [2809440, 2809441],
-    1300: [2809440, 2809441],
-    1400: [2750042, 2809440, 2809441, 2861791, 2890623, 2893918],
-    1492: [2861791, 2892793, 2893921, 2929115],
-    1500: [2861791, 2892793, 2893921, 2929115],
-    1530: [2861790, 2929115],
-    1600: [2861790, 2929116],
-    1650: [2849499, 2861790, 2929116],
-    1700: [2830352, 2849499, 2861788, 2929116],
-    1715: [2747433, 2830352, 2849499, 2861788, 2929116],
-    1783: [2829140, 2830352, 2851381, 2861788, 2878295, 2929116],
-    1800: [2750805, 2829140, 2830352, 2857706, 2878295, 2929116],
-    1815: [2694163, 2696816, 2827696, 2829140, 2857706, 2878295, 2929116],
-    1880: [2696816, 2835765, 2854743],
-    1900: [2692586, 2696816],
+    1000: [2692719, 2739884, 2889237],
+    1100: [2692732, 2739885],
+    1200: [2692732, 2836150],
+    1279: [2739874, 2806727, 2809440, 2809441],
+    1300: [2692730, 2739874, 2809440, 2809441],
+    1400: [
+      2692734,
+      2739874,
+      2750042,
+      2809440,
+      2809441,
+      2861791,
+      2890623,
+      2893918,
+    ],
+    1492: [2692735, 2739874, 2861791, 2892793, 2893921, 2929115],
+    1500: [2692735, 2739874, 2861791, 2892793, 2893921, 2929115],
+    1530: [2692735, 2739874, 2861790, 2929115],
+    1600: [2692735, 2739874, 2861790, 2929116],
+    1650: [2692735, 2739874, 2849499, 2861790, 2929116],
+    1700: [2739874, 2830352, 2849499, 2853644, 2861788, 2929116],
+    1715: [2739874, 2747433, 2830352, 2849499, 2853644, 2861788, 2929116],
+    1783: [
+      2739874,
+      2806824,
+      2829140,
+      2830352,
+      2851381,
+      2853735,
+      2861788,
+      2878295,
+      2929116,
+    ],
+    1800: [
+      2739874,
+      2750805,
+      2806824,
+      2829140,
+      2830352,
+      2853735,
+      2857706,
+      2878295,
+      2929116,
+    ],
+    1815: [
+      2694163,
+      2696816,
+      2739874,
+      2746467,
+      2827696,
+      2829140,
+      2851283,
+      2857706,
+      2878295,
+      2929116,
+    ],
+    1880: [2693418, 2696816, 2739874, 2746467, 2835765, 2853735, 2854743],
+    1900: [2692586, 2693418, 2696816, 2739874, 2746467, 2853735],
+    1914: [2693418, 2739874, 2746467, 2853735],
   };
   for (const year of SOVEREIGN_FIEF_YEARS) {
     assertEquals(sovereignFiefIdsForYear(year), expected[year], String(year));
@@ -529,6 +594,92 @@ Deno.test("ミラノ公国は他系統・base が全対象年を覆うため本�
   }
 });
 
+// ---------------------------------------------------------------------------
+// #191: 微小国家（サンマリノ・アンドラ・モナコ・リヒテンシュタイン）
+// ---------------------------------------------------------------------------
+
+/** #191 の 4 政体が表示される年（実測した OHM の収録区間から決まる） */
+const MICROSTATE_YEARS: Readonly<Record<string, readonly number[]>> = {
+  // base は 1815 年だけ San Marino を個別収録するため、その年は除外して
+  // オーバーレイ 18 年 + base 1 年で全 19 年代に現れる（AC1）
+  "San Marino": SOVEREIGN_FIEF_YEARS.filter((year) => year !== 1815),
+  // OHM の Andorra は start_date=1278 の 1 本きり（AC2）
+  "Andorra": SOVEREIGN_FIEF_YEARS.filter((year) => year >= 1279),
+  // OHM のモナコ公国は 1815 年（ウィーン会議でサルデーニャの保護下）から（AC3）
+  "Monaco": [1815, 1880, 1900, 1914],
+  // OHM のリヒテンシュタインは 1719 年（侯国成立）から（AC3）
+  "Liechtenstein": [1783, 1800, 1815, 1880, 1900, 1914],
+};
+
+/** 表示名 → その年に採るリレーション ID（実測） */
+function microstateIdsForYear(name: string, year: number): number[] {
+  return sovereignFiefIdsForYear(year).filter((id) =>
+    SOVEREIGN_FIEF_ALLOWLIST[id].name === name
+  );
+}
+
+Deno.test("微小国家 4 政体は実測どおりの年に 1 件ずつ現れる（#191 AC1〜AC3）", () => {
+  for (const [name, years] of Object.entries(MICROSTATE_YEARS)) {
+    for (const year of SOVEREIGN_FIEF_YEARS) {
+      const ids = microstateIdsForYear(name, year);
+      assertEquals(
+        ids.length,
+        years.includes(year) ? 1 : 0,
+        `${name} の ${year} 年: ${JSON.stringify(ids)}`,
+      );
+    }
+  }
+});
+
+Deno.test("サンマリノは base 収録年（1815）以外の全対象年に現れ、19 年代すべてが埋まる（#191 AC1）", () => {
+  // オーバーレイ側（18 年）
+  for (const year of SOVEREIGN_FIEF_YEARS) {
+    const ids = microstateIdsForYear("San Marino", year);
+    assertEquals(ids.length, year === 1815 ? 0 : 1, String(year));
+  }
+  // 残る 1815 年は base（europe_1815 の San Marino）が担うため、
+  // SNAPSHOT_YEARS 全 19 年でサンマリノが地図に出る
+  assertEquals([...SOVEREIGN_FIEF_YEARS], [...SNAPSHOT_YEARS]);
+});
+
+Deno.test("サンマリノの連鎖は年境界で重ならない（1100 年は後続リレーションが担う）（#191）", () => {
+  // rel 2692719（0301..1100）と rel 2692732（1100..1243）は年単位の閉区間では
+  // どちらも 1100 年に有効になる。二重塗り・二重ラベルを避けるため、
+  // 「その年に成立した側」= 後続を採る（excludedYears で前者から 1100 を落とす）。
+  assertEquals(sovereignFiefIdsForYear(1000).includes(2692719), true);
+  assertEquals(sovereignFiefIdsForYear(1100).includes(2692719), false);
+  assertEquals(sovereignFiefIdsForYear(1100).includes(2692732), true);
+});
+
+Deno.test("微小国家の castelli・スナップショット年を持たない区間は収録しない（#191）", () => {
+  // City of San Marino（al=6）は表示中の共和国の内部行政区
+  assert(sovereignFiefExclusionReason(2692733) !== null);
+  // San Marino 1739-10-17..1740-02-04（アルベローニ枢機卿の占領期）は
+  // スナップショット年を含まない
+  assert(sovereignFiefExclusionReason(2853734) !== null);
+  // Liechtenstein 1960-03-17.. は 1914 年より後
+  assert(sovereignFiefExclusionReason(2692582) !== null);
+  for (const year of SOVEREIGN_FIEF_YEARS) {
+    const ids = sovereignFiefIdsForYear(year);
+    for (const id of [2692733, 2853734, 2692582]) {
+      assert(!ids.includes(id), `${year} 年に ${id} が混入`);
+    }
+  }
+});
+
+Deno.test("現存する政体は endDate を持たず、OHM の end_date 欠損と一致する（#191）", () => {
+  for (const id of [2739874, 2693418, 2853735]) {
+    assertEquals(SOVEREIGN_FIEF_ALLOWLIST[id].endDate, undefined);
+  }
+  // end_date が無いタグとの比較では drift にならない
+  const { metadata } = buildYearCollection(
+    [relationFromAllowlist(2739874)],
+    new Map([[2739874, withSquare(2739874, 1.0, 42.0)]]),
+    1914,
+  );
+  assertEquals(metadata.tagDrift, {});
+});
+
 Deno.test("存続区間は年単位の閉区間（開始年・終了年の両端を含む）", () => {
   // Wallachia (1538..1829-09-14) は 1829 に含まれ 1830 には含まれない
   assert(sovereignFiefIdsForYear(1829).includes(2929116));
@@ -675,10 +826,10 @@ Deno.test("parseTargetYears: 年を並べるとその年だけ（昇順・重複
 });
 
 Deno.test("parseTargetYears: 対象外の年はエラー", () => {
-  // 1914 は base が後継の主権国家を個別収録するため対象年ではない（#189）。
-  // #190 で 1000 / 1100 / 1279 / 1300 が対象年に加わったため、
-  // スナップショット年ですらない年（900 / 1850）も併せて固定する。
-  assertThrows(() => parseTargetYears(["1914"]));
+  // #191 で 1914 も対象年になった（サンマリノ・アンドラ・モナコ・
+  // リヒテンシュタインは base に無い）ため、対象外はスナップショット年ですら
+  // ない年（900 / 1850）だけになる。
+  assertEquals(parseTargetYears(["1914"]), [1914]);
   assertThrows(() => parseTargetYears(["900"]));
   assertThrows(() => parseTargetYears(["1850"]));
 });
@@ -751,5 +902,75 @@ Deno.test("生成物（flat）: 対象年ごとにファイルがあり重なり
       sovereignFiefIdsForYear(year).length,
       String(year),
     );
+  }
+});
+
+/**
+ * #191 AC4: 微小国家が simplify（shrinkToLimit のトレランス 0.005 度 ≒ 556 m）と
+ * 微小破片除去（MIN_PART_AREA_M2 = 1 km² / MIN_PART_MEAN_WIDTH_M ≒ 111 m）を
+ * 通しても消えないことの下限。
+ *
+ * 2026-08 実測（生成前に build-data.ts の shrinkToLimit へ通した測定値）:
+ * サンマリノ 6.98〜58.3 km²（最小は 0301〜1100 の区画）・アンドラ 465 km²・
+ * モナコ 17.9 km²（1861 年以降）/ 73.1 km²（1815〜1861 はマントン・
+ * ロクブリュヌを含む）・リヒテンシュタイン 153 km²。いずれも面積下限の 7 倍
+ * 以上あり、面積下限の例外機構は要らない（Issue #191 が懸念した「モナコは
+ * 面積下限すれすれ」は、OHM のモナコが陸域 2.1 km² ではなく領海を含む
+ * 17.9 km² の区画であるため起きない）。
+ * 下限 5 km² は最小値（6.98 km²）の直下に置き、簡略化の悪化で面が痩せたら
+ * 気付けるようにする。
+ */
+const MICROSTATE_MIN_AREA_M2 = 5_000_000;
+
+Deno.test("生成物: 微小国家 4 政体が simplify と微小破片除去を通しても残る（#191 AC4）", async () => {
+  for (const [name, years] of Object.entries(MICROSTATE_YEARS)) {
+    for (const year of years) {
+      const fc = await readSovereignFiefs(year);
+      const features = fc.features.filter((f) => f.properties?.NAME === name);
+      assertEquals(features.length, 1, `${name} が ${year} 年の生成物に無い`);
+      const geometry = features[0].geometry;
+      assert(
+        geometry.type === "Polygon" || geometry.type === "MultiPolygon",
+        `${name} ${year} がポリゴンでない`,
+      );
+      // 面積が保たれている（点に潰れていない）
+      const km2 = area(features[0]) / 1e6;
+      assert(
+        km2 * 1e6 >= MICROSTATE_MIN_AREA_M2,
+        `${name} ${year} の面積が ${km2.toFixed(3)} km² まで痩せている`,
+      );
+      // 微小破片除去（面積下限 + 平均幅下限）をもう一度通しても 1 パートも
+      // 落ちない = 生成物は閾値の内側に安全余裕を持って収まっている
+      const dropped = dropTinyRings(geometry);
+      assertEquals(
+        dropped.droppedParts,
+        0,
+        `${name} ${year} のパートが微小破片として落ちる`,
+      );
+      assert(dropped.geometry !== null, `${name} ${year} の面が残らない`);
+      for (const part of polygonParts(geometry)) {
+        assert(
+          area({ type: "Polygon", coordinates: [part[0]] }) >= MIN_PART_AREA_M2,
+          `${name} ${year} に面積下限未満のパートがある`,
+        );
+      }
+    }
+  }
+});
+
+Deno.test("生成物（flat）: 微小国家は他系統との差引後も面が残る（#191 AC4）", async () => {
+  for (const [name, years] of Object.entries(MICROSTATE_YEARS)) {
+    for (const year of years) {
+      const fc = JSON.parse(
+        await Deno.readTextFile(`data/sovereign_fiefs_flat_${year}.geojson`),
+      ) as FeatureCollection;
+      const features = fc.features.filter((f) => f.properties?.NAME === name);
+      assertEquals(features.length, 1, `${name} が ${year} 年の flat に無い`);
+      const km2 = area(features[0]) / 1e6;
+      assert(
+        km2 * 1e6 >= MICROSTATE_MIN_AREA_M2,
+        `${name} ${year} が flat 化で ${km2.toFixed(3)} km² まで削られている`,
+      );
+    }
   }
 });

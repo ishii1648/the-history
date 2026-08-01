@@ -1633,17 +1633,18 @@ Deno.test("sovereignFiefDataUrlFor は主権政体オーバーレイ GeoJSON の
   );
 });
 
-Deno.test("hasSovereignFiefOverlay は対象年（1000〜1900 の 18 年）でのみ true（#189/#190）", () => {
+Deno.test("hasSovereignFiefOverlay は対象年（1000〜1914 の 19 年）でのみ true（#189/#190/#191）", () => {
   for (const year of SOVEREIGN_FIEF_OVERLAY_YEARS) {
     assert(hasSovereignFiefOverlay(year, SOVEREIGN_FIEF_OVERLAY_YEARS));
   }
   // #190 で 1000〜1100（教皇領・バルセロナ伯領）・1279〜1300（アテネ公国・
-  // アカイア公国）が対象年に加わった。1914 は後継の主権国家（Finland ほか）を
-  // base が個別収録するため引き続き対象外
-  for (const year of [1000, 1100, 1279, 1300]) {
+  // アカイア公国）が、#191 で 1914（微小国家 4 政体）が対象年に加わり、
+  // 全スナップショット年が対象になった
+  for (const year of [1000, 1100, 1279, 1300, 1914]) {
     assert(hasSovereignFiefOverlay(year, SOVEREIGN_FIEF_OVERLAY_YEARS));
   }
-  assert(!hasSovereignFiefOverlay(1914, SOVEREIGN_FIEF_OVERLAY_YEARS));
+  // 対象外はスナップショット年ですらない年だけ
+  assert(!hasSovereignFiefOverlay(1850, SOVEREIGN_FIEF_OVERLAY_YEARS));
 });
 
 Deno.test("createSovereignFiefOverlayLoader は非対象年では fetch せず空 FC を返す（#189）", async () => {
@@ -1656,9 +1657,11 @@ Deno.test("createSovereignFiefOverlayLoader は非対象年では fetch せず�
       json: () => Promise.resolve(fakeCollection("X")),
     });
   }, SOVEREIGN_FIEF_OVERLAY_YEARS);
-  assertEquals(await loader.load(1914), EMPTY_FEATURE_COLLECTION);
+  // #191 で 1914 も対象年になったため、非対象年はスナップショット年ですら
+  // ない年（1850）で確かめる
+  assertEquals(await loader.load(1850), EMPTY_FEATURE_COLLECTION);
   assertEquals(count, 0);
-  assert(loader.has(1914));
+  assert(loader.has(1850));
 });
 
 Deno.test("createSovereignFiefOverlayLoader は対象年で sovereign_fiefs_flat を fetch して返す（キャッシュあり）（#189）", async () => {

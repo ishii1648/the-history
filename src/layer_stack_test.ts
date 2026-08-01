@@ -472,12 +472,13 @@ Deno.test("beforeId の付与は picking 優先順（PICKING_PRIORITY）に影�
     PEAK_HIT_LAYER_ID,
     MOUNTAIN_HIT_LAYER_ID,
     RIVERS_HIT_LAYER_ID,
+    // #191: 主権政体は微小国家を含むため政治ポリゴンの最上段へ引き上げた
+    SOVEREIGN_FIEF_LAYER_ID,
     HRE_LAYER_ID,
     FRANCE_FIEF_LAYER_ID,
     ITALY_FIEF_LAYER_ID,
     CLIOPATRIA_FIEF_LAYER_ID,
     BRITAIN_FIEF_LAYER_ID,
-    SOVEREIGN_FIEF_LAYER_ID,
     POWER_LAYER_ID,
   ]);
 });
