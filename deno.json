@@ -30,6 +30,7 @@
     "build-britain-fiefs": "deno run --allow-net --allow-read --allow-write scripts/build-britain-fiefs.ts",
     "build-sovereign-fiefs": "deno run --allow-net --allow-read --allow-write scripts/build-sovereign-fiefs.ts",
     "build-cliopatria-fiefs": "deno run --v8-flags=--max-old-space-size=8192 --allow-net=raw.githubusercontent.com --allow-env=CLIOPATRIA_ARCHIVE --allow-read --allow-write --allow-run=unzip scripts/build-cliopatria-fiefs.ts",
+    "build-borrowed-fiefs": "deno run --allow-read --allow-write scripts/build-borrowed-fiefs.ts",
     "build-fief-dedupe": "deno run --allow-read --allow-write scripts/build-fief-dedupe.ts",
     "build-fief-flat": "deno run --allow-read --allow-write scripts/build-fief-flat.ts",
     "extract-pmtiles": "deno run --allow-net=build-metadata.protomaps.dev --allow-run=pmtiles --allow-read scripts/extract-pmtiles.ts",

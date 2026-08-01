@@ -268,6 +268,13 @@ const FILE_PATTERNS: readonly (readonly [RegExp, DatasetKey])[] = [
   ],
   [/^cliopatria_fiefs_(?:flat_)?\d+\.geojson$/, "cliopatria"],
   [/^hre_\d+\.geojson$/, "ethHreTerritories"],
+  // #202 / ADR-0033: 隣接年から流用した面（scripts/build-borrowed-fiefs.ts）。
+  // 借用元と同じ系統の別ファイルへ置くので、出典・ライセンスも借用元の系統を
+  // そのまま引く（borrowed_hre_* は Roller / CC BY-NC-SA 4.0、borrowed_italy_* は
+  // OHM / CC0）。1 ファイルに 1 出典という既存の粒度を崩さないための分離で、
+  // 「どの年から借りたか」は各ファイルの metadata.borrowedFrom が持つ。
+  [/^borrowed_hre_\d+\.geojson$/, "ethHreTerritories"],
+  [/^borrowed_italy_\d+\.geojson$/, "openHistoricalMap"],
   [/^rivers\.geojson$/, "naturalEarthRivers"],
   [/^mountains\.geojson$/, "naturalEarthMountains"],
   [/^peaks\.geojson$/, "naturalEarthPeaks"],

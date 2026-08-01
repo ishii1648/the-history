@@ -662,6 +662,125 @@ export function createBaseFillLoader(
 }
 
 /**
+ * 隣接年から流用した HRE 領邦（borrowed_hre_<year>.geojson）の配信 URL を返す
+ * （純粋関数、#202 / ADR-0033）。
+ *
+ * 生成は scripts/build-borrowed-fiefs.ts で、中身は借用元（Roller 由来
+ * hre_<year>.geojson）の面を座標を変えずに複製したもの。既存の
+ * hre_fiefs_flat_<year>（OHM / CC0）とは出典もライセンスも違うため、
+ * **ファイルを分けたまま**ランタイムで hre-powers レイヤーへ足す
+ * （withBorrowedGeometry）。1 ファイル 1 出典という生成物側の粒度を崩さずに、
+ * feature 単位で正しい出典を出すための構成。
+ */
+export function borrowedHreDataUrlFor(year: number): string {
+  return `/data/borrowed_hre_${year}.geojson`;
+}
+
+/**
+ * 隣接年から流用したイタリア諸侯領（borrowed_italy_<year>.geojson）の配信 URL を
+ * 返す（純粋関数、#202 / ADR-0033）。借用元は italy_fiefs_<year>.geojson
+ * （OHM / CC0）で、italy-fiefs レイヤーと同一出典・同一ライセンスだが、
+ * 「借用した面」を生成物として区別できるよう別ファイルに置く
+ * （借用の解消 = ファイルごと落とす、で済むようにするため）。
+ */
+export function borrowedItalyFiefDataUrlFor(year: number): string {
+  return `/data/borrowed_italy_${year}.geojson`;
+}
+
+/**
+ * 借用面（HRE 系統）のローダを作る（#202）。
+ * 既存オーバーレイと同じ機構（createOverlayLoader）に載せるため、借用の無い年は
+ * fetch せず空 FC、取得失敗・未生成は warn + 空 FC に落ちて従来表示へ縮退する。
+ */
+export function createBorrowedHreLoader(
+  fetchFn: FetchLike,
+  borrowedYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    borrowedYears,
+    borrowedHreDataUrlFor,
+    "HRE 領邦の借用オーバーレイ",
+    warnFn,
+  );
+}
+
+/** 借用面（イタリア諸侯領系統）のローダを作る（#202）。挙動は HRE 側と同じ */
+export function createBorrowedItalyFiefLoader(
+  fetchFn: FetchLike,
+  borrowedYears: readonly number[],
+  warnFn: (message: string) => void = console.warn,
+): YearDataLoader {
+  return createOverlayLoader(
+    fetchFn,
+    borrowedYears,
+    borrowedItalyFiefDataUrlFor,
+    "イタリア諸侯領の借用オーバーレイ",
+    warnFn,
+  );
+}
+
+/**
+ * 借用ファイルの feature を既存オーバーレイの FeatureCollection へ足す（純粋関数、
+ * #202 / ADR-0033）。
+ *
+ * 借用 feature には借用ファイルの metadata（出典・ライセンス・境界の確からしさ・
+ * borrowedFrom）を properties.ATTRIBUTION として写す。情報パネルは
+ * FeatureCollection の metadata を読む契約（pick_handlers.ts pickedMetadata）
+ * だが、1 枚のレイヤーへ出典の異なる面が載る場合はそれでは足りないため、
+ * feature 側の出典を優先させるための土台をここで用意する。データファイル自体は
+ * 系統ごとに分かれたままなので、生成物の「1 ファイル 1 出典」は崩れない。
+ *
+ * 借用が無い（feature 0 件）ときは入力をそのまま（同一参照で）返し、deck.gl の
+ * 差分更新に無用な再アップロードを起こさない。既存 feature も同一参照のまま
+ * 保ち、レイヤー側の metadata（既存系統の出典）は書き換えない。
+ */
+export function mergeBorrowedFeatures(
+  fc: FeatureCollection,
+  borrowed: FeatureCollection,
+): FeatureCollection {
+  if (borrowed.features.length === 0) return fc;
+  const attribution = (borrowed as { metadata?: unknown }).metadata;
+  const added = borrowed.features.map((feature) =>
+    attribution === undefined ? feature : {
+      ...feature,
+      properties: { ...(feature.properties ?? {}), ATTRIBUTION: attribution },
+    }
+  );
+  return { ...fc, features: [...fc.features, ...added] };
+}
+
+/**
+ * 既存オーバーレイのローダに借用面のローダを重ねる（#202）。
+ * 両者を並行に取得して mergeBorrowedFeatures で束ねるため、呼び出し側
+ * （main.ts）から見ると従来どおり 1 本のローダのままで、レイヤー・色・ラベル・
+ * picking は借用の有無で分岐しない。マージ結果は年ごとに保持して、同じ年を
+ * 再ロードしたときの参照を安定させる（deck.gl の差分更新のため）。保持は
+ * withSuzerainOverrides と同じ LRU（上限 YEAR_CACHE_MAX_YEARS 年）に載せる。
+ */
+export function withBorrowedGeometry(
+  loader: YearDataLoader,
+  borrowedLoader: YearDataLoader,
+): YearDataLoader {
+  const merged = createYearCache<FeatureCollection>();
+  return {
+    has: (year) => loader.has(year) && borrowedLoader.has(year),
+    async load(year) {
+      const cached = merged.get(year);
+      if (cached !== undefined) return cached;
+      const [base, borrowed] = await Promise.all([
+        loader.load(year),
+        borrowedLoader.load(year),
+      ]);
+      const result = mergeBorrowedFeatures(base, borrowed);
+      if (result !== base) merged.set(year, result);
+      return result;
+    },
+  };
+}
+
+/**
  * 年代切替で同時に反映する base（europe_*）・hre（hre_*）・
  * fiefs（france_fiefs_*、TASK-71）・outlines（base_outline_*、TASK-78）の
  * データ組

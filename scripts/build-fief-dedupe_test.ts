@@ -106,12 +106,17 @@ Deno.test("fiefsPathsFor はその年に存在するオーバーレイの入力�
   // 1400 以降は HRE 領邦・伊諸侯領・Cliopatria + ブリテン（仏諸侯領は 1300 まで）。
   // TASK-110: Cliopatria を外すと 1400 / 1492 のバイエルン公領などの下に
   // base 塗りが残り、半透明が二重に重なって濃くなる。
+  // #202: 1492 年だけは隣接年から流用した面（オーストリア大公領・ミラノ公国）も
+  // 入力に含む。借用面は flat 化を通さないので、base の二重塗りの解消はここでの
+  // 差し引きだけが担う。
   assertEquals(fiefsPathsFor(1492), [
     "data/hre_fiefs_1492.geojson",
     "data/italy_fiefs_1492.geojson",
     "data/cliopatria_fiefs_1492.geojson",
     "data/britain_fiefs_1492.geojson",
     "data/sovereign_fiefs_1492.geojson",
+    "data/borrowed_hre_1492.geojson",
+    "data/borrowed_italy_1492.geojson",
   ]);
   // #188: 1500 年は伊諸侯領（近世初頭拡張）+ ブリテン。伊を登録しないと
   // base の Holy Roman Empire 一括塗りが北・中伊の諸邦の下に残り、
