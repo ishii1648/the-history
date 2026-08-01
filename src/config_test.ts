@@ -391,7 +391,7 @@ Deno.test("BRITAIN_FIEF_OVERLAY_YEARS は BASE_OUTLINE_YEARS の部分集合（�
 
 // ---- 主権政体オーバーレイ（#189）----
 
-Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は #189/#190 が生成した 18 年代である", () => {
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は #189/#190/#191 が生成した 19 年代である", () => {
   assertEquals([...SOVEREIGN_FIEF_OVERLAY_YEARS], [
     1000,
     1100,
@@ -411,6 +411,9 @@ Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は #189/#190 が生成した 18 年代�
     1815,
     1880,
     1900,
+    // #191: 微小国家 4 政体（サンマリノ・アンドラ・モナコ・
+    // リヒテンシュタイン）は 1914 年の base にも 1 件も無い
+    1914,
   ]);
 });
 
@@ -426,8 +429,13 @@ Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は昇順・重複なしで SNAPSHOT_YEA
   }
 });
 
-Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は 1914 を含まない（base が後継の主権国家を個別収録する年代。#189）", () => {
-  assert(!SOVEREIGN_FIEF_OVERLAY_YEARS.includes(1914));
+Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は SNAPSHOT_YEARS 全 19 年（#191 で 1914 も対象になった）", () => {
+  // #189 時点では「base が Finland ほか後継の主権国家を個別収録する」ことを
+  // 理由に 1914 を外していた。#191 で加えた微小国家（サンマリノ・アンドラ・
+  // モナコ・リヒテンシュタイン）は 1914 年の base にも無いため、この年も
+  // オーバーレイが要る。BASE_OUTLINE_YEARS もこれに伴い全 19 年になる。
+  assertEquals([...SOVEREIGN_FIEF_OVERLAY_YEARS], [...SNAPSHOT_YEARS]);
+  assert(BASE_OUTLINE_YEARS.includes(1914));
 });
 
 Deno.test("SOVEREIGN_FIEF_OVERLAY_YEARS は AC の対象年（1650〜1715 のクリミア、1400 のモスクワ、1815〜1900 のフィンランド、1880 のクレタ、#190 の 1000 の教皇領・1279〜1500 のナポリ / アテネ / サヴォイア・1783〜1800 のジェノヴァ）を含む", () => {

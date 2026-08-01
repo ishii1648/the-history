@@ -132,10 +132,27 @@ export const BRITAIN_FIEF_LAYER_ID = "britain-fiefs";
  *   POWER_HIGHLIGHT_LAYER_IDS への各 1 行で、整合はいずれも既存の汎用テストが
  *   そのまま検証する。
  *
- * PICKING_PRIORITY 上の位置は powers の直上（既存 5 系統の下）。主権政体は
- * 既存オーバーレイと地理的にほぼ重ならないため相対順は表示・picking のどちらにも
- * 影響しないが、「後から追加した層は最も影響の小さい最下段へ積む」既定
- * （TASK-96 / TASK-110 / #172 と同じ判断）に従う。
+ * PICKING_PRIORITY 上の位置は **政治ポリゴン 7 層の最上段**（#191 で
+ * powers の直上から引き上げた）。#189/#190 の時点では「既存オーバーレイと
+ * 地理的にほぼ重ならないため相対順は影響しない」として最下段（powers の直上）
+ * に置いていたが、#191 で微小国家（サンマリノ 7〜61 km²・モナコ 18 km²・
+ * リヒテンシュタイン 157 km²・アンドラ 465 km²）を収録したことで前提が崩れた:
+ *
+ * - クリックの解決は直下 pick ではなく **半径 PICKING_RADIUS_PX（6px）の
+ *   近傍再ピック → PICKING_PRIORITY で 1 件選ぶ**（resolveClickPick）。
+ *   ポリゴンが数十 px しかない微小国家では、カーソルが中に入っていても
+ *   6px 先の隣接オーバーレイが候補に入り、優先順が上ならそちらが勝つ。
+ * - 実測（2026-08・ヘッドレス CDP、zoom 7）: 1300 / 1500 年のサンマリノは
+ *   ホバーでは `sovereign-fiefs` / サンマリノを拾うのに、クリックでは
+ *   `italy-fiefs` のリミニ領主領（サンマリノを取り囲む諸侯領）が勝ち、
+ *   情報パネルにサンマリノを出せなかった。
+ *
+ * これは TASK-71 が france-fiefs を powers の上へ置いた理由（内側に完全に
+ * 含まれる小さい区画は、下に置くと常に外側の大きい区画に負ける）と同型で、
+ * 「より小さく、より個別性の高い政体を優先する」という同じ原則の適用になる。
+ * flat 化（scripts/build-fief-flat.ts）は重なりを常に主権政体側から差し引く
+ * ため、両者が同一ピクセルを塗ることは無く、この引き上げで表示は変わらない
+ * （変わるのは近傍再ピックの綱引きだけ）。
  */
 export const SOVEREIGN_FIEF_LAYER_ID = "sovereign-fiefs";
 
@@ -198,7 +215,8 @@ export const RIVERS_HIT_LAYER_ID = "rivers-hit";
 
 /**
  * picking の優先順（先頭が最優先）: 河川 > 都市 > 都市ヒット層 > 河川ヒット層 >
- * HRE 領邦 > 仏諸侯領 > 伊諸侯領 > Cliopatria 領邦 > 勢力（AC #4、TASK-49 で
+ * 主権政体（#191 で引き上げ）> HRE 領邦 > 仏諸侯領 > 伊諸侯領 >
+ * Cliopatria 領邦 > 勢力（AC #4、TASK-49 で
  * rivers-hit を cities より劣後させ都市 picking の遮蔽を解消、TASK-71 で
  * france-fiefs を powers の上に追加、TASK-82 で cities-hit を cities と
  * rivers-hit の間に追加、TASK-96 で italy-fiefs を powers の直上に追加、
@@ -253,12 +271,14 @@ export const PICKING_PRIORITY: readonly string[] = [
   PEAK_HIT_LAYER_ID,
   MOUNTAIN_HIT_LAYER_ID,
   RIVERS_HIT_LAYER_ID,
+  // #191: 主権政体は微小国家を含むため政治ポリゴンの最上段へ引き上げた
+  // （根拠は SOVEREIGN_FIEF_LAYER_ID のコメント）
+  SOVEREIGN_FIEF_LAYER_ID,
   HRE_LAYER_ID,
   FRANCE_FIEF_LAYER_ID,
   ITALY_FIEF_LAYER_ID,
   CLIOPATRIA_FIEF_LAYER_ID,
   BRITAIN_FIEF_LAYER_ID,
-  SOVEREIGN_FIEF_LAYER_ID,
   POWER_LAYER_ID,
 ];
 

@@ -40,25 +40,26 @@ Deno.test("PICKING_PRIORITY: 可視記号（河川 > 都市 > 山峰）> 透明�
       PEAK_HIT_LAYER_ID,
       MOUNTAIN_HIT_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
+      SOVEREIGN_FIEF_LAYER_ID,
       HRE_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
       CLIOPATRIA_FIEF_LAYER_ID,
       BRITAIN_FIEF_LAYER_ID,
-      SOVEREIGN_FIEF_LAYER_ID,
       POWER_LAYER_ID,
     ],
   );
 });
 
-Deno.test("PICKING_PRIORITY: sovereign-fiefs は powers より優先され、既存の領邦 5 系統に劣後する（#189）", () => {
-  // 主権政体は既存オーバーレイと地理的にほぼ重ならないため相対順は表示に
-  // 影響しないが、後から追加した層を最下段（powers の直上）へ置く既定
-  // （TASK-96 / TASK-110 / #172 と同じ判断）を保つ
+Deno.test("PICKING_PRIORITY: sovereign-fiefs は政治ポリゴン 7 層の最上段（微小国家が近傍再ピックで隣の大きい区画に負けない）（#191）", () => {
+  // #189/#190 では最下段（powers の直上）に置いていたが、#191 で微小国家
+  // （サンマリノ 7〜61 km² など）を収録したため引き上げた。クリックの解決は
+  // 半径 PICKING_RADIUS_PX の近傍再ピック → PICKING_PRIORITY で 1 件選ぶ
+  // 経路（resolveClickPick）なので、最下段のままだとカーソルが微小国家の
+  // 内側にあっても 6px 先の隣接オーバーレイが勝つ（実測: zoom 7 の
+  // 1300 / 1500 年でサンマリノがリミニ領主領に負けた）。
   const sovereignIndex = PICKING_PRIORITY.indexOf(SOVEREIGN_FIEF_LAYER_ID);
-  const powerIndex = PICKING_PRIORITY.indexOf(POWER_LAYER_ID);
   assert(sovereignIndex !== -1);
-  assert(sovereignIndex < powerIndex);
   for (
     const existing of [
       HRE_LAYER_ID,
@@ -66,11 +67,12 @@ Deno.test("PICKING_PRIORITY: sovereign-fiefs は powers より優先され、既
       ITALY_FIEF_LAYER_ID,
       CLIOPATRIA_FIEF_LAYER_ID,
       BRITAIN_FIEF_LAYER_ID,
+      POWER_LAYER_ID,
     ]
   ) {
     assert(
-      PICKING_PRIORITY.indexOf(existing) < sovereignIndex,
-      `${existing} は sovereign-fiefs より優先されなければならない`,
+      sovereignIndex < PICKING_PRIORITY.indexOf(existing),
+      `sovereign-fiefs は ${existing} より優先されなければならない`,
     );
   }
 });
@@ -85,7 +87,8 @@ Deno.test("PICKING_PRIORITY: britain-fiefs は powers より優先される（�
 Deno.test("PICKING_PRIORITY: britain-fiefs は既存の領邦 4 系統に劣後する（既存の相対順を動かさない）（#172）", () => {
   // ブリテン諸島は他のオーバーレイと地理的に重ならないため相対順は表示に
   // 影響しないが、後から追加した層を最下段（powers の直上）へ置く既定
-  // （TASK-96 / TASK-110 と同じ判断）を保つ
+  // （TASK-96 / TASK-110 と同じ判断）を保つ。#191 で sovereign-fiefs だけは
+  // 微小国家を含むため最上段へ引き上げたが、ブリテンとの相対順は変わらない
   const britainIndex = PICKING_PRIORITY.indexOf(BRITAIN_FIEF_LAYER_ID);
   for (
     const existing of [
@@ -618,12 +621,13 @@ Deno.test("renderOrderFromPickingPriority: 描画順（下→上）は優先順�
     renderOrderFromPickingPriority(PICKING_PRIORITY),
     [
       POWER_LAYER_ID,
-      SOVEREIGN_FIEF_LAYER_ID,
       BRITAIN_FIEF_LAYER_ID,
       CLIOPATRIA_FIEF_LAYER_ID,
       ITALY_FIEF_LAYER_ID,
       FRANCE_FIEF_LAYER_ID,
       HRE_LAYER_ID,
+      // #191: 主権政体は微小国家を含むため政治ポリゴンの最上段
+      SOVEREIGN_FIEF_LAYER_ID,
       RIVERS_HIT_LAYER_ID,
       MOUNTAIN_HIT_LAYER_ID,
       PEAK_HIT_LAYER_ID,

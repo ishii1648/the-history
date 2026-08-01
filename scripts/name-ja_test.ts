@@ -44,6 +44,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Amu  Darya",
   // TASK-106: 1400 年の Seljuk Caliphate（1308 年滅亡）を上書きした総称 NAME
   "Anatolian beyliks",
+  "Andorra",
   "Angevin Empire",
   "Anhalt",
   "Arabia",
@@ -339,6 +340,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Landgraviate of Hesse-Darmstadt",
   "Landgraviate of Hesse-Kassel",
   "Landgraviate of Thurgau",
+  "Liechtenstein",
   "Ligurian Republic",
   "Lek",
   "Leks",
@@ -384,6 +386,7 @@ const STATIC_GEOJSON_AND_RIVER_NAMES: string[] = [
   "Milano (Austria)",
   "Modena",
   "Moldova",
+  "Monaco",
   "Montenegro",
   "Moravia",
   "Morocco",
@@ -888,6 +891,24 @@ Deno.test("主権政体オーバーレイの #190 追加分 5 政体が日本語
   assertEquals(mapping["Savoy"], "サヴォイア");
   assertEquals(mapping["Genoa"], "ジェノヴァ");
   assertEquals(mapping["Papal States"], "教皇領");
+});
+
+Deno.test("主権政体オーバーレイの #191 追加分（微小国家 4 政体）が日本語表記で登録されている", () => {
+  // #191 の許可リスト（scripts/build-sovereign-fiefs.ts）の 4 政体。
+  // San Marino は base の 1815 年にも現れる（既存の訳「サンマリノ」を再利用し、
+  // base とオーバーレイで表記・色が連続する）。
+  // 通称が定着しているため称号（公国・侯国・共和国）は付けず、現行の国名表記
+  // （外務省の国名表記に合わせた片仮名）を採る。
+  const expected: Record<string, string> = {
+    "San Marino": "サンマリノ",
+    "Andorra": "アンドラ",
+    "Monaco": "モナコ",
+    "Liechtenstein": "リヒテンシュタイン",
+  };
+  assertEquals(Object.keys(expected).length, 4);
+  for (const [name, ja] of Object.entries(expected)) {
+    assertEquals(mapping[name], ja, `${name} の訳が期待と異なる`);
+  }
 });
 
 Deno.test("主要山脈の日本語表記が登録されている（TASK-97 AC #1）", () => {

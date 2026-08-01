@@ -51,9 +51,11 @@ export const WATER_STYLE_LAYER_ID = WATER_LAYER_ID;
 
 /**
  * 水面より下へ回す deck レイヤーの ID（政治ポリゴンの塗り 7 枚）。
- * 相対順（powers → sovereign-fiefs → britain-fiefs → cliopatria-fiefs →
- * italy-fiefs → france-fiefs → hre-powers）は同一 beforeId のグループ内で
- * deck レイヤー配列順が保たれるため従来と変わらない。
+ * 相対順（powers → britain-fiefs → cliopatria-fiefs → italy-fiefs →
+ * france-fiefs → hre-powers → sovereign-fiefs。#191 で sovereign-fiefs を
+ * 最上段へ引き上げた）は同一 beforeId のグループ内で deck レイヤー配列順が
+ * 保たれるため、この定数の並び自体には意味が無い（順は
+ * renderOrderFromPickingPriority が決める）。
  *
  * TASK-78 の base 境界線オーバーレイ（deck の base-outlines）は TASK-80 で
  * MapLibre の line レイヤー（approximate_borders.ts）へ移したため、ここには
